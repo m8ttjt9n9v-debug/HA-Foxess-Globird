@@ -32,6 +32,23 @@ async def test_user_flow_rejects_unsafe_limits(hass):
     assert result["errors"] == {"base": "invalid_site_limits"}
 
 
+async def test_user_flow_omits_unselected_optional_entity_selectors(hass):
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": SOURCE_USER},
+        data={
+            "name": "Test Site",
+            **ENTRY_DATA,
+            "house_load_entity": "None",
+            "ev_soc_entity": "None",
+        },
+    )
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert "house_load_entity" not in result["data"]
+    assert "ev_soc_entity" not in result["data"]
+
+
 async def test_reconfigure_updates_and_reloads_an_entry(hass):
     entry = MockConfigEntry(domain=DOMAIN, title="Original Site", data=ENTRY_DATA)
     entry.add_to_hass(hass)

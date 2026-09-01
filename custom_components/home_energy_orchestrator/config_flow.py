@@ -41,28 +41,30 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def async_step_user(self, user_input: dict[str, object] | None = None):
         """Collect the mappings and site limits required by the observer."""
         if user_input is not None:
-            errors = self._validate_input(user_input)
+            data = self._normalise_optional_entities(user_input)
+            errors = self._validate_input(data)
             if errors:
                 return self.async_show_form(
                     step_id="user", data_schema=self._schema(), errors=errors
                 )
-            title = str(user_input.pop(CONF_NAME))
+            title = str(data.pop(CONF_NAME))
             await self.async_set_unique_id(title.strip().casefold())
             self._abort_if_unique_id_configured()
-            return self.async_create_entry(title=title, data=user_input)
+            return self.async_create_entry(title=title, data=data)
         return self.async_show_form(step_id="user", data_schema=self._schema())
 
     async def async_step_reconfigure(self, user_input: dict[str, object] | None = None):
         """Update mappings and commissioned limits without reinstalling."""
         entry = self._get_reconfigure_entry()
         if user_input is not None:
-            errors = self._validate_input(user_input)
+            data = self._normalise_optional_entities(user_input)
+            errors = self._validate_input(data)
             if not errors:
-                title = str(user_input.pop(CONF_NAME))
+                title = str(data.pop(CONF_NAME))
                 return self.async_update_reload_and_abort(
                     entry,
                     title=title,
-                    data_updates=user_input,
+                    data_updates=data,
                     reason="reconfigure_successful",
                 )
             return self.async_show_form(
@@ -77,42 +79,49 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     def _schema(defaults: dict[str, object] | None = None) -> vol.Schema:
         """Keep setup and reconfigure field definitions identical."""
         defaults = defaults or {}
-        return vol.Schema(
-            {
-                vol.Required(
-                    CONF_NAME, default=defaults.get(CONF_NAME, "Home Energy")
-                ): selector.TextSelector(),
-                vol.Required(CONF_BATTERY_SOC, default=defaults.get(CONF_BATTERY_SOC)): ENTITY,
-                vol.Required(
-                    CONF_BATTERY_CAPACITY, default=defaults.get(CONF_BATTERY_CAPACITY, 10.0)
-                ): vol.Coerce(float),
-                vol.Required(
-                    CONF_BATTERY_FLOOR,
-                    default=defaults.get(CONF_BATTERY_FLOOR, DEFAULT_BATTERY_FLOOR),
-                ): vol.Coerce(float),
-                vol.Required(
-                    CONF_RESERVE, default=defaults.get(CONF_RESERVE, DEFAULT_RESERVE_KWH)
-                ): vol.Coerce(float),
-                vol.Required(CONF_GRID_POWER, default=defaults.get(CONF_GRID_POWER)): ENTITY,
-                vol.Required(
-                    CONF_GRID_IMPORT_POSITIVE,
-                    default=defaults.get(CONF_GRID_IMPORT_POSITIVE, True),
-                ): selector.BooleanSelector(),
-                vol.Optional(CONF_HOUSE_LOAD, default=defaults.get(CONF_HOUSE_LOAD)): ENTITY,
-                vol.Optional(CONF_EV_SOC, default=defaults.get(CONF_EV_SOC)): ENTITY,
-                vol.Required(
-                    CONF_EV_MIN_CURRENT,
-                    default=defaults.get(CONF_EV_MIN_CURRENT, DEFAULT_EV_MIN_CURRENT),
-                ): vol.Coerce(float),
-                vol.Required(
-                    CONF_EV_MAX_CURRENT,
-                    default=defaults.get(CONF_EV_MAX_CURRENT, DEFAULT_EV_MAX_CURRENT),
-                ): vol.Coerce(float),
-                vol.Required(
-                    CONF_EV_VOLTAGE, default=defaults.get(CONF_EV_VOLTAGE, DEFAULT_EV_VOLTAGE)
-                ): vol.Coerce(float),
-            }
-        )
+        fields = {
+            vol.Required(CONF_NAME, default=defaults.get(CONF_NAME, "Home Energy")): selector.TextSelector(),
+            vol.Required(CONF_BATTERY_SOC, default=defaults.get(CONF_BATTERY_SOC)): ENTITY,
+            vol.Required(
+                CONF_BATTERY_CAPACITY, default=defaults.get(CONF_BATTERY_CAPACITY, 10.0)
+            ): vol.Coerce(float),
+            vol.Required(
+                CONF_BATTERY_FLOOR,
+                default=defaults.get(CONF_BATTERY_FLOOR, DEFAULT_BATTERY_FLOOR),
+            ): vol.Coerce(float),
+            vol.Required(CONF_RESERVE, default=defaults.get(CONF_RESERVE, DEFAULT_RESERVE_KWH)): vol.Coerce(
+                float
+            ),
+            vol.Required(CONF_GRID_POWER, default=defaults.get(CONF_GRID_POWER)): ENTITY,
+            vol.Required(
+                CONF_GRID_IMPORT_POSITIVE,
+                default=defaults.get(CONF_GRID_IMPORT_POSITIVE, True),
+            ): selector.BooleanSelector(),
+            vol.Required(
+                CONF_EV_MIN_CURRENT,
+                default=defaults.get(CONF_EV_MIN_CURRENT, DEFAULT_EV_MIN_CURRENT),
+            ): vol.Coerce(float),
+            vol.Required(
+                CONF_EV_MAX_CURRENT,
+                default=defaults.get(CONF_EV_MAX_CURRENT, DEFAULT_EV_MAX_CURRENT),
+            ): vol.Coerce(float),
+            vol.Required(
+                CONF_EV_VOLTAGE, default=defaults.get(CONF_EV_VOLTAGE, DEFAULT_EV_VOLTAGE)
+            ): vol.Coerce(float),
+        }
+        for key in (CONF_HOUSE_LOAD, CONF_EV_SOC):
+            default = defaults.get(key)
+            fields[vol.Optional(key, default=default) if default else vol.Optional(key)] = ENTITY
+        return vol.Schema(fields)
+
+    @staticmethod
+    def _normalise_optional_entities(data: dict[str, object]) -> dict[str, object]:
+        """Drop the empty selector value emitted by the Home Assistant frontend."""
+        normalised = dict(data)
+        for key in (CONF_HOUSE_LOAD, CONF_EV_SOC):
+            if normalised.get(key) in (None, "", "None"):
+                normalised.pop(key, None)
+        return normalised
 
     @staticmethod
     def _validate_input(data: dict[str, object]) -> dict[str, str]:
