@@ -1,0 +1,47 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Set up Home Energy Orchestrator",
+        "description": "This first release observes energy telemetry only and never controls equipment.",
+        "data": {
+          "name": "Site name",
+          "battery_soc_entity": "Battery state of charge sensor",
+          "battery_capacity_kwh": "Usable battery capacity (kWh)",
+          "battery_floor_percent": "Minimum battery state of charge (%)",
+          "reserve_kwh": "Additional protected energy reserve (kWh)",
+          "grid_power_entity": "Signed grid power sensor",
+          "grid_import_positive": "Grid sensor is positive when importing",
+          "house_load_entity": "Whole-house load sensor (optional)",
+          "ev_soc_entity": "EV state of charge sensor (optional)",
+          "ev_min_current": "Commissioned EV minimum current (A)",
+          "ev_max_current": "Commissioned EV maximum current (A)",
+          "ev_voltage": "EV charging voltage (V)"
+        }
+      },
+      "reconfigure": {
+        "title": "Reconfigure Home Energy Orchestrator",
+        "description": "Update site mappings or observer limits. This release still never controls equipment.",
+        "data": {
+          "name": "Site name",
+          "battery_soc_entity": "Battery state of charge sensor",
+          "battery_capacity_kwh": "Usable battery capacity (kWh)",
+          "battery_floor_percent": "Minimum battery state of charge (%)",
+          "reserve_kwh": "Additional protected energy reserve (kWh)",
+          "grid_power_entity": "Signed grid power sensor",
+          "grid_import_positive": "Grid sensor is positive when importing",
+          "house_load_entity": "Whole-house load sensor (optional)",
+          "ev_soc_entity": "EV state of charge sensor (optional)",
+          "ev_min_current": "Commissioned EV minimum current (A)",
+          "ev_max_current": "Commissioned EV maximum current (A)",
+          "ev_voltage": "EV charging voltage (V)"
+        }
+      }
+    },
+    "error": {
+      "invalid_name": "Enter a site name.",
+      "invalid_entity": "Select a valid Home Assistant entity.",
+      "invalid_site_limits": "Check capacity, floor, reserve, current, and voltage limits."
+    }
+  }
+}

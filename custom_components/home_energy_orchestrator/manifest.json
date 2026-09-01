@@ -1,0 +1,13 @@
+{
+  "domain": "home_energy_orchestrator",
+  "name": "Home Energy Orchestrator",
+  "codeowners": ["@m8ttjt9n9v-debug"],
+  "config_flow": true,
+  "dependencies": [],
+  "documentation": "https://github.com/m8ttjt9n9v-debug/HA-Foxess-Globird",
+  "integration_type": "service",
+  "iot_class": "local_push",
+  "issue_tracker": "https://github.com/m8ttjt9n9v-debug/HA-Foxess-Globird/issues",
+  "requirements": [],
+  "version": "0.1.0"
+}

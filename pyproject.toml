@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "home-energy-orchestrator"
+version = "0.1.0"
+description = "Observe-only Home Assistant energy controller"
+requires-python = ">=3.12"
+
+[project.optional-dependencies]
+test = [
+  "pytest-homeassistant-custom-component==0.13.205",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+
+[tool.setuptools.packages.find]
+include = ["custom_components*"]
+exclude = ["archive*", "backups*", "tests*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]

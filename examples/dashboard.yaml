@@ -1,0 +1,13 @@
+title: Home Energy Orchestrator
+views:
+  - title: Observer
+    path: observer
+    cards:
+      - type: entities
+        title: Controller status
+        entities:
+          - sensor.home_energy_orchestrator_status
+          - sensor.home_energy_orchestrator_available_battery_energy
+          - sensor.home_energy_orchestrator_grid_import
+          - sensor.home_energy_orchestrator_grid_export
+          - sensor.home_energy_orchestrator_ev_maximum_configured_power
