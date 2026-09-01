@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.1 — Deployable observer release
+
+- Rename the public integration to **FoxESS Globird Energy Observer**.
+- Allow optional house-load and EV state-of-charge entity selectors to be
+  left blank during setup.
+- Validate the package in a clean Home Assistant OS pilot and with the HACS
+  GitHub Action.
+
 ## 0.1.0 — Observer release
 
 - Initial HACS custom-integration package.
