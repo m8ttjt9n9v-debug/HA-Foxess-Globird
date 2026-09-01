@@ -80,7 +80,9 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """Keep setup and reconfigure field definitions identical."""
         defaults = defaults or {}
         fields = {
-            vol.Required(CONF_NAME, default=defaults.get(CONF_NAME, "Home Energy")): selector.TextSelector(),
+            vol.Required(
+                CONF_NAME, default=defaults.get(CONF_NAME, "Home Energy")
+            ): selector.TextSelector(),
             vol.Required(CONF_BATTERY_SOC, default=defaults.get(CONF_BATTERY_SOC)): ENTITY,
             vol.Required(
                 CONF_BATTERY_CAPACITY, default=defaults.get(CONF_BATTERY_CAPACITY, 10.0)
@@ -89,9 +91,10 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 CONF_BATTERY_FLOOR,
                 default=defaults.get(CONF_BATTERY_FLOOR, DEFAULT_BATTERY_FLOOR),
             ): vol.Coerce(float),
-            vol.Required(CONF_RESERVE, default=defaults.get(CONF_RESERVE, DEFAULT_RESERVE_KWH)): vol.Coerce(
-                float
-            ),
+            vol.Required(
+                CONF_RESERVE,
+                default=defaults.get(CONF_RESERVE, DEFAULT_RESERVE_KWH),
+            ): vol.Coerce(float),
             vol.Required(CONF_GRID_POWER, default=defaults.get(CONF_GRID_POWER)): ENTITY,
             vol.Required(
                 CONF_GRID_IMPORT_POSITIVE,

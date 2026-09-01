@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.2 — Validation correction
+
+- Fix two setup-flow formatting violations so the repository's GitHub Actions
+  lint job completes successfully.
+
 ## 0.1.1 — Deployable observer release
 
 - Rename the public integration to **FoxESS Globird Energy Observer**.
