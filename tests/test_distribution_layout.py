@@ -47,4 +47,4 @@ def test_hacs_metadata_matches_the_integration_manifest() -> None:
     )
     assert hacs["name"] == manifest["name"]
     assert hacs["country"] == "AU"
-    assert hacs["homeassistant"] == "2025.1.4"
+    assert hacs["homeassistant"] == "2026.8.3"

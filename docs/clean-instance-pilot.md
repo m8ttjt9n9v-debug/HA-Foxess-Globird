@@ -7,7 +7,8 @@ an inverter, EV, EVSE, smart socket, or production credentials.
 
 ## Supported pilot environment
 
-- Home Assistant Core **2025.1.4** was exercised by the automated test suite.
+- Home Assistant Core **2026.8.3** is the supported pilot baseline and is
+  exercised by the automated test suite.
 - A fresh Home Assistant OS, Container, or Core installation is suitable.
 - HACS is not needed for this first manual pilot.
 
