@@ -9,8 +9,8 @@ control capability.
 ## HACS custom repository (after publishing)
 
 1. In HACS, open **Integrations** and add this repository as a custom repository with category **Integration**.
-2. Download **Home Energy Orchestrator** and restart Home Assistant.
-3. Go to **Settings → Devices & services → Add integration** and select **Home Energy Orchestrator**.
+2. Download **FoxESS Globird Energy Observer** and restart Home Assistant.
+3. Go to **Settings → Devices & services → Add integration** and select **FoxESS Globird Energy Observer**.
 4. Complete the entity-mapping form. No edits to `configuration.yaml` are needed.
 
 HACS installation requires a public GitHub repository. A GitHub release is

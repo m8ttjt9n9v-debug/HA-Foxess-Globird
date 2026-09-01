@@ -1,6 +1,6 @@
 {
   "domain": "home_energy_orchestrator",
-  "name": "Home Energy Orchestrator",
+  "name": "FoxESS Globird Energy Observer",
   "codeowners": ["@m8ttjt9n9v-debug"],
   "config_flow": true,
   "dependencies": [],

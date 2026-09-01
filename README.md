@@ -1,4 +1,4 @@
-# Home Energy Orchestrator
+# FoxESS Globird Energy Observer
 
 An Australia-scoped Home Assistant custom integration for an auditable,
 site-configured home-energy ledger. Version 0.1.0 is deliberately
@@ -24,7 +24,7 @@ repository using:
 
 `https://github.com/m8ttjt9n9v-debug/HA-Foxess-Globird`
 
-Then restart Home Assistant and add **Home Energy Orchestrator** from
+Then restart Home Assistant and add **FoxESS Globird Energy Observer** from
 **Settings → Devices & services**. The setup flow asks for the local entity
 IDs and electrical limits for that home. See the [installation guide](docs/installation.md)
 and the [clean-instance pilot](docs/clean-instance-pilot.md).

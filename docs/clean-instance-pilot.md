@@ -22,7 +22,7 @@ an inverter, EV, EVSE, smart socket, or production credentials.
    directory into it.
 2. Restart Home Assistant.
 3. Go to **Settings → Devices & services → Add integration** and choose
-   **Home Energy Orchestrator**.
+   **FoxESS Globird Energy Observer**.
 
 Home Assistant will label it as an untested custom integration. That warning
 is expected until the integration has a published release and broader testing

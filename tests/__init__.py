@@ -1,1 +1,1 @@
-"""Test package for Home Energy Orchestrator."""
+"""Test package for FoxESS Globird Energy Observer."""

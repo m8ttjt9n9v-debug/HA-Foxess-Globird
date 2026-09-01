@@ -1,4 +1,4 @@
-"""Home Energy Orchestrator integration setup."""
+"""FoxESS Globird Energy Observer integration setup."""
 
 from __future__ import annotations
 

@@ -2,7 +2,7 @@
   "config": {
     "step": {
       "user": {
-        "title": "Set up Home Energy Orchestrator",
+        "title": "Set up FoxESS Globird Energy Observer",
         "description": "This first release observes energy telemetry only and never controls equipment.",
         "data": {
           "name": "Site name",
@@ -20,7 +20,7 @@
         }
       },
       "reconfigure": {
-        "title": "Reconfigure Home Energy Orchestrator",
+        "title": "Reconfigure FoxESS Globird Energy Observer",
         "description": "Update site mappings or observer limits. This release still never controls equipment.",
         "data": {
           "name": "Site name",

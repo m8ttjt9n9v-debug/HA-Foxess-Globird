@@ -73,7 +73,7 @@ class EnergySensor(CoordinatorEntity[EnergyCoordinator], SensorEntity):
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, entry.entry_id)},
             name=entry.title,
-            manufacturer="Home Energy Orchestrator",
+            manufacturer="FoxESS Globird Energy Observer",
             model="Observer",
             entry_type=DeviceEntryType.SERVICE,
         )

@@ -1,4 +1,4 @@
-"""Constants for Home Energy Orchestrator."""
+"""Constants for FoxESS Globird Energy Observer."""
 
 from __future__ import annotations
 
