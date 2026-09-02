@@ -315,7 +315,7 @@ def remaining_protected_cycle_budget_kwh(
     window_start, window_finish = _window_bounds_for_day(
         now.date(), now.tzinfo, free_window_start, free_window_end
     )
-    if window_start <= now < window_finish:
+    if window_start <= now <= window_finish:
         return 0.0
     next_window_start = window_start if now < window_start else window_start + timedelta(days=1)
     free_hours = (window_finish - window_start).total_seconds() / 3600

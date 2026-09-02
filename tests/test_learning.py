@@ -122,3 +122,12 @@ def test_remaining_budget_is_zero_inside_free_window() -> None:
         )
         == 0
     )
+
+
+def test_remaining_budget_treats_configured_window_end_as_free() -> None:
+    assert (
+        remaining_protected_cycle_budget_kwh(
+            17.5, datetime(2026, 9, 1, 14, 59, tzinfo=UTC), time(12, 1), time(14, 59)
+        )
+        == 0
+    )
