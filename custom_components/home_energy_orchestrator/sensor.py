@@ -62,6 +62,12 @@ DESCRIPTIONS = (
         device_class="energy",
     ),
     SensorEntityDescription(
+        key="remaining_house_energy",
+        name="Remaining House Energy Budget",
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        device_class="energy",
+    ),
+    SensorEntityDescription(
         key="learning_samples",
         name="House Learning Samples",
         state_class="measurement",
@@ -115,6 +121,7 @@ class EnergySensor(CoordinatorEntity[EnergyCoordinator], SensorEntity):
             "grid_export": ledger.grid_export_kw,
             "ev_max_power": ledger.ev_max_power_kw,
             "learned_house_energy": learning.cycle_budget_kwh,
+            "remaining_house_energy": self.coordinator.learning_remaining_kwh,
             "learning_samples": learning.sample_count,
             "learning_status": learning.model,
         }

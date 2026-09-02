@@ -32,7 +32,12 @@ from .const import (
 )
 from .models import EnergyLedger, SiteSnapshot
 from .normalise import energy_to_kwh, percent, power_to_kw, signed_grid_power_to_import_kw
-from .planner.learning import DemandCycleSampler, DemandHistory, DemandLearningResult
+from .planner.learning import (
+    DemandCycleSampler,
+    DemandHistory,
+    DemandLearningResult,
+    remaining_protected_cycle_budget_kwh,
+)
 from .planner.ledger import calculate_ledger
 
 _LOGGER = logging.getLogger(__name__)
@@ -107,6 +112,22 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
         if not isfinite(fallback) or fallback < 0:
             fallback = 0.0
         return self.demand_history.select(fallback)
+
+    @property
+    def learning_remaining_kwh(self) -> float | None:
+        """Return the learned/fallback budget remaining before free power."""
+        if self.demand_sampler is None:
+            return None
+        learning = self.learning_result
+        try:
+            return remaining_protected_cycle_budget_kwh(
+                learning.cycle_budget_kwh,
+                dt_util.now(),
+                self.demand_sampler.free_window_start,
+                self.demand_sampler.free_window_end,
+            )
+        except ValueError:
+            return None
 
     @callback
     def _async_source_changed(self, event: Event) -> None:

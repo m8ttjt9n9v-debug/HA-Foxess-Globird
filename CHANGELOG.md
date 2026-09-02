@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.2 — Remaining learning budget
+
+- Expose the full-cycle house-learning budget scaled to the time remaining
+  before the next configured free-power window, with read-only tests.
+
 ## 0.2.1 — Learning timezone correction
 
 - Use Home Assistant local time when sampling configured site learning windows,

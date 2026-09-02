@@ -1,6 +1,6 @@
 # Clean Home Assistant pilot
 
-This is the first installation test for the **observer-only** 0.2.1 release.
+This is the first installation test for the **observer-only** 0.2.2 release.
 It verifies that the application installs, calculates values, reacts to state
 changes, can be reconfigured, and can be removed. It must not be connected to
 an inverter, EV, EVSE, smart socket, or production credentials.
@@ -14,7 +14,7 @@ an inverter, EV, EVSE, smart socket, or production credentials.
 
 ## Install the application
 
-1. Transfer the release archive for `home_energy_orchestrator-0.2.1` to the new Home
+1. Transfer the release archive for `home_energy_orchestrator-0.2.2` to the new Home
    Assistant host and extract it in the Home Assistant configuration directory.
    It creates `custom_components/home_energy_orchestrator` in the correct
    location. Alternatively, create `<Home Assistant config>/custom_components`

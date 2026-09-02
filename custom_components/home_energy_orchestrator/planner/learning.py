@@ -168,12 +168,12 @@ class DemandCycleSampler:
         total_seconds = (observed_at - self._last_at).total_seconds()
         begin_fraction = (begin - self._last_at).total_seconds() / total_seconds
         finish_fraction = (finish - self._last_at).total_seconds() / total_seconds
-        begin_power = (
-            self._last_power_kw + (observed_power_kw - self._last_power_kw) * begin_fraction
-        )
-        finish_power = (
-            self._last_power_kw + (observed_power_kw - self._last_power_kw) * finish_fraction
-        )
+        begin_power = self._last_power_kw + (
+            observed_power_kw - self._last_power_kw
+        ) * begin_fraction
+        finish_power = self._last_power_kw + (
+            observed_power_kw - self._last_power_kw
+        ) * finish_fraction
         return (begin_power + finish_power) / 2 * (finish - begin).total_seconds() / 3600
 
     def _window_bounds(self, day: date, tzinfo) -> tuple[datetime, datetime]:
@@ -291,3 +291,50 @@ def select_protected_cycle_budget(
         len(valid),
         f"p{percentile:g}",
     )
+
+
+def remaining_protected_cycle_budget_kwh(
+    cycle_budget_kwh: float,
+    now: datetime,
+    free_window_start: time,
+    free_window_end: time,
+) -> float:
+    """Scale a full-cycle budget to the time remaining before free power.
+
+    The protected budget covers the non-free portion of a 24-hour cycle. While
+    the free window is active, no battery energy is reserved for the next
+    cycle because the controller is already in the protected charging period.
+    """
+    if now.tzinfo is None:
+        raise ValueError("now must be timezone-aware")
+    if not isfinite(cycle_budget_kwh) or cycle_budget_kwh < 0:
+        raise ValueError("cycle_budget_kwh must be finite and non-negative")
+    if free_window_start == free_window_end:
+        raise ValueError("free window must not be empty")
+
+    window_start, window_finish = _window_bounds_for_day(
+        now.date(), now.tzinfo, free_window_start, free_window_end
+    )
+    if window_start <= now < window_finish:
+        return 0.0
+    next_window_start = window_start if now < window_start else window_start + timedelta(days=1)
+    free_hours = (window_finish - window_start).total_seconds() / 3600
+    protected_hours = max(24 - free_hours, 0)
+    if protected_hours <= 0:
+        return 0.0
+    remaining_hours = max((next_window_start - now).total_seconds() / 3600, 0)
+    return cycle_budget_kwh * min(remaining_hours, protected_hours) / protected_hours
+
+
+def _window_bounds_for_day(
+    day: date,
+    tzinfo,
+    free_window_start: time,
+    free_window_end: time,
+) -> tuple[datetime, datetime]:
+    """Build one local-time free-window interval, including midnight spans."""
+    start = datetime.combine(day, free_window_start, tzinfo=tzinfo)
+    finish = datetime.combine(day, free_window_end, tzinfo=tzinfo)
+    if finish <= start:
+        finish += timedelta(days=1)
+    return start, finish

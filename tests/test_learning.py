@@ -10,6 +10,7 @@ from custom_components.home_energy_orchestrator.planner.learning import (
     DemandCycleSample,
     DemandCycleSampler,
     DemandHistory,
+    remaining_protected_cycle_budget_kwh,
     retain_demand_samples,
     select_protected_cycle_budget,
 )
@@ -73,13 +74,17 @@ def test_history_round_trips_and_selects_the_legacy_budget() -> None:
 
 def test_history_add_keeps_existing_samples_when_a_late_row_arrives() -> None:
     now = datetime(2026, 9, 2, tzinfo=UTC)
-    history = DemandHistory([DemandCycleSample(now - timedelta(days=1), 4)])
+    history = DemandHistory(
+        [DemandCycleSample(now - timedelta(days=1), 4)]
+    )
     history.add(now - timedelta(days=2), 3)
     assert [sample.energy_kwh for sample in history.samples] == [3, 4]
 
 
 def test_cycle_sampler_excludes_the_free_window() -> None:
-    sampler = DemandCycleSampler(time(12), time(15), max_gap=timedelta(days=2))
+    sampler = DemandCycleSampler(
+        time(12), time(15), max_gap=timedelta(days=2)
+    )
     assert sampler.observe(datetime(2026, 9, 1, 12, tzinfo=UTC), 1) is None
     assert sampler.observe(datetime(2026, 9, 1, 15, tzinfo=UTC), 1) is None
     sample = sampler.observe(datetime(2026, 9, 2, 12, tzinfo=UTC), 1)
@@ -89,10 +94,31 @@ def test_cycle_sampler_excludes_the_free_window() -> None:
 
 
 def test_cycle_sampler_uses_trapezoid_power_between_readings() -> None:
-    sampler = DemandCycleSampler(time(12), time(15), max_gap=timedelta(days=2))
+    sampler = DemandCycleSampler(
+        time(12), time(15), max_gap=timedelta(days=2)
+    )
     sampler.observe(datetime(2026, 9, 1, 12, tzinfo=UTC), 1)
     sampler.observe(datetime(2026, 9, 1, 15, tzinfo=UTC), 1)
     sampler.observe(datetime(2026, 9, 1, 18, tzinfo=UTC), 3)
     sample = sampler.observe(datetime(2026, 9, 2, 12, tzinfo=UTC), 3)
     assert sample is not None
     assert sample.energy_kwh == 60
+
+
+def test_remaining_budget_scales_to_next_free_window() -> None:
+    start = datetime(2026, 9, 1, 18, 1, tzinfo=UTC)
+    remaining = remaining_protected_cycle_budget_kwh(
+        17.5, start, time(12, 1), time(14, 59)
+    )
+    protected_hours = 24 - (2 + 58 / 60)
+    expected = 17.5 * 18.0 / protected_hours
+    assert remaining == pytest.approx(expected)
+
+
+def test_remaining_budget_is_zero_inside_free_window() -> None:
+    assert (
+        remaining_protected_cycle_budget_kwh(
+            17.5, datetime(2026, 9, 1, 13, tzinfo=UTC), time(12, 1), time(14, 59)
+        )
+        == 0
+    )
