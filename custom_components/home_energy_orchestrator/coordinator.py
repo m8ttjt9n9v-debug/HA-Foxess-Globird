@@ -177,8 +177,7 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
             configured_capacity = self._configured_float(CONF_BATTERY_CAPACITY)
             measured_capacity = self._energy(self.config.get(CONF_BATTERY_CAPACITY_ENTITY))
             effective_capacity = (
-                measured_capacity
-                if measured_capacity is not None and measured_capacity > 0
+                measured_capacity if measured_capacity is not None and measured_capacity > 0
                 else configured_capacity
             )
             self.snapshot = SiteSnapshot(
@@ -217,7 +216,10 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
         house_load_kw = self.snapshot.house_load_kw
         if house_load_kw is None:
             return
-        sample = self.demand_sampler.observe(dt_util.utcnow(), house_load_kw)
+        # Window boundaries are configured as local site time (for this
+        # project, Australia).  Using UTC here would shift a 12:01–14:59
+        # window by ten or eleven hours and silently learn the wrong period.
+        sample = self.demand_sampler.observe(dt_util.now(), house_load_kw)
         if sample is None:
             return
         self.demand_history.add(sample.observed_at, sample.energy_kwh)

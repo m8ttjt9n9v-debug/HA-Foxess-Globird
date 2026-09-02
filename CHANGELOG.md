@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.1 — Learning timezone correction
+
+- Use Home Assistant local time when sampling configured site learning windows,
+  so Australian 12:01–14:59 windows are not interpreted as UTC.
+
 ## 0.2.0 — Observer parity update
 
 - Add measured battery-potential capacity with current energy calculated as

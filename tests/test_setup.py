@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime, time, timedelta
+from zoneinfo import ZoneInfo
 
 from homeassistant.const import EVENT_CALL_SERVICE, STATE_UNAVAILABLE
 from homeassistant.core import HomeAssistant
@@ -8,6 +9,9 @@ from homeassistant.helpers import entity_registry as er
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.home_energy_orchestrator.const import DOMAIN
+from custom_components.home_energy_orchestrator.coordinator import EnergyCoordinator
+from custom_components.home_energy_orchestrator.models import SiteSnapshot
+from custom_components.home_energy_orchestrator.planner.learning import DemandCycleSampler
 
 ENTRY_DATA = {
     "battery_soc_entity": "sensor.test_battery_soc",
@@ -71,7 +75,9 @@ async def test_source_change_recalculates_without_a_restart(hass):
 
 async def test_potential_capacity_is_multiplied_by_soc(hass):
     hass.states.async_set("sensor.test_battery_soc", "45", {"unit_of_measurement": "%"})
-    hass.states.async_set("sensor.test_battery_capacity", "40.32", {"unit_of_measurement": "kWh"})
+    hass.states.async_set(
+        "sensor.test_battery_capacity", "40.32", {"unit_of_measurement": "kWh"}
+    )
     hass.states.async_set("sensor.test_grid_power", "0", {"unit_of_measurement": "kW"})
     entry = MockConfigEntry(
         domain=DOMAIN,
@@ -136,3 +142,28 @@ async def test_unload_removes_entities_and_state_listeners(hass):
 
     assert hass.states.get(status).state == STATE_UNAVAILABLE
     assert coordinator._unsub_source_updates is None
+
+
+async def test_learning_sampler_uses_home_assistant_local_time(hass, monkeypatch):
+    """Configured Australian window boundaries must not be interpreted as UTC."""
+
+    coordinator = EnergyCoordinator(hass, {}, "timezone-test")
+    coordinator.snapshot = SiteSnapshot(
+        battery_soc=50,
+        battery_capacity_kwh=20,
+        battery_floor_percent=10,
+        reserve_kwh=0,
+        grid_power_kw=0,
+        house_load_kw=1,
+    )
+    coordinator.demand_sampler = DemandCycleSampler(time(12), time(15))
+    local_now = datetime(2026, 9, 2, 12, 5, tzinfo=ZoneInfo("Australia/Sydney"))
+    monkeypatch.setattr(
+        "custom_components.home_energy_orchestrator.coordinator.dt_util.now",
+        lambda: local_now,
+    )
+
+    await coordinator._async_sample_house_load()
+
+    assert coordinator.demand_sampler._last_at == local_now
+    coordinator.shutdown()
