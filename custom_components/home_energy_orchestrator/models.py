@@ -26,6 +26,7 @@ class EnergyLedger:
     """A conservative, single-counted energy ledger."""
 
     battery_energy_kwh: float | None
+    battery_potential_capacity_kwh: float | None
     floor_energy_kwh: float
     available_after_floor_kwh: float | None
     available_after_reserve_kwh: float | None

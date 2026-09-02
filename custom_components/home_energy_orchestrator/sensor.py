@@ -17,6 +17,18 @@ from .coordinator import EnergyCoordinator
 DESCRIPTIONS = (
     SensorEntityDescription(key="status", name="Status", icon="mdi:eye-outline"),
     SensorEntityDescription(
+        key="battery_potential_capacity",
+        name="Battery Potential Capacity",
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        device_class="energy",
+    ),
+    SensorEntityDescription(
+        key="battery_energy",
+        name="Current Battery Energy",
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        device_class="energy",
+    ),
+    SensorEntityDescription(
         key="available_energy",
         name="Available Battery Energy",
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
@@ -43,6 +55,18 @@ DESCRIPTIONS = (
         device_class="power",
         state_class="measurement",
     ),
+    SensorEntityDescription(
+        key="learned_house_energy",
+        name="Learned House Energy Budget",
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        device_class="energy",
+    ),
+    SensorEntityDescription(
+        key="learning_samples",
+        name="House Learning Samples",
+        state_class="measurement",
+    ),
+    SensorEntityDescription(key="learning_status", name="House Learning Status"),
 )
 
 
@@ -81,12 +105,18 @@ class EnergySensor(CoordinatorEntity[EnergyCoordinator], SensorEntity):
     @property
     def native_value(self):
         ledger = self.coordinator.data
+        learning = self.coordinator.learning_result
         values = {
             "status": ledger.reason,
+            "battery_potential_capacity": ledger.battery_potential_capacity_kwh,
+            "battery_energy": ledger.battery_energy_kwh,
             "available_energy": ledger.available_after_reserve_kwh,
             "grid_import": ledger.grid_import_kw,
             "grid_export": ledger.grid_export_kw,
             "ev_max_power": ledger.ev_max_power_kw,
+            "learned_house_energy": learning.cycle_budget_kwh,
+            "learning_samples": learning.sample_count,
+            "learning_status": learning.model,
         }
         return values[self.entity_description.key]
 
@@ -94,4 +124,14 @@ class EnergySensor(CoordinatorEntity[EnergyCoordinator], SensorEntity):
     def extra_state_attributes(self):
         if self.entity_description.key != "status":
             return None
-        return {"mode": "observe", "writes_performed": 0, "integration": DOMAIN}
+        learning = self.coordinator.learning_result
+        return {
+            "mode": "observe",
+            "writes_performed": 0,
+            "integration": DOMAIN,
+            "learning_model": learning.model,
+            "learning_samples": learning.sample_count,
+            "learning_max_age_days": self.coordinator.demand_history.max_age_days,
+            "learning_sample_limit": self.coordinator.demand_history.sample_limit,
+            "learning_sampler_enabled": self.coordinator.demand_sampler is not None,
+        }

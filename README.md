@@ -1,7 +1,7 @@
 # FoxESS Globird Energy Observer
 
 An Australia-scoped Home Assistant custom integration for an auditable,
-site-configured home-energy ledger. Version 0.1.2 is deliberately
+site-configured home-energy ledger. Version 0.2.0 is deliberately
 **observer-only**: it reads the Home Assistant entities selected during setup
 and makes no service calls or hardware changes.
 
@@ -9,8 +9,9 @@ and makes no service calls or hardware changes.
 
 - guides setup through Home Assistant's UI; no `configuration.yaml` edits;
 - normalises battery, signed grid, household-load, and EV limit values;
-- exposes observer status, available battery energy, grid import/export, and
-  configured EV-power sensors;
+- exposes observer status, potential/current/available battery energy, grid
+  import/export, configured EV-power sensors, and read-only demand-learning
+  evidence;
 - keeps source entity mappings in the config entry and offers reconfiguration;
 - produces redacted diagnostics; and
 - installs independently of inverter, EV, EVSE, smart-socket, and tariff
@@ -36,8 +37,9 @@ installation must independently validate its entity mappings, measurement
 units, sign conventions, and electrical limits.
 
 It does not currently control FoxESS equipment, EVs, EVSEs, sockets, or tariff
-settings. Adding actuator control requires a separately commissioned and
-tested release.
+settings. The repository may contain adapter-neutral planning code, but the
+HACS integration does not register it as a service and performs no writes.
+Adding actuator control requires a separately commissioned and tested release.
 
 ## Support and development
 

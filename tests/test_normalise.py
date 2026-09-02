@@ -1,10 +1,18 @@
 import pytest
 
 from custom_components.home_energy_orchestrator.normalise import (
+    energy_to_kwh,
     percent,
     power_to_kw,
     signed_grid_power_to_import_kw,
 )
+
+
+@pytest.mark.parametrize(
+    ("value", "unit", "expected"), [(1000, "Wh", 1), (1, "kWh", 1), (0.001, "MWh", 1)]
+)
+def test_energy_units_normalise_once(value, unit, expected):
+    assert energy_to_kwh(value, unit) == expected
 
 
 @pytest.mark.parametrize(

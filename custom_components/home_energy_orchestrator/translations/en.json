@@ -7,12 +7,16 @@
         "data": {
           "name": "Site name",
           "battery_soc_entity": "Battery state of charge sensor",
+          "battery_capacity_entity": "Battery potential capacity sensor (optional)",
           "battery_capacity_kwh": "Usable battery capacity (kWh)",
           "battery_floor_percent": "Minimum battery state of charge (%)",
           "reserve_kwh": "Additional protected energy reserve (kWh)",
           "grid_power_entity": "Signed grid power sensor",
           "grid_import_positive": "Grid sensor is positive when importing",
           "house_load_entity": "Whole-house load sensor (optional)",
+          "free_charge_window_start": "Free-charge window start",
+          "free_charge_window_end": "Free-charge window end",
+          "house_learning_fallback_kwh": "House-energy learning fallback (kWh)",
           "ev_soc_entity": "EV state of charge sensor (optional)",
           "ev_min_current": "Commissioned EV minimum current (A)",
           "ev_max_current": "Commissioned EV maximum current (A)",
@@ -25,12 +29,16 @@
         "data": {
           "name": "Site name",
           "battery_soc_entity": "Battery state of charge sensor",
+          "battery_capacity_entity": "Battery potential capacity sensor (optional)",
           "battery_capacity_kwh": "Usable battery capacity (kWh)",
           "battery_floor_percent": "Minimum battery state of charge (%)",
           "reserve_kwh": "Additional protected energy reserve (kWh)",
           "grid_power_entity": "Signed grid power sensor",
           "grid_import_positive": "Grid sensor is positive when importing",
           "house_load_entity": "Whole-house load sensor (optional)",
+          "free_charge_window_start": "Free-charge window start",
+          "free_charge_window_end": "Free-charge window end",
+          "house_learning_fallback_kwh": "House-energy learning fallback (kWh)",
           "ev_soc_entity": "EV state of charge sensor (optional)",
           "ev_min_current": "Commissioned EV minimum current (A)",
           "ev_max_current": "Commissioned EV maximum current (A)",
@@ -41,7 +49,8 @@
     "error": {
       "invalid_name": "Enter a site name.",
       "invalid_entity": "Select a valid Home Assistant entity.",
-      "invalid_site_limits": "Check capacity, floor, reserve, current, and voltage limits."
+      "invalid_site_limits": "Check capacity, floor, reserve, current, and voltage limits.",
+      "invalid_schedule": "Choose different free-charge times and a non-negative fallback."
     }
   }
 }

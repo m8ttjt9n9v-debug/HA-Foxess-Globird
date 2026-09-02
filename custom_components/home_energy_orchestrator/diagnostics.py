@@ -15,6 +15,7 @@ async def async_get_config_entry_diagnostics(
     """Return calculated values only; entity IDs are deliberately omitted."""
     coordinator = entry.runtime_data
     ledger = coordinator.data
+    learning = coordinator.learning_result
     return {
         "entry": {"version": entry.version, "options": {"mode": "observe"}},
         "ledger": {
@@ -23,5 +24,11 @@ async def async_get_config_entry_diagnostics(
             "available_after_reserve_kwh": ledger.available_after_reserve_kwh,
             "grid_import_kw": ledger.grid_import_kw,
             "grid_export_kw": ledger.grid_export_kw,
+        },
+        "learning": {
+            "model": learning.model,
+            "cycle_budget_kwh": learning.cycle_budget_kwh,
+            "sample_count": learning.sample_count,
+            "retained_sample_count": len(coordinator.demand_history.samples),
         },
     }

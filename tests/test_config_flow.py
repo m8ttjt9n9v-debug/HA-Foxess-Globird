@@ -32,21 +32,31 @@ async def test_user_flow_rejects_unsafe_limits(hass):
     assert result["errors"] == {"base": "invalid_site_limits"}
 
 
-async def test_user_flow_omits_unselected_optional_entity_selectors(hass):
+async def test_user_flow_rejects_invalid_learning_schedule(hass):
     result = await hass.config_entries.flow.async_init(
         DOMAIN,
         context={"source": SOURCE_USER},
         data={
             "name": "Test Site",
             **ENTRY_DATA,
-            "house_load_entity": "None",
-            "ev_soc_entity": "None",
+            "free_charge_window_start": "12:00:00",
+            "free_charge_window_end": "12:00:00",
         },
     )
 
-    assert result["type"] is FlowResultType.CREATE_ENTRY
-    assert "house_load_entity" not in result["data"]
-    assert "ev_soc_entity" not in result["data"]
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"] == {"base": "invalid_schedule"}
+
+
+async def test_user_flow_rejects_negative_learning_fallback(hass):
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": SOURCE_USER},
+        data={"name": "Test Site", **ENTRY_DATA, "house_learning_fallback_kwh": -1},
+    )
+
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"] == {"base": "invalid_schedule"}
 
 
 async def test_reconfigure_updates_and_reloads_an_entry(hass):

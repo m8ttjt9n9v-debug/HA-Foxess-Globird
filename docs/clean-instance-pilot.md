@@ -1,6 +1,6 @@
 # Clean Home Assistant pilot
 
-This is the first installation test for the **observer-only** 0.1.0 release.
+This is the first installation test for the **observer-only** 0.2.0 release.
 It verifies that the application installs, calculates values, reacts to state
 changes, can be reconfigured, and can be removed. It must not be connected to
 an inverter, EV, EVSE, smart socket, or production credentials.
@@ -14,7 +14,7 @@ an inverter, EV, EVSE, smart socket, or production credentials.
 
 ## Install the application
 
-1. Transfer `dist/home_energy_orchestrator-0.1.0.zip` to the new Home
+1. Transfer the release archive for `home_energy_orchestrator-0.2.0` to the new Home
    Assistant host and extract it in the Home Assistant configuration directory.
    It creates `custom_components/home_energy_orchestrator` in the correct
    location. Alternatively, create `<Home Assistant config>/custom_components`
@@ -45,6 +45,7 @@ Complete setup with these values:
 | --- | --- |
 | Site name | `Pilot Site` |
 | Battery SOC | `sensor.test_battery_soc` |
+| Battery potential capacity | leave blank for this synthetic pilot |
 | Usable battery capacity | `20` kWh |
 | Minimum battery SOC | `10` % |
 | Additional reserve | `2` kWh |
@@ -75,6 +76,11 @@ the integration and retain the updated value.
 Finally, remove the integration. Its entities will become unavailable; this is
 normal Home Assistant entity-registry behaviour and confirms the runtime has
 unloaded.
+
+For the learning path, keep `sensor.test_house_load` mapped, use the configured
+12:01–14:59 free-charge window, and inspect the read-only learning sample and
+budget entities after recording complete cycles. No actuator is enabled by
+this pilot.
 
 ## Record the pilot
 

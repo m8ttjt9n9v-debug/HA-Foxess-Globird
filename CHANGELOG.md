@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.0 — Observer parity update
+
+- Add measured battery-potential capacity with current energy calculated as
+  capacity × SoC, with an explicit configured fallback.
+- Persist and expose validated rolling whole-house demand-learning evidence.
+- Add tested, adapter-neutral FoxESS profile, decision, export-planning, and
+  response-verification primitives; no Home Assistant write service is exposed.
+
 ## 0.1.2 — Validation correction
 
 - Fix two setup-flow formatting violations so the repository's GitHub Actions

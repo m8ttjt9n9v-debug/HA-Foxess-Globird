@@ -29,6 +29,7 @@ def calculate_ledger(snapshot: SiteSnapshot) -> EnergyLedger:
         reason = REASON_OBSERVER_ONLY
     return EnergyLedger(
         battery_energy_kwh=battery_energy,
+        battery_potential_capacity_kwh=snapshot.battery_capacity_kwh,
         floor_energy_kwh=floor_energy,
         available_after_floor_kwh=after_floor,
         available_after_reserve_kwh=after_reserve,
