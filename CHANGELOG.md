@@ -7,6 +7,8 @@
 - Persist and expose validated rolling whole-house demand-learning evidence.
 - Add tested, adapter-neutral FoxESS profile, decision, export-planning, and
   response-verification primitives; no Home Assistant write service is exposed.
+- Add a tested, fail-closed EV charge-to-target planner with explicit
+  Tessie-style minimum/maximum limit handling; no EV write service is exposed.
 
 ## 0.1.2 — Validation correction
 
