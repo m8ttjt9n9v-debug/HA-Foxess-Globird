@@ -63,9 +63,15 @@ async def test_user_flow_preserves_explicit_future_actuator_mappings(hass):
 
 
 async def test_entity_suggestions_find_common_tessie_entities(hass):
-    hass.states.async_set("sensor.tessy_battery_level", "59", {"friendly_name": "Tessy Battery level"})
-    hass.states.async_set("number.tessy_charge_limit", "71", {"friendly_name": "Tessy Charge limit"})
-    hass.states.async_set("number.tessy_charge_current", "16", {"friendly_name": "Tessy Charge current"})
+    hass.states.async_set(
+        "sensor.tessy_battery_level", "59", {"friendly_name": "Tessy Battery level"}
+    )
+    hass.states.async_set(
+        "number.tessy_charge_limit", "71", {"friendly_name": "Tessy Charge limit"}
+    )
+    hass.states.async_set(
+        "number.tessy_charge_current", "16", {"friendly_name": "Tessy Charge current"}
+    )
     hass.states.async_set("switch.tessy_charge", "off", {"friendly_name": "Tessy Charge"})
     flow = ConfigFlow()
     flow.hass = hass
