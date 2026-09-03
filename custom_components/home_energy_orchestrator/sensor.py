@@ -219,6 +219,26 @@ class EnergySensor(CoordinatorEntity[EnergyCoordinator], SensorEntity):
                 if self.coordinator.active_controller
                 else 0
             ),
+            "ev_control_gate": (
+                self.coordinator.active_controller.ev_controller.gate_status
+                if self.coordinator.active_controller
+                else "unavailable"
+            ),
+            "ev_last_control_reason": (
+                self.coordinator.active_controller.ev_controller.last_reason
+                if self.coordinator.active_controller
+                else "unavailable"
+            ),
+            "ev_last_control_actions": (
+                self.coordinator.active_controller.ev_controller.last_actions
+                if self.coordinator.active_controller
+                else ()
+            ),
+            "ev_writes_performed": (
+                self.coordinator.active_controller.ev_controller.writes_performed
+                if self.coordinator.active_controller
+                else 0
+            ),
             "automatic_control_enabled": self.coordinator.config.get(
                 "automatic_control_enabled", False
             ),

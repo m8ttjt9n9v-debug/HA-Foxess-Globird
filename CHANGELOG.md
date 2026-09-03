@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.26 — gated Tessie current control
+
+- Connect the tested EV current planner and service adapter to the active
+  coordinator behind the existing automatic-control and Rehearsal gates.
+- Adjust only the explicitly mapped Tessie/Tessy current setpoint during the
+  configured free window when local cable and charger-current feedback exists.
+- Do not start or stop charging or change the vehicle SoC limit in this
+  milestone; unavailable or ambiguous feedback fails closed.
+
 ## 0.2.25 — conservative Tessie entity suggestions
 
 - Suggest common Tessie/Tessy EV entities during setup when the installed

@@ -2,8 +2,9 @@
 
 The observer remains the default. This controller only starts when the config
 entry enables automatic control and disables rehearsal mode, and it requires a
-complete FoxESS actuator mapping. Tessie is deliberately not invoked here yet:
-its cable/current feedback gate is a separate commissioning surface.
+complete FoxESS actuator mapping. The companion EV controller uses the same
+gates and only adjusts an explicitly mapped Tessie/Tessy current setpoint while
+the free window and local feedback are valid.
 """
 
 from __future__ import annotations
@@ -29,6 +30,7 @@ from .const import (
     DEFAULT_INVERTER_DISCHARGE_LIMIT_KW,
 )
 from .coordinator import EnergyCoordinator
+from .active_ev import ActiveEvController
 from .foxess_adapter import FoxessEntityMap, FoxessServiceAdapter
 from .normalise import power_to_kw
 from .planner.control import ControlInputs, decide_control
@@ -52,6 +54,7 @@ class ActiveFoxessController:
         self._attempts = 0
         self._last_attempt_at = None
         self._last_plan_reason: str | None = None
+        self.ev_controller = ActiveEvController(hass, coordinator)
 
     @property
     def gate_status(self) -> str:
@@ -74,6 +77,7 @@ class ActiveFoxessController:
                 self.hass, self._async_tick, timedelta(seconds=30)
             )
         await self.async_reconcile()
+        await self.ev_controller.async_reconcile()
 
     async def async_stop(self) -> None:
         """Stop the timer without changing inverter state."""
@@ -84,6 +88,7 @@ class ActiveFoxessController:
     async def _async_tick(self, _now) -> None:
         await self.coordinator.async_request_refresh()
         await self.async_reconcile()
+        await self.ev_controller.async_reconcile()
 
     async def async_reconcile(self) -> None:
         """Evaluate and, only after every gate passes, execute one plan."""

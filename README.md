@@ -1,7 +1,7 @@
 # FoxESS Globird Energy Observer
 
 An Australia-scoped Home Assistant custom integration for an auditable,
-site-configured home-energy ledger. Version 0.2.25 is observer-by-default:
+site-configured home-energy ledger. Version 0.2.26 is observer-by-default:
 it reads the entities selected during setup, normalises their units and signs,
 persists local tariff meters and demand-learning evidence, and only permits
 FoxESS writes after an explicit control opt-in, complete actuator mapping, and
@@ -35,7 +35,11 @@ See the [installation guide](docs/installation.md) and
   `Self Use` outcomes at full battery.
 - an opt-in FoxESS free-window controller that runs every 30 seconds only when
   the automatic-control gate is enabled and all three FoxESS actuator entities
-  are mapped; Tessie/EV writes remain disabled in this release.
+  are mapped; and
+- an opt-in Tessie/Tessy current-setpoint controller that adjusts only the
+  mapped current number during the free window when local cable and charger
+  current feedback is available. It does not start/stop charging or change
+  the vehicle SoC limit.
 
 The ZEROHERO guard checks each hourly bucket independently against the
 configured 0.03 kWh/hour threshold. A three-hour total below 0.09 kWh does not
@@ -47,8 +51,8 @@ This integration is supervisory software, not electrical protection. The
 default is still no hardware writes. The optional FoxESS path is a pilot
 controller, not a substitute for electrical protection or installer
 commissioning; it requires explicit entity mapping, response tests, and
-rollback evidence. Tessie/EV and export control are not enabled by this
-release. Review the [safety boundary](docs/safety.md) before use.
+rollback evidence. EV start/stop, vehicle limit, and export control remain
+outside this milestone. Review the [safety boundary](docs/safety.md) before use.
 
 Please report reproducible issues in the [issue tracker](https://github.com/m8ttjt9n9v-debug/HA-Foxess-Globird/issues) without including credentials, detailed home-location data, or production sensor history.
 

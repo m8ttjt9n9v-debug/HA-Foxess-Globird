@@ -7,6 +7,7 @@ from types import SimpleNamespace
 from homeassistant.const import EVENT_CALL_SERVICE
 
 from custom_components.home_energy_orchestrator.active import ActiveFoxessController
+from custom_components.home_energy_orchestrator.active_ev import ActiveEvController
 from custom_components.home_energy_orchestrator.const import (
     CONF_AUTOMATIC_CONTROL_ENABLED,
     CONF_FOXESS_FORCE_CHARGE_POWER,
@@ -14,6 +15,15 @@ from custom_components.home_energy_orchestrator.const import (
     CONF_FOXESS_WORK_MODE,
     CONF_INVERTER_CHARGE_LIMIT_KW,
     CONF_REHEARSAL_MODE,
+    CONF_EV_CHARGE_SWITCH,
+    CONF_EV_CURRENT_LIMIT,
+    CONF_EV_SOC,
+    CONF_EV_MAX_CURRENT,
+    CONF_EV_MIN_CURRENT,
+    CONF_EV_PHASE_COUNT,
+    CONF_EV_VOLTAGE,
+    CONF_INVERTER_CAPACITY,
+    CONF_SERVICE_IMPORT_LIMIT_A,
 )
 
 
@@ -91,3 +101,65 @@ async def test_commissioned_controller_executes_bounded_charge_plan(hass):
     ]
     assert calls[0].data["service_data"]["value"] == 5.0
     assert calls[1].data["service_data"]["option"] == "Force Charge"
+
+
+async def test_ev_controller_is_inert_in_rehearsal_mode(hass):
+    calls = []
+    hass.bus.async_listen(EVENT_CALL_SERVICE, calls.append)
+    coordinator = _coordinator(
+        **{
+            CONF_AUTOMATIC_CONTROL_ENABLED: True,
+            CONF_EV_CURRENT_LIMIT: "number.tessy_charge_current",
+            CONF_EV_CHARGE_SWITCH: "switch.tessy_charge",
+        }
+    )
+    controller = ActiveEvController(hass, coordinator)
+
+    await controller.async_reconcile()
+
+    assert calls == []
+    assert controller.gate_status == "rehearsal"
+
+
+async def test_ev_controller_adjusts_mapped_current_only_when_commissioned(hass):
+    calls = []
+    hass.bus.async_listen(EVENT_CALL_SERVICE, calls.append)
+
+    async def noop(_call):
+        return None
+
+    hass.services.async_register("number", "set_value", noop)
+    hass.states.async_set("number.tessy_charge_current", "16", {"min": 0, "max": 16, "step": 1})
+    hass.states.async_set("switch.tessy_charge", "on")
+    hass.states.async_set(
+        "sensor.tessy_charger_current", "16", {"friendly_name": "Tessy Charger current"}
+    )
+    hass.states.async_set(
+        "binary_sensor.tessy_charge_cable", "on", {"friendly_name": "Tessy Charge cable"}
+    )
+    coordinator = _coordinator(
+        **{
+            CONF_AUTOMATIC_CONTROL_ENABLED: True,
+            CONF_REHEARSAL_MODE: False,
+            CONF_EV_SOC: "sensor.tessy_battery_level",
+            CONF_EV_CURRENT_LIMIT: "number.tessy_charge_current",
+            CONF_EV_CHARGE_SWITCH: "switch.tessy_charge",
+            CONF_EV_MAX_CURRENT: 16.0,
+            CONF_EV_MIN_CURRENT: 6.0,
+            CONF_EV_PHASE_COUNT: 1,
+            CONF_EV_VOLTAGE: 230.0,
+            CONF_INVERTER_CAPACITY: 10.0,
+            CONF_SERVICE_IMPORT_LIMIT_A: 32.0,
+        }
+    )
+    coordinator.snapshot.ev_soc = 60.0
+    controller = ActiveEvController(hass, coordinator)
+
+    await controller.async_reconcile()
+    await hass.async_block_till_done()
+
+    assert controller.gate_status == "ready"
+    assert [(event.data["domain"], event.data["service"]) for event in calls] == [
+        ("number", "set_value")
+    ]
+    assert calls[0].data["service_data"]["value"] == 6.0
