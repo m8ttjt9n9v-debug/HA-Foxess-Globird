@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.2.18 — latched export session planning
+## 0.2.19 — allowance-paced free charging
 
 - Add a pure FoxESS response-reconciliation policy with a retry interval and
   finite attempt limit. It never calls Home Assistant services; active
@@ -9,6 +9,9 @@
   coordinator can never receive an incomplete control surface.
 - Add a pure export-session state machine covering bounded start retries,
   feedback acceptance, latching, finish restoration, and source-loss recovery.
+- Add an allowance-paced battery-charge planner that converts remaining kWh and
+  remaining window time into a grid-import target, then accounts for measured
+  house load and AC-coupled PV before applying the inverter limit.
 
 ## 0.2.15 — Dashboard entity-ID correction
 
