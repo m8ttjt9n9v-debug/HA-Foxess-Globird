@@ -18,7 +18,7 @@ HACS installation requires a public GitHub repository. This project publishes
 versioned GitHub releases for the custom-repository channel; inclusion in
 HACS's default catalogue is a separate review process.
 
-Version 0.2.30 is observer-by-default. It makes no writes unless automatic
+Version 0.2.31 is observer-by-default. It makes no writes unless automatic
 control is enabled, Rehearsal mode is disabled, and the required FoxESS and EV
 entities are explicitly mapped. The commissioned path writes only the mapped
 EV current number. It confirms the Tessie/Tessy vehicle is at home before any
@@ -36,6 +36,8 @@ as a Lovelace starter view; HACS does not install dashboards automatically.
 Version 0.2.29 also exposes the read-only ZEROHERO window accumulator and its
 hourly buckets as sensor attributes. Version 0.2.30 adds mapped battery SOC,
 solar, house-load, and EV SOC entities for the portable dashboard template.
+Version 0.2.31 gives generated entities stable `sensor.home_energy_*` IDs;
+existing entries are migrated only when the stable ID is unused.
 
 ## Before setup
 

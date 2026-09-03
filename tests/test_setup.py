@@ -78,6 +78,8 @@ async def test_setup_observes_normalised_values_and_never_calls_services(hass):
     available_energy = _entity_id(hass, entry, "available_energy")
     grid_import = _entity_id(hass, entry, "grid_import")
     status = _entity_id(hass, entry, "status")
+    assert status == "sensor.home_energy_status"
+    assert _entity_id(hass, entry, "battery_soc") == "sensor.home_energy_battery_soc"
     assert hass.states.get(available_energy).state == "8.0"
     assert hass.states.get(grid_import).state == "1.2"
     assert hass.states.get(status).state == "observer_only"

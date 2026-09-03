@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.31 — stable portable entity IDs
+
+- Use stable `sensor.home_energy_*` IDs for the dashboard regardless of the
+  config-entry display name.
+- Migrate an existing entity to its stable ID only when that ID is unused;
+  otherwise preserve the existing entity and fail safely.
+
 ## 0.2.30 — portable two-column dashboard
 
 - Add mapped battery SOC, solar, house-load, and EV SOC sensors so a dashboard

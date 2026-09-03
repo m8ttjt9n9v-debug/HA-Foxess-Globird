@@ -1,8 +1,7 @@
 title: FoxESS Globird Energy
 # Generic, two-column Lovelace starter view.  HACS installs the integration,
-# not dashboards.  The entity IDs below use the default Home Energy entry slug;
-# select the generated entities in the dashboard editor if the entry has a
-# different name.
+# not dashboards.  Version 0.2.31 and later publish stable `sensor.home_energy_*`
+# IDs, so this view works regardless of the config-entry display name.
 views:
   - type: sections
     max_columns: 2
