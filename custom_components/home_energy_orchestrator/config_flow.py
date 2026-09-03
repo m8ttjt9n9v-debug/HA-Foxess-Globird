@@ -146,16 +146,15 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             step_id="reconfigure", data_schema=self._schema({CONF_NAME: entry.title, **entry.data})
         )
 
-    @staticmethod
     @callback
-    def _schema(defaults: dict[str, object] | None = None) -> vol.Schema:
+    def _schema(self, defaults: dict[str, object] | None = None) -> vol.Schema:
         """Keep setup and reconfigure field definitions identical."""
         defaults = defaults or {}
         profile_default = ConfigFlow._profile_from_data(defaults) or DEFAULT_EV_CHARGER_PROFILE
 
         def optional_entity(key: str):
-            """Avoid passing None to Home Assistant's entity selector."""
-            value = defaults.get(key)
+            """Use an unambiguous integration entity as a UI-only suggestion."""
+            value = defaults.get(key) or self._suggest_entity(key)
             return vol.Optional(key, default=value) if value else vol.Optional(key)
 
         return vol.Schema(
@@ -342,6 +341,56 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 optional_entity(CONF_EV_CHARGE_SWITCH): SWITCH_ENTITY,
             }
         )
+
+    def _suggest_entity(self, key: str) -> str | None:
+        """Suggest a common Tessie/Tessy entity only when it is unambiguous.
+
+        Entity IDs are installation-specific, so suggestions are deliberately
+        conservative: an exact known ID wins; otherwise exactly one matching
+        state is suggested. Ambiguous or unavailable candidates remain blank.
+        """
+        candidates = {
+            CONF_EV_SOC: ("sensor", ("battery_level", "state_of_charge", "soc")),
+            CONF_EV_CHARGE_LIMIT: ("number", ("charge_limit",)),
+            CONF_EV_CURRENT_LIMIT: ("number", ("charge_current", "charger_current")),
+            CONF_EV_CHARGE_SWITCH: ("switch", ("charge",)),
+        }
+        spec = candidates.get(key)
+        if spec is None:
+            return None
+        domain, tokens = spec
+        states = self.hass.states.async_all(domain)
+        matches: list[str] = []
+        for state in states:
+            entity_id = state.entity_id.casefold()
+            friendly_name = str(state.attributes.get("friendly_name", "")).casefold()
+            combined = f"{entity_id} {friendly_name}"
+            if not any(token in combined for token in tokens):
+                continue
+            if not any(marker in combined for marker in ("tessie", "tessy")):
+                continue
+            if state.state in ("unavailable", "unknown"):
+                continue
+            matches.append(state.entity_id)
+        if len(matches) == 1:
+            return matches[0]
+        exact = next(
+            (
+                entity_id
+                for entity_id in matches
+                if entity_id.casefold()
+                in {
+                    "sensor.tessie_battery_level",
+                    "number.tessie_charge_limit",
+                    "number.tessie_charge_current",
+                    "number.tessy_charge_current",
+                    "switch.tessie_charge",
+                    "switch.tessy_charge",
+                }
+            ),
+            None,
+        )
+        return exact
 
     @staticmethod
     def _profile_from_data(data: dict[str, object]) -> str | None:

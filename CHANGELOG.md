@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.25 — conservative Tessie entity suggestions
+
+- Suggest common Tessie/Tessy EV entities during setup when the installed
+  entities produce one clear match (or an exact known ID).
+- Leave ambiguous, unavailable, or non-Tessie entities blank so setup never
+  silently controls the wrong vehicle.
+
 ## 0.2.24 — opt-in FoxESS free-window controller
 
 - Add an explicit automatic-control opt-in and Rehearsal mode interlock to the
