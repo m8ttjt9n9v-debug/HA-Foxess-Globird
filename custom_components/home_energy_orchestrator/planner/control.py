@@ -70,7 +70,9 @@ def decide_control(inputs: ControlInputs) -> ControlDecision:
 
     forced_mode = inputs.current_mode in {"Force Charge", "Force Discharge"}
     if inputs.rehearsal:
-        return ControlDecision("restore_self_use" if forced_mode else "hold", 0.0, "rehearsal_mode")
+        return ControlDecision(
+            "restore_self_use" if forced_mode else "hold", 0.0, "rehearsal_mode"
+        )
     if not inputs.ready:
         return ControlDecision(
             "restore_self_use" if forced_mode else "hold", 0.0, "telemetry_not_ready"

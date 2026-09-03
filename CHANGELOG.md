@@ -1,37 +1,75 @@
 # Changelog
 
-## 0.2.2 — Remaining learning budget
+## 0.2.12 — Hourly ZEROHERO guard correction
 
-- Expose the full-cycle house-learning budget scaled to the time remaining
-  before the next configured free-power window, with read-only tests.
+- Evaluate the GloBird ZEROHERO threshold independently for each hourly bucket
+  in the 18:00–21:00 window. A single bucket above 0.03 kWh/hour fails the
+  guard even when the three-hour sum is below 0.09 kWh.
+- Clarify the setup label and tariff-meter documentation to distinguish the
+  retailer's hourly condition from the local telemetry debounce.
+- Keep the HACS integration observer-only; no hardware-control service calls
+  are enabled.
+
+## Unreleased — GloBird FoxESS automation pilot
+
+- Added opt-in, fail-closed FoxESS Modbus free-window charging automation.
+- Added opt-in export automation with protected-energy and sustained-import
+  guards.
+- Added configurable windows, SOC target and command-power limits.
+- Kept Tesla vehicle control disabled until a vehicle-current actuator is
+  explicitly installed and mapped.
+- Recorded the remote H3 commissioning boundary and rollback procedure.
+- Added persistent non-free-window house-demand sampling and read-only learning
+  sensors to the HACS core.
+- Added an automatic EV policy to the YAML pilot: once armed after
+  commissioning, a connected vehicle starts in the battery-funded backfill
+  window, hands over to free charging, and stops at its target, disconnect, or
+  user-configured ready-by time (06:00 default).
+- Added explicit FoxESS profile validation plus adapter-neutral, fail-closed
+  command planning and mocked service-layer tests; no live HACS writes are
+  enabled.
+- Added an explicit EV physical phase-count setting (single- or three-phase)
+  and phase-aware configured charging-power calculation. Existing entries remain
+  single-phase by default until the site is deliberately configured otherwise.
+- Added setup choices for the supported EV profiles (single-phase 10/15/32 A or
+  three-phase 16 A), plus configurable 6–9 pm and other-paid-period
+  load-following ceilings (20% and 30% defaults) and a load-following-preserving
+  override. These are policy inputs only until the HACS actuator adapter is
+  commissioned.
+- Added explicit, configurable bonus-window boundaries (18:00–21:00 defaults)
+  so the zero-import policy is a reviewed site setting rather than a hidden
+  clock assumption.
+- Added explicit site topology plus commissioned service-import, export, and
+  inverter charge/discharge limits. Zero means not commissioned and therefore
+  cannot silently become an assumed electrical rating.
+- Added a pure tariff guard and read-only allowance sensors. A mapped
+  cumulative import meter now caps the remaining daily free-energy budget, and
+  the bonus guard requires qualified, sustained zero import before it can be
+  considered eligible.
+- Added a fail-closed EV service adapter and pure runtime safety-state
+  evaluator. They are deliberately not connected to the observer entry yet;
+  no EV or inverter write is enabled by this release.
+- Added a pure runtime composition seam that evaluates tariff, EV and FoxESS
+  decisions together before any adapter can be granted write permission.
+- Connected the learned protected-house budget to the runtime export plan, so
+  learned demand is subtracted before any sellable-energy calculation.
 
 ## 0.2.1 — Learning timezone correction
 
 - Use Home Assistant local time when sampling configured site learning windows,
   so Australian 12:01–14:59 windows are not interpreted as UTC.
 
+## 0.2.2 — Remaining learning budget
+
+- Expose the full-cycle house-learning budget scaled to the time remaining
+  before the next configured free-power window, with read-only tests.
+
 ## 0.2.0 — Observer parity update
 
-- Add measured battery-potential capacity with current energy calculated as
-  capacity × SoC, with an explicit configured fallback.
-- Persist and expose validated rolling whole-house demand-learning evidence.
-- Add tested, adapter-neutral FoxESS profile, decision, export-planning, and
-  response-verification primitives; no Home Assistant write service is exposed.
-- Add a tested, fail-closed EV charge-to-target planner with explicit
-  Tessie-style minimum/maximum limit handling; no EV write service is exposed.
-
-## 0.1.2 — Validation correction
-
-- Fix two setup-flow formatting violations so the repository's GitHub Actions
-  lint job completes successfully.
-
-## 0.1.1 — Deployable observer release
-
-- Rename the public integration to **FoxESS Globird Energy Observer**.
-- Allow optional house-load and EV state-of-charge entity selectors to be
-  left blank during setup.
-- Validate the package in a clean Home Assistant OS pilot and with the HACS
-  GitHub Action.
+- Synced the HACS release tree with measured battery-potential capacity and
+  persistent rolling house-demand learning.
+- Included tested, adapter-neutral FoxESS planning and response-verification
+  primitives while keeping the HACS integration observer-only.
 
 ## 0.1.0 — Observer release
 

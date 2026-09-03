@@ -20,7 +20,9 @@ def calculate_ledger(snapshot: SiteSnapshot) -> EnergyLedger:
     )
     grid_import = max(0.0, snapshot.grid_power_kw) if snapshot.grid_power_kw is not None else None
     grid_export = max(0.0, -snapshot.grid_power_kw) if snapshot.grid_power_kw is not None else None
-    ev_max_power = snapshot.ev_max_current_a * snapshot.ev_voltage_v / 1000
+    ev_max_power = (
+        snapshot.ev_max_current_a * snapshot.ev_voltage_v * snapshot.ev_phase_count / 1000
+    )
     if snapshot.battery_soc is None:
         reason = REASON_MISSING_BATTERY_SOC
     elif snapshot.grid_power_kw is None:

@@ -21,11 +21,37 @@ async def test_user_flow_creates_a_config_entry(hass):
     assert result["data"] == ENTRY_DATA
 
 
+async def test_user_flow_defaults_existing_single_phase_ev_configuration(hass):
+    data_without_phase = {
+        key: value for key, value in ENTRY_DATA.items() if key != "ev_phase_count"
+    }
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": SOURCE_USER},
+        data={"name": "Legacy Site", **data_without_phase},
+    )
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["data"]["ev_phase_count"] == 1
+
+
 async def test_user_flow_rejects_unsafe_limits(hass):
     result = await hass.config_entries.flow.async_init(
         DOMAIN,
         context={"source": SOURCE_USER},
-        data={"name": "Test Site", **ENTRY_DATA, "ev_max_current": -1},
+        data={"name": "Test Site", **ENTRY_DATA, "inverter_capacity_kw": -1},
+    )
+
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"] == {"base": "invalid_site_limits"}
+
+
+async def test_user_flow_rejects_invalid_load_following_rate(hass):
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": SOURCE_USER},
+        data={"name": "Test Site", **ENTRY_DATA, "bonus_load_following_percent": 101},
     )
 
     assert result["type"] is FlowResultType.FORM
