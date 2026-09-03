@@ -56,7 +56,10 @@ bucket exceeds 0.03, even though the three-hour total is below 0.09 kWh.
 The sustained-time field is explicitly only a local telemetry debounce; it is
 not a second retailer condition. The observer therefore reports evidence and a
 fail-closed guard, while retaining a clear distinction between live telemetry
-and the provider's final billing calculation.
+and the provider's final billing calculation. The **ZEROHERO Import This
+Window** sensor shows the accumulated import observed so far and exposes the
+individual hourly buckets in its attributes, so each 18:00–19:00,
+19:00–20:00, and 20:00–21:00 result can be checked directly.
 
 Super Export is a separate rule: only the first **15 kWh exported during the
 6–9 pm window per day** receives the boosted top-up. It requires its own

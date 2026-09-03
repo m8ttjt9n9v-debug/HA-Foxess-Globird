@@ -23,6 +23,7 @@ views:
           - sensor.home_energy_free_charge_allowance_remaining
           - sensor.home_energy_estimated_energy_cost_today
           - sensor.home_energy_zerohero_telemetry_guard_qualified
+          - sensor.home_energy_zerohero_import_this_window
           - sensor.home_energy_tariff_guard_status
           - sensor.home_energy_free_window_charge_completion_mode
           - sensor.home_energy_free_window_charge_power_target

@@ -149,6 +149,33 @@ async def test_full_battery_completion_mode_is_exposed(hass):
     assert completion.action == "backup"
 
 
+async def test_zerohero_hourly_accumulator_is_exposed(hass):
+    hass.states.async_set("sensor.test_battery_soc", "60", {"unit_of_measurement": "%"})
+    hass.states.async_set("sensor.test_grid_power", "0", {"unit_of_measurement": "kW"})
+    entry = MockConfigEntry(domain=DOMAIN, title="ZEROHERO Site", data=ENTRY_DATA)
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    coordinator = entry.runtime_data
+    now = datetime(2026, 9, 3, 20, 30, tzinfo=ZoneInfo("Australia/Sydney"))
+    coordinator.zerohero_import.local_date = now.date()
+    coordinator.zerohero_import.last_at = now
+    coordinator.zerohero_import.hourly_import_kwh = {
+        "2026-09-03T18:00:00+10:00": 0.01,
+        "2026-09-03T19:00:00+10:00": 0.02,
+        "2026-09-03T20:00:00+10:00": 0.04,
+    }
+    coordinator.async_update_listeners()
+    await hass.async_block_till_done()
+
+    entity = _entity_id(hass, entry, "zerohero_import_window")
+    state = hass.states.get(entity)
+    assert state.state == "0.07"
+    assert state.attributes["hourly_import_kwh"]["2026-09-03T20:00:00+10:00"] == 0.04
+    assert state.attributes["threshold_kwh_per_hour"] == 0.05
+
+
 async def test_potential_capacity_is_multiplied_by_soc(hass):
     hass.states.async_set("sensor.test_battery_soc", "45", {"unit_of_measurement": "%"})
     hass.states.async_set(

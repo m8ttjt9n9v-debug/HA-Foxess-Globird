@@ -91,6 +91,13 @@ DESCRIPTIONS = (
         name="ZEROHERO Telemetry Guard Qualified",
         icon="mdi:cash-check",
     ),
+    SensorEntityDescription(
+        key="zerohero_import_window",
+        name="ZEROHERO Import This Window",
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        device_class="energy",
+        state_class="total_increasing",
+    ),
     SensorEntityDescription(key="tariff_status", name="Tariff Guard Status"),
     SensorEntityDescription(
         key="free_charge_completion",
@@ -174,6 +181,11 @@ class EnergySensor(CoordinatorEntity[EnergyCoordinator], SensorEntity):
             "estimated_energy_cost": ledger.estimated_energy_cost,
             "free_charge_allowed": ledger.free_charge_allowed_kwh,
             "bonus_zero_import_allowed": ledger.bonus_zero_import_allowed,
+            "zerohero_import_window": (
+                None
+                if self.coordinator.zerohero_import.last_at is None
+                else round(sum(self.coordinator.zerohero_import.hourly_import_kwh.values()), 3)
+            ),
             "tariff_status": ledger.tariff_reason,
             "free_charge_completion": (
                 None
@@ -194,6 +206,23 @@ class EnergySensor(CoordinatorEntity[EnergyCoordinator], SensorEntity):
 
     @property
     def extra_state_attributes(self):
+        if self.entity_description.key == "zerohero_import_window":
+            accumulator = self.coordinator.zerohero_import
+            return {
+                "hourly_import_kwh": {
+                    bucket: round(value, 6)
+                    for bucket, value in accumulator.hourly_import_kwh.items()
+                },
+                "accumulator_date": (
+                    None if accumulator.local_date is None else accumulator.local_date.isoformat()
+                ),
+                "last_sample": (
+                    None if accumulator.last_at is None else accumulator.last_at.isoformat()
+                ),
+                "threshold_kwh_per_hour": self.coordinator.config.get(
+                    "zero_import_threshold_kw", 0.03
+                ),
+            }
         if self.entity_description.key != "status":
             return None
         learning = self.coordinator.learning_result

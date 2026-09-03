@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.29 — visible ZEROHERO hourly import evidence
+
+- Expose a read-only **ZEROHERO Import This Window** sensor.
+- Include each local hourly import bucket, accumulator date, last sample, and
+  configured hourly threshold as sensor attributes for direct evening review.
+- Add the sensor to the importable Lovelace starter and document where to find
+  the evidence. No control boundary changes.
+
 ## 0.2.28 — guarded EV session commands and dashboard starter
 
 - Start a mapped Tessie/Tessy charge session only when the vehicle is confirmed
