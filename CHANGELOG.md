@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.2.28 — guarded EV session commands and dashboard starter
+
+- Start a mapped Tessie/Tessy charge session only when the vehicle is confirmed
+  at home, connected, below its mapped charge-limit target, and the planner has
+  an active free-window, solar-spill, or pre-window intent.
+- Stop only sessions started by this controller when the mapped target is
+  reached or the managed window ends; manually/cloud-started sessions are not
+  stopped by the integration.
+- Keep away, unknown, disconnected, and unavailable states fail-closed.
+- Expand the importable Lovelace starter view with tariff, planning, and house-
+  learning sensors. HACS still does not install dashboards automatically.
+- Add mocked coverage for EV session start/stop and retain the full regression
+  suite (135 public-package tests pass).
+
 ## 0.2.27 — Tessie solar spill, away bypass, and pre-window backfill
 
 - Add an opt-in Tessie/Tessy current planner for three explicit behaviours:

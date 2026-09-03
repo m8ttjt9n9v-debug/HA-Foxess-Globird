@@ -1,7 +1,7 @@
 # FoxESS Globird Energy Observer
 
 An Australia-scoped Home Assistant custom integration for an auditable,
-site-configured home-energy ledger. Version 0.2.27 is observer-by-default:
+site-configured home-energy ledger. Version 0.2.28 is observer-by-default:
 it reads the entities selected during setup, normalises their units and signs,
 persists local tariff meters and demand-learning evidence, and only permits
 FoxESS writes after an explicit control opt-in, complete actuator mapping, and
@@ -20,6 +20,11 @@ are required. When Tessie/Tessy is installed, common EV entities are suggested
 only when the local match is unambiguous; ambiguous matches are left blank.
 See the [installation guide](docs/installation.md) and
 [commissioning checklist](docs/commissioning.md).
+
+An importable Lovelace starter view is provided at
+[`examples/dashboard.yaml`](examples/dashboard.yaml). HACS installs the
+integration, not Lovelace dashboards; import the view and select the generated
+entities if your config-entry name differs from the example.
 
 ## What it provides
 
@@ -41,8 +46,9 @@ See the [installation guide](docs/installation.md) and
   local cable/current feedback is available. It uses the free-window import
   budget, soaks measurable post-window solar surplus once the battery is full,
   and can perform a small reserve-aware pre-window backfill. It never applies
-  charging limits to an away vehicle, and does not start/stop charging or
-  change the vehicle SoC limit.
+  charging limits to an away vehicle. A guarded session may use the mapped
+  charge switch to start or stop only a session it owns; it does not change
+  the vehicle SoC limit.
 
 The ZEROHERO guard checks each hourly bucket independently against the
 configured 0.03 kWh/hour threshold. A three-hour total below 0.09 kWh does not
@@ -54,7 +60,7 @@ This integration is supervisory software, not electrical protection. The
 default is still no hardware writes. The optional FoxESS path is a pilot
 controller, not a substitute for electrical protection or installer
 commissioning; it requires explicit entity mapping, response tests, and
-rollback evidence. EV start/stop, vehicle limit, and export control remain
+rollback evidence. Vehicle charge-limit and FoxESS export control remain
 outside this milestone. Review the [safety boundary](docs/safety.md) before use.
 
 Please report reproducible issues in the [issue tracker](https://github.com/m8ttjt9n9v-debug/HA-Foxess-Globird/issues) without including credentials, detailed home-location data, or production sensor history.

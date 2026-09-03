@@ -12,8 +12,8 @@ from homeassistant.util import dt as dt_util
 from .const import (
     CONF_AUTOMATIC_CONTROL_ENABLED,
     CONF_BONUS_LOAD_FOLLOWING_PERCENT,
-    CONF_EV_CHARGE_SWITCH,
     CONF_EV_CHARGE_LIMIT,
+    CONF_EV_CHARGE_SWITCH,
     CONF_EV_CURRENT_LIMIT,
     CONF_EV_MAX_CURRENT,
     CONF_EV_MIN_CURRENT,
@@ -60,6 +60,7 @@ class ActiveEvController:
         self.writes_performed = 0
         self.last_reason = "automatic_control_disabled"
         self.last_actions: tuple[str, ...] = ()
+        self._session_started = False
 
     @property
     def gate_status(self) -> str:
@@ -105,6 +106,11 @@ class ActiveEvController:
             return
         current_sensor, cable_sensor = feedback
         cable_connected = cable_sensor.state == "on"
+        switch_state = self.hass.states.get(str(switch_entity))
+        if switch_state is None or switch_state.state not in {"on", "off"}:
+            self.last_reason = "ev_charge_switch_unavailable"
+            self.last_actions = ()
+            return
         now = dt_util.now()
         hours_remaining = self.coordinator._free_window_hours_remaining(now)  # noqa: SLF001
         free_window_active = hours_remaining > 0
@@ -178,6 +184,38 @@ class ActiveEvController:
         pre_free_current = self._pre_free_backfill_current(
             now, free_window_active, cable_connected, at_home, charge_limit
         )
+        session_window_active = (
+            free_window_active or solar_spill_active or pre_free_current is not None
+        )
+        target_reached = ev_soc is not None and ev_soc >= charge_limit
+        session_intent = session_window_active and not target_reached
+        if session_window_active and switch_state.state == "off" and ev_soc is None:
+            self.last_reason = "ev_soc_unavailable"
+            self.last_actions = ()
+            return
+        stop_reason = "target_reached" if target_reached else "charging_window_finished"
+        if (
+            self._session_started
+            and not session_intent
+            and switch_state.state == "on"
+        ):
+            if self._adapter is None:
+                self._adapter = EvServiceAdapter(
+                    self.hass,
+                    EvEntityMap(
+                        current_limit_entity=str(current_entity),
+                        charge_switch_entity=str(switch_entity),
+                    ),
+                    allow_writes=True,
+                )
+            actions = await self._adapter.async_execute(
+                EvCommandPlan((EvCommand("turn_off_charge"),), stop_reason)
+            )
+            self._session_started = False
+            self.last_reason = stop_reason
+            self.last_actions = actions
+            self.writes_performed += len(actions)
+            return
         try:
             decision = plan_ev_current_target(
                 EvCurrentInputs(
@@ -256,19 +294,28 @@ class ActiveEvController:
             self.last_actions = ()
             return
         target = decision.target_current_a
-        if abs(target - current_value) < max(step, 0.1):
+        start_session = session_intent and switch_state.state == "off"
+        if abs(target - current_value) < max(step, 0.1) and not start_session:
             self.last_reason = decision.reason
             self.last_actions = ()
             return
+        commands = [EvCommand("set_current", target)]
+        if start_session:
+            commands.append(EvCommand("turn_on_charge"))
         if self._adapter is None:
             self._adapter = EvServiceAdapter(
                 self.hass,
-                EvEntityMap(current_limit_entity=str(current_entity)),
+                EvEntityMap(
+                    current_limit_entity=str(current_entity),
+                    charge_switch_entity=str(switch_entity),
+                ),
                 allow_writes=True,
             )
         actions = await self._adapter.async_execute(
-            EvCommandPlan((EvCommand("set_current", target),), decision.reason)
+            EvCommandPlan(tuple(commands), decision.reason)
         )
+        if start_session and "turn_on_charge" in actions:
+            self._session_started = True
         self.last_reason = decision.reason
         self.last_actions = actions
         self.writes_performed += len(actions)

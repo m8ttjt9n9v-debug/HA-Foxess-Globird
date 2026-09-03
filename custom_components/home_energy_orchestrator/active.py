@@ -16,6 +16,7 @@ from homeassistant.core import CALLBACK_TYPE, HomeAssistant
 from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.util import dt as dt_util
 
+from .active_ev import ActiveEvController
 from .const import (
     CONF_AUTOMATIC_CONTROL_ENABLED,
     CONF_EXPORT_LIMIT_KW,
@@ -30,7 +31,6 @@ from .const import (
     DEFAULT_INVERTER_DISCHARGE_LIMIT_KW,
 )
 from .coordinator import EnergyCoordinator
-from .active_ev import ActiveEvController
 from .foxess_adapter import FoxessEntityMap, FoxessServiceAdapter
 from .normalise import power_to_kw
 from .planner.control import ControlInputs, decide_control

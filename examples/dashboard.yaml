@@ -1,4 +1,7 @@
 title: FoxESS Globird Energy Observer
+# Import this view into a dashboard after installing the integration.  Entity
+# IDs use the default "Home Energy" entry slug; if the entry has another name,
+# select the generated entities from the dashboard editor.
 views:
   - title: Observer
     path: observer
@@ -11,3 +14,22 @@ views:
           - sensor.home_energy_grid_import
           - sensor.home_energy_grid_export
           - sensor.home_energy_ev_maximum_configured_power
+      - type: entities
+        title: Tariff and planning
+        entities:
+          - sensor.home_energy_free_energy_remaining_today
+          - sensor.home_energy_grid_import_today
+          - sensor.home_energy_free_window_import
+          - sensor.home_energy_free_charge_allowance_remaining
+          - sensor.home_energy_estimated_energy_cost_today
+          - sensor.home_energy_zerohero_telemetry_guard_qualified
+          - sensor.home_energy_tariff_guard_status
+          - sensor.home_energy_free_window_charge_completion_mode
+          - sensor.home_energy_free_window_charge_power_target
+      - type: entities
+        title: EV and house learning
+        entities:
+          - sensor.home_energy_learned_house_energy_budget
+          - sensor.home_energy_remaining_house_energy_budget
+          - sensor.home_energy_house_learning_samples
+          - sensor.home_energy_house_learning_status

@@ -11,19 +11,20 @@ from custom_components.home_energy_orchestrator.active import ActiveFoxessContro
 from custom_components.home_energy_orchestrator.active_ev import ActiveEvController
 from custom_components.home_energy_orchestrator.const import (
     CONF_AUTOMATIC_CONTROL_ENABLED,
-    CONF_FOXESS_FORCE_CHARGE_POWER,
-    CONF_FOXESS_FORCE_DISCHARGE_POWER,
-    CONF_FOXESS_WORK_MODE,
-    CONF_INVERTER_CHARGE_LIMIT_KW,
-    CONF_REHEARSAL_MODE,
+    CONF_EV_CHARGE_LIMIT,
     CONF_EV_CHARGE_SWITCH,
     CONF_EV_CURRENT_LIMIT,
-    CONF_EV_SOC,
     CONF_EV_MAX_CURRENT,
     CONF_EV_MIN_CURRENT,
     CONF_EV_PHASE_COUNT,
+    CONF_EV_SOC,
     CONF_EV_VOLTAGE,
+    CONF_FOXESS_FORCE_CHARGE_POWER,
+    CONF_FOXESS_FORCE_DISCHARGE_POWER,
+    CONF_FOXESS_WORK_MODE,
     CONF_INVERTER_CAPACITY,
+    CONF_INVERTER_CHARGE_LIMIT_KW,
+    CONF_REHEARSAL_MODE,
     CONF_SERVICE_IMPORT_LIMIT_A,
 )
 
@@ -188,8 +189,12 @@ async def test_ev_controller_does_not_change_current_when_vehicle_is_away(hass):
     hass.states.async_set("device_tracker.tessy_location", "not_home")
     hass.states.async_set("number.tessy_charge_current", "16", {"min": 0, "max": 16, "step": 1})
     hass.states.async_set("switch.tessy_charge", "on")
-    hass.states.async_set("sensor.tessy_charger_current", "16", {"friendly_name": "Tessy Charger current"})
-    hass.states.async_set("binary_sensor.tessy_charge_cable", "on", {"friendly_name": "Tessy Charge cable"})
+    hass.states.async_set(
+        "sensor.tessy_charger_current", "16", {"friendly_name": "Tessy Charger current"}
+    )
+    hass.states.async_set(
+        "binary_sensor.tessy_charge_cable", "on", {"friendly_name": "Tessy Charge cable"}
+    )
     coordinator = _coordinator(
         **{
             CONF_AUTOMATIC_CONTROL_ENABLED: True,
@@ -205,3 +210,84 @@ async def test_ev_controller_does_not_change_current_when_vehicle_is_away(hass):
 
     assert controller.last_reason == "away"
     assert calls == []
+
+
+async def test_ev_controller_starts_a_mapped_session_when_target_is_not_reached(hass):
+    calls = []
+    hass.bus.async_listen(EVENT_CALL_SERVICE, calls.append)
+
+    async def noop(_call):
+        return None
+
+    hass.services.async_register("number", "set_value", noop)
+    hass.services.async_register("switch", "turn_on", noop)
+    hass.states.async_set("device_tracker.tessy_location", "home")
+    hass.states.async_set("number.tessy_charge_current", "10", {"min": 0, "max": 16, "step": 1})
+    hass.states.async_set("number.tessy_charge_limit", "80")
+    hass.states.async_set("switch.tessy_charge", "off")
+    hass.states.async_set(
+        "sensor.tessy_charger_current", "0", {"friendly_name": "Tessy Charger current"}
+    )
+    hass.states.async_set(
+        "binary_sensor.tessy_charge_cable", "on", {"friendly_name": "Tessy Charge cable"}
+    )
+    coordinator = _coordinator(
+        **{
+            CONF_AUTOMATIC_CONTROL_ENABLED: True,
+            CONF_REHEARSAL_MODE: False,
+            CONF_EV_CHARGE_LIMIT: "number.tessy_charge_limit",
+            CONF_EV_CURRENT_LIMIT: "number.tessy_charge_current",
+            CONF_EV_CHARGE_SWITCH: "switch.tessy_charge",
+        }
+    )
+    coordinator.snapshot.ev_soc = 40.0
+    controller = ActiveEvController(hass, coordinator)
+
+    await controller.async_reconcile()
+    await hass.async_block_till_done()
+
+    assert [(event.data["domain"], event.data["service"]) for event in calls] == [
+        ("number", "set_value"),
+        ("switch", "turn_on"),
+    ]
+    assert controller._session_started is True
+
+
+async def test_ev_controller_stops_only_a_session_it_started_at_target(hass):
+    calls = []
+    hass.bus.async_listen(EVENT_CALL_SERVICE, calls.append)
+
+    async def noop(_call):
+        return None
+
+    hass.services.async_register("switch", "turn_off", noop)
+    hass.states.async_set("device_tracker.tessy_location", "home")
+    hass.states.async_set("number.tessy_charge_current", "10", {"min": 0, "max": 16, "step": 1})
+    hass.states.async_set("number.tessy_charge_limit", "80")
+    hass.states.async_set("switch.tessy_charge", "on")
+    hass.states.async_set(
+        "sensor.tessy_charger_current", "10", {"friendly_name": "Tessy Charger current"}
+    )
+    hass.states.async_set(
+        "binary_sensor.tessy_charge_cable", "on", {"friendly_name": "Tessy Charge cable"}
+    )
+    coordinator = _coordinator(
+        **{
+            CONF_AUTOMATIC_CONTROL_ENABLED: True,
+            CONF_REHEARSAL_MODE: False,
+            CONF_EV_CHARGE_LIMIT: "number.tessy_charge_limit",
+            CONF_EV_CURRENT_LIMIT: "number.tessy_charge_current",
+            CONF_EV_CHARGE_SWITCH: "switch.tessy_charge",
+        }
+    )
+    coordinator.snapshot.ev_soc = 80.0
+    controller = ActiveEvController(hass, coordinator)
+    controller._session_started = True
+
+    await controller.async_reconcile()
+    await hass.async_block_till_done()
+
+    assert [(event.data["domain"], event.data["service"]) for event in calls] == [
+        ("switch", "turn_off")
+    ]
+    assert controller.last_reason == "target_reached"

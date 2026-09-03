@@ -14,10 +14,9 @@ step.
 3. Go to **Settings → Devices & services → Add integration** and select **FoxESS Globird Energy Observer**.
 4. Complete the entity-mapping form. No edits to `configuration.yaml` are needed.
 
-HACS installation requires a public GitHub repository. A GitHub release is
-preferred for a custom repository; it becomes mandatory only when applying
-for inclusion in HACS's default catalogue. This repository does not yet have
-that published distribution channel.
+HACS installation requires a public GitHub repository. This project publishes
+versioned GitHub releases for the custom-repository channel; inclusion in
+HACS's default catalogue is a separate review process.
 
 Version 0.2.27 is observer-by-default. It makes no writes unless automatic
 control is enabled, Rehearsal mode is disabled, and the required FoxESS and EV
@@ -27,6 +26,13 @@ write; away or unknown presence is fail-closed. Free-window current follows
 the persisted import allowance, while post-window solar spill and reserve-aware
 pre-window backfill are bounded by the configured EV and inverter limits. EV
 start/stop, vehicle charge-limit, and export writes remain disabled.
+
+Version 0.2.28 adds guarded EV session start/stop. A session can start only
+when the mapped Tessie/Tessy vehicle is home, connected, below its mapped
+charge-limit target, and the planner has a managed charging intent. The
+controller stops only sessions it started itself. Manually or cloud-started
+sessions are not stopped. Import [`examples/dashboard.yaml`](../examples/dashboard.yaml)
+as a Lovelace starter view; HACS does not install dashboards automatically.
 
 ## Before setup
 
