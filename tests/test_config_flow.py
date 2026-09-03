@@ -36,6 +36,25 @@ async def test_user_flow_defaults_existing_single_phase_ev_configuration(hass):
     assert result["data"]["ev_phase_count"] == 1
 
 
+async def test_user_flow_preserves_explicit_future_actuator_mappings(hass):
+    mappings = {
+        "foxess_work_mode_entity": "select.foxess_work_mode",
+        "foxess_force_charge_power_entity": "number.foxess_force_charge_power",
+        "foxess_force_discharge_power_entity": "number.foxess_force_discharge_power",
+        "ev_charge_limit_entity": "number.tessie_charge_limit",
+        "ev_current_limit_entity": "number.tessie_charge_current",
+        "ev_charge_switch_entity": "switch.tessie_charge",
+    }
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": SOURCE_USER},
+        data={"name": "Mapped Site", **ENTRY_DATA, **mappings},
+    )
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert {key: result["data"][key] for key in mappings} == mappings
+
+
 async def test_user_flow_rejects_unsafe_limits(hass):
     result = await hass.config_entries.flow.async_init(
         DOMAIN,

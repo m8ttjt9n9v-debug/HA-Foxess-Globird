@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.14 — Explicit actuator mapping groundwork
+
+- Add optional, domain-constrained FoxESS and Tessie actuator mappings to the
+  setup and reconfigure flows for future commissioning.
+- Validate and redact mapping presence in diagnostics without enabling writes.
+
 ## 0.2.13 — Hassfest translation fix
 
 - Place selector option translations at the Home Assistant-supported

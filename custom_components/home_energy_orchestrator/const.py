@@ -45,6 +45,16 @@ CONF_FREE_CHARGE_START = "free_charge_window_start"
 CONF_FREE_CHARGE_END = "free_charge_window_end"
 CONF_HOUSE_LEARNING_FALLBACK = "house_learning_fallback_kwh"
 
+# Actuator mappings are collected for commissioning and diagnostics. The
+# observer release never writes to these entities; an active release must
+# still pass every mapping through its explicit safety gate.
+CONF_FOXESS_WORK_MODE = "foxess_work_mode_entity"
+CONF_FOXESS_FORCE_CHARGE_POWER = "foxess_force_charge_power_entity"
+CONF_FOXESS_FORCE_DISCHARGE_POWER = "foxess_force_discharge_power_entity"
+CONF_EV_CHARGE_LIMIT = "ev_charge_limit_entity"
+CONF_EV_CURRENT_LIMIT = "ev_current_limit_entity"
+CONF_EV_CHARGE_SWITCH = "ev_charge_switch_entity"
+
 DEFAULT_BATTERY_FLOOR = 10.0
 DEFAULT_RESERVE_KWH = 0.0
 DEFAULT_DAILY_FREE_ALLOWANCE_KWH = 50.0

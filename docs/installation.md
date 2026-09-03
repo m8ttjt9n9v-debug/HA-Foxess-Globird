@@ -18,7 +18,7 @@ preferred for a custom repository; it becomes mandatory only when applying
 for inclusion in HACS's default catalogue. This repository does not yet have
 that published distribution channel.
 
-The current 0.2.13 release is observer-only: it makes no service calls and cannot change inverter, EV, charger, socket, or tariff settings. Its planner and adapters are tested separately but remain disabled until commissioning gates are complete.
+The current 0.2.14 release is observer-only: it makes no service calls and cannot change inverter, EV, charger, socket, or tariff settings. Its planner and adapters are tested separately but remain disabled until commissioning gates are complete.
 
 ## Before setup
 

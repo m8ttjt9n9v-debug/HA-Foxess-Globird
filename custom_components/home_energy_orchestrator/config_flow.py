@@ -22,13 +22,19 @@ from .const import (
     CONF_DAILY_CHARGE,
     CONF_DAILY_FREE_ALLOWANCE_KWH,
     CONF_DAILY_IMPORT_ENTITY,
+    CONF_EV_CHARGE_LIMIT,
+    CONF_EV_CHARGE_SWITCH,
     CONF_EV_CHARGER_PROFILE,
+    CONF_EV_CURRENT_LIMIT,
     CONF_EV_MAX_CURRENT,
     CONF_EV_MIN_CURRENT,
     CONF_EV_PHASE_COUNT,
     CONF_EV_SOC,
     CONF_EV_VOLTAGE,
     CONF_EXPORT_LIMIT_KW,
+    CONF_FOXESS_FORCE_CHARGE_POWER,
+    CONF_FOXESS_FORCE_DISCHARGE_POWER,
+    CONF_FOXESS_WORK_MODE,
     CONF_FREE_CHARGE_END,
     CONF_FREE_CHARGE_START,
     CONF_GRID_IMPORT_POSITIVE,
@@ -87,6 +93,9 @@ from .const import (
 )
 
 ENTITY = selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor"))
+SELECT_ENTITY = selector.EntitySelector(selector.EntitySelectorConfig(domain="select"))
+NUMBER_ENTITY = selector.EntitySelector(selector.EntitySelectorConfig(domain="number"))
+SWITCH_ENTITY = selector.EntitySelector(selector.EntitySelectorConfig(domain="switch"))
 
 
 class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -300,6 +309,12 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         CONF_ZERO_IMPORT_CONFIRM_MINUTES, DEFAULT_ZERO_IMPORT_CONFIRM_MINUTES
                     ),
                 ): vol.Coerce(float),
+                optional_entity(CONF_FOXESS_WORK_MODE): SELECT_ENTITY,
+                optional_entity(CONF_FOXESS_FORCE_CHARGE_POWER): NUMBER_ENTITY,
+                optional_entity(CONF_FOXESS_FORCE_DISCHARGE_POWER): NUMBER_ENTITY,
+                optional_entity(CONF_EV_CHARGE_LIMIT): NUMBER_ENTITY,
+                optional_entity(CONF_EV_CURRENT_LIMIT): NUMBER_ENTITY,
+                optional_entity(CONF_EV_CHARGE_SWITCH): SWITCH_ENTITY,
             }
         )
 
@@ -393,6 +408,12 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             CONF_GRID_POWER,
             CONF_HOUSE_LOAD,
             CONF_EV_SOC,
+            CONF_FOXESS_WORK_MODE,
+            CONF_FOXESS_FORCE_CHARGE_POWER,
+            CONF_FOXESS_FORCE_DISCHARGE_POWER,
+            CONF_EV_CHARGE_LIMIT,
+            CONF_EV_CURRENT_LIMIT,
+            CONF_EV_CHARGE_SWITCH,
         ):
             entity_id = data.get(key)
             if entity_id is not None and not valid_entity_id(str(entity_id)):
