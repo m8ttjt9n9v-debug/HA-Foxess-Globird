@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.2.24 — opt-in FoxESS free-window controller
+
+- Add an explicit automatic-control opt-in and Rehearsal mode interlock to the
+  config and reconfigure forms; defaults remain no-write.
+- Wire the tested FoxESS free-window charge/restore planner into a 30-second
+  coordinator loop only when all three FoxESS actuator mappings are present
+  and the interlocks permit control.
+- Keep the first active capability narrow: allowance-paced Force Charge and
+  reviewed `Backup`/`Self Use` restoration. Tessie/EV and export writers are
+  not enabled by this release.
+- Expose control-gate state, last control reason/actions, and write count in
+  the status sensor attributes for commissioning evidence.
+- Add mocked Home Assistant tests covering disabled, rehearsal, and active
+  FoxESS paths.
+
 ## 0.2.23 — explicit free-window completion modes
 
 - Add a configurable full-battery import threshold (49 kWh by default) to the

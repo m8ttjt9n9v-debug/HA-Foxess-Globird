@@ -198,8 +198,31 @@ class EnergySensor(CoordinatorEntity[EnergyCoordinator], SensorEntity):
             return None
         learning = self.coordinator.learning_result
         return {
-            "mode": "observe",
-            "writes_performed": 0,
+            "mode": "automatic_foxess" if self.coordinator.active_controller else "observe",
+            "control_gate": (
+                self.coordinator.active_controller.gate_status
+                if self.coordinator.active_controller
+                else "unavailable"
+            ),
+            "last_control_reason": (
+                self.coordinator.active_controller.last_reason
+                if self.coordinator.active_controller
+                else "unavailable"
+            ),
+            "last_control_actions": (
+                self.coordinator.active_controller.last_actions
+                if self.coordinator.active_controller
+                else ()
+            ),
+            "writes_performed": (
+                self.coordinator.active_controller.writes_performed
+                if self.coordinator.active_controller
+                else 0
+            ),
+            "automatic_control_enabled": self.coordinator.config.get(
+                "automatic_control_enabled", False
+            ),
+            "rehearsal_mode": self.coordinator.config.get("rehearsal_mode", True),
             "integration": DOMAIN,
             "learning_model": learning.model,
             "learning_samples": learning.sample_count,

@@ -12,6 +12,7 @@ from homeassistant.core import callback, valid_entity_id
 from homeassistant.helpers import selector
 
 from .const import (
+    CONF_AUTOMATIC_CONTROL_ENABLED,
     CONF_BATTERY_CAPACITY,
     CONF_BATTERY_CAPACITY_ENTITY,
     CONF_BATTERY_FLOOR,
@@ -52,6 +53,7 @@ from .const import (
     CONF_PEAK_RATE,
     CONF_PEAK_WINDOW_END,
     CONF_PEAK_WINDOW_START,
+    CONF_REHEARSAL_MODE,
     CONF_RESERVE,
     CONF_SERVICE_IMPORT_LIMIT_A,
     CONF_SHOULDER_RATE,
@@ -59,6 +61,7 @@ from .const import (
     CONF_SOLAR_POWER,
     CONF_ZERO_IMPORT_CONFIRM_MINUTES,
     CONF_ZERO_IMPORT_THRESHOLD_KW,
+    DEFAULT_AUTOMATIC_CONTROL_ENABLED,
     DEFAULT_BATTERY_FLOOR,
     DEFAULT_BONUS_LOAD_FOLLOWING_PERCENT,
     DEFAULT_BONUS_WINDOW_END,
@@ -85,6 +88,7 @@ from .const import (
     DEFAULT_PEAK_RATE,
     DEFAULT_PEAK_WINDOW_END,
     DEFAULT_PEAK_WINDOW_START,
+    DEFAULT_REHEARSAL_MODE,
     DEFAULT_RESERVE_KWH,
     DEFAULT_SERVICE_IMPORT_LIMIT_A,
     DEFAULT_SHOULDER_RATE,
@@ -320,6 +324,16 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         CONF_ZERO_IMPORT_CONFIRM_MINUTES, DEFAULT_ZERO_IMPORT_CONFIRM_MINUTES
                     ),
                 ): vol.Coerce(float),
+                vol.Required(
+                    CONF_AUTOMATIC_CONTROL_ENABLED,
+                    default=defaults.get(
+                        CONF_AUTOMATIC_CONTROL_ENABLED, DEFAULT_AUTOMATIC_CONTROL_ENABLED
+                    ),
+                ): selector.BooleanSelector(),
+                vol.Required(
+                    CONF_REHEARSAL_MODE,
+                    default=defaults.get(CONF_REHEARSAL_MODE, DEFAULT_REHEARSAL_MODE),
+                ): selector.BooleanSelector(),
                 optional_entity(CONF_FOXESS_WORK_MODE): SELECT_ENTITY,
                 optional_entity(CONF_FOXESS_FORCE_CHARGE_POWER): NUMBER_ENTITY,
                 optional_entity(CONF_FOXESS_FORCE_DISCHARGE_POWER): NUMBER_ENTITY,
@@ -409,6 +423,10 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             CONF_ZERO_IMPORT_CONFIRM_MINUTES: data.get(
                 CONF_ZERO_IMPORT_CONFIRM_MINUTES, DEFAULT_ZERO_IMPORT_CONFIRM_MINUTES
             ),
+            CONF_AUTOMATIC_CONTROL_ENABLED: data.get(
+                CONF_AUTOMATIC_CONTROL_ENABLED, DEFAULT_AUTOMATIC_CONTROL_ENABLED
+            ),
+            CONF_REHEARSAL_MODE: data.get(CONF_REHEARSAL_MODE, DEFAULT_REHEARSAL_MODE),
         }
 
     @staticmethod

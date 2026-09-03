@@ -39,6 +39,8 @@ ENTRY_DATA = {
     "free_charge_window_end": "14:59:00",
     "free_charge_full_battery_import_threshold_kwh": 49.0,
     "house_learning_fallback_kwh": 17.5,
+    "automatic_control_enabled": False,
+    "rehearsal_mode": True,
     "ev_charger_profile": "single_phase_32a",
     "ev_min_current": 6.0,
     "ev_max_current": 32.0,

@@ -48,6 +48,8 @@ CONF_FREE_CHARGE_FULL_BATTERY_IMPORT_THRESHOLD_KWH = (
     "free_charge_full_battery_import_threshold_kwh"
 )
 CONF_HOUSE_LEARNING_FALLBACK = "house_learning_fallback_kwh"
+CONF_AUTOMATIC_CONTROL_ENABLED = "automatic_control_enabled"
+CONF_REHEARSAL_MODE = "rehearsal_mode"
 
 # Actuator mappings are collected for commissioning and diagnostics. The
 # observer release never writes to these entities; an active release must
@@ -85,6 +87,8 @@ DEFAULT_FREE_CHARGE_START = "12:01:00"
 DEFAULT_FREE_CHARGE_END = "14:59:00"
 DEFAULT_FREE_CHARGE_FULL_BATTERY_IMPORT_THRESHOLD_KWH = 49.0
 DEFAULT_HOUSE_LEARNING_FALLBACK_KWH = 17.5
+DEFAULT_AUTOMATIC_CONTROL_ENABLED = False
+DEFAULT_REHEARSAL_MODE = True
 DEFAULT_INVERTER_CAPACITY_KW = 0.0
 DEFAULT_BONUS_LOAD_FOLLOWING_PERCENT = 20.0
 DEFAULT_NON_FREE_LOAD_FOLLOWING_PERCENT = 30.0

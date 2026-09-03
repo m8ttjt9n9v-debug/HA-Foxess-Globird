@@ -1,4 +1,4 @@
-"""Read configured entities and calculate a safe observer-only ledger."""
+"""Read configured entities and calculate a safe observer-by-default ledger."""
 
 from __future__ import annotations
 
@@ -101,6 +101,7 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
     def __init__(self, hass: HomeAssistant, config: dict[str, object], entry_id: str) -> None:
         super().__init__(hass, _LOGGER, name=DOMAIN, update_interval=timedelta(seconds=30))
         self.config = config
+        self.active_controller = None
         self.snapshot: SiteSnapshot | None = None
         self.demand_history = DemandHistory([])
         self.demand_sampler = self._create_demand_sampler(config)

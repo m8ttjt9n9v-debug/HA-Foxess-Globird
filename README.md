@@ -1,10 +1,11 @@
 # FoxESS Globird Energy Observer
 
 An Australia-scoped Home Assistant custom integration for an auditable,
-site-configured home-energy ledger. Version 0.2.23 is deliberately
-observer-only: it reads the entities selected during setup, normalises their
-units and signs, persists local tariff meters and demand-learning evidence,
-and makes no service calls or hardware changes.
+site-configured home-energy ledger. Version 0.2.24 is observer-by-default:
+it reads the entities selected during setup, normalises their units and signs,
+persists local tariff meters and demand-learning evidence, and only permits
+FoxESS writes after an explicit control opt-in, complete actuator mapping, and
+Rehearsal mode being disabled.
 
 ## Installation
 
@@ -30,6 +31,9 @@ are required. See the [installation guide](docs/installation.md) and
   house-load, AC-coupled PV, and inverter-limit telemetry;
 - a read-only completion-mode recommendation for the reviewed `Backup` /
   `Self Use` outcomes at full battery.
+- an opt-in FoxESS free-window controller that runs every 30 seconds only when
+  the automatic-control gate is enabled and all three FoxESS actuator entities
+  are mapped; Tessie/EV writes remain disabled in this release.
 
 The ZEROHERO guard checks each hourly bucket independently against the
 configured 0.03 kWh/hour threshold. A three-hour total below 0.09 kWh does not
@@ -37,11 +41,12 @@ qualify if any individual hourly bucket exceeds 0.03 kWh/hour.
 
 ## Safety boundary
 
-This integration is supervisory software, not electrical protection. It does
-not control FoxESS equipment, EVs, EVSEs, sockets, or tariff settings. Any
-future actuator release must be separately commissioned with explicit entity
-mapping, response tests, and rollback evidence. Review the [safety
-boundary](docs/safety.md) before use.
+This integration is supervisory software, not electrical protection. The
+default is still no hardware writes. The optional FoxESS path is a pilot
+controller, not a substitute for electrical protection or installer
+commissioning; it requires explicit entity mapping, response tests, and
+rollback evidence. Tessie/EV and export control are not enabled by this
+release. Review the [safety boundary](docs/safety.md) before use.
 
 Please report reproducible issues in the [issue tracker](https://github.com/m8ttjt9n9v-debug/HA-Foxess-Globird/issues) without including credentials, detailed home-location data, or production sensor history.
 

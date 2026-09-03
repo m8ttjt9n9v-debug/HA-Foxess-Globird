@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Set up FoxESS Globird Energy Observer",
-        "description": "This first release observes energy telemetry only and never controls equipment.",
+        "description": "Automatic control is opt-in and remains blocked while Rehearsal mode is enabled. Verify mappings and commissioning evidence before enabling it.",
         "data": {
           "name": "Site name",
           "battery_soc_entity": "Battery state of charge sensor",
@@ -34,9 +34,9 @@
           "free_charge_full_battery_import_threshold_kwh": "Full-battery import threshold for Self Use (kWh)",
           "house_learning_fallback_kwh": "House-energy learning fallback (kWh)",
           "ev_soc_entity": "EV state of charge sensor (optional)",
-          "foxess_work_mode_entity": "FoxESS work-mode selector (optional; future control mapping)",
-          "foxess_force_charge_power_entity": "FoxESS force-charge power number (optional; future control mapping)",
-          "foxess_force_discharge_power_entity": "FoxESS force-discharge power number (optional; future control mapping)",
+          "foxess_work_mode_entity": "FoxESS work-mode selector (required for automatic FoxESS control)",
+          "foxess_force_charge_power_entity": "FoxESS force-charge power number (required for automatic FoxESS control)",
+          "foxess_force_discharge_power_entity": "FoxESS force-discharge power number (required for automatic FoxESS control)",
           "ev_charge_limit_entity": "EV charge-limit number (optional; future control mapping)",
           "ev_current_limit_entity": "EV current-limit number (optional; future control mapping)",
           "ev_charge_switch_entity": "EV charge switch (optional; future control mapping)",
@@ -50,12 +50,14 @@
           "bonus_window_start": "Bonus zero-import window start",
           "bonus_window_end": "Bonus zero-import window end",
           "zero_import_threshold_kw": "ZEROHERO average import threshold (kWh/hour; contract says 0.03)",
-          "zero_import_confirm_minutes": "Local telemetry debounce only (minutes)"
+          "zero_import_confirm_minutes": "Local telemetry debounce only (minutes)",
+          "automatic_control_enabled": "Enable automatic FoxESS control (commissioned sites only)",
+          "rehearsal_mode": "Rehearsal mode (no hardware writes)"
         }
       },
       "reconfigure": {
         "title": "Reconfigure FoxESS Globird Energy Observer",
-        "description": "Update site mappings or observer limits. This release still never controls equipment.",
+        "description": "Update site mappings, limits, or the explicit control gate. Rehearsal mode blocks all hardware writes.",
         "data": {
           "name": "Site name",
           "battery_soc_entity": "Battery state of charge sensor",
@@ -86,9 +88,9 @@
           "free_charge_full_battery_import_threshold_kwh": "Full-battery import threshold for Self Use (kWh)",
           "house_learning_fallback_kwh": "House-energy learning fallback (kWh)",
           "ev_soc_entity": "EV state of charge sensor (optional)",
-          "foxess_work_mode_entity": "FoxESS work-mode selector (optional; future control mapping)",
-          "foxess_force_charge_power_entity": "FoxESS force-charge power number (optional; future control mapping)",
-          "foxess_force_discharge_power_entity": "FoxESS force-discharge power number (optional; future control mapping)",
+          "foxess_work_mode_entity": "FoxESS work-mode selector (required for automatic FoxESS control)",
+          "foxess_force_charge_power_entity": "FoxESS force-charge power number (required for automatic FoxESS control)",
+          "foxess_force_discharge_power_entity": "FoxESS force-discharge power number (required for automatic FoxESS control)",
           "ev_charge_limit_entity": "EV charge-limit number (optional; future control mapping)",
           "ev_current_limit_entity": "EV current-limit number (optional; future control mapping)",
           "ev_charge_switch_entity": "EV charge switch (optional; future control mapping)",
@@ -102,7 +104,9 @@
           "bonus_window_start": "Bonus zero-import window start",
           "bonus_window_end": "Bonus zero-import window end",
           "zero_import_threshold_kw": "ZEROHERO average import threshold (kWh/hour; contract says 0.03)",
-          "zero_import_confirm_minutes": "Local telemetry debounce only (minutes)"
+          "zero_import_confirm_minutes": "Local telemetry debounce only (minutes)",
+          "automatic_control_enabled": "Enable automatic FoxESS/Tessie control (commissioned sites only)",
+          "rehearsal_mode": "Rehearsal mode (no hardware writes)"
         }
       }
     },

@@ -2,9 +2,10 @@
 
 ## Current pilot installation
 
-The first release should be installed manually on a clean test instance. Follow
-the [clean-instance pilot guide](clean-instance-pilot.md). It has no hardware
-control capability.
+Install the release on a backed-up test instance first. Follow the
+[clean-instance pilot guide](clean-instance-pilot.md). The default setup is
+still non-writing; the optional FoxESS controller is a separate commissioning
+step.
 
 ## HACS custom repository (after publishing)
 
@@ -18,7 +19,16 @@ preferred for a custom repository; it becomes mandatory only when applying
 for inclusion in HACS's default catalogue. This repository does not yet have
 that published distribution channel.
 
-The current 0.2.23 release is observer-only: it makes no service calls and cannot change inverter, EV, charger, socket, or tariff settings. Its planner and adapters are tested separately but remain disabled until commissioning gates are complete. When an AC-coupled solar sensor, whole-house load sensor, cumulative free-window meter, and inverter charge limit are mapped, it exposes a read-only charge-power target paced against the remaining free-window allowance. It also reports the reviewed completion mode: Backup while a full battery is below the configured 49 kWh threshold, then Self Use at the threshold or when the 50 kWh allowance is exhausted.
+Version 0.2.24 is observer-by-default. It makes no writes unless automatic
+control is enabled, Rehearsal mode is disabled, and all three FoxESS actuator
+entities are explicitly mapped. In that commissioned state, only the
+allowance-paced free-window charge/restore loop is active. Tessie/EV and export
+writers remain disabled. With an AC-coupled solar sensor, whole-house load
+sensor, and inverter charge limit mapped, the integration exposes a read-only
+charge-power target paced against the remaining free-window allowance. It
+also reports the reviewed completion mode: Backup while a full battery is
+below the configured 49 kWh threshold, then Self Use at the threshold or when
+the 50 kWh allowance is exhausted.
 
 ## Before setup
 
