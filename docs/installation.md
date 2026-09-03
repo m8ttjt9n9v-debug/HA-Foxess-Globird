@@ -18,7 +18,7 @@ preferred for a custom repository; it becomes mandatory only when applying
 for inclusion in HACS's default catalogue. This repository does not yet have
 that published distribution channel.
 
-The current 0.2.15 release is observer-only: it makes no service calls and cannot change inverter, EV, charger, socket, or tariff settings. Its planner and adapters are tested separately but remain disabled until commissioning gates are complete.
+The current 0.2.22 release is observer-only: it makes no service calls and cannot change inverter, EV, charger, socket, or tariff settings. Its planner and adapters are tested separately but remain disabled until commissioning gates are complete. When an AC-coupled solar sensor, whole-house load sensor, cumulative free-window meter, and inverter charge limit are mapped, it also exposes a read-only charge-power target paced against the remaining free-window allowance.
 
 ## Before setup
 

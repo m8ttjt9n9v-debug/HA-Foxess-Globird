@@ -45,6 +45,7 @@ from .const import (
     CONF_SERVICE_IMPORT_LIMIT_A,
     CONF_SHOULDER_RATE,
     CONF_SITE_PHASE_COUNT,
+    CONF_SOLAR_POWER,
     CONF_ZERO_IMPORT_CONFIRM_MINUTES,
     CONF_ZERO_IMPORT_THRESHOLD_KW,
     DEFAULT_BONUS_WINDOW_END,
@@ -75,6 +76,7 @@ from .planner.daily_meter import (
     HourlyWindowImportAccumulator,
     WindowImportAccumulator,
 )
+from .planner.free_charge import FreeChargePowerPlan, calculate_free_charge_power
 from .planner.learning import (
     DemandCycleSampler,
     DemandHistory,
@@ -139,6 +141,7 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
                     CONF_GRID_POWER,
                     CONF_DAILY_IMPORT_ENTITY,
                     CONF_HOUSE_LOAD,
+                    CONF_SOLAR_POWER,
                     CONF_EV_SOC,
                 )
                 if (entity_id := config.get(key))
@@ -218,6 +221,52 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
             )
         except ValueError:
             return None
+
+    @property
+    def free_charge_plan(self) -> FreeChargePowerPlan | None:
+        """Return a read-only allowance-paced charge target when evidence exists."""
+        if self.snapshot is None or self.data is None:
+            return None
+        imported = self.data.free_window_import_kwh
+        house = self.snapshot.house_load_kw
+        solar = self._power(self.config.get(CONF_SOLAR_POWER))
+        if imported is None or house is None or solar is None:
+            return None
+        try:
+            allowance = self._configured_nonnegative(
+                CONF_DAILY_FREE_ALLOWANCE_KWH, DEFAULT_DAILY_FREE_ALLOWANCE_KWH
+            )
+            limit = self._configured_nonnegative(
+                CONF_INVERTER_CHARGE_LIMIT_KW, DEFAULT_INVERTER_CHARGE_LIMIT_KW
+            )
+            now = dt_util.now()
+            hours_remaining = self._free_window_hours_remaining(now)
+            return calculate_free_charge_power(
+                allowance_remaining_kwh=max(allowance - imported, 0.0),
+                hours_remaining=hours_remaining,
+                house_load_kw=max(house, 0.0),
+                pv_generation_kw=max(solar, 0.0),
+                inverter_charge_limit_kw=limit,
+            )
+        except (TypeError, ValueError):
+            return None
+
+    def _free_window_hours_remaining(self, now: datetime) -> float:
+        """Return remaining hours in today's configured free-charge window."""
+        start = self._configured_time(CONF_FREE_CHARGE_START, "12:01:00")
+        end = self._configured_time(CONF_FREE_CHARGE_END, "14:59:00")
+        current = now.timetz().replace(tzinfo=None)
+        if start < end:
+            if not start <= current < end:
+                return 0.0
+            finish = datetime.combine(now.date(), end, tzinfo=now.tzinfo)
+        else:
+            if current >= end and current < start:
+                return 0.0
+            finish = datetime.combine(now.date(), end, tzinfo=now.tzinfo)
+            if current >= start:
+                finish += timedelta(days=1)
+        return max(0.0, (finish - now).total_seconds() / 3600)
 
     @callback
     def _async_source_changed(self, event: Event) -> None:

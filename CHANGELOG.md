@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.2.22 — read-only free-window charge target
+
+- Add an optional AC-coupled solar-power mapping to the setup and reconfigure
+  forms.
+- Expose a read-only **Free-Window Charge Power Target** sensor that combines
+  the persisted free-window import allowance, remaining local window time,
+  measured house load, measured AC-coupled PV, and the commissioned inverter
+  charge limit.
+- Keep the target fail-closed: it is unavailable unless the required evidence
+  is mapped and valid, and this release still performs no service calls.
+
 ## 0.2.21 — normal-mode restoration at zero charge
 
 - Add a pure FoxESS response-reconciliation policy with a retry interval and

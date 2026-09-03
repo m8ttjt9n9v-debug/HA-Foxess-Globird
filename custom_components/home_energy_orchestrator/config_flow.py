@@ -55,6 +55,7 @@ from .const import (
     CONF_SERVICE_IMPORT_LIMIT_A,
     CONF_SHOULDER_RATE,
     CONF_SITE_PHASE_COUNT,
+    CONF_SOLAR_POWER,
     CONF_ZERO_IMPORT_CONFIRM_MINUTES,
     CONF_ZERO_IMPORT_THRESHOLD_KW,
     DEFAULT_BATTERY_FLOOR,
@@ -237,6 +238,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     ),
                 ): vol.Coerce(float),
                 optional_entity(CONF_HOUSE_LOAD): ENTITY,
+                optional_entity(CONF_SOLAR_POWER): ENTITY,
                 vol.Required(
                     CONF_FREE_CHARGE_START,
                     default=defaults.get(CONF_FREE_CHARGE_START, DEFAULT_FREE_CHARGE_START),
@@ -407,6 +409,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             CONF_DAILY_IMPORT_ENTITY,
             CONF_GRID_POWER,
             CONF_HOUSE_LOAD,
+            CONF_SOLAR_POWER,
             CONF_EV_SOC,
             CONF_FOXESS_WORK_MODE,
             CONF_FOXESS_FORCE_CHARGE_POWER,

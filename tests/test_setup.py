@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import UTC, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
@@ -94,6 +95,35 @@ async def test_source_change_recalculates_without_a_restart(hass):
 
     grid_export = _entity_id(hass, entry, "grid_export")
     assert hass.states.get(grid_export).state == "2.0"
+
+
+async def test_free_charge_target_accounts_for_allowance_house_load_and_solar(hass, monkeypatch):
+    hass.states.async_set("sensor.test_battery_soc", "60", {"unit_of_measurement": "%"})
+    hass.states.async_set("sensor.test_grid_power", "0", {"unit_of_measurement": "kW"})
+    hass.states.async_set("sensor.test_house_load", "4", {"unit_of_measurement": "kW"})
+    hass.states.async_set("sensor.test_solar", "3", {"unit_of_measurement": "kW"})
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Charge target site",
+        data={
+            **ENTRY_DATA,
+            "solar_power_entity": "sensor.test_solar",
+            "inverter_charge_limit_kw": 15.0,
+        },
+    )
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    coordinator = entry.runtime_data
+    coordinator.data = replace(coordinator.data, free_window_import_kwh=5.0)
+    monkeypatch.setattr(
+        "custom_components.home_energy_orchestrator.coordinator.dt_util.now",
+        lambda: datetime(2026, 9, 3, 12, 1, tzinfo=ZoneInfo("Australia/Sydney")),
+    )
+    plan = coordinator.free_charge_plan
+    assert plan is not None
+    assert plan.target_grid_import_kw > 0
+    assert round(plan.target_charge_power_kw, 3) == 13.169
 
 
 async def test_potential_capacity_is_multiplied_by_soc(hass):
