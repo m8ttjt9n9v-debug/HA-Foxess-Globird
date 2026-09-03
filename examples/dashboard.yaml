@@ -6,8 +6,8 @@ views:
       - type: entities
         title: Controller status
         entities:
-          - sensor.home_energy_orchestrator_status
-          - sensor.home_energy_orchestrator_available_battery_energy
-          - sensor.home_energy_orchestrator_grid_import
-          - sensor.home_energy_orchestrator_grid_export
-          - sensor.home_energy_orchestrator_ev_maximum_configured_power
+          - sensor.home_energy_status
+          - sensor.home_energy_available_battery_energy
+          - sensor.home_energy_grid_import
+          - sensor.home_energy_grid_export
+          - sensor.home_energy_ev_maximum_configured_power

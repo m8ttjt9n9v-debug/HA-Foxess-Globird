@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import yaml
+
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 COMPONENT_ROOT = REPOSITORY_ROOT / "custom_components"
 COMPONENT = COMPONENT_ROOT / "home_energy_orchestrator"
@@ -48,3 +50,18 @@ def test_hacs_metadata_matches_the_integration_manifest() -> None:
     assert hacs["name"] == manifest["name"]
     assert hacs["country"] == "AU"
     assert hacs["homeassistant"] == "2026.8.3"
+
+
+def test_example_dashboard_uses_the_integration_entity_ids() -> None:
+    """Keep the shipped observer dashboard aligned with generated entity IDs."""
+    dashboard = yaml.safe_load(
+        (REPOSITORY_ROOT / "examples" / "dashboard.yaml").read_text(encoding="utf-8")
+    )
+    entities = dashboard["views"][0]["cards"][0]["entities"]
+    assert entities == [
+        "sensor.home_energy_status",
+        "sensor.home_energy_available_battery_energy",
+        "sensor.home_energy_grid_import",
+        "sensor.home_energy_grid_export",
+        "sensor.home_energy_ev_maximum_configured_power",
+    ]
