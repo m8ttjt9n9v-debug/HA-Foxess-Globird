@@ -4,7 +4,14 @@ from homeassistant.config_entries import SOURCE_RECONFIGURE, SOURCE_USER
 from homeassistant.data_entry_flow import FlowResultType
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.home_energy_orchestrator.const import DOMAIN
+from custom_components.home_energy_orchestrator.config_flow import ConfigFlow
+from custom_components.home_energy_orchestrator.const import (
+    CONF_EV_CHARGE_LIMIT,
+    CONF_EV_CHARGE_SWITCH,
+    CONF_EV_CURRENT_LIMIT,
+    CONF_EV_SOC,
+    DOMAIN,
+)
 
 from .test_setup import ENTRY_DATA
 
@@ -53,6 +60,29 @@ async def test_user_flow_preserves_explicit_future_actuator_mappings(hass):
 
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert {key: result["data"][key] for key in mappings} == mappings
+
+
+async def test_entity_suggestions_find_common_tessie_entities(hass):
+    hass.states.async_set("sensor.tessy_battery_level", "59", {"friendly_name": "Tessy Battery level"})
+    hass.states.async_set("number.tessy_charge_limit", "71", {"friendly_name": "Tessy Charge limit"})
+    hass.states.async_set("number.tessy_charge_current", "16", {"friendly_name": "Tessy Charge current"})
+    hass.states.async_set("switch.tessy_charge", "off", {"friendly_name": "Tessy Charge"})
+    flow = ConfigFlow()
+    flow.hass = hass
+
+    assert flow._suggest_entity(CONF_EV_SOC) == "sensor.tessy_battery_level"
+    assert flow._suggest_entity(CONF_EV_CHARGE_LIMIT) == "number.tessy_charge_limit"
+    assert flow._suggest_entity(CONF_EV_CURRENT_LIMIT) == "number.tessy_charge_current"
+    assert flow._suggest_entity(CONF_EV_CHARGE_SWITCH) == "switch.tessy_charge"
+
+
+async def test_entity_suggestions_leave_ambiguous_matches_blank(hass):
+    hass.states.async_set("number.tessy_ev_charge_current", "16")
+    hass.states.async_set("number.tessy_car_charge_current", "16")
+    flow = ConfigFlow()
+    flow.hass = hass
+
+    assert flow._suggest_entity(CONF_EV_CURRENT_LIMIT) is None
 
 
 async def test_user_flow_rejects_partial_foxess_mapping(hass):
