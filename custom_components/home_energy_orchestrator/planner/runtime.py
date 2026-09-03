@@ -12,6 +12,7 @@ from dataclasses import dataclass, replace
 from .control import ControlDecision, ControlInputs, decide_control
 from .ev import EvCurrentDecision, EvCurrentInputs, plan_ev_current_target
 from .export import ExportPlan, calculate_export_plan
+from .free_charge import FreeChargePowerPlan, calculate_free_charge_power
 from .tariff import TariffGuardDecision, calculate_tariff_guard
 
 
@@ -23,6 +24,7 @@ class RuntimePlan:
     ev_current: EvCurrentDecision
     tariff: TariffGuardDecision
     export: ExportPlan | None = None
+    free_charge: FreeChargePowerPlan | None = None
 
 
 def plan_runtime(
@@ -31,11 +33,19 @@ def plan_runtime(
     *,
     tariff_inputs: dict[str, object],
     export_inputs: dict[str, float] | None = None,
+    free_charge_inputs: dict[str, float] | None = None,
     learned_house_budget_kwh: float | None = None,
 ) -> RuntimePlan:
     """Evaluate tariff, EV and FoxESS policy in one deterministic pass."""
     tariff = calculate_tariff_guard(**tariff_inputs)
     ev_current = plan_ev_current_target(ev_inputs)
+    free_charge_plan = None
+    if free_charge_inputs is not None:
+        free_charge_plan = calculate_free_charge_power(**free_charge_inputs)
+        control_inputs = replace(
+            control_inputs,
+            requested_charge_power_kw=free_charge_plan.target_charge_power_kw,
+        )
     export_plan = None
     if export_inputs is not None:
         protected_house = 0.0 if learned_house_budget_kwh is None else learned_house_budget_kwh
@@ -51,4 +61,10 @@ def plan_runtime(
             planned_export_energy_kwh=export_plan.planned_export_energy_kwh,
         )
     control = decide_control(control_inputs)
-    return RuntimePlan(control=control, ev_current=ev_current, tariff=tariff, export=export_plan)
+    return RuntimePlan(
+        control=control,
+        ev_current=ev_current,
+        tariff=tariff,
+        export=export_plan,
+        free_charge=free_charge_plan,
+    )

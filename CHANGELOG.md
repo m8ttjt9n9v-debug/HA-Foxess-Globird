@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.2.19 — allowance-paced free charging
+## 0.2.20 — runtime charge-plan composition
 
 - Add a pure FoxESS response-reconciliation policy with a retry interval and
   finite attempt limit. It never calls Home Assistant services; active
@@ -12,6 +12,9 @@
 - Add an allowance-paced battery-charge planner that converts remaining kWh and
   remaining window time into a grid-import target, then accounts for measured
   house load and AC-coupled PV before applying the inverter limit.
+- Feed the optional charge plan through the pure runtime composition boundary,
+  so the eventual coordinator and reconciliation layer share one bounded
+  target calculation.
 
 ## 0.2.15 — Dashboard entity-ID correction
 

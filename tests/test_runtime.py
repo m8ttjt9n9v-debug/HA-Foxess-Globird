@@ -106,3 +106,30 @@ def test_runtime_plan_applies_learned_house_budget_before_export() -> None:
     assert plan.export is not None
     assert plan.export.planned_export_energy_kwh == 14
     assert plan.control.action == "force_discharge"
+
+
+def test_runtime_plan_uses_allowance_paced_charge_target() -> None:
+    plan = plan_runtime(
+        _control_inputs(),
+        _ev_inputs(),
+        tariff_inputs={
+            "daily_free_allowance_kwh": 50,
+            "imported_today_kwh": 0,
+            "requested_free_charge_kwh": 50,
+            "bonus_window_active": False,
+            "grid_import_kw": 0.0,
+            "grid_telemetry_valid": True,
+            "zero_import_minutes": 0,
+        },
+        free_charge_inputs={
+            "allowance_remaining_kwh": 45,
+            "hours_remaining": 3,
+            "house_load_kw": 4,
+            "pv_generation_kw": 0,
+            "inverter_charge_limit_kw": 15,
+            "safety_margin_kw": 1,
+        },
+    )
+    assert plan.free_charge is not None
+    assert plan.free_charge.target_charge_power_kw == 10
+    assert plan.control.power_kw == 10
