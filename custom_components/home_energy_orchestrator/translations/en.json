@@ -90,22 +90,22 @@
         }
       }
     },
-    "selector": {
-      "ev_charger_profile": {
-        "options": {
-          "not_configured": "No EV charger configured",
-          "single_phase_10a": "Single-phase 10 A (approximately 2.3 kW)",
-          "single_phase_15a": "Single-phase 15 A (approximately 3.5 kW)",
-          "single_phase_32a": "Single-phase 32 A (approximately 7.4 kW)",
-          "three_phase_16a": "Three-phase 16 A (approximately 11 kW)"
-        }
-      }
-    },
     "error": {
       "invalid_name": "Enter a site name.",
       "invalid_entity": "Select a valid Home Assistant entity.",
       "invalid_site_limits": "Check capacity, floor, reserve, charger, inverter, current, and voltage limits.",
       "invalid_schedule": "Choose different free-charge times and a non-negative fallback."
+    }
+  },
+  "selector": {
+    "ev_charger_profile": {
+      "options": {
+        "not_configured": "No EV charger configured",
+        "single_phase_10a": "Single-phase 10 A (approximately 2.3 kW)",
+        "single_phase_15a": "Single-phase 15 A (approximately 3.5 kW)",
+        "single_phase_32a": "Single-phase 32 A (approximately 7.4 kW)",
+        "three_phase_16a": "Three-phase 16 A (approximately 11 kW)"
+      }
     }
   }
 }

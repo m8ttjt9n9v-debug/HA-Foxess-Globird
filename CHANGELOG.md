@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.13 — Hassfest translation fix
+
+- Place selector option translations at the Home Assistant-supported
+  top-level location so Hassfest validates the integration metadata.
+
 ## 0.2.12 — Hourly ZEROHERO guard correction
 
 - Evaluate the GloBird ZEROHERO threshold independently for each hourly bucket

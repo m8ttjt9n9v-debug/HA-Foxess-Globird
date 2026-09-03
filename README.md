@@ -1,7 +1,7 @@
 # FoxESS Globird Energy Observer
 
 An Australia-scoped Home Assistant custom integration for an auditable,
-site-configured home-energy ledger. Version 0.2.12 is deliberately
+site-configured home-energy ledger. Version 0.2.13 is deliberately
 observer-only: it reads the entities selected during setup, normalises their
 units and signs, persists local tariff meters and demand-learning evidence,
 and makes no service calls or hardware changes.
