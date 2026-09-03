@@ -1,7 +1,7 @@
 # FoxESS Globird Energy Observer
 
 An Australia-scoped Home Assistant custom integration for an auditable,
-site-configured home-energy ledger. Version 0.2.29 is observer-by-default:
+site-configured home-energy ledger. Version 0.2.30 is observer-by-default:
 it reads the entities selected during setup, normalises their units and signs,
 persists local tariff meters and demand-learning evidence, and only permits
 FoxESS writes after an explicit control opt-in, complete actuator mapping, and
@@ -21,10 +21,12 @@ only when the local match is unambiguous; ambiguous matches are left blank.
 See the [installation guide](docs/installation.md) and
 [commissioning checklist](docs/commissioning.md).
 
-An importable Lovelace starter view is provided at
+An importable, generic two-column Lovelace starter dashboard is provided at
 [`examples/dashboard.yaml`](examples/dashboard.yaml). HACS installs the
 integration, not Lovelace dashboards; import the view and select the generated
-entities if your config-entry name differs from the example.
+entities if your config-entry name differs from the example. The dashboard has
+Overview, EV, and Commissioning views and intentionally contains no site
+background image or personal entity IDs.
 
 ## What it provides
 

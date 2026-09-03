@@ -100,6 +100,32 @@ async def test_source_change_recalculates_without_a_restart(hass):
     assert hass.states.get(grid_export).state == "2.0"
 
 
+async def test_mapped_telemetry_is_exposed_for_portable_dashboard(hass):
+    """Expose mapped source telemetry without requiring site-specific IDs."""
+    hass.states.async_set("sensor.test_battery_soc", "60", {"unit_of_measurement": "%"})
+    hass.states.async_set("sensor.test_grid_power", "1200", {"unit_of_measurement": "W"})
+    hass.states.async_set("sensor.test_house_load", "800", {"unit_of_measurement": "W"})
+    hass.states.async_set("sensor.test_solar", "3", {"unit_of_measurement": "kW"})
+    hass.states.async_set("sensor.test_ev_soc", "70", {"unit_of_measurement": "%"})
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Portable dashboard site",
+        data={
+            **ENTRY_DATA,
+            "solar_power_entity": "sensor.test_solar",
+            "ev_soc_entity": "sensor.test_ev_soc",
+        },
+    )
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert hass.states.get(_entity_id(hass, entry, "battery_soc")).state == "60.0"
+    assert hass.states.get(_entity_id(hass, entry, "house_load")).state == "0.8"
+    assert hass.states.get(_entity_id(hass, entry, "solar_power")).state == "3.0"
+    assert hass.states.get(_entity_id(hass, entry, "ev_soc")).state == "70.0"
+
+
 async def test_free_charge_target_accounts_for_allowance_house_load_and_solar(hass, monkeypatch):
     hass.states.async_set("sensor.test_battery_soc", "60", {"unit_of_measurement": "%"})
     hass.states.async_set("sensor.test_grid_power", "0", {"unit_of_measurement": "kW"})

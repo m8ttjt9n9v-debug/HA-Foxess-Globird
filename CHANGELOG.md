@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.30 — portable two-column dashboard
+
+- Add mapped battery SOC, solar, house-load, and EV SOC sensors so a dashboard
+  can use stable integration entity IDs rather than site-specific source IDs.
+- Replace the minimal starter view with generic Overview, EV, and
+  Commissioning views using a two-column layout and no personal imagery.
+- Keep the dashboard read-only and retain observer-by-default control gates.
+
 ## 0.2.29 — visible ZEROHERO hourly import evidence
 
 - Expose a read-only **ZEROHERO Import This Window** sensor.

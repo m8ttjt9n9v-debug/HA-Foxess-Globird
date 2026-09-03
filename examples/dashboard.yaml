@@ -1,36 +1,188 @@
-title: FoxESS Globird Energy Observer
-# Import this view into a dashboard after installing the integration.  Entity
-# IDs use the default "Home Energy" entry slug; if the entry has another name,
-# select the generated entities from the dashboard editor.
+title: FoxESS Globird Energy
+# Generic, two-column Lovelace starter view.  HACS installs the integration,
+# not dashboards.  The entity IDs below use the default Home Energy entry slug;
+# select the generated entities in the dashboard editor if the entry has a
+# different name.
 views:
-  - title: Observer
-    path: observer
-    cards:
-      - type: entities
-        title: Controller status
-        entities:
-          - sensor.home_energy_status
-          - sensor.home_energy_available_battery_energy
-          - sensor.home_energy_grid_import
-          - sensor.home_energy_grid_export
-          - sensor.home_energy_ev_maximum_configured_power
-      - type: entities
-        title: Tariff and planning
-        entities:
-          - sensor.home_energy_free_energy_remaining_today
-          - sensor.home_energy_grid_import_today
-          - sensor.home_energy_free_window_import
-          - sensor.home_energy_free_charge_allowance_remaining
-          - sensor.home_energy_estimated_energy_cost_today
-          - sensor.home_energy_zerohero_telemetry_guard_qualified
-          - sensor.home_energy_zerohero_import_this_window
-          - sensor.home_energy_tariff_guard_status
-          - sensor.home_energy_free_window_charge_completion_mode
-          - sensor.home_energy_free_window_charge_power_target
-      - type: entities
-        title: EV and house learning
-        entities:
-          - sensor.home_energy_learned_house_energy_budget
-          - sensor.home_energy_remaining_house_energy_budget
-          - sensor.home_energy_house_learning_samples
-          - sensor.home_energy_house_learning_status
+  - type: sections
+    max_columns: 2
+    title: Overview
+    path: overview
+    icon: mdi:home-lightning-bolt
+    sections:
+      - type: grid
+        column_span: 2
+        cards:
+          - type: heading
+            heading: Live energy
+            heading_style: title
+            icon: mdi:transmission-tower
+          - type: tile
+            entity: sensor.home_energy_battery_soc
+            name: Battery SOC
+            features:
+              - type: bar-gauge
+            features_position: bottom
+          - type: tile
+            entity: sensor.home_energy_battery_energy
+            name: Battery energy
+          - type: tile
+            entity: sensor.home_energy_available_battery_energy
+            name: Available above reserve
+          - type: tile
+            entity: sensor.home_energy_solar_power
+            name: Solar now
+          - type: tile
+            entity: sensor.home_energy_house_load
+            name: House load
+          - type: tile
+            entity: sensor.home_energy_grid_import
+            name: Grid import
+          - type: tile
+            entity: sensor.home_energy_grid_export
+            name: Grid export
+      - type: grid
+        cards:
+          - type: heading
+            heading: Tariff and ZEROHERO
+            heading_style: title
+            icon: mdi:cash-clock
+          - type: tile
+            entity: sensor.home_energy_free_window_import
+            name: Free-window import
+          - type: tile
+            entity: sensor.home_energy_free_charge_allowance_remaining
+            name: Free allowance remaining
+          - type: tile
+            entity: sensor.home_energy_zerohero_import_this_window
+            name: ZEROHERO import this window
+          - type: tile
+            entity: sensor.home_energy_zerohero_telemetry_guard_qualified
+            name: ZEROHERO guard
+          - type: tile
+            entity: sensor.home_energy_estimated_energy_cost_today
+            name: Estimated cost today
+          - type: tile
+            entity: sensor.home_energy_grid_import_today
+            name: Grid import today
+      - type: grid
+        cards:
+          - type: heading
+            heading: Planning and learning
+            heading_style: title
+            icon: mdi:chart-line
+          - type: tile
+            entity: sensor.home_energy_free_window_charge_completion_mode
+            name: Full-battery action
+          - type: tile
+            entity: sensor.home_energy_free_window_charge_power_target
+            name: Free-window charge target
+          - type: tile
+            entity: sensor.home_energy_learned_house_energy_budget
+            name: Learned house budget
+          - type: tile
+            entity: sensor.home_energy_remaining_house_energy_budget
+            name: Remaining house budget
+          - type: tile
+            entity: sensor.home_energy_house_learning_samples
+            name: Learning samples
+          - type: tile
+            entity: sensor.home_energy_house_learning_status
+            name: Learning status
+          - type: tile
+            entity: sensor.home_energy_status
+            name: Controller status
+      - type: grid
+        column_span: 2
+        cards:
+          - type: history-graph
+            title: Power and battery history
+            hours_to_show: 24
+            entities:
+              - entity: sensor.home_energy_grid_import
+                name: Grid import
+              - entity: sensor.home_energy_grid_export
+                name: Grid export
+              - entity: sensor.home_energy_house_load
+                name: House load
+              - entity: sensor.home_energy_solar_power
+                name: Solar
+  - type: sections
+    max_columns: 2
+    title: EV
+    path: ev
+    icon: mdi:car-electric
+    sections:
+      - type: grid
+        column_span: 2
+        cards:
+          - type: heading
+            heading: EV charging
+            heading_style: title
+            icon: mdi:ev-station
+          - type: tile
+            entity: sensor.home_energy_ev_soc
+            name: EV SOC
+            features:
+              - type: bar-gauge
+            features_position: bottom
+          - type: tile
+            entity: sensor.home_energy_ev_maximum_configured_power
+            name: EV maximum power
+          - type: markdown
+            content: >-
+              The integration adjusts the explicitly mapped Tessie/Tessy
+              charge-current number only when active control is commissioned.
+              Add the vehicle's own Tessie cards here if desired; entity names
+              vary by vehicle and are deliberately not hard-coded in this
+              portable template.
+      - type: grid
+        cards:
+          - type: heading
+            heading: EV commissioning
+            heading_style: title
+            icon: mdi:clipboard-check-outline
+          - type: entities
+            entities:
+              - entity: sensor.home_energy_status
+                name: Orchestrator status
+              - entity: sensor.home_energy_free_window_charge_power_target
+                name: Planned charge target
+              - entity: sensor.home_energy_free_charge_allowance_remaining
+                name: Free allowance remaining
+          - type: markdown
+            content: >-
+              Confirm the vehicle is home, plugged in, and mapped to the
+              correct Tessie/Tessy entities before enabling automatic control.
+              Keep Rehearsal mode enabled during commissioning.
+  - type: sections
+    max_columns: 2
+    title: Commissioning
+    path: commissioning
+    icon: mdi:shield-check
+    sections:
+      - type: grid
+        column_span: 2
+        cards:
+          - type: heading
+            heading: Safety and data quality
+            heading_style: title
+            icon: mdi:shield-check
+          - type: entities
+            entities:
+              - entity: sensor.home_energy_status
+                name: Controller status
+              - entity: sensor.home_energy_tariff_guard_status
+                name: Tariff guard
+              - entity: sensor.home_energy_zerohero_telemetry_guard_qualified
+                name: ZEROHERO guard
+              - entity: sensor.home_energy_house_learning_status
+                name: Learning model
+              - entity: sensor.home_energy_house_learning_samples
+                name: Learning samples
+          - type: markdown
+            content: >-
+              This view is intentionally read-only.  Check the signed grid
+              import/export values against a known load before enabling any
+              FoxESS or EV writes.  HEO remains observer-only until the
+              automatic-control gate is deliberately commissioned.

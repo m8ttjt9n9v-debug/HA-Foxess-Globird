@@ -53,15 +53,28 @@ def test_hacs_metadata_matches_the_integration_manifest() -> None:
 
 
 def test_example_dashboard_uses_the_integration_entity_ids() -> None:
-    """Keep the shipped observer dashboard aligned with generated entity IDs."""
+    """Keep the shipped dashboard aligned with generated entity IDs."""
     dashboard = yaml.safe_load(
         (REPOSITORY_ROOT / "examples" / "dashboard.yaml").read_text(encoding="utf-8")
     )
-    entities = dashboard["views"][0]["cards"][0]["entities"]
-    assert entities == [
+    entity_ids = []
+    for view in dashboard["views"]:
+        for section in view.get("sections", []):
+            for card in section.get("cards", []):
+                for item in card.get("entities", []):
+                    entity_ids.append(item if isinstance(item, str) else item["entity"])
+                if "entity" in card:
+                    entity_ids.append(card["entity"])
+                for item in card.get("entities", []):
+                    if isinstance(item, dict) and "entity" in item:
+                        entity_ids.append(item["entity"])
+    assert {
         "sensor.home_energy_status",
-        "sensor.home_energy_available_battery_energy",
+        "sensor.home_energy_battery_soc",
+        "sensor.home_energy_solar_power",
+        "sensor.home_energy_house_load",
         "sensor.home_energy_grid_import",
         "sensor.home_energy_grid_export",
+        "sensor.home_energy_zerohero_import_this_window",
         "sensor.home_energy_ev_maximum_configured_power",
-    ]
+    } <= set(entity_ids)

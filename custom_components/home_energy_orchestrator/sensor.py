@@ -11,11 +11,18 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from . import EnergyConfigEntry
-from .const import DOMAIN
+from .const import CONF_SOLAR_POWER, DOMAIN
 from .coordinator import EnergyCoordinator
 
 DESCRIPTIONS = (
     SensorEntityDescription(key="status", name="Status", icon="mdi:eye-outline"),
+    SensorEntityDescription(
+        key="battery_soc",
+        name="Battery State of Charge",
+        native_unit_of_measurement="%",
+        device_class="battery",
+        state_class="measurement",
+    ),
     SensorEntityDescription(
         key="battery_potential_capacity",
         name="Battery Potential Capacity",
@@ -46,6 +53,27 @@ DESCRIPTIONS = (
         name="Grid Export",
         native_unit_of_measurement=UnitOfPower.KILO_WATT,
         device_class="power",
+        state_class="measurement",
+    ),
+    SensorEntityDescription(
+        key="house_load",
+        name="House Load",
+        native_unit_of_measurement=UnitOfPower.KILO_WATT,
+        device_class="power",
+        state_class="measurement",
+    ),
+    SensorEntityDescription(
+        key="solar_power",
+        name="Solar Generation",
+        native_unit_of_measurement=UnitOfPower.KILO_WATT,
+        device_class="power",
+        state_class="measurement",
+    ),
+    SensorEntityDescription(
+        key="ev_soc",
+        name="EV State of Charge",
+        native_unit_of_measurement="%",
+        device_class="battery",
         state_class="measurement",
     ),
     SensorEntityDescription(
@@ -167,13 +195,20 @@ class EnergySensor(CoordinatorEntity[EnergyCoordinator], SensorEntity):
     def native_value(self):
         ledger = self.coordinator.data
         learning = self.coordinator.learning_result
+        snapshot = self.coordinator.snapshot
         values = {
             "status": ledger.reason,
+            "battery_soc": None if snapshot is None else snapshot.battery_soc,
             "battery_potential_capacity": ledger.battery_potential_capacity_kwh,
             "battery_energy": ledger.battery_energy_kwh,
             "available_energy": ledger.available_after_reserve_kwh,
             "grid_import": ledger.grid_import_kw,
             "grid_export": ledger.grid_export_kw,
+            "house_load": None if snapshot is None else snapshot.house_load_kw,
+            "solar_power": self.coordinator._power(
+                self.coordinator.config.get(CONF_SOLAR_POWER)
+            ),
+            "ev_soc": None if snapshot is None else snapshot.ev_soc,
             "ev_max_power": ledger.ev_max_power_kw,
             "free_energy_remaining": ledger.free_energy_remaining_kwh,
             "daily_import": ledger.daily_import_kwh,
