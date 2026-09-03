@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.2.20 — runtime charge-plan composition
+## 0.2.21 — normal-mode restoration at zero charge
 
 - Add a pure FoxESS response-reconciliation policy with a retry interval and
   finite attempt limit. It never calls Home Assistant services; active
@@ -15,6 +15,9 @@
 - Feed the optional charge plan through the pure runtime composition boundary,
   so the eventual coordinator and reconciliation layer share one bounded
   target calculation.
+- Treat an exhausted allowance, finished window, or zero charge target as a
+  request to restore normal inverter mode, rather than issuing Force Charge at
+  0 kW; Self Use then remains available to soak up solar.
 
 ## 0.2.15 — Dashboard entity-ID correction
 

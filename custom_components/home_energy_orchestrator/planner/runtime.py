@@ -45,6 +45,10 @@ def plan_runtime(
         control_inputs = replace(
             control_inputs,
             requested_charge_power_kw=free_charge_plan.target_charge_power_kw,
+            automatic_charge=(
+                control_inputs.automatic_charge
+                and free_charge_plan.target_charge_power_kw > 0
+            ),
         )
     export_plan = None
     if export_inputs is not None:
