@@ -69,7 +69,9 @@ def test_runtime_plan_keeps_tariff_and_ev_decisions_together() -> None:
         },
     )
     assert plan.control.action == "force_charge"
-    assert plan.ev_current.target_current_a == 4.348
+    # Free-window current is governed by the import allowance; the slower
+    # percentage cap applies only to explicit load-following sessions.
+    assert plan.ev_current.target_current_a == 16
     assert plan.tariff.free_energy_remaining_kwh == 3
     assert plan.tariff.bonus_zero_import_allowed
 

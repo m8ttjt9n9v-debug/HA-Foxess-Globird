@@ -19,16 +19,14 @@ preferred for a custom repository; it becomes mandatory only when applying
 for inclusion in HACS's default catalogue. This repository does not yet have
 that published distribution channel.
 
-Version 0.2.24 is observer-by-default. It makes no writes unless automatic
-control is enabled, Rehearsal mode is disabled, and all three FoxESS actuator
-entities are explicitly mapped. In that commissioned state, only the
-allowance-paced free-window charge/restore loop is active. Tessie/EV and export
-writers remain disabled. With an AC-coupled solar sensor, whole-house load
-sensor, and inverter charge limit mapped, the integration exposes a read-only
-charge-power target paced against the remaining free-window allowance. It
-also reports the reviewed completion mode: Backup while a full battery is
-below the configured 49 kWh threshold, then Self Use at the threshold or when
-the 50 kWh allowance is exhausted.
+Version 0.2.27 is observer-by-default. It makes no writes unless automatic
+control is enabled, Rehearsal mode is disabled, and the required FoxESS and EV
+entities are explicitly mapped. The commissioned path writes only the mapped
+EV current number. It confirms the Tessie/Tessy vehicle is at home before any
+write; away or unknown presence is fail-closed. Free-window current follows
+the persisted import allowance, while post-window solar spill and reserve-aware
+pre-window backfill are bounded by the configured EV and inverter limits. EV
+start/stop, vehicle charge-limit, and export writes remain disabled.
 
 ## Before setup
 

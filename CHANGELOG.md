@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.2.27 — Tessie solar spill, away bypass, and pre-window backfill
+
+- Add an opt-in Tessie/Tessy current planner for three explicit behaviours:
+  free-window allowance charging, post-window solar-spill charging after the
+  battery is full, and a modest reserve-aware backfill before the free window.
+- Confirm a Tessie/Tessy vehicle tracker is `home` before writing. An away,
+  supercharging, unknown, disconnected, or ambiguous vehicle fails closed;
+  away vehicles receive no current-limit write.
+- Apply the configurable 20%/30% inverter-capacity ceilings only to slower
+  load-following sessions. Free-window charging remains governed by the
+  import allowance and commissioned electrical ceiling.
+- Keep the active boundary narrow: only the explicitly mapped EV current
+  number may be written. Tessie charge start/stop, SoC-limit, and FoxESS
+  export writers remain outside this release.
+- Add regression coverage for away bypass, solar-spill conversion, pre-window
+  backfill, unknown presence, and free-window cap semantics (133 tests pass).
+
 ## 0.2.26 — gated Tessie current control
 
 - Connect the tested EV current planner and service adapter to the active

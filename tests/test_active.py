@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import time
 from types import SimpleNamespace
 
 from homeassistant.const import EVENT_CALL_SERVICE
@@ -39,11 +40,20 @@ def _coordinator(**config):
     }
     return SimpleNamespace(
         config=values,
-        snapshot=SimpleNamespace(battery_soc=60.0, battery_floor_percent=10.0),
-        data=SimpleNamespace(grid_import_kw=0.0),
+        snapshot=SimpleNamespace(
+            battery_soc=60.0,
+            battery_floor_percent=10.0,
+            grid_power_kw=0.0,
+            house_load_kw=0.0,
+            ev_soc=60.0,
+        ),
+        data=SimpleNamespace(grid_import_kw=0.0, available_after_reserve_kwh=0.0),
         free_charge_plan=SimpleNamespace(target_charge_power_kw=5.0),
         free_charge_completion=SimpleNamespace(action="continue"),
         _free_window_hours_remaining=lambda _now: 1.0,
+        _power=lambda _entity: 0.0,
+        _configured_time=lambda _key, default: time.fromisoformat(default),
+        _bonus_window_active=lambda _now: False,
     )
 
 
@@ -129,6 +139,7 @@ async def test_ev_controller_adjusts_mapped_current_only_when_commissioned(hass)
         return None
 
     hass.services.async_register("number", "set_value", noop)
+    hass.states.async_set("device_tracker.tessy_location", "home")
     hass.states.async_set("number.tessy_charge_current", "16", {"min": 0, "max": 16, "step": 1})
     hass.states.async_set("switch.tessy_charge", "on")
     hass.states.async_set(
@@ -153,6 +164,7 @@ async def test_ev_controller_adjusts_mapped_current_only_when_commissioned(hass)
         }
     )
     coordinator.snapshot.ev_soc = 60.0
+    coordinator.snapshot.grid_power_kw = 8.0
     controller = ActiveEvController(hass, coordinator)
 
     await controller.async_reconcile()
@@ -162,4 +174,34 @@ async def test_ev_controller_adjusts_mapped_current_only_when_commissioned(hass)
     assert [(event.data["domain"], event.data["service"]) for event in calls] == [
         ("number", "set_value")
     ]
-    assert calls[0].data["service_data"]["value"] == 6.0
+    assert calls[0].data["service_data"]["value"] == 12.0
+
+
+async def test_ev_controller_does_not_change_current_when_vehicle_is_away(hass):
+    calls = []
+    hass.bus.async_listen(EVENT_CALL_SERVICE, calls.append)
+
+    async def noop(_call):
+        return None
+
+    hass.services.async_register("number", "set_value", noop)
+    hass.states.async_set("device_tracker.tessy_location", "not_home")
+    hass.states.async_set("number.tessy_charge_current", "16", {"min": 0, "max": 16, "step": 1})
+    hass.states.async_set("switch.tessy_charge", "on")
+    hass.states.async_set("sensor.tessy_charger_current", "16", {"friendly_name": "Tessy Charger current"})
+    hass.states.async_set("binary_sensor.tessy_charge_cable", "on", {"friendly_name": "Tessy Charge cable"})
+    coordinator = _coordinator(
+        **{
+            CONF_AUTOMATIC_CONTROL_ENABLED: True,
+            CONF_REHEARSAL_MODE: False,
+            CONF_EV_CURRENT_LIMIT: "number.tessy_charge_current",
+            CONF_EV_CHARGE_SWITCH: "switch.tessy_charge",
+        }
+    )
+    controller = ActiveEvController(hass, coordinator)
+
+    await controller.async_reconcile()
+    await hass.async_block_till_done()
+
+    assert controller.last_reason == "away"
+    assert calls == []

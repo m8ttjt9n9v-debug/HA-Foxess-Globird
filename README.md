@@ -1,7 +1,7 @@
 # FoxESS Globird Energy Observer
 
 An Australia-scoped Home Assistant custom integration for an auditable,
-site-configured home-energy ledger. Version 0.2.26 is observer-by-default:
+site-configured home-energy ledger. Version 0.2.27 is observer-by-default:
 it reads the entities selected during setup, normalises their units and signs,
 persists local tariff meters and demand-learning evidence, and only permits
 FoxESS writes after an explicit control opt-in, complete actuator mapping, and
@@ -37,9 +37,12 @@ See the [installation guide](docs/installation.md) and
   the automatic-control gate is enabled and all three FoxESS actuator entities
   are mapped; and
 - an opt-in Tessie/Tessy current-setpoint controller that adjusts only the
-  mapped current number during the free window when local cable and charger
-  current feedback is available. It does not start/stop charging or change
-  the vehicle SoC limit.
+  mapped current number when a connected vehicle is confirmed at home and
+  local cable/current feedback is available. It uses the free-window import
+  budget, soaks measurable post-window solar surplus once the battery is full,
+  and can perform a small reserve-aware pre-window backfill. It never applies
+  charging limits to an away vehicle, and does not start/stop charging or
+  change the vehicle SoC limit.
 
 The ZEROHERO guard checks each hourly bucket independently against the
 configured 0.03 kWh/hour threshold. A three-hour total below 0.09 kWh does not

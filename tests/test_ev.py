@@ -4,8 +4,10 @@ import pytest
 
 from custom_components.home_energy_orchestrator.planner.ev import (
     EvCommand,
+    EvCurrentInputs,
     EvObservation,
     ev_charge_should_stop,
+    plan_ev_current_target,
     plan_ev_start,
     plan_ev_stop,
 )
@@ -58,6 +60,67 @@ def test_stop_guard_handles_disconnect_and_target() -> None:
     assert ev_charge_should_stop(40, soc_percent=40, cable_connected=True, armed=True)
     assert not ev_charge_should_stop(40, soc_percent=None, cable_connected=True, armed=True)
     assert not ev_charge_should_stop(40, soc_percent=99, cable_connected=True, armed=False)
+
+
+def current_inputs(**overrides: object) -> EvCurrentInputs:
+    values = {
+        "free_window_active": False,
+        "cable_connected": True,
+        "ceiling_a": 32.0,
+        "protected_baseline_a": 0.0,
+        "effective_minimum_a": 0.0,
+        "requested_current_a": 10.0,
+        "service_current_a": 32.0,
+        "headroom_a": 1.0,
+        "grid_average_a": 0.0,
+        "grid_coverage_ratio": 1.0,
+        "ev_average_a": 10.0,
+        "ev_current_now_a": 10.0,
+        "ev_feedback_source_valid": True,
+        "elapsed_free_window_minutes": 20.0,
+        "settle_minutes": 5.0,
+    }
+    values.update(overrides)
+    return EvCurrentInputs(**values)
+
+
+def test_current_planner_never_applies_limits_to_an_away_vehicle() -> None:
+    decision = plan_ev_current_target(current_inputs(at_home=False))
+    assert decision.reason == "away"
+    assert decision.target_current_a == 0.0
+
+
+def test_current_planner_uses_solar_spill_after_battery_is_full() -> None:
+    decision = plan_ev_current_target(
+        current_inputs(
+            solar_spill_active=True,
+            solar_surplus_kw=2.3,
+            battery_soc_percent=100.0,
+            solar_spill_soc_threshold=99.0,
+            ev_voltage_v=230.0,
+            ev_phase_count=1,
+            ceiling_a=32.0,
+        )
+    )
+    assert decision.reason == "solar_spill"
+    assert decision.target_current_a == 10.0
+
+
+def test_current_planner_backfills_before_free_window_with_requested_target() -> None:
+    decision = plan_ev_current_target(
+        current_inputs(
+            pre_free_backfill_active=True,
+            pre_free_backfill_current_a=4.0,
+        )
+    )
+    assert decision.reason == "pre_free_backfill"
+    assert decision.target_current_a == 4.0
+
+
+def test_current_planner_fails_closed_when_home_presence_is_unknown() -> None:
+    decision = plan_ev_current_target(current_inputs(home_presence_known=False))
+    assert decision.reason == "home_presence_unknown"
+    assert decision.target_current_a == 0.0
 
 
 @pytest.mark.parametrize(

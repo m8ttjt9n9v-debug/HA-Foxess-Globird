@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from datetime import datetime
 from math import isfinite
 
 from homeassistant.core import HomeAssistant
@@ -12,16 +13,19 @@ from .const import (
     CONF_AUTOMATIC_CONTROL_ENABLED,
     CONF_BONUS_LOAD_FOLLOWING_PERCENT,
     CONF_EV_CHARGE_SWITCH,
+    CONF_EV_CHARGE_LIMIT,
     CONF_EV_CURRENT_LIMIT,
     CONF_EV_MAX_CURRENT,
     CONF_EV_MIN_CURRENT,
     CONF_EV_PHASE_COUNT,
     CONF_EV_VOLTAGE,
+    CONF_FREE_CHARGE_START,
     CONF_INVERTER_CAPACITY,
     CONF_LOAD_FOLLOWING_OVERRIDE,
     CONF_NON_FREE_LOAD_FOLLOWING_PERCENT,
     CONF_REHEARSAL_MODE,
     CONF_SERVICE_IMPORT_LIMIT_A,
+    CONF_SOLAR_POWER,
     DEFAULT_BONUS_LOAD_FOLLOWING_PERCENT,
     DEFAULT_EV_MAX_CURRENT,
     DEFAULT_EV_MIN_CURRENT,
@@ -42,11 +46,11 @@ _LOGGER = logging.getLogger(__name__)
 class ActiveEvController:
     """Adjust an already-connected EV's Tessie current setpoint safely.
 
-    This first active EV milestone intentionally does not start/stop charging
-    or change the vehicle's SoC limit. It only writes the explicitly mapped
-    current setpoint while the configured free window is active, and only when
-    local cable/current feedback can be found. That keeps cloud schedules and
-    charge-to-target behaviour outside this commissioning surface.
+    This controller intentionally does not start/stop charging or change the
+    vehicle's SoC limit. It only writes the explicitly mapped current setpoint
+    for an at-home, connected vehicle, and only when local cable/current
+    feedback can be found. Cloud schedules and charge-to-target behaviour stay
+    outside this commissioning surface.
     """
 
     def __init__(self, hass: HomeAssistant, coordinator: EnergyCoordinator) -> None:
@@ -104,8 +108,19 @@ class ActiveEvController:
         now = dt_util.now()
         hours_remaining = self.coordinator._free_window_hours_remaining(now)  # noqa: SLF001
         free_window_active = hours_remaining > 0
-        if not free_window_active or not cable_connected:
-            self.last_reason = "outside_free_window" if not free_window_active else "disconnected"
+        at_home = self._at_home()
+        if at_home is None:
+            self.last_reason = "home_presence_unavailable"
+            self.last_actions = ()
+            return
+        if at_home is False:
+            # Away/supercharger operation belongs to Tessie.  Do not push a
+            # zero or baseline current to a vehicle that has left the site.
+            self.last_reason = "away"
+            self.last_actions = ()
+            return
+        if not cable_connected:
+            self.last_reason = "disconnected"
             self.last_actions = ()
             return
 
@@ -135,10 +150,38 @@ class ActiveEvController:
         if grid_power_kw is not None and isfinite(grid_power_kw):
             grid_average_a = max(grid_power_kw, 0.0) * 1000 / (voltage * phase_count)
         measured_current = _finite_number(current_sensor.state)
+        ev_soc = self.coordinator.snapshot.ev_soc
+        charge_limit = 100.0
+        limit_state = self.hass.states.get(
+            str(self.coordinator.config.get(CONF_EV_CHARGE_LIMIT, ""))
+        )
+        if limit_state is not None:
+            charge_limit = _finite_number(limit_state.state) or charge_limit
+        solar_kw = self.coordinator._power(  # noqa: SLF001
+            self.coordinator.config.get(CONF_SOLAR_POWER)
+        )
+        house_kw = self.coordinator.snapshot.house_load_kw
+        solar_surplus_kw = (
+            max(solar_kw - max(house_kw, 0.0), 0.0)
+            if solar_kw is not None and house_kw is not None
+            else None
+        )
+        solar_spill_active = (
+            not free_window_active
+            and solar_surplus_kw is not None
+            and solar_surplus_kw > 0.1
+            and ev_soc is not None
+            and ev_soc < charge_limit
+            and self.coordinator.snapshot.battery_soc is not None
+            and self.coordinator.snapshot.battery_soc >= 99.0
+        )
+        pre_free_current = self._pre_free_backfill_current(
+            now, free_window_active, cable_connected, at_home, charge_limit
+        )
         try:
             decision = plan_ev_current_target(
                 EvCurrentInputs(
-                    free_window_active=True,
+                    free_window_active=free_window_active,
                     cable_connected=True,
                     ceiling_a=max(maximum, 0.0),
                     protected_baseline_a=min(
@@ -168,7 +211,9 @@ class ActiveEvController:
                     elapsed_free_window_minutes=max(0.0, 180.0 - hours_remaining * 60),
                     settle_minutes=5.0,
                     priority_ev=False,
-                    load_following_active=True,
+                    # Free-window charging is budget-controlled; the slower
+                    # load-following percentage cap is for non-free sessions.
+                    load_following_active=False,
                     bonus_window_active=(
                         self.coordinator._bonus_window_active(now)  # noqa: SLF001
                         if hasattr(self.coordinator, "_bonus_window_active")
@@ -197,6 +242,13 @@ class ActiveEvController:
                     ev_voltage_v=voltage,
                     ev_phase_count=phase_count,
                     step_a=max(step, 0.1),
+                    home_presence_known=True,
+                    at_home=at_home,
+                    solar_spill_active=solar_spill_active,
+                    solar_surplus_kw=solar_surplus_kw,
+                    battery_soc_percent=self.coordinator.snapshot.battery_soc,
+                    pre_free_backfill_active=pre_free_current is not None,
+                    pre_free_backfill_current_a=pre_free_current,
                 )
             )
         except (TypeError, ValueError):
@@ -222,6 +274,77 @@ class ActiveEvController:
         self.writes_performed += len(actions)
         if actions:
             _LOGGER.info("EV automatic current plan executed: %s", actions)
+
+    def _at_home(self) -> bool | None:
+        """Read a Tessie/Tessy location tracker; unknown presence fails closed."""
+        candidates = []
+        for state in self.hass.states.async_all("device_tracker"):
+            combined = f"{state.entity_id} {state.attributes.get('friendly_name', '')}".casefold()
+            if any(marker in combined for marker in ("tessie", "tessy")):
+                candidates.append(state)
+        if not candidates:
+            return None
+        exact = next(
+            (state for state in candidates if state.entity_id.casefold() in {
+                "device_tracker.tessie_location", "device_tracker.tessy_location"
+            }),
+            candidates[0],
+        )
+        if exact.state == "home":
+            return True
+        if exact.state in {"not_home", "away"}:
+            return False
+        return None
+
+    def _pre_free_backfill_current(
+        self,
+        now,
+        free_window_active: bool,
+        cable_connected: bool,
+        at_home: bool,
+        charge_limit: float,
+    ) -> float | None:
+        """Return a modest battery-funded backfill target before free power."""
+        if free_window_active or not cable_connected or not at_home:
+            return None
+        if (
+            self.coordinator.snapshot.ev_soc is None
+            or self.coordinator.snapshot.ev_soc >= charge_limit
+        ):
+            return None
+        if (
+            self.coordinator.snapshot.grid_power_kw is None
+            or self.coordinator.snapshot.grid_power_kw > 0
+        ):
+            return None
+        available = getattr(self.coordinator.data, "available_after_reserve_kwh", None)
+        if available is None or available <= 0.5:
+            return None
+        start = self.coordinator._configured_time(  # noqa: SLF001
+            CONF_FREE_CHARGE_START, "12:01:00"
+        )
+        current = now.timetz().replace(tzinfo=None)
+        if current >= start:
+            return None
+        hours_until = max(
+            0.0,
+            (
+                datetime.combine(now.date(), start)
+                - datetime.combine(now.date(), current)
+            ).total_seconds()
+            / 3600,
+        )
+        if hours_until <= 0 or hours_until > 6:
+            return None
+        voltage = _configured(
+            self.coordinator.config, CONF_EV_VOLTAGE, DEFAULT_EV_VOLTAGE
+        )
+        phase_count = int(
+            _configured(
+                self.coordinator.config, CONF_EV_PHASE_COUNT, DEFAULT_EV_PHASE_COUNT
+            )
+        )
+        return max(0.0, min(6.0, available * 1000 / (hours_until * voltage * phase_count)))
 
     def _feedback_entities(self):
         """Find one local Tessie/Tessy current sensor and cable sensor."""

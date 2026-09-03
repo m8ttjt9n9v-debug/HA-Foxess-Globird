@@ -76,6 +76,14 @@ class EvCurrentInputs:
     load_following_override: bool = False
     ev_voltage_v: float = 230.0
     ev_phase_count: int = 1
+    home_presence_known: bool = True
+    at_home: bool = True
+    solar_spill_active: bool = False
+    solar_surplus_kw: float | None = None
+    battery_soc_percent: float | None = None
+    solar_spill_soc_threshold: float = 100.0
+    pre_free_backfill_active: bool = False
+    pre_free_backfill_current_a: float | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -170,9 +178,27 @@ def plan_ev_current_target(inputs: EvCurrentInputs) -> EvCurrentDecision:
     """
 
     _validate_current_inputs(inputs)
-    window_active = inputs.free_window_active or inputs.load_following_active
+    if not inputs.home_presence_known:
+        return EvCurrentDecision(0.0, "home_presence_unknown", 0.0, None, None)
+    if not inputs.at_home:
+        return EvCurrentDecision(0.0, "away", 0.0, None, None)
+    window_active = (
+        inputs.free_window_active
+        or inputs.load_following_active
+        or inputs.solar_spill_active
+        or inputs.pre_free_backfill_active
+    )
     ceiling = inputs.ceiling_a
-    if window_active and not inputs.load_following_override:
+    # The free window is governed by the tariff/import budget and may use the
+    # inverter's full commissioned capacity.  The percentage ceilings apply
+    # only to slower, load-following sessions (including solar spill and
+    # pre-window backfill), where a transient household load needs margin.
+    capped_session_active = (
+        inputs.load_following_active
+        or inputs.solar_spill_active
+        or inputs.pre_free_backfill_active
+    )
+    if capped_session_active and not inputs.load_following_override:
         rate_percent = (
             inputs.bonus_load_following_percent
             if inputs.bonus_window_active
@@ -216,6 +242,24 @@ def plan_ev_current_target(inputs: EvCurrentInputs) -> EvCurrentDecision:
         return decision(baseline, "outside_free_window")
     if not inputs.cable_connected:
         return decision(baseline, "disconnected")
+
+    if inputs.solar_spill_active:
+        if (
+            inputs.solar_surplus_kw is None
+            or inputs.solar_surplus_kw <= 0
+            or inputs.battery_soc_percent is None
+            or inputs.battery_soc_percent < inputs.solar_spill_soc_threshold
+        ):
+            return decision(baseline, "solar_spill_inputs_unavailable")
+        solar_current = inputs.solar_surplus_kw * 1000 / (
+            inputs.ev_voltage_v * inputs.ev_phase_count
+        )
+        return decision(solar_current, "solar_spill")
+
+    if inputs.pre_free_backfill_active:
+        if inputs.pre_free_backfill_current_a is None:
+            return decision(baseline, "pre_free_backfill_inputs_unavailable")
+        return decision(inputs.pre_free_backfill_current_a, "pre_free_backfill")
 
     grid_valid = (
         inputs.grid_average_a is not None
@@ -277,6 +321,10 @@ def _validate_current_inputs(inputs: EvCurrentInputs) -> None:
         ("bonus_load_following_percent", inputs.bonus_load_following_percent),
         ("non_free_load_following_percent", inputs.non_free_load_following_percent),
         ("ev_voltage_v", inputs.ev_voltage_v),
+        ("solar_surplus_kw", inputs.solar_surplus_kw),
+        ("battery_soc_percent", inputs.battery_soc_percent),
+        ("solar_spill_soc_threshold", inputs.solar_spill_soc_threshold),
+        ("pre_free_backfill_current_a", inputs.pre_free_backfill_current_a),
     )
     for name, value in non_negative:
         if value is not None and (not isfinite(value) or value < 0):
@@ -301,6 +349,12 @@ def _validate_current_inputs(inputs: EvCurrentInputs) -> None:
         raise ValueError("bonus_load_following_percent cannot exceed 100")
     if inputs.non_free_load_following_percent > 100:
         raise ValueError("non_free_load_following_percent cannot exceed 100")
+    for name, value in (
+        ("battery_soc_percent", inputs.battery_soc_percent),
+        ("solar_spill_soc_threshold", inputs.solar_spill_soc_threshold),
+    ):
+        if value is not None and value > 100:
+            raise ValueError(f"{name} cannot exceed 100")
     if inputs.ev_voltage_v <= 0:
         raise ValueError("ev_voltage_v must be greater than zero")
     if inputs.ev_phase_count not in (1, 3):
