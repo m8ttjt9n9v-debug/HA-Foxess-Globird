@@ -1,12 +1,14 @@
 # Changelog
 
-## 0.2.17 — actuator mapping validation
+## 0.2.18 — latched export session planning
 
 - Add a pure FoxESS response-reconciliation policy with a retry interval and
   finite attempt limit. It never calls Home Assistant services; active
   coordinator wiring remains gated behind commissioning.
 - Reject partial FoxESS or EV actuator mappings at setup time so an active
   coordinator can never receive an incomplete control surface.
+- Add a pure export-session state machine covering bounded start retries,
+  feedback acceptance, latching, finish restoration, and source-loss recovery.
 
 ## 0.2.15 — Dashboard entity-ID correction
 
