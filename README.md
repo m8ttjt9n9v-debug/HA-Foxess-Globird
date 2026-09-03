@@ -1,7 +1,7 @@
 # FoxESS Globird Energy Observer
 
 An Australia-scoped Home Assistant custom integration for an auditable,
-site-configured home-energy ledger. Version 0.2.24 is observer-by-default:
+site-configured home-energy ledger. Version 0.2.25 is observer-by-default:
 it reads the entities selected during setup, normalises their units and signs,
 persists local tariff meters and demand-learning evidence, and only permits
 FoxESS writes after an explicit control opt-in, complete actuator mapping, and
@@ -16,7 +16,9 @@ Install this repository in HACS as a custom **Integration** repository:
 Then restart Home Assistant and add **FoxESS Globird Energy Observer** under
 **Settings → Devices & services**. The setup flow asks for the entity IDs and
 commissioned electrical limits for that site; no `configuration.yaml` edits
-are required. See the [installation guide](docs/installation.md) and
+are required. When Tessie/Tessy is installed, common EV entities are suggested
+only when the local match is unambiguous; ambiguous matches are left blank.
+See the [installation guide](docs/installation.md) and
 [commissioning checklist](docs/commissioning.md).
 
 ## What it provides
