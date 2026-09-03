@@ -55,6 +55,36 @@ async def test_user_flow_preserves_explicit_future_actuator_mappings(hass):
     assert {key: result["data"][key] for key in mappings} == mappings
 
 
+async def test_user_flow_rejects_partial_foxess_mapping(hass):
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": SOURCE_USER},
+        data={
+            "name": "Partial FoxESS",
+            **ENTRY_DATA,
+            "foxess_work_mode_entity": "select.foxess_work_mode",
+        },
+    )
+
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"] == {"base": "incomplete_foxess_mapping"}
+
+
+async def test_user_flow_rejects_partial_ev_mapping(hass):
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": SOURCE_USER},
+        data={
+            "name": "Partial EV",
+            **ENTRY_DATA,
+            "ev_charge_limit_entity": "number.tessie_charge_limit",
+        },
+    )
+
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"] == {"base": "incomplete_ev_mapping"}
+
+
 async def test_user_flow_rejects_unsafe_limits(hass):
     result = await hass.config_entries.flow.async_init(
         DOMAIN,

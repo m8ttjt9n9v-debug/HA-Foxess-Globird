@@ -105,6 +105,8 @@
     "error": {
       "invalid_name": "Enter a site name.",
       "invalid_entity": "Select a valid Home Assistant entity.",
+      "incomplete_foxess_mapping": "Map all three FoxESS control entities, or leave all three unmapped.",
+      "incomplete_ev_mapping": "Map all three EV control entities, or leave all three unmapped.",
       "invalid_site_limits": "Check capacity, floor, reserve, charger, inverter, current, and voltage limits.",
       "invalid_schedule": "Choose different free-charge times and a non-negative fallback."
     }

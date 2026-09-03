@@ -418,6 +418,20 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             entity_id = data.get(key)
             if entity_id is not None and not valid_entity_id(str(entity_id)):
                 return {key: "invalid_entity"}
+        foxess_mapping = (
+            data.get(CONF_FOXESS_WORK_MODE),
+            data.get(CONF_FOXESS_FORCE_CHARGE_POWER),
+            data.get(CONF_FOXESS_FORCE_DISCHARGE_POWER),
+        )
+        if any(foxess_mapping) and not all(foxess_mapping):
+            return {"base": "incomplete_foxess_mapping"}
+        ev_mapping = (
+            data.get(CONF_EV_CHARGE_LIMIT),
+            data.get(CONF_EV_CURRENT_LIMIT),
+            data.get(CONF_EV_CHARGE_SWITCH),
+        )
+        if any(ev_mapping) and not all(ev_mapping):
+            return {"base": "incomplete_ev_mapping"}
         try:
             capacity = float(data[CONF_BATTERY_CAPACITY])
             floor = float(data[CONF_BATTERY_FLOOR])

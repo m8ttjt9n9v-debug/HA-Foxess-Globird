@@ -1,10 +1,12 @@
 # Changelog
 
-## Unreleased — bounded FoxESS reconciliation seam
+## 0.2.17 — actuator mapping validation
 
 - Add a pure FoxESS response-reconciliation policy with a retry interval and
   finite attempt limit. It never calls Home Assistant services; active
   coordinator wiring remains gated behind commissioning.
+- Reject partial FoxESS or EV actuator mappings at setup time so an active
+  coordinator can never receive an incomplete control surface.
 
 ## 0.2.15 — Dashboard entity-ID correction
 
