@@ -34,6 +34,7 @@ class ControlInputs:
     minimum_export_rate_c_kwh: float
     requested_discharge_power_kw: float
     discharge_power_max_kw: float
+    restore_mode: str = "Self Use"
 
 
 @dataclass(frozen=True, slots=True)
@@ -69,17 +70,20 @@ def decide_control(inputs: ControlInputs) -> ControlDecision:
         raise ValueError("control inputs must be non-negative")
 
     forced_mode = inputs.current_mode in {"Force Charge", "Force Discharge"}
+    restore_action = (
+        "restore_backup" if inputs.restore_mode == "Backup" else "restore_self_use"
+    )
     if inputs.rehearsal:
         return ControlDecision(
-            "restore_self_use" if forced_mode else "hold", 0.0, "rehearsal_mode"
+            restore_action if forced_mode else "hold", 0.0, "rehearsal_mode"
         )
     if not inputs.ready:
         return ControlDecision(
-            "restore_self_use" if forced_mode else "hold", 0.0, "telemetry_not_ready"
+            restore_action if forced_mode else "hold", 0.0, "telemetry_not_ready"
         )
     if inputs.free_window_active and inputs.export_window_active:
         return ControlDecision(
-            "restore_self_use" if forced_mode else "hold", 0.0, "conflicting_windows"
+            restore_action if forced_mode else "hold", 0.0, "conflicting_windows"
         )
 
     charge_allowed = (
@@ -98,7 +102,7 @@ def decide_control(inputs: ControlInputs) -> ControlDecision:
 
     if charge_allowed and export_allowed:
         return ControlDecision(
-            "restore_self_use" if forced_mode else "hold", 0.0, "conflicting_intents"
+            restore_action if forced_mode else "hold", 0.0, "conflicting_intents"
         )
     if charge_allowed:
         if inputs.current_mode == "Force Discharge":
@@ -117,5 +121,5 @@ def decide_control(inputs: ControlInputs) -> ControlDecision:
             "export_window_ready",
         )
     if forced_mode:
-        return ControlDecision("restore_self_use", 0.0, "no_active_policy")
+        return ControlDecision(restore_action, 0.0, "no_active_policy")
     return ControlDecision("hold", 0.0, "no_active_policy")

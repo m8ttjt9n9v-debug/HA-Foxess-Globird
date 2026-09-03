@@ -6,6 +6,7 @@ import pytest
 
 from custom_components.home_energy_orchestrator.planner.free_charge import (
     calculate_free_charge_power,
+    decide_free_charge_completion,
 )
 
 
@@ -90,3 +91,22 @@ def test_invalid_minimum_is_rejected() -> None:
             inverter_charge_limit_kw=10,
             minimum_charge_power_kw=11,
         )
+
+
+def test_full_battery_before_import_threshold_uses_backup() -> None:
+    completion = decide_free_charge_completion(imported_kwh=48.9, battery_soc=100)
+    assert completion == completion.__class__(
+        "backup", "battery_full_before_import_threshold"
+    )
+
+
+def test_full_battery_at_import_threshold_uses_self_use() -> None:
+    completion = decide_free_charge_completion(imported_kwh=49, battery_soc=100)
+    assert completion == completion.__class__(
+        "self_use", "battery_full_at_import_threshold"
+    )
+
+
+def test_allowance_exhaustion_uses_self_use_even_if_battery_is_not_full() -> None:
+    completion = decide_free_charge_completion(imported_kwh=50, battery_soc=80)
+    assert completion == completion.__class__("self_use", "free_allowance_exhausted")

@@ -44,6 +44,9 @@ CONF_ZERO_IMPORT_THRESHOLD_KW = "zero_import_threshold_kw"
 CONF_ZERO_IMPORT_CONFIRM_MINUTES = "zero_import_confirm_minutes"
 CONF_FREE_CHARGE_START = "free_charge_window_start"
 CONF_FREE_CHARGE_END = "free_charge_window_end"
+CONF_FREE_CHARGE_FULL_BATTERY_IMPORT_THRESHOLD_KWH = (
+    "free_charge_full_battery_import_threshold_kwh"
+)
 CONF_HOUSE_LEARNING_FALLBACK = "house_learning_fallback_kwh"
 
 # Actuator mappings are collected for commissioning and diagnostics. The
@@ -80,6 +83,7 @@ DEFAULT_EV_MIN_CURRENT = 0.0
 DEFAULT_EV_MAX_CURRENT = 0.0
 DEFAULT_FREE_CHARGE_START = "12:01:00"
 DEFAULT_FREE_CHARGE_END = "14:59:00"
+DEFAULT_FREE_CHARGE_FULL_BATTERY_IMPORT_THRESHOLD_KWH = 49.0
 DEFAULT_HOUSE_LEARNING_FALLBACK_KWH = 17.5
 DEFAULT_INVERTER_CAPACITY_KW = 0.0
 DEFAULT_BONUS_LOAD_FOLLOWING_PERCENT = 20.0

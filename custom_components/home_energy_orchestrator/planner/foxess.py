@@ -82,15 +82,27 @@ def plan_foxess_commands(
             commands.append(FoxessCommand("select_mode", "Force Discharge"))
         return FoxessCommandPlan(tuple(commands), decision.reason)
     if decision.action == "restore_self_use":
-        commands = []
-        if observation.mode != "Self Use":
-            commands.append(FoxessCommand("select_mode", "Self Use", wait_seconds=5.0))
-        if not _same_power(observation.charge_power_kw, 0.0, response_tolerance_kw):
-            commands.append(FoxessCommand("set_charge_power", 0.0))
-        if not _same_power(observation.discharge_power_kw, 0.0, response_tolerance_kw):
-            commands.append(FoxessCommand("set_discharge_power", 0.0))
-        return FoxessCommandPlan(tuple(commands), decision.reason)
+        return _plan_restore_mode(decision, observation, "Self Use", response_tolerance_kw)
+    if decision.action == "restore_backup":
+        return _plan_restore_mode(decision, observation, "Backup", response_tolerance_kw)
     raise ValueError(f"unsupported FoxESS action: {decision.action}")
+
+
+def _plan_restore_mode(
+    decision: ControlDecision,
+    observation: FoxessObservation,
+    mode: str,
+    response_tolerance_kw: float,
+) -> FoxessCommandPlan:
+    """Clear force targets and select the reviewed post-charge mode."""
+    commands = []
+    if observation.mode != mode:
+        commands.append(FoxessCommand("select_mode", mode, wait_seconds=5.0))
+    if not _same_power(observation.charge_power_kw, 0.0, response_tolerance_kw):
+        commands.append(FoxessCommand("set_charge_power", 0.0))
+    if not _same_power(observation.discharge_power_kw, 0.0, response_tolerance_kw):
+        commands.append(FoxessCommand("set_discharge_power", 0.0))
+    return FoxessCommandPlan(tuple(commands), decision.reason)
 
 
 def foxess_response_matches(
@@ -117,6 +129,12 @@ def foxess_response_matches(
     if decision.action == "restore_self_use":
         return (
             observation.mode == "Self Use"
+            and _same_power(observation.charge_power_kw, 0.0, tolerance_kw)
+            and _same_power(observation.discharge_power_kw, 0.0, tolerance_kw)
+        )
+    if decision.action == "restore_backup":
+        return (
+            observation.mode == "Backup"
             and _same_power(observation.charge_power_kw, 0.0, tolerance_kw)
             and _same_power(observation.discharge_power_kw, 0.0, tolerance_kw)
         )

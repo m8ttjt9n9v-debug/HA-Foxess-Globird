@@ -36,6 +36,7 @@ from .const import (
     CONF_FOXESS_FORCE_DISCHARGE_POWER,
     CONF_FOXESS_WORK_MODE,
     CONF_FREE_CHARGE_END,
+    CONF_FREE_CHARGE_FULL_BATTERY_IMPORT_THRESHOLD_KWH,
     CONF_FREE_CHARGE_START,
     CONF_GRID_IMPORT_POSITIVE,
     CONF_GRID_POWER,
@@ -71,6 +72,7 @@ from .const import (
     DEFAULT_EV_VOLTAGE,
     DEFAULT_EXPORT_LIMIT_KW,
     DEFAULT_FREE_CHARGE_END,
+    DEFAULT_FREE_CHARGE_FULL_BATTERY_IMPORT_THRESHOLD_KWH,
     DEFAULT_FREE_CHARGE_START,
     DEFAULT_HOUSE_LEARNING_FALLBACK_KWH,
     DEFAULT_INVERTER_CAPACITY_KW,
@@ -248,6 +250,13 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     default=defaults.get(CONF_FREE_CHARGE_END, DEFAULT_FREE_CHARGE_END),
                 ): selector.TimeSelector(),
                 vol.Required(
+                    CONF_FREE_CHARGE_FULL_BATTERY_IMPORT_THRESHOLD_KWH,
+                    default=defaults.get(
+                        CONF_FREE_CHARGE_FULL_BATTERY_IMPORT_THRESHOLD_KWH,
+                        DEFAULT_FREE_CHARGE_FULL_BATTERY_IMPORT_THRESHOLD_KWH,
+                    ),
+                ): vol.Coerce(float),
+                vol.Required(
                     CONF_HOUSE_LEARNING_FALLBACK,
                     default=defaults.get(
                         CONF_HOUSE_LEARNING_FALLBACK, DEFAULT_HOUSE_LEARNING_FALLBACK_KWH
@@ -345,6 +354,10 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             **data,
             CONF_FREE_CHARGE_START: data.get(CONF_FREE_CHARGE_START, DEFAULT_FREE_CHARGE_START),
             CONF_FREE_CHARGE_END: data.get(CONF_FREE_CHARGE_END, DEFAULT_FREE_CHARGE_END),
+            CONF_FREE_CHARGE_FULL_BATTERY_IMPORT_THRESHOLD_KWH: data.get(
+                CONF_FREE_CHARGE_FULL_BATTERY_IMPORT_THRESHOLD_KWH,
+                DEFAULT_FREE_CHARGE_FULL_BATTERY_IMPORT_THRESHOLD_KWH,
+            ),
             CONF_SITE_PHASE_COUNT: data.get(CONF_SITE_PHASE_COUNT, DEFAULT_SITE_PHASE_COUNT),
             CONF_DAILY_FREE_ALLOWANCE_KWH: data.get(
                 CONF_DAILY_FREE_ALLOWANCE_KWH, DEFAULT_DAILY_FREE_ALLOWANCE_KWH
@@ -441,6 +454,9 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             reserve = float(data[CONF_RESERVE])
             site_phase_count = int(float(data[CONF_SITE_PHASE_COUNT]))
             daily_allowance = float(data[CONF_DAILY_FREE_ALLOWANCE_KWH])
+            full_battery_threshold = float(
+                data[CONF_FREE_CHARGE_FULL_BATTERY_IMPORT_THRESHOLD_KWH]
+            )
             service_import_limit = float(data[CONF_SERVICE_IMPORT_LIMIT_A])
             export_limit = float(data[CONF_EXPORT_LIMIT_KW])
             inverter_charge_limit = float(data[CONF_INVERTER_CHARGE_LIMIT_KW])
@@ -490,6 +506,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             inverter_charge_limit,
             inverter_discharge_limit,
             daily_allowance,
+            full_battery_threshold,
             zero_import_threshold,
             zero_import_minutes,
             min_current,
@@ -512,6 +529,8 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             or reserve < 0
             or site_phase_count not in (1, 3)
             or daily_allowance < 0
+            or full_battery_threshold < 0
+            or full_battery_threshold > daily_allowance
             or zero_import_threshold < 0
             or zero_import_minutes < 0
             or service_import_limit < 0

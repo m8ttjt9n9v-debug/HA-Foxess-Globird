@@ -37,6 +37,7 @@ ENTRY_DATA = {
     "house_load_entity": "sensor.test_house_load",
     "free_charge_window_start": "12:01:00",
     "free_charge_window_end": "14:59:00",
+    "free_charge_full_battery_import_threshold_kwh": 49.0,
     "house_learning_fallback_kwh": 17.5,
     "ev_charger_profile": "single_phase_32a",
     "ev_min_current": 6.0,
@@ -124,6 +125,26 @@ async def test_free_charge_target_accounts_for_allowance_house_load_and_solar(ha
     assert plan is not None
     assert plan.target_grid_import_kw > 0
     assert round(plan.target_charge_power_kw, 3) == 13.169
+    assert coordinator.free_charge_completion is not None
+    assert coordinator.free_charge_completion.action == "continue"
+
+
+async def test_full_battery_completion_mode_is_exposed(hass):
+    hass.states.async_set("sensor.test_battery_soc", "100", {"unit_of_measurement": "%"})
+    hass.states.async_set("sensor.test_grid_power", "0", {"unit_of_measurement": "kW"})
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Full battery site",
+        data={**ENTRY_DATA, "inverter_charge_limit_kw": 15.0},
+    )
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    coordinator = entry.runtime_data
+    coordinator.data = replace(coordinator.data, free_window_import_kwh=48.0)
+    completion = coordinator.free_charge_completion
+    assert completion is not None
+    assert completion.action == "backup"
 
 
 async def test_potential_capacity_is_multiplied_by_soc(hass):

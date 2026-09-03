@@ -30,6 +30,7 @@ from .const import (
     CONF_EV_VOLTAGE,
     CONF_EXPORT_LIMIT_KW,
     CONF_FREE_CHARGE_END,
+    CONF_FREE_CHARGE_FULL_BATTERY_IMPORT_THRESHOLD_KWH,
     CONF_FREE_CHARGE_START,
     CONF_GRID_IMPORT_POSITIVE,
     CONF_GRID_POWER,
@@ -76,7 +77,12 @@ from .planner.daily_meter import (
     HourlyWindowImportAccumulator,
     WindowImportAccumulator,
 )
-from .planner.free_charge import FreeChargePowerPlan, calculate_free_charge_power
+from .planner.free_charge import (
+    FreeChargeCompletion,
+    FreeChargePowerPlan,
+    calculate_free_charge_power,
+    decide_free_charge_completion,
+)
 from .planner.learning import (
     DemandCycleSampler,
     DemandHistory,
@@ -247,6 +253,29 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
                 house_load_kw=max(house, 0.0),
                 pv_generation_kw=max(solar, 0.0),
                 inverter_charge_limit_kw=limit,
+            )
+        except (TypeError, ValueError):
+            return None
+
+    @property
+    def free_charge_completion(self) -> FreeChargeCompletion | None:
+        """Return the mode outcome for a completed free-window charge."""
+        if self.snapshot is None or self.data is None:
+            return None
+        imported = self.data.free_window_import_kwh
+        soc = self.snapshot.battery_soc
+        if imported is None or soc is None:
+            return None
+        try:
+            return decide_free_charge_completion(
+                imported_kwh=imported,
+                battery_soc=soc,
+                daily_allowance_kwh=self._configured_nonnegative(
+                    CONF_DAILY_FREE_ALLOWANCE_KWH, DEFAULT_DAILY_FREE_ALLOWANCE_KWH
+                ),
+                full_battery_import_threshold_kwh=self._configured_nonnegative(
+                    CONF_FREE_CHARGE_FULL_BATTERY_IMPORT_THRESHOLD_KWH, 49.0
+                ),
             )
         except (TypeError, ValueError):
             return None

@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.2.23 — explicit free-window completion modes
+
+- Add a configurable full-battery import threshold (49 kWh by default) to the
+  setup and reconfigure forms.
+- Add a pure completion policy for the three reviewed outcomes: continue while
+  below full, restore `Backup` when full before the threshold, and restore
+  `Self Use` at the threshold or once the 50 kWh allowance is exhausted.
+- Extend the adapter-neutral FoxESS planner and runtime composition to support
+  `Backup` restoration, while retaining the no-write observer boundary.
+- Expose the completion recommendation as a read-only sensor and test the
+  exact-threshold boundary explicitly.
+- Document the evidence and commissioning rule for FoxCloud schedule versus
+  local Modbus ownership; no mixed-control behaviour is assumed.
+
 ## 0.2.22 — read-only free-window charge target
 
 - Add an optional AC-coupled solar-power mapping to the setup and reconfigure

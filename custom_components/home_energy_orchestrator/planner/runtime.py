@@ -12,7 +12,12 @@ from dataclasses import dataclass, replace
 from .control import ControlDecision, ControlInputs, decide_control
 from .ev import EvCurrentDecision, EvCurrentInputs, plan_ev_current_target
 from .export import ExportPlan, calculate_export_plan
-from .free_charge import FreeChargePowerPlan, calculate_free_charge_power
+from .free_charge import (
+    FreeChargeCompletion,
+    FreeChargePowerPlan,
+    calculate_free_charge_power,
+    decide_free_charge_completion,
+)
 from .tariff import TariffGuardDecision, calculate_tariff_guard
 
 
@@ -25,6 +30,7 @@ class RuntimePlan:
     tariff: TariffGuardDecision
     export: ExportPlan | None = None
     free_charge: FreeChargePowerPlan | None = None
+    free_charge_completion: FreeChargeCompletion | None = None
 
 
 def plan_runtime(
@@ -34,6 +40,7 @@ def plan_runtime(
     tariff_inputs: dict[str, object],
     export_inputs: dict[str, float] | None = None,
     free_charge_inputs: dict[str, float] | None = None,
+    free_charge_completion_inputs: dict[str, float] | None = None,
     learned_house_budget_kwh: float | None = None,
 ) -> RuntimePlan:
     """Evaluate tariff, EV and FoxESS policy in one deterministic pass."""
@@ -50,6 +57,21 @@ def plan_runtime(
                 and free_charge_plan.target_charge_power_kw > 0
             ),
         )
+    free_charge_completion = None
+    if free_charge_completion_inputs is not None:
+        free_charge_completion = decide_free_charge_completion(
+            **free_charge_completion_inputs
+        )
+        if free_charge_completion.action != "continue":
+            control_inputs = replace(
+                control_inputs,
+                automatic_charge=False,
+                restore_mode=(
+                    "Backup"
+                    if free_charge_completion.action == "backup"
+                    else "Self Use"
+                ),
+            )
     export_plan = None
     if export_inputs is not None:
         protected_house = 0.0 if learned_house_budget_kwh is None else learned_house_budget_kwh
@@ -71,4 +93,5 @@ def plan_runtime(
         tariff=tariff,
         export=export_plan,
         free_charge=free_charge_plan,
+        free_charge_completion=free_charge_completion,
     )

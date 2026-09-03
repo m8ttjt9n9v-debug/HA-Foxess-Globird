@@ -22,6 +22,53 @@ class FreeChargePowerPlan:
     reason: str
 
 
+@dataclass(frozen=True, slots=True)
+class FreeChargeCompletion:
+    """Mode outcome when a free-window charge session is complete."""
+
+    action: str
+    reason: str
+
+
+def decide_free_charge_completion(
+    *,
+    imported_kwh: float,
+    battery_soc: float,
+    daily_allowance_kwh: float = 50.0,
+    full_battery_import_threshold_kwh: float = 49.0,
+    full_soc_percent: float = 100.0,
+) -> FreeChargeCompletion:
+    """Choose the safe mode after free-window charging reaches a stop point.
+
+    A full battery below the configured import threshold is restored to
+    ``Backup`` so the remaining free allowance can be used by the house.
+    Once the threshold is reached, ``Self Use`` prevents further deliberate
+    grid import. Equality belongs to the self-use side of the boundary.
+    """
+    values = (
+        imported_kwh,
+        battery_soc,
+        daily_allowance_kwh,
+        full_battery_import_threshold_kwh,
+        full_soc_percent,
+    )
+    if not all(isfinite(value) for value in values):
+        raise ValueError("free-charge completion inputs must be finite")
+    if any(value < 0 for value in values):
+        raise ValueError("free-charge completion inputs must be non-negative")
+    if daily_allowance_kwh <= 0:
+        raise ValueError("daily allowance must be positive")
+    if full_battery_import_threshold_kwh > daily_allowance_kwh:
+        raise ValueError("full-battery threshold cannot exceed daily allowance")
+    if imported_kwh >= daily_allowance_kwh:
+        return FreeChargeCompletion("self_use", "free_allowance_exhausted")
+    if battery_soc < full_soc_percent:
+        return FreeChargeCompletion("continue", "battery_below_full")
+    if imported_kwh >= full_battery_import_threshold_kwh:
+        return FreeChargeCompletion("self_use", "battery_full_at_import_threshold")
+    return FreeChargeCompletion("backup", "battery_full_before_import_threshold")
+
+
 def calculate_free_charge_power(
     *,
     allowance_remaining_kwh: float,
@@ -70,4 +117,3 @@ def calculate_free_charge_power(
         round(allowance_rate, 3),
         "paced" if raw_charge > 0 else "house_load_exceeds_target",
     )
-

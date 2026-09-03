@@ -93,6 +93,10 @@ DESCRIPTIONS = (
     ),
     SensorEntityDescription(key="tariff_status", name="Tariff Guard Status"),
     SensorEntityDescription(
+        key="free_charge_completion",
+        name="Free-Window Charge Completion Mode",
+    ),
+    SensorEntityDescription(
         key="free_charge_power_target",
         name="Free-Window Charge Power Target",
         native_unit_of_measurement=UnitOfPower.KILO_WATT,
@@ -171,6 +175,11 @@ class EnergySensor(CoordinatorEntity[EnergyCoordinator], SensorEntity):
             "free_charge_allowed": ledger.free_charge_allowed_kwh,
             "bonus_zero_import_allowed": ledger.bonus_zero_import_allowed,
             "tariff_status": ledger.tariff_reason,
+            "free_charge_completion": (
+                None
+                if self.coordinator.free_charge_completion is None
+                else self.coordinator.free_charge_completion.action
+            ),
             "free_charge_power_target": (
                 None
                 if self.coordinator.free_charge_plan is None

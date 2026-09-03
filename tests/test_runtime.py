@@ -161,3 +161,24 @@ def test_runtime_plan_restores_normal_mode_when_charge_target_reaches_zero() -> 
     assert plan.free_charge is not None
     assert plan.free_charge.reason == "allowance_exhausted"
     assert plan.control.action == "restore_self_use"
+
+
+def test_runtime_plan_restores_backup_when_battery_full_before_threshold() -> None:
+    control = replace(_control_inputs(), current_mode="Force Charge")
+    plan = plan_runtime(
+        control,
+        _ev_inputs(),
+        tariff_inputs={
+            "daily_free_allowance_kwh": 50,
+            "imported_today_kwh": 48,
+            "requested_free_charge_kwh": 2,
+            "bonus_window_active": False,
+            "grid_import_kw": 0.0,
+            "grid_telemetry_valid": True,
+            "zero_import_minutes": 0,
+        },
+        free_charge_completion_inputs={"imported_kwh": 48, "battery_soc": 100},
+    )
+    assert plan.free_charge_completion is not None
+    assert plan.free_charge_completion.action == "backup"
+    assert plan.control.action == "restore_backup"

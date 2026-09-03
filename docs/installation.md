@@ -18,7 +18,7 @@ preferred for a custom repository; it becomes mandatory only when applying
 for inclusion in HACS's default catalogue. This repository does not yet have
 that published distribution channel.
 
-The current 0.2.22 release is observer-only: it makes no service calls and cannot change inverter, EV, charger, socket, or tariff settings. Its planner and adapters are tested separately but remain disabled until commissioning gates are complete. When an AC-coupled solar sensor, whole-house load sensor, cumulative free-window meter, and inverter charge limit are mapped, it also exposes a read-only charge-power target paced against the remaining free-window allowance.
+The current 0.2.23 release is observer-only: it makes no service calls and cannot change inverter, EV, charger, socket, or tariff settings. Its planner and adapters are tested separately but remain disabled until commissioning gates are complete. When an AC-coupled solar sensor, whole-house load sensor, cumulative free-window meter, and inverter charge limit are mapped, it exposes a read-only charge-power target paced against the remaining free-window allowance. It also reports the reviewed completion mode: Backup while a full battery is below the configured 49 kWh threshold, then Self Use at the threshold or when the 50 kWh allowance is exhausted.
 
 ## Before setup
 
