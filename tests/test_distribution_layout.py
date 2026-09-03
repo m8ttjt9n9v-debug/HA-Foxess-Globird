@@ -75,6 +75,6 @@ def test_example_dashboard_uses_the_integration_entity_ids() -> None:
         "sensor.home_energy_house_load",
         "sensor.home_energy_grid_import",
         "sensor.home_energy_grid_export",
-        "sensor.home_energy_zerohero_import_this_window",
-        "sensor.home_energy_ev_maximum_configured_power",
+            "sensor.home_energy_zerohero_import_window",
+            "sensor.home_energy_ev_max_power",
     } <= set(entity_ids)

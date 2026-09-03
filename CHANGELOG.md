@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.32 — portable dashboard references
+
+- Correct the starter dashboard entity references to the stable integration
+  keys introduced in 0.2.31, removing the remaining `Entity not found` cards.
+
 ## 0.2.31 — stable portable entity IDs
 
 - Use stable `sensor.home_energy_*` IDs for the dashboard regardless of the

@@ -26,7 +26,7 @@ views:
             entity: sensor.home_energy_battery_energy
             name: Battery energy
           - type: tile
-            entity: sensor.home_energy_available_battery_energy
+            entity: sensor.home_energy_available_energy
             name: Available above reserve
           - type: tile
             entity: sensor.home_energy_solar_power
@@ -50,19 +50,19 @@ views:
             entity: sensor.home_energy_free_window_import
             name: Free-window import
           - type: tile
-            entity: sensor.home_energy_free_charge_allowance_remaining
+            entity: sensor.home_energy_free_charge_allowed
             name: Free allowance remaining
           - type: tile
-            entity: sensor.home_energy_zerohero_import_this_window
+            entity: sensor.home_energy_zerohero_import_window
             name: ZEROHERO import this window
           - type: tile
-            entity: sensor.home_energy_zerohero_telemetry_guard_qualified
+            entity: sensor.home_energy_bonus_zero_import_allowed
             name: ZEROHERO guard
           - type: tile
-            entity: sensor.home_energy_estimated_energy_cost_today
+            entity: sensor.home_energy_estimated_energy_cost
             name: Estimated cost today
           - type: tile
-            entity: sensor.home_energy_grid_import_today
+            entity: sensor.home_energy_daily_import
             name: Grid import today
       - type: grid
         cards:
@@ -71,22 +71,22 @@ views:
             heading_style: title
             icon: mdi:chart-line
           - type: tile
-            entity: sensor.home_energy_free_window_charge_completion_mode
+            entity: sensor.home_energy_free_charge_completion
             name: Full-battery action
           - type: tile
-            entity: sensor.home_energy_free_window_charge_power_target
+            entity: sensor.home_energy_free_charge_power_target
             name: Free-window charge target
           - type: tile
-            entity: sensor.home_energy_learned_house_energy_budget
+            entity: sensor.home_energy_learned_house_energy
             name: Learned house budget
           - type: tile
-            entity: sensor.home_energy_remaining_house_energy_budget
+            entity: sensor.home_energy_remaining_house_energy
             name: Remaining house budget
           - type: tile
-            entity: sensor.home_energy_house_learning_samples
+            entity: sensor.home_energy_learning_samples
             name: Learning samples
           - type: tile
-            entity: sensor.home_energy_house_learning_status
+            entity: sensor.home_energy_learning_status
             name: Learning status
           - type: tile
             entity: sensor.home_energy_status
@@ -126,7 +126,7 @@ views:
               - type: bar-gauge
             features_position: bottom
           - type: tile
-            entity: sensor.home_energy_ev_maximum_configured_power
+            entity: sensor.home_energy_ev_max_power
             name: EV maximum power
           - type: markdown
             content: >-
@@ -145,9 +145,9 @@ views:
             entities:
               - entity: sensor.home_energy_status
                 name: Orchestrator status
-              - entity: sensor.home_energy_free_window_charge_power_target
+              - entity: sensor.home_energy_free_charge_power_target
                 name: Planned charge target
-              - entity: sensor.home_energy_free_charge_allowance_remaining
+              - entity: sensor.home_energy_free_charge_allowed
                 name: Free allowance remaining
           - type: markdown
             content: >-
@@ -171,13 +171,13 @@ views:
             entities:
               - entity: sensor.home_energy_status
                 name: Controller status
-              - entity: sensor.home_energy_tariff_guard_status
+              - entity: sensor.home_energy_tariff_status
                 name: Tariff guard
-              - entity: sensor.home_energy_zerohero_telemetry_guard_qualified
+              - entity: sensor.home_energy_bonus_zero_import_allowed
                 name: ZEROHERO guard
-              - entity: sensor.home_energy_house_learning_status
+              - entity: sensor.home_energy_learning_status
                 name: Learning model
-              - entity: sensor.home_energy_house_learning_samples
+              - entity: sensor.home_energy_learning_samples
                 name: Learning samples
           - type: markdown
             content: >-
