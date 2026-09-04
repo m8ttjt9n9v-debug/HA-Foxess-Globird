@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.3.0 — preview-first FoxESS commissioning tests
+
+- Add editable charge/discharge power and duration inputs for a dedicated Test
+  view, with pre-submit cost and export-earning estimates.
+- Add explicit, timed FoxESS force-charge and force-discharge buttons plus a
+  stop-and-restore-Self-Use button. Tests require automatic-control opt-in,
+  Rehearsal mode disabled, complete FoxESS mappings, valid telemetry, and a
+  30-minute maximum duration.
+- Block force-charge tests outside the configured free window and pause the
+  automatic FoxESS/EV loops while a manual test is active.
+- Keep the stop path fail-safe when actuator feedback disappears by clearing
+  both force-power targets before selecting Self Use.
+- Add live test status, remaining time, power history, and regression tests.
+
 ## 0.2.34 — rounded currency state
 
 - Round the currency-specific estimated daily cost state to two decimal places;

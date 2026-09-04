@@ -81,6 +81,11 @@ class ActiveEvController:
 
     async def async_reconcile(self) -> None:
         """Evaluate one bounded current adjustment; otherwise perform no write."""
+        manual_test = getattr(self.coordinator, "manual_test", None)
+        if manual_test is not None and manual_test.is_active:
+            self.last_reason = "manual_test_active"
+            self.last_actions = ()
+            return
         if not self.coordinator.config.get(CONF_AUTOMATIC_CONTROL_ENABLED, False):
             self.last_reason = "automatic_control_disabled"
             self.last_actions = ()

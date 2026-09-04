@@ -185,3 +185,114 @@ views:
               import/export values against a known load before enabling any
               FoxESS or EV writes.  HEO remains observer-only until the
               automatic-control gate is deliberately commissioned.
+  - type: sections
+    max_columns: 2
+    title: Test
+    path: test
+    icon: mdi:test-tube
+    sections:
+      - type: grid
+        column_span: 2
+        cards:
+          - type: heading
+            heading: Manual FoxESS test
+            heading_style: title
+            icon: mdi:flask-outline
+          - type: markdown
+            content: >-
+              Set the power and duration first.  The cost/earning preview is
+              calculated before submission.  The charge action is hard-blocked
+              outside the configured free window.  Both actions require the
+              explicit automatic-control gate, complete FoxESS mappings, and
+              Rehearsal mode disabled.  A test is limited to 30 minutes and
+              automatically restores Self Use when it ends.
+          - type: entities
+            title: Test parameters
+            entities:
+              - entity: number.home_energy_test_charge_power
+                name: Charge power
+              - entity: number.home_energy_test_discharge_power
+                name: Discharge power
+              - entity: number.home_energy_test_duration
+                name: Duration
+              - entity: number.home_energy_test_export_rate
+                name: Export rate for preview
+          - type: entities
+            title: Preview
+            entities:
+              - entity: sensor.home_energy_test_charge_estimated_cost
+                name: Estimated charge cost
+              - entity: sensor.home_energy_test_discharge_estimated_earning
+                name: Estimated discharge earning
+              - entity: sensor.home_energy_test_status
+                name: Test status
+              - entity: sensor.home_energy_test_remaining_minutes
+                name: Remaining time
+          - type: grid
+            columns: 2
+            cards:
+              - type: button
+                entity: button.home_energy_test_force_charge
+                name: Submit charge test
+                icon: mdi:battery-arrow-up-outline
+                tap_action:
+                  action: call-service
+                  service: button.press
+                  target:
+                    entity_id: button.home_energy_test_force_charge
+                  confirmation:
+                    text: Submit the force-charge test now?
+              - type: button
+                entity: button.home_energy_test_force_discharge
+                name: Submit discharge test
+                icon: mdi:battery-arrow-down-outline
+                tap_action:
+                  action: call-service
+                  service: button.press
+                  target:
+                    entity_id: button.home_energy_test_force_discharge
+                  confirmation:
+                    text: Submit the force-discharge test now?
+              - type: button
+                entity: button.home_energy_test_stop
+                name: Stop and restore Self Use
+                icon: mdi:stop-circle-outline
+                tap_action:
+                  action: call-service
+                  service: button.press
+                  target:
+                    entity_id: button.home_energy_test_stop
+                  confirmation:
+                    text: Stop the active test and restore Self Use?
+      - type: grid
+        cards:
+          - type: heading
+            heading: Live feedback
+            heading_style: title
+            icon: mdi:chart-timeline-variant
+          - type: entities
+            entities:
+              - entity: sensor.home_energy_status
+                name: Controller status
+              - entity: sensor.home_energy_battery_soc
+                name: Battery SOC
+              - entity: sensor.home_energy_battery_energy
+                name: Battery energy
+              - entity: sensor.home_energy_grid_import
+                name: Grid import
+              - entity: sensor.home_energy_grid_export
+                name: Grid export
+              - entity: sensor.home_energy_house_load
+                name: House load
+              - entity: sensor.home_energy_solar_power
+                name: Solar generation
+          - type: history-graph
+            title: Test feedback history
+            hours_to_show: 2
+            entities:
+              - entity: sensor.home_energy_grid_import
+                name: Grid import
+              - entity: sensor.home_energy_grid_export
+                name: Grid export
+              - entity: sensor.home_energy_battery_energy
+                name: Battery energy

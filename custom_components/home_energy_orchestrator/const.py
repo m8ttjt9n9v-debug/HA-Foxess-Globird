@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 DOMAIN = "home_energy_orchestrator"
-PLATFORMS = ["sensor"]
+PLATFORMS = ["sensor", "number", "button"]
 
 CONF_BATTERY_SOC = "battery_soc_entity"
 CONF_BATTERY_CAPACITY_ENTITY = "battery_capacity_entity"
@@ -50,6 +50,12 @@ CONF_FREE_CHARGE_FULL_BATTERY_IMPORT_THRESHOLD_KWH = (
 CONF_HOUSE_LEARNING_FALLBACK = "house_learning_fallback_kwh"
 CONF_AUTOMATIC_CONTROL_ENABLED = "automatic_control_enabled"
 CONF_REHEARSAL_MODE = "rehearsal_mode"
+
+# Explicit, short-lived commissioning tests. These are independent of the
+# automatic scheduler and remain unavailable until the control gate is opened.
+SERVICE_TEST_FORCE_CHARGE = "test_force_charge"
+SERVICE_TEST_FORCE_DISCHARGE = "test_force_discharge"
+SERVICE_TEST_STOP = "test_stop"
 
 # Actuator mappings are collected for commissioning and diagnostics. The
 # observer release never writes to these entities; an active release must

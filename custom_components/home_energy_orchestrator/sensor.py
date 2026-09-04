@@ -176,6 +176,25 @@ DESCRIPTIONS = (
         state_class="measurement",
     ),
     SensorEntityDescription(key="learning_status", name="House Learning Status"),
+    SensorEntityDescription(
+        key="test_charge_estimated_cost",
+        name="Test Charge Estimated Cost",
+        icon="mdi:cash-minus",
+        suggested_display_precision=2,
+    ),
+    SensorEntityDescription(
+        key="test_discharge_estimated_earning",
+        name="Test Discharge Estimated Earning",
+        icon="mdi:cash-plus",
+        suggested_display_precision=2,
+    ),
+    SensorEntityDescription(key="test_status", name="Test Status"),
+    SensorEntityDescription(
+        key="test_remaining_minutes",
+        name="Test Remaining",
+        native_unit_of_measurement="min",
+        suggested_display_precision=2,
+    ),
 )
 
 
@@ -271,6 +290,12 @@ class EnergySensor(CoordinatorEntity[EnergyCoordinator], SensorEntity):
             "remaining_house_energy": self.coordinator.learning_remaining_kwh,
             "learning_samples": learning.sample_count,
             "learning_status": learning.model,
+            "test_charge_estimated_cost": self.coordinator.manual_test.preview_charge().amount,
+            "test_discharge_estimated_earning": (
+                self.coordinator.manual_test.preview_discharge().amount
+            ),
+            "test_status": self.coordinator.manual_test.status,
+            "test_remaining_minutes": self.coordinator.manual_test.remaining_minutes,
         }
         return values[self.entity_description.key]
 

@@ -18,7 +18,7 @@ HACS installation requires a public GitHub repository. This project publishes
 versioned GitHub releases for the custom-repository channel; inclusion in
 HACS's default catalogue is a separate review process.
 
-Version 0.2.32 is observer-by-default. It makes no writes unless automatic
+Version 0.3.0 is observer-by-default. It makes no writes unless automatic
 control is enabled, Rehearsal mode is disabled, and the required FoxESS and EV
 entities are explicitly mapped. The commissioned path writes only the mapped
 EV current number. It confirms the Tessie/Tessy vehicle is at home before any
@@ -40,6 +40,14 @@ Version 0.2.31 gives generated entities stable `sensor.home_energy_*` IDs;
 existing entries are migrated only when the stable ID is unused.
 Version 0.2.32 updates the starter dashboard to reference those stable IDs
 correctly, including the descriptive telemetry and tariff sensors.
+
+Version 0.3.0 adds a separate **Test** dashboard view and matching
+commissioning entities. The editable power, duration, and export-rate fields
+only prepare a preview; pressing a start button is the explicit submit action.
+Force-charge tests are rejected outside the configured free window, both test
+types are limited to 30 minutes, and the controller restores Self Use at the
+end. The control gate must be enabled, Rehearsal mode disabled, and all three
+FoxESS actuator mappings complete.
 
 ## Before setup
 
