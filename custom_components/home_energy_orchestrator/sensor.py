@@ -23,24 +23,28 @@ DESCRIPTIONS = (
         native_unit_of_measurement="%",
         device_class="battery",
         state_class="measurement",
+        suggested_display_precision=2,
     ),
     SensorEntityDescription(
         key="battery_potential_capacity",
         name="Battery Potential Capacity",
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
         device_class="energy",
+        suggested_display_precision=2,
     ),
     SensorEntityDescription(
         key="battery_energy",
         name="Current Battery Energy",
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
         device_class="energy",
+        suggested_display_precision=2,
     ),
     SensorEntityDescription(
         key="available_energy",
         name="Available Battery Energy",
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
         device_class="energy",
+        suggested_display_precision=2,
     ),
     SensorEntityDescription(
         key="grid_import",
@@ -48,6 +52,7 @@ DESCRIPTIONS = (
         native_unit_of_measurement=UnitOfPower.KILO_WATT,
         device_class="power",
         state_class="measurement",
+        suggested_display_precision=2,
     ),
     SensorEntityDescription(
         key="grid_export",
@@ -55,6 +60,7 @@ DESCRIPTIONS = (
         native_unit_of_measurement=UnitOfPower.KILO_WATT,
         device_class="power",
         state_class="measurement",
+        suggested_display_precision=2,
     ),
     SensorEntityDescription(
         key="house_load",
@@ -62,6 +68,7 @@ DESCRIPTIONS = (
         native_unit_of_measurement=UnitOfPower.KILO_WATT,
         device_class="power",
         state_class="measurement",
+        suggested_display_precision=2,
     ),
     SensorEntityDescription(
         key="solar_power",
@@ -69,6 +76,7 @@ DESCRIPTIONS = (
         native_unit_of_measurement=UnitOfPower.KILO_WATT,
         device_class="power",
         state_class="measurement",
+        suggested_display_precision=2,
     ),
     SensorEntityDescription(
         key="ev_soc",
@@ -76,6 +84,7 @@ DESCRIPTIONS = (
         native_unit_of_measurement="%",
         device_class="battery",
         state_class="measurement",
+        suggested_display_precision=2,
     ),
     SensorEntityDescription(
         key="ev_max_power",
@@ -83,12 +92,14 @@ DESCRIPTIONS = (
         native_unit_of_measurement=UnitOfPower.KILO_WATT,
         device_class="power",
         state_class="measurement",
+        suggested_display_precision=2,
     ),
     SensorEntityDescription(
         key="free_energy_remaining",
         name="Free Energy Remaining Today",
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
         device_class="energy",
+        suggested_display_precision=2,
     ),
     SensorEntityDescription(
         key="daily_import",
@@ -96,6 +107,7 @@ DESCRIPTIONS = (
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
         device_class="energy",
         state_class="total_increasing",
+        suggested_display_precision=2,
     ),
     SensorEntityDescription(
         key="free_window_import",
@@ -103,17 +115,20 @@ DESCRIPTIONS = (
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
         device_class="energy",
         state_class="total_increasing",
+        suggested_display_precision=2,
     ),
     SensorEntityDescription(
         key="estimated_energy_cost",
         name="Estimated Energy Cost Today",
         icon="mdi:cash",
+        suggested_display_precision=2,
     ),
     SensorEntityDescription(
         key="free_charge_allowed",
         name="Free Charge Allowance Remaining",
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
         device_class="energy",
+        suggested_display_precision=2,
     ),
     SensorEntityDescription(
         key="bonus_zero_import_allowed",
@@ -126,6 +141,7 @@ DESCRIPTIONS = (
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
         device_class="energy",
         state_class="total_increasing",
+        suggested_display_precision=2,
     ),
     SensorEntityDescription(key="tariff_status", name="Tariff Guard Status"),
     SensorEntityDescription(
@@ -138,18 +154,21 @@ DESCRIPTIONS = (
         native_unit_of_measurement=UnitOfPower.KILO_WATT,
         device_class="power",
         state_class="measurement",
+        suggested_display_precision=2,
     ),
     SensorEntityDescription(
         key="learned_house_energy",
         name="Learned House Energy Budget",
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
         device_class="energy",
+        suggested_display_precision=2,
     ),
     SensorEntityDescription(
         key="remaining_house_energy",
         name="Remaining House Energy Budget",
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
         device_class="energy",
+        suggested_display_precision=2,
     ),
     SensorEntityDescription(
         key="learning_samples",

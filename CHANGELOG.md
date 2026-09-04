@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.33 — concise numeric display
+
+- Suggest a maximum of two decimal places for numeric energy, power, state of
+  charge, and cost entities in Home Assistant.
+
 ## 0.2.32 — portable dashboard references
 
 - Correct the starter dashboard entity references to the stable integration
