@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.4 — full-rate free-window target and cutoff stop
+
+- Request the commissioned inverter charge limit while the configured
+  free-window import cutoff remains; house load and AC-coupled PV are retained
+  only for estimating the resulting grid import.
+- Restore Self Use as soon as the cutoff is reached, regardless of battery SoC.
+- Keep the full-battery-before-cutoff outcome as Back-up so the remaining
+  allowance can serve the house.
+
 ## 0.3.3 — explicit Safety Lock switch
 
 - Expose `switch.home_energy_safety_lock` with unambiguous semantics: ON means

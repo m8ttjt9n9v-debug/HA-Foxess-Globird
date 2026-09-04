@@ -1,7 +1,7 @@
 # FoxESS Globird Energy Observer
 
 An Australia-scoped Home Assistant custom integration for an auditable,
-site-configured home-energy ledger. Version 0.3.2 is observer-by-default:
+site-configured home-energy ledger. Version 0.3.4 is observer-by-default:
 it reads the entities selected during setup, normalises their units and signs,
 persists local tariff meters and demand-learning evidence, and only permits
 FoxESS writes after an explicit control opt-in, complete actuator mapping, and
@@ -37,10 +37,11 @@ entities stable `sensor.home_energy_*` IDs regardless of the entry name.
 - configurable GloBird tariff estimates and an hourly 6–9 pm ZEROHERO guard;
 - whole-house demand-learning evidence; and
 - explicit single-phase 10/15/32 A and three-phase 16 A EV profile calculations;
-- an optional, read-only free-window charge target paced from allowance,
-  house-load, AC-coupled PV, and inverter-limit telemetry;
+- an optional, read-only free-window charge target at the commissioned inverter
+  limit while the configured import cutoff remains; house-load and AC-coupled
+  PV telemetry are retained for grid-import estimation;
 - a read-only completion-mode recommendation for the reviewed `Backup` /
-  `Self Use` outcomes at full battery.
+  `Self Use` outcomes at the configured import cutoff, regardless of battery SoC.
 - a read-only ZEROHERO import accumulator with the three hourly buckets exposed
   in its attributes for evening review.
 - an opt-in FoxESS free-window controller that runs every 30 seconds only when

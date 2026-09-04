@@ -55,6 +55,7 @@ from .const import (
     DEFAULT_DAILY_FREE_ALLOWANCE_KWH,
     DEFAULT_EV_PHASE_COUNT,
     DEFAULT_EXPORT_LIMIT_KW,
+    DEFAULT_FREE_CHARGE_FULL_BATTERY_IMPORT_THRESHOLD_KWH,
     DEFAULT_INVERTER_CHARGE_LIMIT_KW,
     DEFAULT_INVERTER_DISCHARGE_LIMIT_KW,
     DEFAULT_OFFPEAK_BALANCE_RATE,
@@ -231,17 +232,23 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
 
     @property
     def free_charge_plan(self) -> FreeChargePowerPlan | None:
-        """Return a read-only allowance-paced charge target when evidence exists."""
+        """Return a read-only full-rate charge target while the cutoff remains."""
         if self.snapshot is None or self.data is None:
             return None
         imported = self.data.free_window_import_kwh
         house = self.snapshot.house_load_kw
         solar = self._power(self.config.get(CONF_SOLAR_POWER))
-        if imported is None or house is None or solar is None:
+        if imported is None:
             return None
         try:
             allowance = self._configured_nonnegative(
                 CONF_DAILY_FREE_ALLOWANCE_KWH, DEFAULT_DAILY_FREE_ALLOWANCE_KWH
+            )
+            cutoff = min(
+                allowance,
+                self._configured_nonnegative(
+                    CONF_FREE_CHARGE_FULL_BATTERY_IMPORT_THRESHOLD_KWH, allowance
+                ),
             )
             limit = self._configured_nonnegative(
                 CONF_INVERTER_CHARGE_LIMIT_KW, DEFAULT_INVERTER_CHARGE_LIMIT_KW
@@ -249,10 +256,12 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
             now = dt_util.now()
             hours_remaining = self._free_window_hours_remaining(now)
             return calculate_free_charge_power(
-                allowance_remaining_kwh=max(allowance - imported, 0.0),
+                allowance_remaining_kwh=max(cutoff - imported, 0.0),
                 hours_remaining=hours_remaining,
-                house_load_kw=max(house, 0.0),
-                pv_generation_kw=max(solar, 0.0),
+                # The target is the commissioned battery limit; these two
+                # optional readings only refine the displayed grid estimate.
+                house_load_kw=max(house or 0.0, 0.0),
+                pv_generation_kw=max(solar or 0.0, 0.0),
                 inverter_charge_limit_kw=limit,
             )
         except (TypeError, ValueError):
@@ -275,7 +284,8 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
                     CONF_DAILY_FREE_ALLOWANCE_KWH, DEFAULT_DAILY_FREE_ALLOWANCE_KWH
                 ),
                 full_battery_import_threshold_kwh=self._configured_nonnegative(
-                    CONF_FREE_CHARGE_FULL_BATTERY_IMPORT_THRESHOLD_KWH, 49.0
+                    CONF_FREE_CHARGE_FULL_BATTERY_IMPORT_THRESHOLD_KWH,
+                    DEFAULT_FREE_CHARGE_FULL_BATTERY_IMPORT_THRESHOLD_KWH,
                 ),
             )
         except (TypeError, ValueError):

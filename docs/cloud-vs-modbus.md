@@ -27,11 +27,12 @@ What the available evidence says:
 If Home Assistant owns the window, it can pace the charge target and apply the
 three completion outcomes in the integration policy:
 
-1. At the 50 kWh allowance, restore Self Use and stop deliberate grid import.
-2. At 100% SoC below the 49 kWh full-battery threshold, restore Back-up so the
+1. At the configured import cutoff (49 kWh by default), restore Self Use and
+   stop deliberate grid import, regardless of battery SoC.
+2. At 100% SoC below the import cutoff, restore Back-up so the
    remaining allowance can serve the house from the grid.
-3. At 100% SoC at or above 49 kWh, restore Self Use. Equality is deliberately
-   treated as the no-more-import boundary.
+3. While below the cutoff and below 100% SoC, continue Force Charge. Equality
+   at the cutoff is deliberately treated as the no-more-import boundary.
 
 If FoxCloud/Mode Scheduler owns the window, a Modbus change made by Home
 Assistant may be overwritten or may cancel the remainder of the cloud period.

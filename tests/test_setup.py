@@ -151,7 +151,7 @@ async def test_mapped_telemetry_is_exposed_for_portable_dashboard(hass):
     assert hass.states.get(_entity_id(hass, entry, "ev_soc")).state == "70.0"
 
 
-async def test_free_charge_target_accounts_for_allowance_house_load_and_solar(hass, monkeypatch):
+async def test_free_charge_target_uses_commissioned_maximum(hass, monkeypatch):
     hass.states.async_set("sensor.test_battery_soc", "60", {"unit_of_measurement": "%"})
     hass.states.async_set("sensor.test_grid_power", "0", {"unit_of_measurement": "kW"})
     hass.states.async_set("sensor.test_house_load", "4", {"unit_of_measurement": "kW"})
@@ -177,9 +177,31 @@ async def test_free_charge_target_accounts_for_allowance_house_load_and_solar(ha
     plan = coordinator.free_charge_plan
     assert plan is not None
     assert plan.target_grid_import_kw > 0
-    assert round(plan.target_charge_power_kw, 3) == 13.169
+    assert round(plan.target_charge_power_kw, 3) == 15.0
     assert coordinator.free_charge_completion is not None
     assert coordinator.free_charge_completion.action == "continue"
+
+
+async def test_free_charge_target_does_not_depend_on_optional_estimates(hass, monkeypatch):
+    hass.states.async_set("sensor.test_battery_soc", "60", {"unit_of_measurement": "%"})
+    hass.states.async_set("sensor.test_grid_power", "0", {"unit_of_measurement": "kW"})
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Minimal charge target site",
+        data={**ENTRY_DATA, "inverter_charge_limit_kw": 15.0},
+    )
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    coordinator = entry.runtime_data
+    coordinator.data = replace(coordinator.data, free_window_import_kwh=5.0)
+    monkeypatch.setattr(
+        "custom_components.home_energy_orchestrator.coordinator.dt_util.now",
+        lambda: datetime(2026, 9, 3, 12, 1, tzinfo=ZoneInfo("Australia/Sydney")),
+    )
+    plan = coordinator.free_charge_plan
+    assert plan is not None
+    assert plan.target_charge_power_kw == 15.0
 
 
 async def test_full_battery_completion_mode_is_exposed(hass):
@@ -198,6 +220,35 @@ async def test_full_battery_completion_mode_is_exposed(hass):
     completion = coordinator.free_charge_completion
     assert completion is not None
     assert completion.action == "backup"
+
+
+async def test_free_import_cutoff_restores_self_use_even_below_full(hass):
+    hass.states.async_set("sensor.test_battery_soc", "80", {"unit_of_measurement": "%"})
+    hass.states.async_set("sensor.test_grid_power", "0", {"unit_of_measurement": "kW"})
+    hass.states.async_set("sensor.test_house_load", "1", {"unit_of_measurement": "kW"})
+    hass.states.async_set("sensor.test_solar", "0", {"unit_of_measurement": "kW"})
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Cutoff site",
+        data={
+            **ENTRY_DATA,
+            "solar_power_entity": "sensor.test_solar",
+            "inverter_charge_limit_kw": 15.0,
+        },
+    )
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    coordinator = entry.runtime_data
+    coordinator.data = replace(coordinator.data, free_window_import_kwh=49.0)
+    plan = coordinator.free_charge_plan
+    assert plan is not None
+    assert plan.target_charge_power_kw == 0.0
+    assert plan.reason == "allowance_exhausted"
+    completion = coordinator.free_charge_completion
+    assert completion is not None
+    assert completion.action == "self_use"
+    assert completion.reason == "free_allowance_cutoff_reached"
 
 
 async def test_zerohero_hourly_accumulator_is_exposed(hass):

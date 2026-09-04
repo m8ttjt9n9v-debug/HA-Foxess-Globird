@@ -114,6 +114,40 @@ async def test_commissioned_controller_executes_bounded_charge_plan(hass):
     assert calls[1].data["service_data"]["option"] == "Force Charge"
 
 
+async def test_cutoff_restores_self_use_even_when_battery_is_not_full(hass):
+    calls = []
+    hass.bus.async_listen(EVENT_CALL_SERVICE, calls.append)
+
+    async def noop(_call):
+        return None
+
+    hass.services.async_register("number", "set_value", noop)
+    hass.services.async_register("select", "select_option", noop)
+    hass.states.async_set("select.foxess_mode", "Force Charge")
+    hass.states.async_set("number.foxess_charge", "15", {"unit_of_measurement": "kW"})
+    hass.states.async_set("number.foxess_discharge", "0", {"unit_of_measurement": "kW"})
+    coordinator = _coordinator(
+        **{
+            CONF_AUTOMATIC_CONTROL_ENABLED: True,
+            CONF_REHEARSAL_MODE: False,
+        }
+    )
+    coordinator.snapshot.battery_soc = 80.0
+    coordinator.free_charge_plan = SimpleNamespace(target_charge_power_kw=0.0)
+    coordinator.free_charge_completion = SimpleNamespace(action="self_use")
+    controller = ActiveFoxessController(hass, coordinator)
+
+    await controller.async_reconcile()
+    await hass.async_block_till_done()
+
+    assert [(event.data["domain"], event.data["service"]) for event in calls] == [
+        ("select", "select_option"),
+        ("number", "set_value"),
+    ]
+    assert calls[0].data["service_data"]["option"] == "Self Use"
+    assert calls[1].data["service_data"]["value"] == 0.0
+
+
 async def test_ev_controller_is_inert_in_rehearsal_mode(hass):
     calls = []
     hass.bus.async_listen(EVENT_CALL_SERVICE, calls.append)

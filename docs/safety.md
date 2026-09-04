@@ -2,7 +2,7 @@
 
 Home Assistant is supervisory software; it is not a substitute for compliant electrical design, equipment protections, breaker ratings, EVSE protections, or installer verification.
 
-Version 0.3.3 is observer-by-default. Its optional FoxESS path is a bounded
+Version 0.3.4 is observer-by-default. Its optional FoxESS path is a bounded
 pilot controller, enabled only by an explicit automatic-control setting,
 the Safety Lock being OFF, complete FoxESS actuator mapping, valid telemetry,
 and a commissioned inverter limit. The EV path writes only the explicitly

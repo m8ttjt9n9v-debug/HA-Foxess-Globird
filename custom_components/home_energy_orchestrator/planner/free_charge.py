@@ -1,9 +1,11 @@
-"""Dynamic free-window battery charging limits.
+"""Free-window battery charging decisions.
 
-The GloBird allowance is energy (kWh) accumulated across the window. This
-planner turns the remaining allowance and time into an instantaneous grid
-target, then backs out measured house demand and AC-coupled PV to produce a
-bounded FoxESS battery-charge target. It has no Home Assistant side effects.
+The GloBird allowance is energy (kWh) accumulated across the window. The
+allowance is a stop condition, not a reason to throttle the battery below its
+commissioned charge limit. This planner therefore requests the full
+commissioned battery rate while allowance remains; the coordinator limits the
+allowance to the configured cutoff before calling it. It has no Home
+Assistant side effects.
 """
 
 from __future__ import annotations
@@ -62,10 +64,10 @@ def decide_free_charge_completion(
         raise ValueError("full-battery threshold cannot exceed daily allowance")
     if imported_kwh >= daily_allowance_kwh:
         return FreeChargeCompletion("self_use", "free_allowance_exhausted")
+    if imported_kwh >= full_battery_import_threshold_kwh:
+        return FreeChargeCompletion("self_use", "free_allowance_cutoff_reached")
     if battery_soc < full_soc_percent:
         return FreeChargeCompletion("continue", "battery_below_full")
-    if imported_kwh >= full_battery_import_threshold_kwh:
-        return FreeChargeCompletion("self_use", "battery_full_at_import_threshold")
     return FreeChargeCompletion("backup", "battery_full_before_import_threshold")
 
 
@@ -76,16 +78,13 @@ def calculate_free_charge_power(
     house_load_kw: float,
     pv_generation_kw: float,
     inverter_charge_limit_kw: float,
-    safety_margin_kw: float = 1.0,
-    minimum_charge_power_kw: float = 0.0,
 ) -> FreeChargePowerPlan:
-    """Calculate a charge target that paces the remaining energy allowance.
+    """Request the commissioned maximum while the free allowance remains.
 
-    The instantaneous target is ``allowance_remaining / hours_remaining`` less
-    the safety margin. With measured AC-coupled PV, charging power can rise by
-    the PV contribution without raising grid import. House load reduces the
-    battery target. Every result is clamped to the inverter's commissioned
-    charge limit.
+    ``hours_remaining`` is retained as an input so a finished window is a
+    deterministic no-op and ``allowance_rate_kw`` remains available as an
+    audit value. House load and AC-coupled PV are used only to estimate the
+    resulting grid import; they do not throttle the battery target.
     """
     values = (
         allowance_remaining_kwh,
@@ -93,27 +92,22 @@ def calculate_free_charge_power(
         house_load_kw,
         pv_generation_kw,
         inverter_charge_limit_kw,
-        safety_margin_kw,
-        minimum_charge_power_kw,
     )
     if not all(isfinite(value) for value in values):
         raise ValueError("free-charge inputs must be finite")
     if any(value < 0 for value in values):
         raise ValueError("free-charge inputs must be non-negative")
-    if minimum_charge_power_kw > inverter_charge_limit_kw:
-        raise ValueError("minimum charge power cannot exceed inverter limit")
     if allowance_remaining_kwh <= 0:
         return FreeChargePowerPlan(0.0, 0.0, 0.0, "allowance_exhausted")
     if hours_remaining <= 0:
         return FreeChargePowerPlan(0.0, 0.0, 0.0, "window_finished")
 
     allowance_rate = allowance_remaining_kwh / hours_remaining
-    target_grid = max(allowance_rate - safety_margin_kw, 0.0)
-    raw_charge = target_grid - house_load_kw + pv_generation_kw
-    target_charge = min(max(raw_charge, minimum_charge_power_kw), inverter_charge_limit_kw)
+    target_charge = inverter_charge_limit_kw
+    target_grid = max(target_charge + house_load_kw - pv_generation_kw, 0.0)
     return FreeChargePowerPlan(
         round(target_charge, 3),
         round(target_grid, 3),
         round(allowance_rate, 3),
-        "paced" if raw_charge > 0 else "house_load_exceeds_target",
+        "full_rate",
     )

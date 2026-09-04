@@ -110,7 +110,7 @@ def test_runtime_plan_applies_learned_house_budget_before_export() -> None:
     assert plan.control.action == "force_discharge"
 
 
-def test_runtime_plan_uses_allowance_paced_charge_target() -> None:
+def test_runtime_plan_uses_commissioned_maximum_charge_target() -> None:
     plan = plan_runtime(
         _control_inputs(),
         _ev_inputs(),
@@ -129,12 +129,11 @@ def test_runtime_plan_uses_allowance_paced_charge_target() -> None:
             "house_load_kw": 4,
             "pv_generation_kw": 0,
             "inverter_charge_limit_kw": 15,
-            "safety_margin_kw": 1,
         },
     )
     assert plan.free_charge is not None
-    assert plan.free_charge.target_charge_power_kw == 10
-    assert plan.control.power_kw == 10
+    assert plan.free_charge.target_charge_power_kw == 15
+    assert plan.control.power_kw == 15
 
 
 def test_runtime_plan_restores_normal_mode_when_charge_target_reaches_zero() -> None:
@@ -157,7 +156,6 @@ def test_runtime_plan_restores_normal_mode_when_charge_target_reaches_zero() -> 
             "house_load_kw": 4,
             "pv_generation_kw": 0,
             "inverter_charge_limit_kw": 15,
-            "safety_margin_kw": 1,
         },
     )
     assert plan.free_charge is not None
