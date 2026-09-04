@@ -1,7 +1,7 @@
 # FoxESS Globird Energy Observer
 
 An Australia-scoped Home Assistant custom integration for an auditable,
-site-configured home-energy ledger. Version 0.3.0 is observer-by-default:
+site-configured home-energy ledger. Version 0.3.1 is observer-by-default:
 it reads the entities selected during setup, normalises their units and signs,
 persists local tariff meters and demand-learning evidence, and only permits
 FoxESS writes after an explicit control opt-in, complete actuator mapping, and
@@ -25,7 +25,7 @@ An importable, generic two-column Lovelace starter dashboard is provided at
 [`examples/dashboard.yaml`](examples/dashboard.yaml). HACS installs the
 integration, not Lovelace dashboards; import the view and select the generated
 entities if your config-entry name differs from the example. The dashboard has
-Overview, EV, Commissioning, and Test views and intentionally contains no site
+Overview, EV, Commissioning, and Diagnostics views and intentionally contains no site
 background image or personal entity IDs. Version 0.2.31 gives the generated
 entities stable `sensor.home_energy_*` IDs regardless of the entry name.
 
@@ -54,11 +54,14 @@ entities stable `sensor.home_energy_*` IDs regardless of the entry name.
   charging limits to an away vehicle. A guarded session may use the mapped
   charge switch to start or stop only a session it owns; it does not change
   the vehicle SoC limit.
-- a preview-first Test view for short, explicit FoxESS force-charge and
+- a preview-first Diagnostics view for short, explicit FoxESS force-charge and
   force-discharge commissioning checks. Each test has editable power and
-  duration, a cost/earning preview, live feedback, a 30-minute maximum, and
+  duration, a cost/earning preview, live feedback, a 120-minute maximum, and
   automatic Self Use restoration. Force-charge tests are blocked outside the
-  free-charge window and both actions require the explicit control gate.
+  free-charge window. Hardware tests require Rehearsal mode to be disabled,
+  complete actuator mapping, and an explicit confirmation; they do not enable
+  the automatic scheduler. Discharge previews use the configured standard or
+  ZEROHERO-window export rate automatically.
 
 The ZEROHERO guard checks each hourly bucket independently against the
 configured 0.03 kWh/hour threshold. A three-hour total below 0.09 kWh does not

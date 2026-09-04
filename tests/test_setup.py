@@ -29,6 +29,8 @@ ENTRY_DATA = {
     "offpeak_rate_per_kwh": 0.0,
     "offpeak_balance_rate_per_kwh": 0.308,
     "shoulder_rate_per_kwh": 0.528,
+    "export_rate_per_kwh": 0.0,
+    "super_export_rate_per_kwh": 0.10,
     "site_phase_count": 1,
     "service_import_limit_a": 0.0,
     "export_limit_kw": 0.0,

@@ -13,12 +13,12 @@ test_force_charge:
           step: 0.1
     duration_minutes:
       name: Duration
-      description: Test duration in minutes; maximum 30.
+      description: Test duration in minutes; maximum 120.
       example: 5
       selector:
         number:
           min: 1
-          max: 30
+          max: 120
           step: 1
     entry_id:
       name: Config entry
@@ -27,7 +27,7 @@ test_force_charge:
         text:
 test_force_discharge:
   name: Start force-discharge test
-  description: Start a bounded force-discharge commissioning test using the entered export-rate preview.
+  description: Start a bounded force-discharge commissioning test using the configured export rate for the current time.
   fields:
     power_kw:
       name: Discharge power
@@ -40,12 +40,12 @@ test_force_discharge:
           step: 0.1
     duration_minutes:
       name: Duration
-      description: Test duration in minutes; maximum 30.
+      description: Test duration in minutes; maximum 120.
       example: 5
       selector:
         number:
           min: 1
-          max: 30
+          max: 120
           step: 1
     entry_id:
       name: Config entry

@@ -72,11 +72,11 @@ def _coordinator(**config):
     )
 
 
-async def test_controller_requires_explicit_control_gate(hass) -> None:
-    coordinator = _coordinator(**{CONF_AUTOMATIC_CONTROL_ENABLED: False})
+async def test_controller_requires_rehearsal_off(hass) -> None:
+    coordinator = _coordinator(**{CONF_REHEARSAL_MODE: True})
     controller = ManualTestController(hass, coordinator)
 
-    with pytest.raises(ManualTestError, match="enable automatic control"):
+    with pytest.raises(ManualTestError, match="Rehearsal mode"):
         await controller.async_start("charge", 1.0, 1.0)
 
 

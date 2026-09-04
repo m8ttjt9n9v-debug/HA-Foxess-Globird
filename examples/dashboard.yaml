@@ -187,25 +187,27 @@ views:
               automatic-control gate is deliberately commissioned.
   - type: sections
     max_columns: 2
-    title: Test
-    path: test
+    title: Diagnostics
+    path: diagnostics
     icon: mdi:test-tube
     sections:
       - type: grid
         column_span: 2
         cards:
           - type: heading
-            heading: Manual FoxESS test
+            heading: Manual FoxESS diagnostics
             heading_style: title
             icon: mdi:flask-outline
           - type: markdown
             content: >-
               Set the power and duration first.  The cost/earning preview is
               calculated before submission.  The charge action is hard-blocked
-              outside the configured free window.  Both actions require the
-              explicit automatic-control gate, complete FoxESS mappings, and
-              Rehearsal mode disabled.  A test is limited to 30 minutes and
-              automatically restores Self Use when it ends.
+              outside the configured free window.  Both actions require
+              complete FoxESS mappings and Rehearsal mode disabled.  A test is
+              limited to 120 minutes and automatically restores Self Use when
+              it ends. This diagnostic surface does not enable the automatic
+              scheduler. The export preview uses the configured standard or
+              ZEROHERO-window export rate and updates with the current time.
           - type: entities
             title: Test parameters
             entities:
@@ -215,8 +217,6 @@ views:
                 name: Discharge power
               - entity: number.home_energy_test_duration
                 name: Duration
-              - entity: number.home_energy_test_export_rate
-                name: Export rate for preview
           - type: entities
             title: Preview
             entities:
@@ -224,6 +224,8 @@ views:
                 name: Estimated charge cost
               - entity: sensor.home_energy_test_discharge_estimated_earning
                 name: Estimated discharge earning
+              - entity: sensor.home_energy_test_discharge_export_rate
+                name: Current export rate
               - entity: sensor.home_energy_test_status
                 name: Test status
               - entity: sensor.home_energy_test_remaining_minutes

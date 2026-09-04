@@ -1,4 +1,4 @@
-"""Editable inputs for the explicit FoxESS commissioning test tab."""
+"""Editable inputs for the explicit FoxESS diagnostics tab."""
 
 from __future__ import annotations
 
@@ -38,17 +38,8 @@ DESCRIPTIONS = (
         icon="mdi:timer-outline",
         native_unit_of_measurement="min",
         native_min_value=1.0,
-        native_max_value=30.0,
+        native_max_value=120.0,
         native_step=1.0,
-    ),
-    NumberEntityDescription(
-        key="test_export_rate",
-        name="Test Export Rate",
-        icon="mdi:cash-plus",
-        native_unit_of_measurement="$/kWh",
-        native_min_value=0.0,
-        native_max_value=1.0,
-        native_step=0.001,
     ),
 )
 
@@ -56,7 +47,7 @@ DESCRIPTIONS = (
 async def async_setup_entry(
     hass: HomeAssistant, entry: EnergyConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
-    """Add the four local-only test inputs."""
+    """Add the three local-only diagnostic inputs."""
     async_add_entities(
         TestNumber(entry.runtime_data, entry, description) for description in DESCRIPTIONS
     )
@@ -93,8 +84,6 @@ class TestNumber(CoordinatorEntity[EnergyCoordinator], NumberEntity):
             self.coordinator.manual_test.discharge_power_kw = value
         elif self.entity_description.key == "test_duration":
             self.coordinator.manual_test.duration_minutes = value
-        elif self.entity_description.key == "test_export_rate":
-            self.coordinator.manual_test.export_rate_per_kwh = value
         self._attr_native_value = value
         self.async_write_ha_state()
         self.coordinator.async_update_listeners()
@@ -105,7 +94,6 @@ class TestNumber(CoordinatorEntity[EnergyCoordinator], NumberEntity):
             "test_charge_power": test.charge_power_kw,
             "test_discharge_power": test.discharge_power_kw,
             "test_duration": test.duration_minutes,
-            "test_export_rate": test.export_rate_per_kwh,
         }[self.entity_description.key]
 
     def _max_value(self) -> float:

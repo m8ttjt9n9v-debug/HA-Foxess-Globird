@@ -33,6 +33,7 @@ from .const import (
     CONF_EV_SOC,
     CONF_EV_VOLTAGE,
     CONF_EXPORT_LIMIT_KW,
+    CONF_EXPORT_RATE,
     CONF_FOXESS_FORCE_CHARGE_POWER,
     CONF_FOXESS_FORCE_DISCHARGE_POWER,
     CONF_FOXESS_WORK_MODE,
@@ -59,6 +60,7 @@ from .const import (
     CONF_SHOULDER_RATE,
     CONF_SITE_PHASE_COUNT,
     CONF_SOLAR_POWER,
+    CONF_SUPER_EXPORT_RATE,
     CONF_ZERO_IMPORT_CONFIRM_MINUTES,
     CONF_ZERO_IMPORT_THRESHOLD_KW,
     DEFAULT_AUTOMATIC_CONTROL_ENABLED,
@@ -74,6 +76,7 @@ from .const import (
     DEFAULT_EV_PHASE_COUNT,
     DEFAULT_EV_VOLTAGE,
     DEFAULT_EXPORT_LIMIT_KW,
+    DEFAULT_EXPORT_RATE,
     DEFAULT_FREE_CHARGE_END,
     DEFAULT_FREE_CHARGE_FULL_BATTERY_IMPORT_THRESHOLD_KWH,
     DEFAULT_FREE_CHARGE_START,
@@ -93,6 +96,7 @@ from .const import (
     DEFAULT_SERVICE_IMPORT_LIMIT_A,
     DEFAULT_SHOULDER_RATE,
     DEFAULT_SITE_PHASE_COUNT,
+    DEFAULT_SUPER_EXPORT_RATE,
     DEFAULT_ZERO_IMPORT_CONFIRM_MINUTES,
     DEFAULT_ZERO_IMPORT_THRESHOLD_KW,
     DOMAIN,
@@ -213,6 +217,14 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 vol.Required(
                     CONF_SHOULDER_RATE,
                     default=defaults.get(CONF_SHOULDER_RATE, DEFAULT_SHOULDER_RATE),
+                ): vol.Coerce(float),
+                vol.Required(
+                    CONF_EXPORT_RATE,
+                    default=defaults.get(CONF_EXPORT_RATE, DEFAULT_EXPORT_RATE),
+                ): vol.Coerce(float),
+                vol.Required(
+                    CONF_SUPER_EXPORT_RATE,
+                    default=defaults.get(CONF_SUPER_EXPORT_RATE, DEFAULT_SUPER_EXPORT_RATE),
                 ): vol.Coerce(float),
                 vol.Required(
                     CONF_SITE_PHASE_COUNT,
@@ -434,6 +446,10 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 CONF_OFFPEAK_BALANCE_RATE, DEFAULT_OFFPEAK_BALANCE_RATE
             ),
             CONF_SHOULDER_RATE: data.get(CONF_SHOULDER_RATE, DEFAULT_SHOULDER_RATE),
+            CONF_EXPORT_RATE: data.get(CONF_EXPORT_RATE, DEFAULT_EXPORT_RATE),
+            CONF_SUPER_EXPORT_RATE: data.get(
+                CONF_SUPER_EXPORT_RATE, DEFAULT_SUPER_EXPORT_RATE
+            ),
             CONF_SERVICE_IMPORT_LIMIT_A: data.get(
                 CONF_SERVICE_IMPORT_LIMIT_A, DEFAULT_SERVICE_IMPORT_LIMIT_A
             ),
@@ -542,6 +558,8 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             offpeak_rate = float(data[CONF_OFFPEAK_RATE])
             offpeak_balance_rate = float(data[CONF_OFFPEAK_BALANCE_RATE])
             shoulder_rate = float(data[CONF_SHOULDER_RATE])
+            export_rate = float(data[CONF_EXPORT_RATE])
+            super_export_rate = float(data[CONF_SUPER_EXPORT_RATE])
             fallback = float(data[CONF_HOUSE_LEARNING_FALLBACK])
         except (KeyError, TypeError, ValueError):
             return {"base": "invalid_site_limits"}
@@ -587,6 +605,8 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             offpeak_rate,
             offpeak_balance_rate,
             shoulder_rate,
+            export_rate,
+            super_export_rate,
         )
         if (
             profile_values is None
@@ -612,6 +632,8 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             or not 0 <= bonus_percent <= 100
             or not 0 <= non_free_percent <= 100
             or inverter_capacity < 0
+            or export_rate < 0
+            or super_export_rate < 0
         ):
             return {"base": "invalid_site_limits"}
         return {}

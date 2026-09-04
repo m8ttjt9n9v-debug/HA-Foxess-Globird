@@ -1,9 +1,9 @@
 """Explicit, time-limited FoxESS commissioning tests.
 
 The test surface is deliberately separate from the automatic coordinator. It
-requires the same explicit control gate, refuses charge tests outside the
-configured free window, bounds power and duration, and always restores
-Self Use when the timer expires or the integration unloads.
+refuses charge tests outside the configured free window, bounds power and
+duration, derives the active export tariff from the site configuration, and
+always restores Self Use when the timer expires or the integration unloads.
 """
 
 from __future__ import annotations
@@ -16,7 +16,7 @@ from homeassistant.helpers.event import async_call_later
 from homeassistant.util import dt as dt_util
 
 from .const import (
-    CONF_AUTOMATIC_CONTROL_ENABLED,
+    CONF_EXPORT_RATE,
     CONF_FOXESS_FORCE_CHARGE_POWER,
     CONF_FOXESS_FORCE_DISCHARGE_POWER,
     CONF_FOXESS_WORK_MODE,
@@ -29,6 +29,9 @@ from .const import (
     CONF_PEAK_WINDOW_START,
     CONF_REHEARSAL_MODE,
     CONF_SHOULDER_RATE,
+    CONF_SUPER_EXPORT_RATE,
+    DEFAULT_EXPORT_RATE,
+    DEFAULT_SUPER_EXPORT_RATE,
 )
 from .coordinator import EnergyCoordinator
 from .foxess_adapter import FoxessEntityMap, FoxessServiceAdapter
@@ -50,7 +53,7 @@ class ManualTestError(ValueError):
 class ManualTestController:
     """Own one short-lived manual charge or discharge test."""
 
-    MAX_DURATION_MINUTES = 30.0
+    MAX_DURATION_MINUTES = 120.0
 
     def __init__(self, hass: HomeAssistant, coordinator: EnergyCoordinator) -> None:
         self.hass = hass
@@ -58,7 +61,6 @@ class ManualTestController:
         self.charge_power_kw = 1.0
         self.discharge_power_kw = 1.0
         self.duration_minutes = 5.0
-        self.export_rate_per_kwh = 0.0
         self.active_kind: str | None = None
         self.started_at: datetime | None = None
         self.ends_at: datetime | None = None
@@ -96,11 +98,19 @@ class ManualTestController:
         )
 
     def preview_discharge(self) -> ManualTestEstimate:
+        now = dt_util.now()
         return estimate_discharge(
             self.discharge_power_kw,
             self.duration_minutes,
-            export_rate=max(self.export_rate_per_kwh, 0.0),
+            export_rate=self.current_export_rate(now),
         )
+
+    def current_export_rate(self, now: datetime | None = None) -> float:
+        """Return the configured export rate for the current local time."""
+        now = now or dt_util.now()
+        if self._bonus_window_active(now):
+            return self._rate(CONF_SUPER_EXPORT_RATE, DEFAULT_SUPER_EXPORT_RATE)
+        return self._rate(CONF_EXPORT_RATE, DEFAULT_EXPORT_RATE)
 
     def current_import_rate(self, now: datetime | None = None) -> float:
         """Return the configured import rate at the current local time."""
@@ -217,10 +227,8 @@ class ManualTestController:
             self.coordinator.async_update_listeners()
 
     def _require_gate(self) -> None:
-        if not self.coordinator.config.get(CONF_AUTOMATIC_CONTROL_ENABLED, False):
-            raise ManualTestError("enable automatic control before running a manual test")
         if self.coordinator.config.get(CONF_REHEARSAL_MODE, True):
-            raise ManualTestError("disable Rehearsal mode before running a manual test")
+            raise ManualTestError("disable Rehearsal mode before running a diagnostic test")
         if not all(
             self.coordinator.config.get(key)
             for key in (
@@ -307,3 +315,13 @@ class ManualTestController:
 
     def _free_window_active(self, now: datetime) -> bool:
         return self.coordinator._free_window_hours_remaining(now) > 0
+
+    def _bonus_window_active(self, now: datetime) -> bool:
+        """Evaluate the configured local-time ZEROHERO export window."""
+        checker = getattr(self.coordinator, "_bonus_window_active", None)
+        if checker is not None:
+            return bool(checker(now))
+        start = self.coordinator._configured_time("bonus_window_start", "18:00:00")
+        end = self.coordinator._configured_time("bonus_window_end", "21:00:00")
+        current = now.timetz().replace(tzinfo=None)
+        return (start <= current < end) if start < end else (current >= start or current < end)

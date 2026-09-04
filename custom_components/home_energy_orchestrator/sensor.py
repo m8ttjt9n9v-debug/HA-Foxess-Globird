@@ -188,6 +188,13 @@ DESCRIPTIONS = (
         icon="mdi:cash-plus",
         suggested_display_precision=2,
     ),
+    SensorEntityDescription(
+        key="test_discharge_export_rate",
+        name="Test Discharge Export Rate",
+        native_unit_of_measurement="$/kWh",
+        icon="mdi:cash-plus",
+        suggested_display_precision=2,
+    ),
     SensorEntityDescription(key="test_status", name="Test Status"),
     SensorEntityDescription(
         key="test_remaining_minutes",
@@ -294,6 +301,7 @@ class EnergySensor(CoordinatorEntity[EnergyCoordinator], SensorEntity):
             "test_discharge_estimated_earning": (
                 self.coordinator.manual_test.preview_discharge().amount
             ),
+            "test_discharge_export_rate": self.coordinator.manual_test.current_export_rate(),
             "test_status": self.coordinator.manual_test.status,
             "test_remaining_minutes": self.coordinator.manual_test.remaining_minutes,
         }

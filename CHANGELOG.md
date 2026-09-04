@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.3.1 — diagnostics commissioning surface
+
+- Rename the manual Test view to Diagnostics and make its purpose explicit:
+  live telemetry, previews, and bounded FoxESS checks in one place.
+- Derive the discharge preview from the configured standard or ZEROHERO-window
+  export rate; the rate is no longer an editable test input.
+- Extend the bounded diagnostic duration ceiling to 120 minutes.
+- Keep the automatic scheduler disabled while allowing an explicitly
+  confirmed diagnostic test once Rehearsal mode is disabled and all actuator
+  mappings are complete.
+
 ## 0.3.0 — preview-first FoxESS commissioning tests
 
 - Add editable charge/discharge power and duration inputs for a dedicated Test

@@ -41,13 +41,15 @@ existing entries are migrated only when the stable ID is unused.
 Version 0.2.32 updates the starter dashboard to reference those stable IDs
 correctly, including the descriptive telemetry and tariff sensors.
 
-Version 0.3.0 adds a separate **Test** dashboard view and matching
-commissioning entities. The editable power, duration, and export-rate fields
-only prepare a preview; pressing a start button is the explicit submit action.
-Force-charge tests are rejected outside the configured free window, both test
-types are limited to 30 minutes, and the controller restores Self Use at the
-end. The control gate must be enabled, Rehearsal mode disabled, and all three
-FoxESS actuator mappings complete.
+Version 0.3.1 adds a separate **Diagnostics** dashboard view and matching
+commissioning entities. The editable power and duration fields only prepare a
+preview; pressing a start button is the explicit submit action. Force-charge
+tests are rejected outside the configured free window, both test types are
+limited to 120 minutes, and the controller restores Self Use at the end. The
+discharge preview uses the configured standard or ZEROHERO-window export rate
+and updates with the current time. Rehearsal mode must be disabled and all
+three FoxESS actuator mappings complete; the automatic scheduler itself may
+remain disabled.
 
 ## Before setup
 
