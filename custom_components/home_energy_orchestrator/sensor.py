@@ -183,6 +183,13 @@ DESCRIPTIONS = (
         suggested_display_precision=2,
     ),
     SensorEntityDescription(
+        key="test_charge_import_rate",
+        name="Test Charge Import Rate",
+        native_unit_of_measurement="$/kWh",
+        icon="mdi:cash-minus",
+        suggested_display_precision=2,
+    ),
+    SensorEntityDescription(
         key="test_discharge_estimated_earning",
         name="Test Discharge Estimated Earning",
         icon="mdi:cash-plus",
@@ -298,6 +305,7 @@ class EnergySensor(CoordinatorEntity[EnergyCoordinator], SensorEntity):
             "learning_samples": learning.sample_count,
             "learning_status": learning.model,
             "test_charge_estimated_cost": self.coordinator.manual_test.preview_charge().amount,
+            "test_charge_import_rate": self.coordinator.manual_test.current_import_rate(),
             "test_discharge_estimated_earning": (
                 self.coordinator.manual_test.preview_discharge().amount
             ),

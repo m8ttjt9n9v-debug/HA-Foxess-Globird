@@ -14,17 +14,17 @@ from .coordinator import EnergyCoordinator
 DESCRIPTIONS = (
     ButtonEntityDescription(
         key="test_force_charge",
-        name="Start Force-Charge Test",
+        name="Start Charge Diagnostic",
         icon="mdi:battery-arrow-up-outline",
     ),
     ButtonEntityDescription(
         key="test_force_discharge",
-        name="Start Force-Discharge Test",
+        name="Start Discharge Diagnostic",
         icon="mdi:battery-arrow-down-outline",
     ),
     ButtonEntityDescription(
         key="test_stop",
-        name="Stop Test and Restore Self Use",
+        name="Stop Diagnostic and Restore Self Use",
         icon="mdi:stop-circle-outline",
     ),
 )

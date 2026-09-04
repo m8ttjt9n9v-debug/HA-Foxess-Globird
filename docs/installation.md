@@ -41,7 +41,7 @@ existing entries are migrated only when the stable ID is unused.
 Version 0.2.32 updates the starter dashboard to reference those stable IDs
 correctly, including the descriptive telemetry and tariff sensors.
 
-Version 0.3.1 adds a separate **Diagnostics** dashboard view and matching
+Version 0.3.2 adds a separate **Diagnostics** dashboard view and matching
 commissioning entities. The editable power and duration fields only prepare a
 preview; pressing a start button is the explicit submit action. Force-charge
 tests are rejected outside the configured free window, both test types are

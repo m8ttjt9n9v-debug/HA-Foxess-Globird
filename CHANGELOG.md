@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.2 — diagnostics naming and rate feedback
+
+- Rename the remaining user-facing Test labels to Diagnostics.
+- Add read-only current import/export rate sensors so both previews show the
+  configured rate used for their estimate.
+- Clarify the Rehearsal option as **Safety Lock (ON = no hardware writes)**;
+  its default remains ON.
+
 ## 0.3.1 — diagnostics commissioning surface
 
 - Rename the manual Test view to Diagnostics and make its purpose explicit:
