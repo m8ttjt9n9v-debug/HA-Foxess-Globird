@@ -63,6 +63,10 @@ entities stable `sensor.home_energy_*` IDs regardless of the entry name.
   the automatic scheduler. Discharge previews use the configured standard or
   ZEROHERO-window export rate automatically.
 
+The integration also exposes `switch.home_energy_safety_lock`. It is ON when
+the no-write interlock is engaged; turning it OFF only opens the explicit
+commissioning gate and does not enable automatic control.
+
 The ZEROHERO guard checks each hourly bucket independently against the
 configured 0.03 kWh/hour threshold. A three-hour total below 0.09 kWh does not
 qualify if any individual hourly bucket exceeds 0.03 kWh/hour.

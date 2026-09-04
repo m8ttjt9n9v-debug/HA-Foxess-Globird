@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.3 — explicit Safety Lock switch
+
+- Expose `switch.home_energy_safety_lock` with unambiguous semantics: ON means
+  locked and no FoxESS/Tessie hardware writes are allowed.
+- Persist lock changes without coupling them to the automatic-control switch.
+- Add the safety control to the portable Diagnostics dashboard template.
+
 ## 0.3.2 — diagnostics naming and rate feedback
 
 - Rename the remaining user-facing Test labels to Diagnostics.

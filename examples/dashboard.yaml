@@ -12,6 +12,15 @@ views:
       - type: grid
         column_span: 2
         cards:
+          - type: entities
+            title: Controls & safety
+            entities:
+              - entity: sensor.home_energy_status
+                name: Integration status
+              - entity: switch.home_energy_safety_lock
+                name: Safety Lock (ON = locked)
+              - entity: sensor.home_energy_test_status
+                name: Diagnostic status
           - type: heading
             heading: Live energy
             heading_style: title

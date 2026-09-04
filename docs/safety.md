@@ -2,7 +2,7 @@
 
 Home Assistant is supervisory software; it is not a substitute for compliant electrical design, equipment protections, breaker ratings, EVSE protections, or installer verification.
 
-Version 0.3.2 is observer-by-default. Its optional FoxESS path is a bounded
+Version 0.3.3 is observer-by-default. Its optional FoxESS path is a bounded
 pilot controller, enabled only by an explicit automatic-control setting,
 the Safety Lock being OFF, complete FoxESS actuator mapping, valid telemetry,
 and a commissioned inverter limit. The EV path writes only the explicitly
@@ -23,3 +23,7 @@ schedule. It refuses charge tests outside the free window, requires Rehearsal
 mode (Safety Lock) off and complete FoxESS mapping, bounds each run to 120 minutes, and
 attempts to clear both force-power targets before restoring Self Use when a
 run ends. Confirm inverter feedback after every test.
+
+The integration exposes `switch.home_energy_safety_lock` so the state is
+unambiguous in a dashboard: ON means locked and no hardware writes are
+allowed; OFF is required before an explicitly submitted commissioning test.

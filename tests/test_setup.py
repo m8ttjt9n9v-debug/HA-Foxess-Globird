@@ -89,6 +89,27 @@ async def test_setup_observes_normalised_values_and_never_calls_services(hass):
     assert service_calls == []
 
 
+async def test_safety_lock_switch_is_on_by_default_and_persists_unlock(hass):
+    hass.states.async_set("sensor.test_battery_soc", "60", {"unit_of_measurement": "%"})
+    hass.states.async_set("sensor.test_grid_power", "0", {"unit_of_measurement": "kW"})
+    entry = MockConfigEntry(domain=DOMAIN, title="Safety site", data=ENTRY_DATA)
+    entry.add_to_hass(hass)
+
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    lock = hass.states.get("switch.home_energy_safety_lock")
+    assert lock is not None
+    assert lock.state == "on"
+
+    await hass.services.async_call(
+        "switch", "turn_off", {"entity_id": "switch.home_energy_safety_lock"}, blocking=True
+    )
+    assert hass.states.get("switch.home_energy_safety_lock").state == "off"
+    assert entry.data["rehearsal_mode"] is False
+    assert entry.runtime_data.config["rehearsal_mode"] is False
+
+
 async def test_source_change_recalculates_without_a_restart(hass):
     hass.states.async_set("sensor.test_battery_soc", "60", {"unit_of_measurement": "%"})
     hass.states.async_set("sensor.test_grid_power", "1200", {"unit_of_measurement": "W"})
