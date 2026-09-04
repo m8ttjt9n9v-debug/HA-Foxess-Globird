@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.34 — rounded currency state
+
+- Round the currency-specific estimated daily cost state to two decimal places;
+  Home Assistant cannot apply a display precision hint reliably without a
+  native unit.
+
 ## 0.2.33 — concise numeric display
 
 - Suggest a maximum of two decimal places for numeric energy, power, state of

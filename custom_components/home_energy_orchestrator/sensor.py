@@ -242,7 +242,13 @@ class EnergySensor(CoordinatorEntity[EnergyCoordinator], SensorEntity):
             "free_energy_remaining": ledger.free_energy_remaining_kwh,
             "daily_import": ledger.daily_import_kwh,
             "free_window_import": ledger.free_window_import_kwh,
-            "estimated_energy_cost": ledger.estimated_energy_cost,
+            # Cost has no Home Assistant unit (it is site-currency specific),
+            # so round the state itself rather than relying on display hints.
+            "estimated_energy_cost": (
+                None
+                if ledger.estimated_energy_cost is None
+                else round(ledger.estimated_energy_cost, 2)
+            ),
             "free_charge_allowed": ledger.free_charge_allowed_kwh,
             "bonus_zero_import_allowed": ledger.bonus_zero_import_allowed,
             "zerohero_import_window": (
