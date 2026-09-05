@@ -1,10 +1,9 @@
 """Explicitly opt-in FoxESS reconciliation for the commissioned path.
 
 The observer remains the default. This controller only starts when the config
-entry enables automatic control and disables rehearsal mode, and it requires a
-complete FoxESS actuator mapping. The companion EV controller uses the same
-gates and only adjusts an explicitly mapped Tessie/Tessy current setpoint while
-the free window and local feedback are valid.
+entry selects Local Modbus ownership, enables automatic control, disables
+rehearsal mode, and provides a complete FoxESS actuator mapping. The companion
+EV controller has its own authorization gate.
 """
 
 from __future__ import annotations
@@ -20,6 +19,7 @@ from .active_ev import ActiveEvController
 from .const import (
     CONF_AUTOMATIC_CONTROL_ENABLED,
     CONF_EXPORT_LIMIT_KW,
+    CONF_FOXESS_CONTROL_OWNER,
     CONF_FOXESS_FORCE_CHARGE_POWER,
     CONF_FOXESS_FORCE_DISCHARGE_POWER,
     CONF_FOXESS_WORK_MODE,
@@ -27,8 +27,11 @@ from .const import (
     CONF_INVERTER_DISCHARGE_LIMIT_KW,
     CONF_REHEARSAL_MODE,
     DEFAULT_EXPORT_LIMIT_KW,
+    DEFAULT_FOXESS_CONTROL_OWNER,
     DEFAULT_INVERTER_CHARGE_LIMIT_KW,
     DEFAULT_INVERTER_DISCHARGE_LIMIT_KW,
+    FOXESS_CONTROL_OWNER_CLOUD,
+    FOXESS_CONTROL_OWNER_MODBUS,
 )
 from .coordinator import EnergyCoordinator
 from .foxess_adapter import FoxessEntityMap, FoxessServiceAdapter
@@ -59,6 +62,13 @@ class ActiveFoxessController:
     @property
     def gate_status(self) -> str:
         """Return a human-readable commissioning gate state."""
+        owner = self.coordinator.config.get(
+            CONF_FOXESS_CONTROL_OWNER, DEFAULT_FOXESS_CONTROL_OWNER
+        )
+        if owner == FOXESS_CONTROL_OWNER_CLOUD:
+            return "foxcloud_scheduler_owner"
+        if owner != FOXESS_CONTROL_OWNER_MODBUS:
+            return "observer_owner"
         if not self.coordinator.config.get(CONF_AUTOMATIC_CONTROL_ENABLED, False):
             return "disabled"
         if self.coordinator.config.get(CONF_REHEARSAL_MODE, True):
@@ -95,6 +105,17 @@ class ActiveFoxessController:
         manual_test = getattr(self.coordinator, "manual_test", None)
         if manual_test is not None and manual_test.is_active:
             self.last_reason = "manual_test_active"
+            self.last_actions = ()
+            return
+        owner = self.coordinator.config.get(
+            CONF_FOXESS_CONTROL_OWNER, DEFAULT_FOXESS_CONTROL_OWNER
+        )
+        if owner == FOXESS_CONTROL_OWNER_CLOUD:
+            self.last_reason = "foxcloud_scheduler_owns_inverter"
+            self.last_actions = ()
+            return
+        if owner != FOXESS_CONTROL_OWNER_MODBUS:
+            self.last_reason = "foxess_observer_owner"
             self.last_actions = ()
             return
         if not self.coordinator.config.get(CONF_AUTOMATIC_CONTROL_ENABLED, False):

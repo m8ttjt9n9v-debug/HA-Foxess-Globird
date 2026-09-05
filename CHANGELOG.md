@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.3.7 — exclusive FoxESS control ownership
+
+- Add an explicit FoxESS owner selector: Observer only, Local Modbus, or
+  FoxCloud Mode Scheduler. Legacy entries safely default to Observer only.
+- Permit automatic local FoxESS writes only when Local Modbus is the selected
+  owner; selecting FoxCloud blocks reconciliation and Modbus diagnostics even
+  outside the cloud charge period.
+- Report configured ownership and effective Modbus authorization separately in
+  status and diagnostics so an enabled-looking boolean cannot imply ownership.
+- Record the verified scheduler boundary: FoxCloud's Remaining Time Work Mode
+  controls uncovered periods, while remote-control evidence shows Modbus can
+  cancel the remainder of an active scheduled period.
+- Defer dynamic cloud export to a schedule-aware cloud adapter that preserves
+  non-overlapping charge periods. HEO does not mix transports as a workaround.
+
 ## 0.3.6 — portable whole-site EV allowance control
 
 - Port the Mangerton EV-priority current controller behind the independent

@@ -13,10 +13,12 @@ from .const import (
     CONF_EV_CHARGE_LIMIT,
     CONF_EV_CHARGE_SWITCH,
     CONF_EV_CURRENT_LIMIT,
+    CONF_FOXESS_CONTROL_OWNER,
     CONF_FOXESS_FORCE_CHARGE_POWER,
     CONF_FOXESS_FORCE_DISCHARGE_POWER,
     CONF_FOXESS_WORK_MODE,
     CONF_REHEARSAL_MODE,
+    DEFAULT_FOXESS_CONTROL_OWNER,
 )
 
 
@@ -49,6 +51,9 @@ async def async_get_config_entry_diagnostics(
             "safety_lock_engaged": safety_locked,
             "foxess_automatic_control_enabled": bool(
                 entry.data.get(CONF_AUTOMATIC_CONTROL_ENABLED, False)
+            ),
+            "foxess_control_owner": entry.data.get(
+                CONF_FOXESS_CONTROL_OWNER, DEFAULT_FOXESS_CONTROL_OWNER
             ),
             "ev_automatic_control_enabled": bool(
                 entry.data.get(CONF_EV_AUTOMATIC_CONTROL_ENABLED, False)

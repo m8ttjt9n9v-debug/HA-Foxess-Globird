@@ -9,12 +9,15 @@ from homeassistant.const import EVENT_CALL_SERVICE
 
 from custom_components.home_energy_orchestrator.const import (
     CONF_AUTOMATIC_CONTROL_ENABLED,
+    CONF_FOXESS_CONTROL_OWNER,
     CONF_FOXESS_FORCE_CHARGE_POWER,
     CONF_FOXESS_FORCE_DISCHARGE_POWER,
     CONF_FOXESS_WORK_MODE,
     CONF_INVERTER_CHARGE_LIMIT_KW,
     CONF_INVERTER_DISCHARGE_LIMIT_KW,
     CONF_REHEARSAL_MODE,
+    FOXESS_CONTROL_OWNER_CLOUD,
+    FOXESS_CONTROL_OWNER_MODBUS,
 )
 from custom_components.home_energy_orchestrator.manual_test import (
     ManualTestController,
@@ -54,6 +57,7 @@ def _coordinator(**config):
     free_window_hours = config.pop("free_window_hours", 1.0)
     values = {
         CONF_AUTOMATIC_CONTROL_ENABLED: True,
+        CONF_FOXESS_CONTROL_OWNER: FOXESS_CONTROL_OWNER_MODBUS,
         CONF_REHEARSAL_MODE: False,
         CONF_FOXESS_WORK_MODE: "select.foxess_mode",
         CONF_FOXESS_FORCE_CHARGE_POWER: "number.foxess_charge",
@@ -77,6 +81,16 @@ async def test_controller_requires_rehearsal_off(hass) -> None:
     controller = ManualTestController(hass, coordinator)
 
     with pytest.raises(ManualTestError, match="Rehearsal mode"):
+        await controller.async_start("charge", 1.0, 1.0)
+
+
+async def test_controller_blocks_diagnostic_when_cloud_scheduler_owns_inverter(hass) -> None:
+    coordinator = _coordinator(
+        **{CONF_FOXESS_CONTROL_OWNER: FOXESS_CONTROL_OWNER_CLOUD}
+    )
+    controller = ManualTestController(hass, coordinator)
+
+    with pytest.raises(ManualTestError, match="Local Modbus"):
         await controller.async_start("charge", 1.0, 1.0)
 
 

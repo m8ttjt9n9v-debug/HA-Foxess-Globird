@@ -35,6 +35,7 @@ from .const import (
     CONF_EV_VOLTAGE,
     CONF_EXPORT_LIMIT_KW,
     CONF_EXPORT_RATE,
+    CONF_FOXESS_CONTROL_OWNER,
     CONF_FOXESS_FORCE_CHARGE_POWER,
     CONF_FOXESS_FORCE_DISCHARGE_POWER,
     CONF_FOXESS_WORK_MODE,
@@ -79,6 +80,7 @@ from .const import (
     DEFAULT_EV_VOLTAGE,
     DEFAULT_EXPORT_LIMIT_KW,
     DEFAULT_EXPORT_RATE,
+    DEFAULT_FOXESS_CONTROL_OWNER,
     DEFAULT_FREE_CHARGE_END,
     DEFAULT_FREE_CHARGE_FULL_BATTERY_IMPORT_THRESHOLD_KWH,
     DEFAULT_FREE_CHARGE_START,
@@ -103,6 +105,7 @@ from .const import (
     DEFAULT_ZERO_IMPORT_THRESHOLD_KW,
     DOMAIN,
     EV_CHARGER_PROFILES,
+    FOXESS_CONTROL_OWNERS,
 )
 
 ENTITY = selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor"))
@@ -338,6 +341,14 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     ),
                 ): vol.Coerce(float),
                 vol.Required(
+                    CONF_FOXESS_CONTROL_OWNER,
+                    default=defaults.get(
+                        CONF_FOXESS_CONTROL_OWNER, DEFAULT_FOXESS_CONTROL_OWNER
+                    ),
+                ): selector.SelectSelector(
+                    selector.SelectSelectorConfig(options=list(FOXESS_CONTROL_OWNERS))
+                ),
+                vol.Required(
                     CONF_AUTOMATIC_CONTROL_ENABLED,
                     default=defaults.get(
                         CONF_AUTOMATIC_CONTROL_ENABLED, DEFAULT_AUTOMATIC_CONTROL_ENABLED
@@ -500,6 +511,9 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             CONF_AUTOMATIC_CONTROL_ENABLED: data.get(
                 CONF_AUTOMATIC_CONTROL_ENABLED, DEFAULT_AUTOMATIC_CONTROL_ENABLED
             ),
+            CONF_FOXESS_CONTROL_OWNER: data.get(
+                CONF_FOXESS_CONTROL_OWNER, DEFAULT_FOXESS_CONTROL_OWNER
+            ),
             CONF_EV_AUTOMATIC_CONTROL_ENABLED: data.get(
                 CONF_EV_AUTOMATIC_CONTROL_ENABLED,
                 DEFAULT_EV_AUTOMATIC_CONTROL_ENABLED,
@@ -512,6 +526,8 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """Reject malformed IDs and unsafe physical limits before saving them."""
         if not str(data.get(CONF_NAME, "")).strip():
             return {CONF_NAME: "invalid_name"}
+        if data.get(CONF_FOXESS_CONTROL_OWNER) not in FOXESS_CONTROL_OWNERS:
+            return {CONF_FOXESS_CONTROL_OWNER: "invalid_foxess_control_owner"}
         for key in (
             CONF_BATTERY_SOC,
             CONF_BATTERY_CAPACITY_ENTITY,

@@ -1,7 +1,7 @@
 # FoxESS Globird Energy Observer
 
 An Australia-scoped Home Assistant custom integration for an auditable,
-site-configured home-energy ledger. Version 0.3.6 is observer-by-default:
+site-configured home-energy ledger. Version 0.3.7 is observer-by-default:
 it reads the entities selected during setup, normalises their units and signs,
 persists local tariff meters and demand-learning evidence, and only permits
 FoxESS writes after an explicit control opt-in, complete actuator mapping, and
@@ -61,6 +61,10 @@ entities stable `sensor.home_energy_*` IDs regardless of the entry name.
   battery control never authorizes EV current or charge-switch writes, and EV
   control can be commissioned without enabling automatic FoxESS writes. The
   shared Safety Lock remains an absolute no-write interlock for both paths.
+- an exclusive FoxESS owner selector: Observer only, Local Modbus, or FoxCloud
+  Mode Scheduler. Selecting FoxCloud blocks all HEO Modbus automation and
+  diagnostic writes for the entire day, including outside configured cloud
+  periods. Cloud-schedule actuation is not yet implemented by HEO.
 - a preview-first Diagnostics view for short, explicit FoxESS force-charge and
   force-discharge commissioning checks. Each test has editable power and
   duration, a cost/earning preview, live feedback, a 120-minute maximum, and

@@ -10,17 +10,19 @@ What the available evidence says:
 - The [FoxESS Modbus integration](https://github.com/nathanmarlor/foxess_modbus)
   talks directly to supported H3 and KH inverters and can expose work-mode and
   charge-power controls without FoxCloud.
-- Its [force-charge documentation](https://github-wiki-see.page/m/nathanmarlor/foxess_modbus/wiki/Force-Charge-and-Discharge)
+- Its [force-charge documentation](https://github.com/nathanmarlor/foxess_modbus/wiki/Force-Charge-and-Discharge)
   says Force Charge requires Home Assistant to keep controlling the inverter;
   if Home Assistant stops, the inverter falls back to Back-up.
-- The official [FoxCloud 2.0 manual](https://au.fox-ess.com/Public/Uploads/uploadfile/files/20260611/FoxCloudApp2.0UserManual.pdf)
+- The official [FoxCloud 2.0 manual](https://www.fox-ess.com/Public/Uploads/uploadfile/files/20260212/ENFoxCloud2.0AppUserManual.pdf)
   describes Mode Scheduler as time periods with a selected work mode, with
   uncovered time using the Remaining Time Work Mode.
-- The FoxESS Modbus community reports that the inverter manager's scheduler
-  can win over local active-power writes, causing the two controllers to fight
-  or the local force-charge period to be cancelled. This is community evidence,
-  not a FoxESS guarantee, so it must be verified on the exact inverter and
-  firmware before relying on it.
+- The FoxESS Modbus project's [remote-control investigation](https://github.com/nathanmarlor/foxess_modbus/discussions/513)
+  found that Active Power temporarily takes precedence during a scheduled force
+  charge, but expiry of the remote timeout returns to base work mode instead of
+  resuming the schedule. In that tested case, the local write cancelled the
+  remainder of the scheduled force-charge period. This is direct community
+  testing, not a FoxESS firmware guarantee, so HEO does not generalise it into
+  a safe mixed-control mode.
 
 ## Consequence for the 50 kWh window
 
@@ -42,7 +44,21 @@ choose one owner for the window; if ownership is mixed during testing, remain
 observer-only and record the mode, charge-power, SoC, grid-import and schedule
 state at one-minute intervals.
 
-The HACS release therefore exposes the target and completion recommendation as
-read-only state. It does not fight a cloud schedule or issue local writes until
-the exact H3 firmware, schedule ownership, and response/recovery behaviour have
-been commissioned.
+This means an enabled Mode Scheduler owns more than its named charge periods:
+its Remaining Time Work Mode covers the rest of the day. "The noon slot is not
+active" is therefore not evidence that an evening Modbus writer has exclusive
+ownership.
+
+The HACS integration requires one explicit owner:
+
+- **Observer only**: no HEO FoxESS writes.
+- **Local Modbus**: FoxCloud Mode Scheduler must be disabled. HEO may use the
+  commissioned local actuator mappings.
+- **FoxCloud Mode Scheduler**: all HEO Modbus automation and diagnostics are
+  blocked for the entire day. Tessie retains its independent gate.
+
+Dynamic evening export under FoxCloud ownership requires a cloud-schedule
+adapter that reads the complete schedule, preserves the standing free-charge
+period, rejects overlaps, and writes a second bounded ForceDischarge period.
+HEO does not yet provide that adapter. A Modbus export is not substituted while
+FoxCloud owns the schedule.

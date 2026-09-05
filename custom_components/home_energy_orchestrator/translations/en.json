@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Set up FoxESS Globird Energy Observer",
-        "description": "FoxESS and Tessie automatic control are independent opt-ins. The Safety Lock is ON by default; while it is ON, no hardware writes are allowed. Verify mappings and commissioning evidence before releasing it.",
+        "description": "Choose exactly one FoxESS owner: observer, local Modbus, or FoxCloud Mode Scheduler. FoxESS and Tessie automatic control are independent opt-ins. The Safety Lock is ON by default; while it is ON, no hardware writes are allowed.",
         "data": {
           "name": "Site name",
           "battery_soc_entity": "Battery state of charge sensor",
@@ -53,14 +53,15 @@
           "bonus_window_end": "Bonus zero-import window end",
           "zero_import_threshold_kw": "ZEROHERO average import threshold (kWh/hour; contract says 0.03)",
           "zero_import_confirm_minutes": "Local telemetry debounce only (minutes)",
-          "automatic_control_enabled": "Enable automatic FoxESS control (commissioned sites only)",
+          "foxess_control_owner": "FoxESS control owner (never mix cloud scheduler and Modbus)",
+          "automatic_control_enabled": "Enable HEO automatic FoxESS control (Local Modbus owner only)",
           "ev_automatic_control_enabled": "Enable automatic Tessie EV control (commissioned sites only)",
           "rehearsal_mode": "Safety Lock (ON = no hardware writes)"
         }
       },
       "reconfigure": {
         "title": "Reconfigure FoxESS Globird Energy Observer",
-        "description": "Update site mappings, limits, or the independent FoxESS and Tessie control gates. Safety Lock ON blocks all hardware writes.",
+        "description": "Update site mappings, limits, the exclusive FoxESS owner, or the independent FoxESS and Tessie control gates. Safety Lock ON blocks all hardware writes.",
         "data": {
           "name": "Site name",
           "battery_soc_entity": "Battery state of charge sensor",
@@ -110,7 +111,8 @@
           "bonus_window_end": "Bonus zero-import window end",
           "zero_import_threshold_kw": "ZEROHERO average import threshold (kWh/hour; contract says 0.03)",
           "zero_import_confirm_minutes": "Local telemetry debounce only (minutes)",
-          "automatic_control_enabled": "Enable automatic FoxESS control (commissioned sites only)",
+          "foxess_control_owner": "FoxESS control owner (never mix cloud scheduler and Modbus)",
+          "automatic_control_enabled": "Enable HEO automatic FoxESS control (Local Modbus owner only)",
           "ev_automatic_control_enabled": "Enable automatic Tessie EV control (commissioned sites only)",
           "rehearsal_mode": "Safety Lock (ON = no hardware writes)"
         }
@@ -122,10 +124,18 @@
       "incomplete_foxess_mapping": "Map all three FoxESS control entities, or leave all three unmapped.",
       "incomplete_ev_mapping": "Map all three EV control entities, or leave all three unmapped.",
       "invalid_site_limits": "Check capacity, floor, reserve, charger, inverter, current, and voltage limits.",
-      "invalid_schedule": "Choose different free-charge times and a non-negative fallback."
+      "invalid_schedule": "Choose different free-charge times and a non-negative fallback.",
+      "invalid_foxess_control_owner": "Choose observer only, local Modbus, or FoxCloud Mode Scheduler."
     }
   },
   "selector": {
+    "foxess_control_owner": {
+      "options": {
+        "observer_only": "Observer only (no FoxESS writes)",
+        "local_modbus": "Local Modbus (FoxCloud Mode Scheduler must be disabled)",
+        "foxcloud_scheduler": "FoxCloud Mode Scheduler (blocks HEO Modbus writes)"
+      }
+    },
     "ev_charger_profile": {
       "options": {
         "not_configured": "No EV charger configured",

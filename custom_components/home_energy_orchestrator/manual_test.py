@@ -17,6 +17,7 @@ from homeassistant.util import dt as dt_util
 
 from .const import (
     CONF_EXPORT_RATE,
+    CONF_FOXESS_CONTROL_OWNER,
     CONF_FOXESS_FORCE_CHARGE_POWER,
     CONF_FOXESS_FORCE_DISCHARGE_POWER,
     CONF_FOXESS_WORK_MODE,
@@ -31,7 +32,9 @@ from .const import (
     CONF_SHOULDER_RATE,
     CONF_SUPER_EXPORT_RATE,
     DEFAULT_EXPORT_RATE,
+    DEFAULT_FOXESS_CONTROL_OWNER,
     DEFAULT_SUPER_EXPORT_RATE,
+    FOXESS_CONTROL_OWNER_MODBUS,
 )
 from .coordinator import EnergyCoordinator
 from .foxess_adapter import FoxessEntityMap, FoxessServiceAdapter
@@ -227,6 +230,13 @@ class ManualTestController:
             self.coordinator.async_update_listeners()
 
     def _require_gate(self) -> None:
+        owner = self.coordinator.config.get(
+            CONF_FOXESS_CONTROL_OWNER, DEFAULT_FOXESS_CONTROL_OWNER
+        )
+        if owner != FOXESS_CONTROL_OWNER_MODBUS:
+            raise ManualTestError(
+                "select Local Modbus as the FoxESS control owner before a diagnostic test"
+            )
         if self.coordinator.config.get(CONF_REHEARSAL_MODE, True):
             raise ManualTestError("disable Rehearsal mode before running a diagnostic test")
         if not all(

@@ -45,6 +45,7 @@ ENTRY_DATA = {
     "free_charge_full_battery_import_threshold_kwh": 49.0,
     "house_learning_fallback_kwh": 17.5,
     "automatic_control_enabled": False,
+    "foxess_control_owner": "observer_only",
     "ev_automatic_control_enabled": False,
     "rehearsal_mode": True,
     "ev_charger_profile": "single_phase_32a",
@@ -95,6 +96,7 @@ async def test_setup_observes_normalised_values_and_never_calls_services(hass):
     assert hass.states.get(status).attributes["mode"] == "observe"
     diagnostics = await async_get_config_entry_diagnostics(hass, entry)
     assert diagnostics["actuators"]["foxess_automatic_control_enabled"] is False
+    assert diagnostics["actuators"]["foxess_control_owner"] == "observer_only"
     assert diagnostics["actuators"]["ev_automatic_control_enabled"] is False
     assert diagnostics["actuators"]["writes_enabled"] is False
     assert service_calls == []

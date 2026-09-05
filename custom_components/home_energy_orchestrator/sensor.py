@@ -15,9 +15,12 @@ from . import EnergyConfigEntry
 from .const import (
     CONF_AUTOMATIC_CONTROL_ENABLED,
     CONF_EV_AUTOMATIC_CONTROL_ENABLED,
+    CONF_FOXESS_CONTROL_OWNER,
     CONF_REHEARSAL_MODE,
     CONF_SOLAR_POWER,
+    DEFAULT_FOXESS_CONTROL_OWNER,
     DOMAIN,
+    FOXESS_CONTROL_OWNER_CLOUD,
 )
 from .coordinator import EnergyCoordinator
 
@@ -343,13 +346,32 @@ class EnergySensor(CoordinatorEntity[EnergyCoordinator], SensorEntity):
         if self.entity_description.key != "status":
             return None
         learning = self.coordinator.learning_result
-        foxess_enabled = bool(
+        foxess_requested = bool(
             self.coordinator.config.get(CONF_AUTOMATIC_CONTROL_ENABLED, False)
         )
-        ev_enabled = bool(
+        foxess_owner = self.coordinator.config.get(
+            CONF_FOXESS_CONTROL_OWNER, DEFAULT_FOXESS_CONTROL_OWNER
+        )
+        foxess_gate = (
+            self.coordinator.active_controller.gate_status
+            if self.coordinator.active_controller
+            else "unavailable"
+        )
+        foxess_enabled = foxess_gate == "ready"
+        ev_requested = bool(
             self.coordinator.config.get(CONF_EV_AUTOMATIC_CONTROL_ENABLED, False)
         )
-        if foxess_enabled and ev_enabled:
+        ev_gate = (
+            self.coordinator.active_controller.ev_controller.gate_status
+            if self.coordinator.active_controller
+            else "unavailable"
+        )
+        ev_enabled = ev_gate == "ready"
+        if foxess_owner == FOXESS_CONTROL_OWNER_CLOUD and ev_enabled:
+            control_mode = "foxcloud_scheduler_ev"
+        elif foxess_owner == FOXESS_CONTROL_OWNER_CLOUD:
+            control_mode = "foxcloud_scheduler"
+        elif foxess_enabled and ev_enabled:
             control_mode = "automatic_foxess_ev"
         elif foxess_enabled:
             control_mode = "automatic_foxess"
@@ -359,11 +381,7 @@ class EnergySensor(CoordinatorEntity[EnergyCoordinator], SensorEntity):
             control_mode = "observe"
         return {
             "mode": control_mode,
-            "control_gate": (
-                self.coordinator.active_controller.gate_status
-                if self.coordinator.active_controller
-                else "unavailable"
-            ),
+            "control_gate": foxess_gate,
             "last_control_reason": (
                 self.coordinator.active_controller.last_reason
                 if self.coordinator.active_controller
@@ -379,11 +397,7 @@ class EnergySensor(CoordinatorEntity[EnergyCoordinator], SensorEntity):
                 if self.coordinator.active_controller
                 else 0
             ),
-            "ev_control_gate": (
-                self.coordinator.active_controller.ev_controller.gate_status
-                if self.coordinator.active_controller
-                else "unavailable"
-            ),
+            "ev_control_gate": ev_gate,
             "ev_last_control_reason": (
                 self.coordinator.active_controller.ev_controller.last_reason
                 if self.coordinator.active_controller
@@ -424,8 +438,11 @@ class EnergySensor(CoordinatorEntity[EnergyCoordinator], SensorEntity):
                 if self.coordinator.active_controller
                 else None
             ),
-            "automatic_control_enabled": foxess_enabled,
-            "ev_automatic_control_enabled": ev_enabled,
+            "automatic_control_enabled": foxess_requested,
+            "foxess_modbus_control_effective": foxess_enabled,
+            "foxess_control_owner": foxess_owner,
+            "ev_automatic_control_enabled": ev_requested,
+            "ev_control_effective": ev_enabled,
             "rehearsal_mode": self.coordinator.config.get(CONF_REHEARSAL_MODE, True),
             "integration": DOMAIN,
             "learning_model": learning.model,

@@ -20,6 +20,7 @@ from custom_components.home_energy_orchestrator.const import (
     CONF_EV_PHASE_COUNT,
     CONF_EV_SOC,
     CONF_EV_VOLTAGE,
+    CONF_FOXESS_CONTROL_OWNER,
     CONF_FOXESS_FORCE_CHARGE_POWER,
     CONF_FOXESS_FORCE_DISCHARGE_POWER,
     CONF_FOXESS_WORK_MODE,
@@ -27,12 +28,15 @@ from custom_components.home_energy_orchestrator.const import (
     CONF_INVERTER_CHARGE_LIMIT_KW,
     CONF_REHEARSAL_MODE,
     CONF_SERVICE_IMPORT_LIMIT_A,
+    FOXESS_CONTROL_OWNER_CLOUD,
+    FOXESS_CONTROL_OWNER_MODBUS,
 )
 
 
 def _coordinator(**config):
     values = {
         CONF_AUTOMATIC_CONTROL_ENABLED: False,
+        CONF_FOXESS_CONTROL_OWNER: FOXESS_CONTROL_OWNER_MODBUS,
         CONF_EV_AUTOMATIC_CONTROL_ENABLED: False,
         CONF_REHEARSAL_MODE: True,
         CONF_FOXESS_WORK_MODE: "select.foxess_mode",
@@ -72,6 +76,27 @@ async def test_controller_is_inert_when_automatic_control_is_disabled(hass):
 
     await controller.async_reconcile()
 
+    assert calls == []
+
+
+async def test_cloud_scheduler_owner_blocks_all_modbus_automation_writes(hass):
+    calls = []
+    hass.bus.async_listen(EVENT_CALL_SERVICE, calls.append)
+    controller = ActiveFoxessController(
+        hass,
+        _coordinator(
+            **{
+                CONF_AUTOMATIC_CONTROL_ENABLED: True,
+                CONF_FOXESS_CONTROL_OWNER: FOXESS_CONTROL_OWNER_CLOUD,
+                CONF_REHEARSAL_MODE: False,
+            }
+        ),
+    )
+
+    await controller.async_reconcile()
+
+    assert controller.gate_status == "foxcloud_scheduler_owner"
+    assert controller.last_reason == "foxcloud_scheduler_owns_inverter"
     assert calls == []
 
 
