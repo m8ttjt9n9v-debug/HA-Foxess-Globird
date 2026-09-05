@@ -18,15 +18,20 @@ HACS installation requires a public GitHub repository. This project publishes
 versioned GitHub releases for the custom-repository channel; inclusion in
 HACS's default catalogue is a separate review process.
 
-Version 0.3.0 is observer-by-default. It makes no writes unless automatic
-control is enabled, Rehearsal mode is disabled, and the required FoxESS and EV
-entities are explicitly mapped. The commissioned path writes only the mapped
-EV current number. It confirms the Tessie/Tessy vehicle is at home before any
-write; away or unknown presence is fail-closed. Free-window battery charging
-uses the commissioned inverter limit while the configured import cutoff
-remains; post-window solar spill and reserve-aware pre-window backfill are
-bounded by the configured EV and inverter limits. EV
-start/stop, vehicle charge-limit, and export writes remain disabled.
+Version 0.3.5 separates automatic FoxESS and Tessie/Tessy authorization.
+Both controls default to disabled. Enabling the FoxESS control option does not
+authorize EV current or charge-switch writes, and enabling EV control does not
+authorize inverter writes. The shared Safety Lock must also be OFF before
+either commissioned controller can write.
+
+The integration is observer-by-default. Each active path requires its own
+automatic-control option, Safety Lock OFF, and complete actuator mapping. The
+EV path confirms that the Tessie/Tessy vehicle is at home before any write;
+away or unknown presence is fail-closed. Free-window battery charging uses the
+commissioned inverter limit while the configured import cutoff remains;
+post-window solar spill and reserve-aware pre-window backfill are bounded by
+the configured EV and inverter limits. Vehicle charge-limit and export writes
+remain disabled.
 
 Version 0.2.28 adds guarded EV session start/stop. A session can start only
 when the mapped Tessie/Tessy vehicle is home, connected, below its mapped

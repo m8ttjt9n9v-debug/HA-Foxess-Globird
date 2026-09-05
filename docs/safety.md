@@ -2,12 +2,13 @@
 
 Home Assistant is supervisory software; it is not a substitute for compliant electrical design, equipment protections, breaker ratings, EVSE protections, or installer verification.
 
-Version 0.3.4 is observer-by-default. Its optional FoxESS path is a bounded
-pilot controller, enabled only by an explicit automatic-control setting,
+Version 0.3.5 is observer-by-default. Its optional FoxESS path is a bounded
+pilot controller, enabled only by the FoxESS automatic-control setting,
 the Safety Lock being OFF, complete FoxESS actuator mapping, valid telemetry,
-and a commissioned inverter limit. The EV path writes only the explicitly
-mapped current number and, for a session it started itself, the mapped charge
-switch. It never changes the vehicle charge-limit or FoxESS export settings.
+and a commissioned inverter limit. The EV path has a separate automatic-control
+setting and writes only the explicitly mapped current number and, for a session
+it started itself, the mapped charge switch. Enabling either controller never
+authorizes the other. It never changes the vehicle charge-limit or FoxESS export settings.
 Away, unknown, disconnected, or ambiguous vehicle presence fails closed. The
 repository does not claim hardware compatibility merely because a sensor can
 be selected in the setup form.

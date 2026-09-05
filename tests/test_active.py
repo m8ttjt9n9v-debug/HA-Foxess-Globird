@@ -11,6 +11,7 @@ from custom_components.home_energy_orchestrator.active import ActiveFoxessContro
 from custom_components.home_energy_orchestrator.active_ev import ActiveEvController
 from custom_components.home_energy_orchestrator.const import (
     CONF_AUTOMATIC_CONTROL_ENABLED,
+    CONF_EV_AUTOMATIC_CONTROL_ENABLED,
     CONF_EV_CHARGE_LIMIT,
     CONF_EV_CHARGE_SWITCH,
     CONF_EV_CURRENT_LIMIT,
@@ -32,6 +33,7 @@ from custom_components.home_energy_orchestrator.const import (
 def _coordinator(**config):
     values = {
         CONF_AUTOMATIC_CONTROL_ENABLED: False,
+        CONF_EV_AUTOMATIC_CONTROL_ENABLED: False,
         CONF_REHEARSAL_MODE: True,
         CONF_FOXESS_WORK_MODE: "select.foxess_mode",
         CONF_FOXESS_FORCE_CHARGE_POWER: "number.foxess_charge",
@@ -154,6 +156,7 @@ async def test_ev_controller_is_inert_in_rehearsal_mode(hass):
     coordinator = _coordinator(
         **{
             CONF_AUTOMATIC_CONTROL_ENABLED: True,
+            CONF_EV_AUTOMATIC_CONTROL_ENABLED: True,
             CONF_EV_CURRENT_LIMIT: "number.tessy_charge_current",
             CONF_EV_CHARGE_SWITCH: "switch.tessy_charge",
         }
@@ -164,6 +167,27 @@ async def test_ev_controller_is_inert_in_rehearsal_mode(hass):
 
     assert calls == []
     assert controller.gate_status == "rehearsal"
+
+
+async def test_ev_controller_is_inert_when_only_foxess_control_is_enabled(hass):
+    calls = []
+    hass.bus.async_listen(EVENT_CALL_SERVICE, calls.append)
+    coordinator = _coordinator(
+        **{
+            CONF_AUTOMATIC_CONTROL_ENABLED: True,
+            CONF_EV_AUTOMATIC_CONTROL_ENABLED: False,
+            CONF_REHEARSAL_MODE: False,
+            CONF_EV_CURRENT_LIMIT: "number.tessy_charge_current",
+            CONF_EV_CHARGE_SWITCH: "switch.tessy_charge",
+        }
+    )
+    controller = ActiveEvController(hass, coordinator)
+
+    await controller.async_reconcile()
+
+    assert controller.gate_status == "disabled"
+    assert controller.last_reason == "automatic_ev_control_disabled"
+    assert calls == []
 
 
 async def test_ev_controller_adjusts_mapped_current_only_when_commissioned(hass):
@@ -185,7 +209,8 @@ async def test_ev_controller_adjusts_mapped_current_only_when_commissioned(hass)
     )
     coordinator = _coordinator(
         **{
-            CONF_AUTOMATIC_CONTROL_ENABLED: True,
+            CONF_AUTOMATIC_CONTROL_ENABLED: False,
+            CONF_EV_AUTOMATIC_CONTROL_ENABLED: True,
             CONF_REHEARSAL_MODE: False,
             CONF_EV_SOC: "sensor.tessy_battery_level",
             CONF_EV_CURRENT_LIMIT: "number.tessy_charge_current",
@@ -231,7 +256,7 @@ async def test_ev_controller_does_not_change_current_when_vehicle_is_away(hass):
     )
     coordinator = _coordinator(
         **{
-            CONF_AUTOMATIC_CONTROL_ENABLED: True,
+            CONF_EV_AUTOMATIC_CONTROL_ENABLED: True,
             CONF_REHEARSAL_MODE: False,
             CONF_EV_CURRENT_LIMIT: "number.tessy_charge_current",
             CONF_EV_CHARGE_SWITCH: "switch.tessy_charge",
@@ -267,7 +292,7 @@ async def test_ev_controller_starts_a_mapped_session_when_target_is_not_reached(
     )
     coordinator = _coordinator(
         **{
-            CONF_AUTOMATIC_CONTROL_ENABLED: True,
+            CONF_EV_AUTOMATIC_CONTROL_ENABLED: True,
             CONF_REHEARSAL_MODE: False,
             CONF_EV_CHARGE_LIMIT: "number.tessy_charge_limit",
             CONF_EV_CURRENT_LIMIT: "number.tessy_charge_current",
@@ -307,7 +332,7 @@ async def test_ev_controller_stops_only_a_session_it_started_at_target(hass):
     )
     coordinator = _coordinator(
         **{
-            CONF_AUTOMATIC_CONTROL_ENABLED: True,
+            CONF_EV_AUTOMATIC_CONTROL_ENABLED: True,
             CONF_REHEARSAL_MODE: False,
             CONF_EV_CHARGE_LIMIT: "number.tessy_charge_limit",
             CONF_EV_CURRENT_LIMIT: "number.tessy_charge_current",

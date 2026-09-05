@@ -8,12 +8,15 @@ from homeassistant.core import HomeAssistant
 
 from . import EnergyConfigEntry
 from .const import (
+    CONF_AUTOMATIC_CONTROL_ENABLED,
+    CONF_EV_AUTOMATIC_CONTROL_ENABLED,
     CONF_EV_CHARGE_LIMIT,
     CONF_EV_CHARGE_SWITCH,
     CONF_EV_CURRENT_LIMIT,
     CONF_FOXESS_FORCE_CHARGE_POWER,
     CONF_FOXESS_FORCE_DISCHARGE_POWER,
     CONF_FOXESS_WORK_MODE,
+    CONF_REHEARSAL_MODE,
 )
 
 
@@ -32,11 +35,29 @@ async def async_get_config_entry_diagnostics(
         CONF_EV_CURRENT_LIMIT,
         CONF_EV_CHARGE_SWITCH,
     )
+    safety_locked = bool(entry.data.get(CONF_REHEARSAL_MODE, True))
+    active_controller = getattr(coordinator, "active_controller", None)
+    ev_controller = getattr(active_controller, "ev_controller", None)
+    foxess_gate = (
+        active_controller.gate_status if active_controller is not None else "unavailable"
+    )
+    ev_gate = ev_controller.gate_status if ev_controller is not None else "unavailable"
     return {
         "entry": {"version": entry.version, "options": {"mode": "observe"}},
         "actuators": {
             "mapped_count": sum(bool(entry.data.get(key)) for key in actuator_keys),
-            "writes_enabled": False,
+            "safety_lock_engaged": safety_locked,
+            "foxess_automatic_control_enabled": bool(
+                entry.data.get(CONF_AUTOMATIC_CONTROL_ENABLED, False)
+            ),
+            "ev_automatic_control_enabled": bool(
+                entry.data.get(CONF_EV_AUTOMATIC_CONTROL_ENABLED, False)
+            ),
+            "foxess_control_gate": foxess_gate,
+            "ev_control_gate": ev_gate,
+            "foxess_writes_enabled": foxess_gate == "ready",
+            "ev_writes_enabled": ev_gate == "ready",
+            "writes_enabled": foxess_gate == "ready" or ev_gate == "ready",
         },
         "ledger": {
             "reason": ledger.reason,

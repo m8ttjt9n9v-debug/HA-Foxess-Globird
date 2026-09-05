@@ -6,6 +6,7 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.home_energy_orchestrator.config_flow import ConfigFlow
 from custom_components.home_energy_orchestrator.const import (
+    CONF_EV_AUTOMATIC_CONTROL_ENABLED,
     CONF_EV_CHARGE_LIMIT,
     CONF_EV_CHARGE_SWITCH,
     CONF_EV_CURRENT_LIMIT,
@@ -41,6 +42,23 @@ async def test_user_flow_defaults_existing_single_phase_ev_configuration(hass):
 
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["data"]["ev_phase_count"] == 1
+
+
+async def test_user_flow_defaults_legacy_ev_control_gate_to_disabled(hass):
+    legacy_data = {
+        key: value
+        for key, value in ENTRY_DATA.items()
+        if key != CONF_EV_AUTOMATIC_CONTROL_ENABLED
+    }
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": SOURCE_USER},
+        data={"name": "Legacy EV Site", **legacy_data},
+    )
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["data"][CONF_EV_AUTOMATIC_CONTROL_ENABLED] is False
 
 
 async def test_user_flow_preserves_explicit_future_actuator_mappings(hass):

@@ -10,8 +10,8 @@ from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 
 from .const import (
-    CONF_AUTOMATIC_CONTROL_ENABLED,
     CONF_BONUS_LOAD_FOLLOWING_PERCENT,
+    CONF_EV_AUTOMATIC_CONTROL_ENABLED,
     CONF_EV_CHARGE_LIMIT,
     CONF_EV_CHARGE_SWITCH,
     CONF_EV_CURRENT_LIMIT,
@@ -58,14 +58,14 @@ class ActiveEvController:
         self.coordinator = coordinator
         self._adapter: EvServiceAdapter | None = None
         self.writes_performed = 0
-        self.last_reason = "automatic_control_disabled"
+        self.last_reason = "automatic_ev_control_disabled"
         self.last_actions: tuple[str, ...] = ()
         self._session_started = False
 
     @property
     def gate_status(self) -> str:
         """Return the current EV commissioning gate."""
-        if not self.coordinator.config.get(CONF_AUTOMATIC_CONTROL_ENABLED, False):
+        if not self.coordinator.config.get(CONF_EV_AUTOMATIC_CONTROL_ENABLED, False):
             return "disabled"
         if self.coordinator.config.get(CONF_REHEARSAL_MODE, True):
             return "rehearsal"
@@ -86,8 +86,8 @@ class ActiveEvController:
             self.last_reason = "manual_test_active"
             self.last_actions = ()
             return
-        if not self.coordinator.config.get(CONF_AUTOMATIC_CONTROL_ENABLED, False):
-            self.last_reason = "automatic_control_disabled"
+        if not self.coordinator.config.get(CONF_EV_AUTOMATIC_CONTROL_ENABLED, False):
+            self.last_reason = "automatic_ev_control_disabled"
             self.last_actions = ()
             return
         if self.coordinator.config.get(CONF_REHEARSAL_MODE, True):

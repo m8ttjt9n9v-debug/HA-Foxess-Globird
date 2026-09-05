@@ -12,7 +12,13 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from . import EnergyConfigEntry
-from .const import CONF_SOLAR_POWER, DOMAIN
+from .const import (
+    CONF_AUTOMATIC_CONTROL_ENABLED,
+    CONF_EV_AUTOMATIC_CONTROL_ENABLED,
+    CONF_REHEARSAL_MODE,
+    CONF_SOLAR_POWER,
+    DOMAIN,
+)
 from .coordinator import EnergyCoordinator
 
 DESCRIPTIONS = (
@@ -337,8 +343,22 @@ class EnergySensor(CoordinatorEntity[EnergyCoordinator], SensorEntity):
         if self.entity_description.key != "status":
             return None
         learning = self.coordinator.learning_result
+        foxess_enabled = bool(
+            self.coordinator.config.get(CONF_AUTOMATIC_CONTROL_ENABLED, False)
+        )
+        ev_enabled = bool(
+            self.coordinator.config.get(CONF_EV_AUTOMATIC_CONTROL_ENABLED, False)
+        )
+        if foxess_enabled and ev_enabled:
+            control_mode = "automatic_foxess_ev"
+        elif foxess_enabled:
+            control_mode = "automatic_foxess"
+        elif ev_enabled:
+            control_mode = "automatic_ev"
+        else:
+            control_mode = "observe"
         return {
-            "mode": "automatic_foxess" if self.coordinator.active_controller else "observe",
+            "mode": control_mode,
             "control_gate": (
                 self.coordinator.active_controller.gate_status
                 if self.coordinator.active_controller
@@ -379,10 +399,9 @@ class EnergySensor(CoordinatorEntity[EnergyCoordinator], SensorEntity):
                 if self.coordinator.active_controller
                 else 0
             ),
-            "automatic_control_enabled": self.coordinator.config.get(
-                "automatic_control_enabled", False
-            ),
-            "rehearsal_mode": self.coordinator.config.get("rehearsal_mode", True),
+            "automatic_control_enabled": foxess_enabled,
+            "ev_automatic_control_enabled": ev_enabled,
+            "rehearsal_mode": self.coordinator.config.get(CONF_REHEARSAL_MODE, True),
             "integration": DOMAIN,
             "learning_model": learning.model,
             "learning_samples": learning.sample_count,

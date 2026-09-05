@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.3.5 — independent EV control authorization
+
+- Restore a separate, default-off automatic-control gate for mapped
+  Tessie/Tessy writes. Enabling automatic FoxESS control no longer authorizes
+  EV current or charge-switch services.
+- Permit a commissioned EV policy to run while automatic FoxESS control is
+  disabled, while retaining the shared Safety Lock as an absolute no-write
+  interlock.
+- Expose both authorization states independently in status attributes and
+  redacted diagnostics.
+
 ## 0.3.4 — full-rate free-window target and cutoff stop
 
 - Request the commissioned inverter charge limit while the configured

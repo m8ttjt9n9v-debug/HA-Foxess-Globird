@@ -1,7 +1,7 @@
 # FoxESS Globird Energy Observer
 
 An Australia-scoped Home Assistant custom integration for an auditable,
-site-configured home-energy ledger. Version 0.3.4 is observer-by-default:
+site-configured home-energy ledger. Version 0.3.5 is observer-by-default:
 it reads the entities selected during setup, normalises their units and signs,
 persists local tariff meters and demand-learning evidence, and only permits
 FoxESS writes after an explicit control opt-in, complete actuator mapping, and
@@ -55,6 +55,10 @@ entities stable `sensor.home_energy_*` IDs regardless of the entry name.
   charging limits to an away vehicle. A guarded session may use the mapped
   charge switch to start or stop only a session it owns; it does not change
   the vehicle SoC limit.
+- independent automatic-control gates for FoxESS and Tessie/Tessy. Enabling
+  battery control never authorizes EV current or charge-switch writes, and EV
+  control can be commissioned without enabling automatic FoxESS writes. The
+  shared Safety Lock remains an absolute no-write interlock for both paths.
 - a preview-first Diagnostics view for short, explicit FoxESS force-charge and
   force-discharge commissioning checks. Each test has editable power and
   duration, a cost/earning preview, live feedback, a 120-minute maximum, and

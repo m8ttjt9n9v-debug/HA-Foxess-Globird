@@ -11,6 +11,9 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.home_energy_orchestrator.const import DOMAIN
 from custom_components.home_energy_orchestrator.coordinator import EnergyCoordinator
+from custom_components.home_energy_orchestrator.diagnostics import (
+    async_get_config_entry_diagnostics,
+)
 from custom_components.home_energy_orchestrator.models import SiteSnapshot
 from custom_components.home_energy_orchestrator.planner.learning import DemandCycleSampler
 
@@ -42,6 +45,7 @@ ENTRY_DATA = {
     "free_charge_full_battery_import_threshold_kwh": 49.0,
     "house_learning_fallback_kwh": 17.5,
     "automatic_control_enabled": False,
+    "ev_automatic_control_enabled": False,
     "rehearsal_mode": True,
     "ev_charger_profile": "single_phase_32a",
     "ev_min_current": 6.0,
@@ -86,6 +90,13 @@ async def test_setup_observes_normalised_values_and_never_calls_services(hass):
     assert hass.states.get(grid_import).state == "1.2"
     assert hass.states.get(status).state == "observer_only"
     assert hass.states.get(status).attributes["writes_performed"] == 0
+    assert hass.states.get(status).attributes["automatic_control_enabled"] is False
+    assert hass.states.get(status).attributes["ev_automatic_control_enabled"] is False
+    assert hass.states.get(status).attributes["mode"] == "observe"
+    diagnostics = await async_get_config_entry_diagnostics(hass, entry)
+    assert diagnostics["actuators"]["foxess_automatic_control_enabled"] is False
+    assert diagnostics["actuators"]["ev_automatic_control_enabled"] is False
+    assert diagnostics["actuators"]["writes_enabled"] is False
     assert service_calls == []
 
 

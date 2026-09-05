@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Set up FoxESS Globird Energy Observer",
-        "description": "Automatic control is opt-in. The Safety Lock is ON by default; while it is ON, no hardware writes are allowed. Verify mappings and commissioning evidence before releasing it.",
+        "description": "FoxESS and Tessie automatic control are independent opt-ins. The Safety Lock is ON by default; while it is ON, no hardware writes are allowed. Verify mappings and commissioning evidence before releasing it.",
         "data": {
           "name": "Site name",
           "battery_soc_entity": "Battery state of charge sensor",
@@ -54,12 +54,13 @@
           "zero_import_threshold_kw": "ZEROHERO average import threshold (kWh/hour; contract says 0.03)",
           "zero_import_confirm_minutes": "Local telemetry debounce only (minutes)",
           "automatic_control_enabled": "Enable automatic FoxESS control (commissioned sites only)",
+          "ev_automatic_control_enabled": "Enable automatic Tessie EV control (commissioned sites only)",
           "rehearsal_mode": "Safety Lock (ON = no hardware writes)"
         }
       },
       "reconfigure": {
         "title": "Reconfigure FoxESS Globird Energy Observer",
-        "description": "Update site mappings, limits, or the explicit control gate. Safety Lock ON blocks all hardware writes.",
+        "description": "Update site mappings, limits, or the independent FoxESS and Tessie control gates. Safety Lock ON blocks all hardware writes.",
         "data": {
           "name": "Site name",
           "battery_soc_entity": "Battery state of charge sensor",
@@ -109,7 +110,8 @@
           "bonus_window_end": "Bonus zero-import window end",
           "zero_import_threshold_kw": "ZEROHERO average import threshold (kWh/hour; contract says 0.03)",
           "zero_import_confirm_minutes": "Local telemetry debounce only (minutes)",
-          "automatic_control_enabled": "Enable automatic FoxESS/Tessie control (commissioned sites only)",
+          "automatic_control_enabled": "Enable automatic FoxESS control (commissioned sites only)",
+          "ev_automatic_control_enabled": "Enable automatic Tessie EV control (commissioned sites only)",
           "rehearsal_mode": "Safety Lock (ON = no hardware writes)"
         }
       }

@@ -23,6 +23,7 @@ from .const import (
     CONF_DAILY_CHARGE,
     CONF_DAILY_FREE_ALLOWANCE_KWH,
     CONF_DAILY_IMPORT_ENTITY,
+    CONF_EV_AUTOMATIC_CONTROL_ENABLED,
     CONF_EV_CHARGE_LIMIT,
     CONF_EV_CHARGE_SWITCH,
     CONF_EV_CHARGER_PROFILE,
@@ -70,6 +71,7 @@ from .const import (
     DEFAULT_BONUS_WINDOW_START,
     DEFAULT_DAILY_CHARGE,
     DEFAULT_DAILY_FREE_ALLOWANCE_KWH,
+    DEFAULT_EV_AUTOMATIC_CONTROL_ENABLED,
     DEFAULT_EV_CHARGER_PROFILE,
     DEFAULT_EV_MAX_CURRENT,
     DEFAULT_EV_MIN_CURRENT,
@@ -342,6 +344,13 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     ),
                 ): selector.BooleanSelector(),
                 vol.Required(
+                    CONF_EV_AUTOMATIC_CONTROL_ENABLED,
+                    default=defaults.get(
+                        CONF_EV_AUTOMATIC_CONTROL_ENABLED,
+                        DEFAULT_EV_AUTOMATIC_CONTROL_ENABLED,
+                    ),
+                ): selector.BooleanSelector(),
+                vol.Required(
                     CONF_REHEARSAL_MODE,
                     default=defaults.get(CONF_REHEARSAL_MODE, DEFAULT_REHEARSAL_MODE),
                 ): selector.BooleanSelector(),
@@ -490,6 +499,10 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             ),
             CONF_AUTOMATIC_CONTROL_ENABLED: data.get(
                 CONF_AUTOMATIC_CONTROL_ENABLED, DEFAULT_AUTOMATIC_CONTROL_ENABLED
+            ),
+            CONF_EV_AUTOMATIC_CONTROL_ENABLED: data.get(
+                CONF_EV_AUTOMATIC_CONTROL_ENABLED,
+                DEFAULT_EV_AUTOMATIC_CONTROL_ENABLED,
             ),
             CONF_REHEARSAL_MODE: data.get(CONF_REHEARSAL_MODE, DEFAULT_REHEARSAL_MODE),
         }
