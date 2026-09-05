@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.3.6 — portable whole-site EV allowance control
+
+- Port the Mangerton EV-priority current controller behind the independent
+  Tessie gate and bound it with a whole-site free-window energy envelope.
+- Derive an EV energy budget from remaining kWh after reserving the live
+  FoxESS capacity gap and forecast house demand, then spread that budget over
+  the remaining window. No site-specific battery-energy guess is required.
+- Stop a controller-owned EV session at the configured cutoff, or hold it off
+  when the residual is below the charger's minimum current. Never stop or
+  alter a manually/cloud-started session.
+- Treat the lower of the configured physical charger profile and Tessie's
+  entity maximum as authoritative, and expose the allowance calculation in
+  status attributes for commissioning evidence.
+- Add single-phase 63 A and three-phase 80 A regression scenarios and record
+  the reusable policy and H3 troubleshooting lessons in project documentation.
+
 ## 0.3.5 — independent EV control authorization
 
 - Restore a separate, default-off automatic-control gate for mapped

@@ -45,12 +45,17 @@ def _coordinator(**config):
         config=values,
         snapshot=SimpleNamespace(
             battery_soc=60.0,
+            battery_capacity_kwh=38.0,
             battery_floor_percent=10.0,
             grid_power_kw=0.0,
             house_load_kw=0.0,
             ev_soc=60.0,
         ),
-        data=SimpleNamespace(grid_import_kw=0.0, available_after_reserve_kwh=0.0),
+        data=SimpleNamespace(
+            grid_import_kw=0.0,
+            free_window_import_kwh=0.0,
+            available_after_reserve_kwh=0.0,
+        ),
         free_charge_plan=SimpleNamespace(target_charge_power_kw=5.0),
         free_charge_completion=SimpleNamespace(action="continue"),
         _free_window_hours_remaining=lambda _now: 1.0,
@@ -199,7 +204,9 @@ async def test_ev_controller_adjusts_mapped_current_only_when_commissioned(hass)
 
     hass.services.async_register("number", "set_value", noop)
     hass.states.async_set("device_tracker.tessy_location", "home")
-    hass.states.async_set("number.tessy_charge_current", "16", {"min": 0, "max": 16, "step": 1})
+    # Tessie's entity advertises 32 A, but the commissioned charger profile is
+    # 16 A and must remain the physical authority.
+    hass.states.async_set("number.tessy_charge_current", "16", {"min": 0, "max": 32, "step": 1})
     hass.states.async_set("switch.tessy_charge", "on")
     hass.states.async_set(
         "sensor.tessy_charger_current", "16", {"friendly_name": "Tessy Charger current"}
@@ -350,3 +357,72 @@ async def test_ev_controller_stops_only_a_session_it_started_at_target(hass):
         ("switch", "turn_off")
     ]
     assert controller.last_reason == "target_reached"
+
+
+async def test_ev_controller_stops_owned_session_at_allowance_cutoff(hass):
+    calls = []
+    hass.bus.async_listen(EVENT_CALL_SERVICE, calls.append)
+
+    async def noop(_call):
+        return None
+
+    hass.services.async_register("switch", "turn_off", noop)
+    hass.states.async_set("device_tracker.tessy_location", "home")
+    hass.states.async_set("number.tessy_charge_current", "16", {"min": 0, "max": 16})
+    hass.states.async_set("number.tessy_charge_limit", "80")
+    hass.states.async_set("switch.tessy_charge", "on")
+    hass.states.async_set(
+        "sensor.tessy_charger_current", "16", {"friendly_name": "Tessy Charger current"}
+    )
+    hass.states.async_set(
+        "binary_sensor.tessy_charge_cable", "on", {"friendly_name": "Tessy Charge cable"}
+    )
+    coordinator = _coordinator(
+        **{
+            CONF_EV_AUTOMATIC_CONTROL_ENABLED: True,
+            CONF_REHEARSAL_MODE: False,
+            CONF_EV_CHARGE_LIMIT: "number.tessy_charge_limit",
+            CONF_EV_CURRENT_LIMIT: "number.tessy_charge_current",
+            CONF_EV_CHARGE_SWITCH: "switch.tessy_charge",
+        }
+    )
+    coordinator.data.free_window_import_kwh = 49.0
+    controller = ActiveEvController(hass, coordinator)
+    controller._session_started = True
+
+    await controller.async_reconcile()
+    await hass.async_block_till_done()
+
+    assert [(event.data["domain"], event.data["service"]) for event in calls] == [
+        ("switch", "turn_off")
+    ]
+    assert controller.last_reason == "free_allowance_cutoff_reached"
+
+
+async def test_ev_controller_does_not_stop_unowned_session_at_cutoff(hass):
+    calls = []
+    hass.bus.async_listen(EVENT_CALL_SERVICE, calls.append)
+    hass.states.async_set("device_tracker.tessy_location", "home")
+    hass.states.async_set("number.tessy_charge_current", "16", {"min": 0, "max": 16})
+    hass.states.async_set("switch.tessy_charge", "on")
+    hass.states.async_set(
+        "sensor.tessy_charger_current", "16", {"friendly_name": "Tessy Charger current"}
+    )
+    hass.states.async_set(
+        "binary_sensor.tessy_charge_cable", "on", {"friendly_name": "Tessy Charge cable"}
+    )
+    coordinator = _coordinator(
+        **{
+            CONF_EV_AUTOMATIC_CONTROL_ENABLED: True,
+            CONF_REHEARSAL_MODE: False,
+            CONF_EV_CURRENT_LIMIT: "number.tessy_charge_current",
+            CONF_EV_CHARGE_SWITCH: "switch.tessy_charge",
+        }
+    )
+    coordinator.data.free_window_import_kwh = 49.0
+    controller = ActiveEvController(hass, coordinator)
+
+    await controller.async_reconcile()
+
+    assert calls == []
+    assert controller.last_reason == "free_allowance_cutoff_reached"

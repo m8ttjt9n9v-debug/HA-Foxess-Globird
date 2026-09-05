@@ -97,6 +97,45 @@ class EvCurrentDecision:
     non_ev_service_current_a: float | None
 
 
+@dataclass(frozen=True, slots=True)
+class EvAllowanceInputs:
+    """Inputs for sharing a finite free-window allowance with an EV.
+
+    The imported-energy counter covers the whole site.  Current feedback is
+    used only to remove the EV's present contribution from measured grid
+    import, leaving battery and house demand without trying to predict either.
+    """
+
+    free_window_active: bool
+    imported_kwh: float | None
+    cutoff_kwh: float
+    hours_remaining: float
+    grid_import_kw: float | None
+    ev_current_a: float | None
+    ev_voltage_v: float
+    ev_phase_count: int
+    physical_ceiling_a: float
+    effective_minimum_a: float
+    step_a: float = 1.0
+    service_current_a: float = 0.0
+    site_phase_count: int = 1
+    service_headroom_a: float = 1.0
+    reserved_non_ev_kwh: float = 0.0
+
+
+@dataclass(frozen=True, slots=True)
+class EvAllowanceDecision:
+    """Maximum EV current permitted by the remaining whole-site allowance."""
+
+    session_allowed: bool
+    ceiling_a: float
+    remaining_kwh: float | None
+    target_site_import_kw: float | None
+    non_ev_import_kw: float | None
+    ev_budget_remaining_kwh: float | None
+    reason: str
+
+
 def plan_ev_start(target_soc_percent: float, observation: EvObservation) -> EvCommandPlan:
     """Plan a guarded charge-to-target start.
 
@@ -157,6 +196,97 @@ def ev_charge_should_stop(
         return bool(armed and not cable_connected)
     soc = _finite_percent(soc_percent, "soc_percent")
     return soc is not None and soc >= target_soc_percent
+
+
+def plan_ev_allowance(inputs: EvAllowanceInputs) -> EvAllowanceDecision:
+    """Pace EV charging so all site loads remain below an energy cutoff.
+
+    The EV budget is the remaining kWh after reserving forecast non-EV energy,
+    spread over the remaining window hours. Measured non-EV import also bounds
+    the commissioned service capacity. The result is stepped down to a
+    supported whole-current setpoint. Missing live evidence fails closed.
+    """
+
+    _validate_allowance_inputs(inputs)
+    if not inputs.free_window_active:
+        return EvAllowanceDecision(
+            True,
+            round(inputs.physical_ceiling_a, 3),
+            None,
+            None,
+            None,
+            None,
+            "outside_free_window",
+        )
+    if inputs.imported_kwh is None:
+        return EvAllowanceDecision(
+            False, 0.0, None, None, None, None, "allowance_meter_unavailable"
+        )
+    remaining = max(inputs.cutoff_kwh - inputs.imported_kwh, 0.0)
+    if remaining <= 0:
+        return EvAllowanceDecision(
+            False, 0.0, 0.0, 0.0, None, 0.0, "free_allowance_cutoff_reached"
+        )
+    if inputs.hours_remaining <= 0:
+        return EvAllowanceDecision(
+            False, 0.0, round(remaining, 3), 0.0, None, 0.0, "charging_window_finished"
+        )
+    if inputs.grid_import_kw is None or inputs.ev_current_a is None:
+        return EvAllowanceDecision(
+            False,
+            0.0,
+            round(remaining, 3),
+            None,
+            None,
+            None,
+            "allowance_telemetry_unavailable",
+        )
+
+    ev_power_kw = (
+        inputs.ev_current_a * inputs.ev_voltage_v * inputs.ev_phase_count / 1000
+    )
+    non_ev_import_kw = max(inputs.grid_import_kw - ev_power_kw, 0.0)
+    ev_budget_remaining_kwh = max(remaining - inputs.reserved_non_ev_kwh, 0.0)
+    ev_power_ceiling_kw = ev_budget_remaining_kwh / inputs.hours_remaining
+    target_site_import_kw = non_ev_import_kw + ev_power_ceiling_kw
+    allowance_current_ceiling = ev_power_ceiling_kw * 1000 / (
+        inputs.ev_voltage_v * inputs.ev_phase_count
+    )
+    raw_current_ceiling = allowance_current_ceiling
+    service_limited = False
+    if inputs.service_current_a > 0:
+        service_power_kw = (
+            max(inputs.service_current_a - inputs.service_headroom_a, 0.0)
+            * inputs.ev_voltage_v
+            * inputs.site_phase_count
+            / 1000
+        )
+        service_ev_power_kw = max(service_power_kw - non_ev_import_kw, 0.0)
+        service_current_ceiling = service_ev_power_kw * 1000 / (
+            inputs.ev_voltage_v * inputs.ev_phase_count
+        )
+        service_limited = service_current_ceiling < raw_current_ceiling
+        raw_current_ceiling = min(raw_current_ceiling, service_current_ceiling)
+    stepped_ceiling = (raw_current_ceiling // inputs.step_a) * inputs.step_a
+    ceiling = min(inputs.physical_ceiling_a, max(stepped_ceiling, 0.0))
+    allowed = ceiling >= inputs.effective_minimum_a and ceiling > 0
+    if not allowed:
+        reason = "allowance_below_minimum_current"
+    elif service_limited and ceiling < inputs.physical_ceiling_a:
+        reason = "service_limited"
+    elif ceiling < inputs.physical_ceiling_a:
+        reason = "allowance_limited"
+    else:
+        reason = "physical_ceiling"
+    return EvAllowanceDecision(
+        allowed,
+        round(ceiling, 3),
+        round(remaining, 3),
+        round(target_site_import_kw, 3),
+        round(non_ev_import_kw, 3),
+        round(ev_budget_remaining_kwh, 3),
+        reason,
+    )
 
 
 def plan_ev_current_target(inputs: EvCurrentInputs) -> EvCurrentDecision:
@@ -275,7 +405,11 @@ def plan_ev_current_target(inputs: EvCurrentInputs) -> EvCurrentDecision:
     # A sustained grid-target overrun takes precedence over EV-priority policy.
     # This is the key protection for a 15 kW inverter at a busy site, and lets
     # a tariff import ceiling be stricter than the physical service rating.
-    if grid_valid and inputs.grid_average_a > grid_target:
+    if (
+        grid_valid
+        and inputs.service_current_a > 0
+        and inputs.grid_average_a > grid_target
+    ):
         if not ev_valid:
             return decision(baseline, "service_limit_fallback")
         error = grid_target - inputs.grid_average_a
@@ -359,6 +493,39 @@ def _validate_current_inputs(inputs: EvCurrentInputs) -> None:
         raise ValueError("ev_voltage_v must be greater than zero")
     if inputs.ev_phase_count not in (1, 3):
         raise ValueError("ev_phase_count must be 1 or 3")
+
+
+def _validate_allowance_inputs(inputs: EvAllowanceInputs) -> None:
+    """Reject malformed allowance and physical-limit inputs."""
+
+    for name, value in (
+        ("imported_kwh", inputs.imported_kwh),
+        ("cutoff_kwh", inputs.cutoff_kwh),
+        ("hours_remaining", inputs.hours_remaining),
+        ("grid_import_kw", inputs.grid_import_kw),
+        ("ev_current_a", inputs.ev_current_a),
+        ("ev_voltage_v", inputs.ev_voltage_v),
+        ("physical_ceiling_a", inputs.physical_ceiling_a),
+        ("effective_minimum_a", inputs.effective_minimum_a),
+        ("step_a", inputs.step_a),
+        ("service_current_a", inputs.service_current_a),
+        ("service_headroom_a", inputs.service_headroom_a),
+        ("reserved_non_ev_kwh", inputs.reserved_non_ev_kwh),
+    ):
+        if value is not None and (not isfinite(value) or value < 0):
+            raise ValueError(f"{name} must be finite and non-negative")
+    if inputs.cutoff_kwh <= 0:
+        raise ValueError("cutoff_kwh must be greater than zero")
+    if inputs.ev_voltage_v <= 0:
+        raise ValueError("ev_voltage_v must be greater than zero")
+    if inputs.ev_phase_count not in (1, 3):
+        raise ValueError("ev_phase_count must be 1 or 3")
+    if inputs.site_phase_count not in (1, 3):
+        raise ValueError("site_phase_count must be 1 or 3")
+    if inputs.step_a <= 0:
+        raise ValueError("step_a must be greater than zero")
+    if inputs.effective_minimum_a > inputs.physical_ceiling_a:
+        raise ValueError("effective_minimum_a cannot exceed physical_ceiling_a")
 
 
 def _validate_target(value: float) -> None:

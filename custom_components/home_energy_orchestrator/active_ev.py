@@ -11,6 +11,7 @@ from homeassistant.util import dt as dt_util
 
 from .const import (
     CONF_BONUS_LOAD_FOLLOWING_PERCENT,
+    CONF_DAILY_FREE_ALLOWANCE_KWH,
     CONF_EV_AUTOMATIC_CONTROL_ENABLED,
     CONF_EV_CHARGE_LIMIT,
     CONF_EV_CHARGE_SWITCH,
@@ -19,38 +20,47 @@ from .const import (
     CONF_EV_MIN_CURRENT,
     CONF_EV_PHASE_COUNT,
     CONF_EV_VOLTAGE,
+    CONF_FREE_CHARGE_FULL_BATTERY_IMPORT_THRESHOLD_KWH,
     CONF_FREE_CHARGE_START,
     CONF_INVERTER_CAPACITY,
     CONF_LOAD_FOLLOWING_OVERRIDE,
     CONF_NON_FREE_LOAD_FOLLOWING_PERCENT,
     CONF_REHEARSAL_MODE,
     CONF_SERVICE_IMPORT_LIMIT_A,
+    CONF_SITE_PHASE_COUNT,
     CONF_SOLAR_POWER,
     DEFAULT_BONUS_LOAD_FOLLOWING_PERCENT,
+    DEFAULT_DAILY_FREE_ALLOWANCE_KWH,
     DEFAULT_EV_MAX_CURRENT,
     DEFAULT_EV_MIN_CURRENT,
     DEFAULT_EV_PHASE_COUNT,
     DEFAULT_EV_VOLTAGE,
+    DEFAULT_FREE_CHARGE_FULL_BATTERY_IMPORT_THRESHOLD_KWH,
     DEFAULT_INVERTER_CAPACITY_KW,
     DEFAULT_LOAD_FOLLOWING_OVERRIDE,
     DEFAULT_NON_FREE_LOAD_FOLLOWING_PERCENT,
     DEFAULT_SERVICE_IMPORT_LIMIT_A,
+    DEFAULT_SITE_PHASE_COUNT,
 )
 from .coordinator import EnergyCoordinator
 from .ev_adapter import EvEntityMap, EvServiceAdapter
-from .planner.ev import EvCommand, EvCommandPlan, EvCurrentInputs, plan_ev_current_target
+from .planner.ev import (
+    EvAllowanceInputs,
+    EvCommand,
+    EvCommandPlan,
+    EvCurrentInputs,
+    plan_ev_allowance,
+    plan_ev_current_target,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
 
 class ActiveEvController:
-    """Adjust an already-connected EV's Tessie current setpoint safely.
+    """Run one bounded, independently authorized Tessie charging policy.
 
-    This controller intentionally does not start/stop charging or change the
-    vehicle's SoC limit. It only writes the explicitly mapped current setpoint
-    for an at-home, connected vehicle, and only when local cable/current
-    feedback can be found. Cloud schedules and charge-to-target behaviour stay
-    outside this commissioning surface.
+    It may set current and start a qualified at-home session.  It stops only
+    sessions it started, and never changes the vehicle's configured SoC limit.
     """
 
     def __init__(self, hass: HomeAssistant, coordinator: EnergyCoordinator) -> None:
@@ -61,6 +71,11 @@ class ActiveEvController:
         self.last_reason = "automatic_ev_control_disabled"
         self.last_actions: tuple[str, ...] = ()
         self._session_started = False
+        self.allowance_remaining_kwh: float | None = None
+        self.allowance_current_ceiling_a: float | None = None
+        self.allowance_target_site_import_kw: float | None = None
+        self.allowance_non_ev_import_kw: float | None = None
+        self.allowance_ev_budget_remaining_kwh: float | None = None
 
     @property
     def gate_status(self) -> str:
@@ -146,21 +161,124 @@ class ActiveEvController:
             self.last_actions = ()
             return
         minimum = _attribute_number(current_state, "min", 0.0)
-        maximum = _attribute_number(
+        entity_maximum = _attribute_number(
             current_state,
             "max",
             _configured(self.coordinator.config, CONF_EV_MAX_CURRENT, DEFAULT_EV_MAX_CURRENT),
+        )
+        configured_maximum = _configured(
+            self.coordinator.config, CONF_EV_MAX_CURRENT, DEFAULT_EV_MAX_CURRENT
+        )
+        maximum = (
+            min(entity_maximum, configured_maximum)
+            if configured_maximum > 0
+            else entity_maximum
         )
         step = _attribute_number(current_state, "step", 1.0)
         voltage = _configured(self.coordinator.config, CONF_EV_VOLTAGE, DEFAULT_EV_VOLTAGE)
         phase_count = int(
             _configured(self.coordinator.config, CONF_EV_PHASE_COUNT, DEFAULT_EV_PHASE_COUNT)
         )
+        site_phase_count = int(
+            _configured(
+                self.coordinator.config, CONF_SITE_PHASE_COUNT, DEFAULT_SITE_PHASE_COUNT
+            )
+        )
         grid_power_kw = getattr(self.coordinator.snapshot, "grid_power_kw", None)
         grid_average_a = None
         if grid_power_kw is not None and isfinite(grid_power_kw):
             grid_average_a = max(grid_power_kw, 0.0) * 1000 / (voltage * phase_count)
         measured_current = _finite_number(current_sensor.state)
+        configured_minimum = _configured(
+            self.coordinator.config, CONF_EV_MIN_CURRENT, DEFAULT_EV_MIN_CURRENT
+        )
+        effective_minimum = max(minimum, configured_minimum)
+        measured_ev_power_kw = (
+            (measured_current if switch_state.state == "on" else 0.0)
+            * voltage
+            * phase_count
+            / 1000
+        )
+        non_ev_import_kw = (
+            max(max(grid_power_kw, 0.0) - measured_ev_power_kw, 0.0)
+            if grid_power_kw is not None and isfinite(grid_power_kw)
+            else None
+        )
+        house_load_kw = self.coordinator.snapshot.house_load_kw
+        if house_load_kw is not None and isfinite(house_load_kw):
+            forecast_house_kwh = max(house_load_kw, 0.0) * hours_remaining
+            inferred_battery_charge = (
+                non_ev_import_kw is not None
+                and non_ev_import_kw > max(house_load_kw, 0.0) + 0.5
+            )
+            battery_gap_kwh = 0.0
+            if inferred_battery_charge and self.coordinator.snapshot.battery_soc is not None:
+                battery_gap_kwh = self.coordinator.snapshot.battery_capacity_kwh * max(
+                    100.0 - self.coordinator.snapshot.battery_soc, 0.0
+                ) / 100
+            reserved_non_ev_kwh = forecast_house_kwh + battery_gap_kwh
+        else:
+            # Without a separate house channel, conservatively assume current
+            # non-EV grid demand continues for the rest of the window.
+            reserved_non_ev_kwh = (
+                non_ev_import_kw * hours_remaining
+                if non_ev_import_kw is not None
+                else 0.0
+            )
+        try:
+            allowance = _configured(
+                self.coordinator.config,
+                CONF_DAILY_FREE_ALLOWANCE_KWH,
+                DEFAULT_DAILY_FREE_ALLOWANCE_KWH,
+            )
+            cutoff = min(
+                allowance,
+                _configured(
+                    self.coordinator.config,
+                    CONF_FREE_CHARGE_FULL_BATTERY_IMPORT_THRESHOLD_KWH,
+                    DEFAULT_FREE_CHARGE_FULL_BATTERY_IMPORT_THRESHOLD_KWH,
+                ),
+            )
+            allowance_decision = plan_ev_allowance(
+                EvAllowanceInputs(
+                    free_window_active=free_window_active,
+                    imported_kwh=getattr(
+                        self.coordinator.data, "free_window_import_kwh", None
+                    ),
+                    cutoff_kwh=cutoff,
+                    hours_remaining=hours_remaining,
+                    grid_import_kw=(
+                        max(grid_power_kw, 0.0)
+                        if grid_power_kw is not None and isfinite(grid_power_kw)
+                        else None
+                    ),
+                    ev_current_a=(measured_current if switch_state.state == "on" else 0.0),
+                    ev_voltage_v=voltage,
+                    ev_phase_count=phase_count,
+                    physical_ceiling_a=max(maximum, 0.0),
+                    effective_minimum_a=effective_minimum,
+                    step_a=max(step, 0.1),
+                    service_current_a=_configured(
+                        self.coordinator.config,
+                        CONF_SERVICE_IMPORT_LIMIT_A,
+                        DEFAULT_SERVICE_IMPORT_LIMIT_A,
+                    ),
+                    site_phase_count=site_phase_count,
+                    service_headroom_a=1.0,
+                    reserved_non_ev_kwh=reserved_non_ev_kwh,
+                )
+            )
+        except (TypeError, ValueError):
+            self.last_reason = "ev_allowance_inputs_invalid"
+            self.last_actions = ()
+            return
+        self.allowance_remaining_kwh = allowance_decision.remaining_kwh
+        self.allowance_current_ceiling_a = allowance_decision.ceiling_a
+        self.allowance_target_site_import_kw = allowance_decision.target_site_import_kw
+        self.allowance_non_ev_import_kw = allowance_decision.non_ev_import_kw
+        self.allowance_ev_budget_remaining_kwh = (
+            allowance_decision.ev_budget_remaining_kwh
+        )
         ev_soc = self.coordinator.snapshot.ev_soc
         charge_limit = 100.0
         limit_state = self.hass.states.get(
@@ -190,7 +308,9 @@ class ActiveEvController:
             now, free_window_active, cable_connected, at_home, charge_limit
         )
         session_window_active = (
-            free_window_active or solar_spill_active or pre_free_current is not None
+            (free_window_active and allowance_decision.session_allowed)
+            or solar_spill_active
+            or pre_free_current is not None
         )
         target_reached = ev_soc is not None and ev_soc >= charge_limit
         session_intent = session_window_active and not target_reached
@@ -198,7 +318,15 @@ class ActiveEvController:
             self.last_reason = "ev_soc_unavailable"
             self.last_actions = ()
             return
-        stop_reason = "target_reached" if target_reached else "charging_window_finished"
+        stop_reason = (
+            "target_reached"
+            if target_reached
+            else (
+                allowance_decision.reason
+                if free_window_active and not allowance_decision.session_allowed
+                else "charging_window_finished"
+            )
+        )
         if (
             self._session_started
             and not session_intent
@@ -221,29 +349,43 @@ class ActiveEvController:
             self.last_actions = actions
             self.writes_performed += len(actions)
             return
+        if free_window_active and not allowance_decision.session_allowed:
+            # A manually or cloud-started session is outside HEO ownership and
+            # is never stopped.  HEO also must not alter its current setpoint.
+            self.last_reason = allowance_decision.reason
+            self.last_actions = ()
+            return
         try:
             decision = plan_ev_current_target(
                 EvCurrentInputs(
                     free_window_active=free_window_active,
                     cable_connected=True,
-                    ceiling_a=max(maximum, 0.0),
+                    ceiling_a=(
+                        allowance_decision.ceiling_a
+                        if free_window_active
+                        else max(maximum, 0.0)
+                    ),
                     protected_baseline_a=min(
-                        _configured(
-                            self.coordinator.config, CONF_EV_MIN_CURRENT, DEFAULT_EV_MIN_CURRENT
-                        ),
-                        max(maximum, 0.0),
-                    ),
-                    effective_minimum_a=max(
-                        minimum,
-                        _configured(
-                            self.coordinator.config, CONF_EV_MIN_CURRENT, DEFAULT_EV_MIN_CURRENT
+                        configured_minimum,
+                        (
+                            allowance_decision.ceiling_a
+                            if free_window_active
+                            else max(maximum, 0.0)
                         ),
                     ),
+                    effective_minimum_a=effective_minimum,
                     requested_current_a=current_value,
-                    service_current_a=_configured(
-                        self.coordinator.config,
-                        CONF_SERVICE_IMPORT_LIMIT_A,
-                        DEFAULT_SERVICE_IMPORT_LIMIT_A,
+                    # Matched per-phase feedback is valid for a single-phase
+                    # site or a balanced three-phase site/EV. Mixed phase
+                    # counts use the aggregate service envelope above.
+                    service_current_a=(
+                        _configured(
+                            self.coordinator.config,
+                            CONF_SERVICE_IMPORT_LIMIT_A,
+                            DEFAULT_SERVICE_IMPORT_LIMIT_A,
+                        )
+                        if site_phase_count == phase_count
+                        else 0.0
                     ),
                     headroom_a=1.0,
                     grid_average_a=grid_average_a,
@@ -253,7 +395,7 @@ class ActiveEvController:
                     ev_feedback_source_valid=measured_current is not None,
                     elapsed_free_window_minutes=max(0.0, 180.0 - hours_remaining * 60),
                     settle_minutes=5.0,
-                    priority_ev=False,
+                    priority_ev=free_window_active,
                     # Free-window charging is budget-controlled; the slower
                     # load-following percentage cap is for non-free sessions.
                     load_following_active=False,

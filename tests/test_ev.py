@@ -3,14 +3,106 @@ from __future__ import annotations
 import pytest
 
 from custom_components.home_energy_orchestrator.planner.ev import (
+    EvAllowanceInputs,
     EvCommand,
     EvCurrentInputs,
     EvObservation,
     ev_charge_should_stop,
+    plan_ev_allowance,
     plan_ev_current_target,
     plan_ev_start,
     plan_ev_stop,
 )
+
+
+def allowance_inputs(**changes) -> EvAllowanceInputs:
+    values = {
+        "free_window_active": True,
+        "imported_kwh": 0.0,
+        "cutoff_kwh": 49.0,
+        "hours_remaining": 178 / 60,
+        "grid_import_kw": 16.0,
+        "ev_current_a": 0.0,
+        "ev_voltage_v": 230.0,
+        "ev_phase_count": 3,
+        "physical_ceiling_a": 16.0,
+        "effective_minimum_a": 6.0,
+        "step_a": 1.0,
+        "reserved_non_ev_kwh": 33.4,
+    }
+    values.update(changes)
+    return EvAllowanceInputs(**values)
+
+
+def test_h3_allowance_reserves_battery_and_house_then_limits_ev() -> None:
+    decision = plan_ev_allowance(allowance_inputs())
+
+    assert decision.session_allowed is True
+    assert decision.ceiling_a == 7.0
+    assert decision.ev_budget_remaining_kwh == 15.6
+    assert decision.target_site_import_kw == 21.258
+    assert decision.non_ev_import_kw == 16.0
+    assert decision.reason == "allowance_limited"
+
+
+def test_h3_allowance_releases_ev_after_battery_charge_finishes() -> None:
+    decision = plan_ev_allowance(
+        allowance_inputs(
+            imported_kwh=31.0,
+            hours_remaining=1.0,
+            grid_import_kw=1.0,
+            reserved_non_ev_kwh=1.0,
+        )
+    )
+
+    assert decision.session_allowed is True
+    assert decision.ceiling_a == 16.0
+    assert decision.reason == "physical_ceiling"
+
+
+def test_mangerton_single_phase_site_stays_at_physical_ceiling() -> None:
+    decision = plan_ev_allowance(
+        allowance_inputs(
+            cutoff_kwh=49.0,
+            hours_remaining=3.0,
+            grid_import_kw=1.0,
+            ev_voltage_v=230.0,
+            ev_phase_count=1,
+            physical_ceiling_a=32.0,
+            reserved_non_ev_kwh=3.0,
+        )
+    )
+
+    assert decision.session_allowed is True
+    assert decision.ceiling_a == 32.0
+
+
+def test_allowance_cutoff_and_missing_meter_fail_closed() -> None:
+    exhausted = plan_ev_allowance(allowance_inputs(imported_kwh=49.0))
+    missing = plan_ev_allowance(allowance_inputs(imported_kwh=None))
+
+    assert exhausted.session_allowed is False
+    assert exhausted.reason == "free_allowance_cutoff_reached"
+    assert missing.session_allowed is False
+    assert missing.reason == "allowance_meter_unavailable"
+
+
+def test_configured_service_limit_caps_ev_below_energy_allowance() -> None:
+    decision = plan_ev_allowance(
+        allowance_inputs(
+            imported_kwh=0.0,
+            hours_remaining=1.0,
+            grid_import_kw=10.0,
+            service_current_a=20.0,
+            site_phase_count=3,
+            reserved_non_ev_kwh=0.0,
+        )
+    )
+
+    # 19 A/phase service target is 13.11 kW, leaving 3.11 kW or 4 A/phase.
+    assert decision.session_allowed is False
+    assert decision.ceiling_a == 4.0
+    assert decision.reason == "allowance_below_minimum_current"
 
 
 def observation(**overrides: object) -> EvObservation:
@@ -121,6 +213,20 @@ def test_current_planner_fails_closed_when_home_presence_is_unknown() -> None:
     decision = plan_ev_current_target(current_inputs(home_presence_known=False))
     assert decision.reason == "home_presence_unknown"
     assert decision.target_current_a == 0.0
+
+
+def test_zero_service_limit_disables_only_service_feedback_guard() -> None:
+    decision = plan_ev_current_target(
+        current_inputs(
+            free_window_active=True,
+            priority_ev=True,
+            service_current_a=0.0,
+            grid_average_a=20.0,
+        )
+    )
+
+    assert decision.reason == "ev_priority"
+    assert decision.target_current_a == 32.0
 
 
 @pytest.mark.parametrize(

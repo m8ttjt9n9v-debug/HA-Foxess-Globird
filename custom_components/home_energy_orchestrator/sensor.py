@@ -399,6 +399,31 @@ class EnergySensor(CoordinatorEntity[EnergyCoordinator], SensorEntity):
                 if self.coordinator.active_controller
                 else 0
             ),
+            "ev_allowance_remaining_kwh": (
+                self.coordinator.active_controller.ev_controller.allowance_remaining_kwh
+                if self.coordinator.active_controller
+                else None
+            ),
+            "ev_allowance_current_ceiling_a": (
+                self.coordinator.active_controller.ev_controller.allowance_current_ceiling_a
+                if self.coordinator.active_controller
+                else None
+            ),
+            "ev_allowance_target_site_import_kw": (
+                self.coordinator.active_controller.ev_controller.allowance_target_site_import_kw
+                if self.coordinator.active_controller
+                else None
+            ),
+            "ev_allowance_non_ev_import_kw": (
+                self.coordinator.active_controller.ev_controller.allowance_non_ev_import_kw
+                if self.coordinator.active_controller
+                else None
+            ),
+            "ev_allowance_budget_remaining_kwh": (
+                self.coordinator.active_controller.ev_controller.allowance_ev_budget_remaining_kwh
+                if self.coordinator.active_controller
+                else None
+            ),
             "automatic_control_enabled": foxess_enabled,
             "ev_automatic_control_enabled": ev_enabled,
             "rehearsal_mode": self.coordinator.config.get(CONF_REHEARSAL_MODE, True),
