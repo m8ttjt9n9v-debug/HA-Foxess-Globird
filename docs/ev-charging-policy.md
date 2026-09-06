@@ -96,8 +96,8 @@ phase count, connector rating, efficiency, time, or entity ID.
 1. Port internal matched three-minute samples with restart-persistent state.
 2. Add explicit Tessie mappings, path selection, location mode, limits, and an
    independent default-off automatic EV gate.
-3. Connect the direct-path adapter with response confirmation, bounded retries,
-   service-call tracing, and rehearsal tests.
+3. Connect the now-characterized direct-path adapter with response
+   confirmation, bounded retries, service-call tracing, and rehearsal tests.
 4. Commission the higher-capacity direct path in observer/rehearsal mode before
    enabling writes.
 5. Port the smart-socket sequence and one-attempt fault recovery for Mangerton.

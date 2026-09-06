@@ -44,6 +44,116 @@ class EvCurrentDecision:
     phase: str
 
 
+@dataclass(frozen=True, slots=True)
+class EvCommand:
+    """One ordered, adapter-neutral Tessie command."""
+
+    action: str
+    value: float | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class EvCommandPlan:
+    """Direct-EVSE commands that already passed physical and policy bounds."""
+
+    commands: tuple[EvCommand, ...]
+    reason: str
+
+
+@dataclass(frozen=True, slots=True)
+class DirectEvseObservation:
+    """Live Tessie actuator state and writable metadata."""
+
+    requested_current_a: float
+    charge_limit_percent: float
+    charge_switch_on: bool
+    current_minimum_a: float | None
+    current_maximum_a: float | None
+    current_step_a: float | None
+    limit_minimum_percent: float | None
+    limit_maximum_percent: float | None
+    limit_step_percent: float | None
+
+
+def plan_direct_evse_commands(
+    observation: DirectEvseObservation,
+    *,
+    target_current_a: float,
+    target_limit_percent: float,
+    physical_ceiling_a: float,
+    start_allowed: bool,
+    rehearsal: bool = False,
+) -> EvCommandPlan:
+    """Port Mangerton's direct path without adding stop/pause behavior."""
+    _validate_direct_observation(
+        observation, target_current_a, target_limit_percent, physical_ceiling_a
+    )
+    if rehearsal:
+        return EvCommandPlan((), "rehearsal_mode")
+    metadata = (
+        observation.current_minimum_a,
+        observation.current_maximum_a,
+        observation.current_step_a,
+        observation.limit_minimum_percent,
+        observation.limit_maximum_percent,
+        observation.limit_step_percent,
+    )
+    if any(value is None for value in metadata):
+        return EvCommandPlan((), "actuator_metadata_unavailable")
+    current_minimum = float(observation.current_minimum_a)
+    current_maximum = float(observation.current_maximum_a)
+    current_step = float(observation.current_step_a)
+    limit_minimum = float(observation.limit_minimum_percent)
+    limit_maximum = float(observation.limit_maximum_percent)
+    limit_step = float(observation.limit_step_percent)
+    if (
+        current_minimum < 0
+        or limit_minimum < 0
+        or current_maximum <= 0
+        or limit_maximum <= 0
+        or current_step <= 0
+        or limit_step <= 0
+        or current_minimum > current_maximum
+        or limit_minimum > limit_maximum
+    ):
+        return EvCommandPlan((), "actuator_metadata_invalid")
+    bounded_current = min(target_current_a, physical_ceiling_a, current_maximum)
+    bounded_current = floor(bounded_current / current_step) * current_step
+    if not start_allowed or bounded_current < current_minimum:
+        return EvCommandPlan((), "direct_path_not_allowed")
+    bounded_limit = _clip(
+        ceil(target_limit_percent / limit_step) * limit_step,
+        limit_minimum,
+        limit_maximum,
+    )
+    commands: list[EvCommand] = []
+    if abs(observation.charge_limit_percent - bounded_limit) >= limit_step:
+        commands.append(EvCommand("set_charge_limit", bounded_limit))
+    if abs(observation.requested_current_a - bounded_current) >= current_step:
+        commands.append(EvCommand("set_charge_current", round(bounded_current, 3)))
+    if not observation.charge_switch_on:
+        commands.append(EvCommand("start_charging"))
+    return EvCommandPlan(tuple(commands), "direct_path_ready")
+
+
+def direct_evse_response_matches(
+    observation: DirectEvseObservation,
+    *,
+    target_current_a: float,
+    target_limit_percent: float,
+    physical_ceiling_a: float,
+) -> bool:
+    """Confirm current, limit and charge-switch feedback after a direct write."""
+    plan = plan_direct_evse_commands(
+        observation,
+        target_current_a=target_current_a,
+        target_limit_percent=target_limit_percent,
+        physical_ceiling_a=physical_ceiling_a,
+        start_allowed=True,
+    )
+    return plan.reason == "direct_path_ready" and not plan.commands
+
+
 def plan_free_window_current(inputs: FreeWindowCurrentInputs) -> EvCurrentDecision:
     """Port the canonical Mangerton branch order without topology assumptions."""
     _validate_free_window_inputs(inputs)
@@ -323,6 +433,33 @@ def _validate_energy_projection(*values: float) -> None:
     efficiency = values[3]
     if efficiency <= 0 or efficiency > 100:
         raise ValueError("charge efficiency must be above zero and at most 100 percent")
+
+
+def _validate_direct_observation(
+    observation: DirectEvseObservation,
+    target_current_a: float,
+    target_limit_percent: float,
+    physical_ceiling_a: float,
+) -> None:
+    required = (
+        observation.requested_current_a,
+        observation.charge_limit_percent,
+        target_current_a,
+        target_limit_percent,
+        physical_ceiling_a,
+    )
+    optional = (
+        observation.current_minimum_a,
+        observation.current_maximum_a,
+        observation.current_step_a,
+        observation.limit_minimum_percent,
+        observation.limit_maximum_percent,
+        observation.limit_step_percent,
+    )
+    if not all(isfinite(value) for value in required) or any(value < 0 for value in required):
+        raise ValueError("direct-EVSE values must be finite and non-negative")
+    if not all(value is None or isfinite(value) for value in optional):
+        raise ValueError("direct-EVSE metadata must be finite when present")
 
 
 def _clip(value: float, minimum: float, maximum: float) -> float:

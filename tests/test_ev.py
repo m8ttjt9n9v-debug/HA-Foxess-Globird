@@ -7,11 +7,14 @@ import pytest
 from custom_components.home_energy_orchestrator.planner.ev import (
     AllowanceCeilingInputs,
     ChargeLimitInputs,
+    DirectEvseObservation,
     FreeWindowCurrentInputs,
     apply_daily_allowance_ceiling,
+    direct_evse_response_matches,
     estimate_other_free_window_import_kwh,
     estimate_vehicle_energy_to_target_kwh,
     plan_charge_limit_target,
+    plan_direct_evse_commands,
     plan_free_window_current,
 )
 
@@ -228,3 +231,99 @@ def test_other_projection_combines_configured_battery_gap_and_live_house_load():
         house_load_kw=2,
         remaining_window_hours=2,
     ) == 14
+
+
+DIRECT = DirectEvseObservation(
+    requested_current_a=6,
+    charge_limit_percent=80,
+    charge_switch_on=False,
+    current_minimum_a=1,
+    current_maximum_a=16,
+    current_step_a=1,
+    limit_minimum_percent=50,
+    limit_maximum_percent=100,
+    limit_step_percent=1,
+)
+
+
+def test_direct_path_orders_limit_current_then_start():
+    plan = plan_direct_evse_commands(
+        DIRECT,
+        target_current_a=14,
+        target_limit_percent=90,
+        physical_ceiling_a=15,
+        start_allowed=True,
+    )
+    assert [(command.action, command.value) for command in plan.commands] == [
+        ("set_charge_limit", 90),
+        ("set_charge_current", 14),
+        ("start_charging", None),
+    ]
+
+
+def test_live_transport_max_bounds_write_but_does_not_change_physical_rating():
+    plan = plan_direct_evse_commands(
+        DIRECT,
+        target_current_a=15,
+        target_limit_percent=80,
+        physical_ceiling_a=32,
+        start_allowed=True,
+    )
+    assert ("set_charge_current", 15) in [
+        (command.action, command.value) for command in plan.commands
+    ]
+    lowered_transport = plan_direct_evse_commands(
+        replace(DIRECT, current_maximum_a=10),
+        target_current_a=15,
+        target_limit_percent=80,
+        physical_ceiling_a=32,
+        start_allowed=True,
+    )
+    assert ("set_charge_current", 10) in [
+        (command.action, command.value) for command in lowered_transport.commands
+    ]
+
+
+def test_direct_path_never_emits_stop_when_policy_is_not_allowed():
+    plan = plan_direct_evse_commands(
+        replace(DIRECT, charge_switch_on=True),
+        target_current_a=0,
+        target_limit_percent=80,
+        physical_ceiling_a=16,
+        start_allowed=False,
+    )
+    assert plan.commands == ()
+    assert plan.reason == "direct_path_not_allowed"
+
+
+def test_missing_live_writable_range_fails_closed_without_fallback_current():
+    plan = plan_direct_evse_commands(
+        replace(DIRECT, current_maximum_a=None),
+        target_current_a=15,
+        target_limit_percent=80,
+        physical_ceiling_a=32,
+        start_allowed=True,
+    )
+    assert plan.commands == ()
+    assert plan.reason == "actuator_metadata_unavailable"
+
+
+def test_direct_feedback_match_requires_current_limit_and_switch():
+    matched = replace(
+        DIRECT,
+        requested_current_a=14,
+        charge_limit_percent=90,
+        charge_switch_on=True,
+    )
+    assert direct_evse_response_matches(
+        matched,
+        target_current_a=14,
+        target_limit_percent=90,
+        physical_ceiling_a=15,
+    )
+    assert not direct_evse_response_matches(
+        replace(matched, charge_switch_on=False),
+        target_current_a=14,
+        target_limit_percent=90,
+        physical_ceiling_a=15,
+    )

@@ -29,6 +29,10 @@
 - Retain raw FoxESS SoC and subtract the configured minimum SoC once in the
   energy ledger; do not feed a human-relative display percentage back into
   control calculations.
+- Add a fail-closed direct-EVSE command planner and Tessie service adapter.
+  The plan preserves charge-limit/current/start ordering, treats the physical
+  connector rating separately from Tessie's live transport maximum, requires
+  writable metadata, and never invents a direct-path stop command.
 
 ## 0.3.8 — Mangerton ZEROHERO selling automation
 

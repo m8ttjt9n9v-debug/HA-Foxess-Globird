@@ -19,6 +19,9 @@ Status here describes behavioral parity, not merely the presence of code.
 - [x] Pure Mangerton free-window EV current planner with golden branch-order
   tests, separate charge-policy/anti-pause limit planning, and a topology-aware
   daily-allowance ceiling that is inert for ordinary sessions that fit.
+- [x] Fail-closed direct-EVSE command boundary and Tessie service adapter,
+  still disconnected from the automatic gate pending mappings and runtime
+  reconciliation tests.
 
 ## Removed pending a faithful port
 
