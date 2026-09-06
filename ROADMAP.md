@@ -16,6 +16,9 @@ Status here describes behavioral parity, not merely the presence of code.
   retry bounds, and deliberate Self Use finish.
 - [x] Restart-persistent house-demand sampling with conservative P80 selection,
   sample retention, fallback, and over-gap rejection.
+- [x] Pure Mangerton free-window EV current planner with golden branch-order
+  tests, separate charge-policy/anti-pause limit planning, and a topology-aware
+  daily-allowance ceiling that is inert for ordinary sessions that fit.
 
 ## Removed pending a faithful port
 
@@ -24,9 +27,11 @@ controllers. They were removed because passing tests did not demonstrate
 Mangerton parity.
 
 - [ ] Automatic FoxESS free-window charging and completion reconciliation.
-- [ ] Tessie automatic current/session controller.
-- [ ] Whole-site daily-free-energy allocation across house, FoxESS, and EV.
-- [ ] EV/house priority and guaranteed-current policy.
+- [ ] Active Tessie automatic current/session adapter and independent gate.
+- [ ] Connect the tested whole-site daily-free-energy ceiling to explicit,
+  auditable house, FoxESS, and EV projections.
+- [x] Pure EV/house priority, guaranteed-current, service-overrun, settle, and
+  feedback-hold policy.
 - [ ] Matched three-minute grid/current feedback and settling behavior.
 - [ ] Learned Tesla driving demand, arrival reserve, and charge-target policy.
 - [ ] Solar-spill EV charging after the battery is full.

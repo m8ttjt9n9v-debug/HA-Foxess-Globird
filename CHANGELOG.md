@@ -15,6 +15,11 @@
   calculations; missing evidence fails closed instead of being auto-discovered.
 - Add a repository instruction hook, source-of-truth record, port-first guide,
   system requirements, and parity-based roadmap for future work.
+- Add a pure, branch-for-branch Mangerton free-window EV current planner and
+  separate Tessie anti-pause charge-limit target with golden tests.
+- Add the higher-capacity-site allowance only as an outer, topology-aware
+  ceiling: ordinary sessions that fit the configured whole-site kWh allowance
+  retain the Mangerton target instead of being evenly spread across the window.
 
 ## 0.3.8 — Mangerton ZEROHERO selling automation
 
