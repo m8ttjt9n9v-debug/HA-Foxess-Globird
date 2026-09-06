@@ -172,6 +172,57 @@ def apply_daily_allowance_ceiling(inputs: AllowanceCeilingInputs) -> EvCurrentDe
     return _decision(max(cap, baseline), "allowance_pacing")
 
 
+def estimate_vehicle_energy_to_target_kwh(
+    *,
+    stored_energy_kwh: float,
+    current_soc_percent: float,
+    target_soc_percent: float,
+    charge_efficiency_percent: float,
+) -> float:
+    """Port Mangerton's live-capacity model and estimate wall energy to target."""
+    _validate_energy_projection(
+        stored_energy_kwh,
+        current_soc_percent,
+        target_soc_percent,
+        charge_efficiency_percent,
+    )
+    if current_soc_percent <= 0:
+        raise ValueError("vehicle SOC must be positive to infer usable capacity")
+    if target_soc_percent <= current_soc_percent:
+        return 0.0
+    usable_capacity = stored_energy_kwh / (current_soc_percent / 100)
+    pack_energy = usable_capacity * (target_soc_percent - current_soc_percent) / 100
+    return round(pack_energy / (charge_efficiency_percent / 100), 3)
+
+
+def estimate_other_free_window_import_kwh(
+    *,
+    battery_capacity_kwh: float,
+    battery_soc_percent: float,
+    battery_target_percent: float,
+    battery_charge_efficiency_percent: float,
+    house_load_kw: float,
+    remaining_window_hours: float,
+) -> float:
+    """Estimate remaining non-EV import from explicit battery and house inputs."""
+    _validate_energy_projection(
+        battery_capacity_kwh,
+        battery_soc_percent,
+        battery_target_percent,
+        battery_charge_efficiency_percent,
+        house_load_kw,
+        remaining_window_hours,
+    )
+    if battery_soc_percent > 100 or battery_target_percent > 100:
+        raise ValueError("battery SOC and target cannot exceed 100 percent")
+    pack_gap = battery_capacity_kwh * max(
+        battery_target_percent - battery_soc_percent, 0.0
+    ) / 100
+    battery_wall_energy = pack_gap / (battery_charge_efficiency_percent / 100)
+    house_energy = house_load_kw * remaining_window_hours
+    return round(battery_wall_energy + house_energy, 3)
+
+
 def _decision(current_a: float, phase: str) -> EvCurrentDecision:
     return EvCurrentDecision(round(max(current_a, 0.0), 3), phase)
 
@@ -238,6 +289,14 @@ def _validate_allowance_inputs(inputs: AllowanceCeilingInputs) -> None:
         raise ValueError("allowance topology and current step must be positive")
     if inputs.protected_baseline_a > inputs.base_current_a:
         raise ValueError("allowance baseline cannot exceed the base current")
+
+
+def _validate_energy_projection(*values: float) -> None:
+    if not all(isfinite(value) for value in values) or any(value < 0 for value in values):
+        raise ValueError("energy projection inputs must be finite and non-negative")
+    efficiency = values[3]
+    if efficiency <= 0 or efficiency > 100:
+        raise ValueError("charge efficiency must be above zero and at most 100 percent")
 
 
 def _clip(value: float, minimum: float, maximum: float) -> float:

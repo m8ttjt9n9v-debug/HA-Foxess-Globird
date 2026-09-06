@@ -7,10 +7,11 @@ deployment target.
 ## Scope and status
 
 The pure planning layer is ported and characterized. It performs no Home
-Assistant service calls. The active Tessie adapter, persistent matched-sample
-state, configuration UI, and commissioning workflow remain incomplete and the
-automatic EV gate must therefore remain unavailable until those pieces and
-their tests land.
+Assistant service calls. The independent, default-off EV intent switch is
+restored, but reports `blocked_adapter_not_implemented` if enabled. The active
+Tessie adapter, persistent matched-sample state, actuator mappings, and
+commissioning workflow remain incomplete, so EV writes remain impossible in
+this milestone.
 
 ## Canonical mapping
 

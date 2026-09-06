@@ -44,6 +44,7 @@ ENTRY_DATA = {
     "house_learning_fallback_kwh": 17.5,
     "automatic_control_enabled": False,
     "automatic_export_enabled": False,
+    "ev_automatic_control_enabled": False,
     "foxess_control_owner": "observer_only",
     "rehearsal_mode": True,
     "ev_min_current": 6.0,
@@ -140,6 +141,33 @@ async def test_automatic_export_switch_is_independent_and_persists(hass):
     assert entry.data["automatic_export_enabled"] is True
     assert entry.data["automatic_control_enabled"] is False
     assert entry.data["rehearsal_mode"] is True
+
+
+async def test_automatic_ev_switch_is_independent_but_cannot_write_yet(hass):
+    hass.states.async_set("sensor.test_battery_soc", "60", {"unit_of_measurement": "%"})
+    hass.states.async_set("sensor.test_grid_power", "0", {"unit_of_measurement": "kW"})
+    entry = MockConfigEntry(domain=DOMAIN, title="EV site", data=ENTRY_DATA)
+    entry.add_to_hass(hass)
+
+    service_calls = []
+    hass.bus.async_listen(EVENT_CALL_SERVICE, service_calls.append)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    assert hass.states.get("switch.home_energy_automatic_ev_control").state == "off"
+
+    await hass.services.async_call(
+        "switch",
+        "turn_on",
+        {"entity_id": "switch.home_energy_automatic_ev_control"},
+        blocking=True,
+    )
+
+    status = hass.states.get("sensor.home_energy_status")
+    assert entry.data["ev_automatic_control_enabled"] is True
+    assert entry.data["automatic_control_enabled"] is False
+    assert status.attributes["ev_control_gate"] == "blocked_adapter_not_implemented"
+    assert status.attributes["ev_writes_enabled"] is False
+    assert [event for event in service_calls if event.data["domain"] != "switch"] == []
 
 
 async def test_source_change_recalculates_without_a_restart(hass):

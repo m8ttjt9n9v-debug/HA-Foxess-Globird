@@ -20,6 +20,9 @@
 - Add the higher-capacity-site allowance only as an outer, topology-aware
   ceiling: ordinary sessions that fit the configured whole-site kWh allowance
   retain the Mangerton target instead of being evenly spread across the window.
+- Restore the independent, default-off Automatic EV Control intent switch.
+  Until the Tessie adapter is completed it explicitly reports blocked and no
+  EV service call can be made, even if the switch is turned on.
 
 ## 0.3.8 — Mangerton ZEROHERO selling automation
 

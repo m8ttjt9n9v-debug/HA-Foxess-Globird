@@ -27,7 +27,8 @@ controllers. They were removed because passing tests did not demonstrate
 Mangerton parity.
 
 - [ ] Automatic FoxESS free-window charging and completion reconciliation.
-- [ ] Active Tessie automatic current/session adapter and independent gate.
+- [ ] Active Tessie automatic current/session adapter. Its independent,
+  default-off intent gate is restored but deliberately remains non-actuating.
 - [ ] Connect the tested whole-site daily-free-energy ceiling to explicit,
   auditable house, FoxESS, and EV projections.
 - [x] Pure EV/house priority, guaranteed-current, service-overrun, settle, and

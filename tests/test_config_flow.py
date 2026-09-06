@@ -6,6 +6,7 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.home_energy_orchestrator.const import (
     CONF_AUTOMATIC_EXPORT_ENABLED,
+    CONF_EV_AUTOMATIC_CONTROL_ENABLED,
     CONF_FOXESS_CONTROL_OWNER,
     DEFAULT_FOXESS_CONTROL_OWNER,
     DOMAIN,
@@ -71,9 +72,25 @@ async def test_user_flow_defaults_legacy_automatic_export_to_disabled(hass):
     assert result["data"][CONF_AUTOMATIC_EXPORT_ENABLED] is False
 
 
+async def test_user_flow_defaults_legacy_ev_control_to_disabled(hass):
+    legacy_data = {
+        key: value
+        for key, value in ENTRY_DATA.items()
+        if key != CONF_EV_AUTOMATIC_CONTROL_ENABLED
+    }
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": SOURCE_USER},
+        data={"name": "Legacy EV site", **legacy_data},
+    )
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["data"][CONF_EV_AUTOMATIC_CONTROL_ENABLED] is False
+
+
 async def test_user_flow_removes_obsolete_rewritten_controller_fields(hass):
     legacy_fields = {
-        "ev_automatic_control_enabled": True,
         "ev_current_limit_entity": "number.car_current",
         "ev_charge_switch_entity": "switch.car_charge",
         "ev_charger_profile": "single_phase_32a",

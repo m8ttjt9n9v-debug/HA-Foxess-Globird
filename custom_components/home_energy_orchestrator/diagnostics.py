@@ -10,6 +10,7 @@ from . import EnergyConfigEntry
 from .const import (
     CONF_AUTOMATIC_CONTROL_ENABLED,
     CONF_AUTOMATIC_EXPORT_ENABLED,
+    CONF_EV_AUTOMATIC_CONTROL_ENABLED,
     CONF_FOXESS_CONTROL_OWNER,
     CONF_FOXESS_FORCE_CHARGE_POWER,
     CONF_FOXESS_FORCE_DISCHARGE_POWER,
@@ -47,6 +48,15 @@ async def async_get_config_entry_diagnostics(
             "automatic_export_enabled": bool(
                 entry.data.get(CONF_AUTOMATIC_EXPORT_ENABLED, False)
             ),
+            "ev_automatic_control_enabled": bool(
+                entry.data.get(CONF_EV_AUTOMATIC_CONTROL_ENABLED, False)
+            ),
+            "ev_control_gate": (
+                "blocked_adapter_not_implemented"
+                if entry.data.get(CONF_EV_AUTOMATIC_CONTROL_ENABLED, False)
+                else "disabled"
+            ),
+            "ev_writes_enabled": False,
             "export_session_phase": (
                 active_controller.export_session.phase
                 if active_controller is not None

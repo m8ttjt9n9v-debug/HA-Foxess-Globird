@@ -11,7 +11,12 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from . import EnergyConfigEntry
-from .const import CONF_AUTOMATIC_EXPORT_ENABLED, CONF_REHEARSAL_MODE, DOMAIN
+from .const import (
+    CONF_AUTOMATIC_EXPORT_ENABLED,
+    CONF_EV_AUTOMATIC_CONTROL_ENABLED,
+    CONF_REHEARSAL_MODE,
+    DOMAIN,
+)
 from .coordinator import EnergyCoordinator
 
 SAFETY_DESCRIPTION = SwitchEntityDescription(
@@ -26,6 +31,12 @@ EXPORT_DESCRIPTION = SwitchEntityDescription(
     icon="mdi:transmission-tower-export",
     entity_category=EntityCategory.CONFIG,
 )
+EV_DESCRIPTION = SwitchEntityDescription(
+    key="automatic_ev_control",
+    name="Automatic EV Control",
+    icon="mdi:ev-station",
+    entity_category=EntityCategory.CONFIG,
+)
 
 
 async def async_setup_entry(
@@ -33,7 +44,7 @@ async def async_setup_entry(
 ) -> None:
     """Expose the config-backed safety lock as an unambiguous switch."""
     registry = er.async_get(hass)
-    for description in (SAFETY_DESCRIPTION, EXPORT_DESCRIPTION):
+    for description in (SAFETY_DESCRIPTION, EXPORT_DESCRIPTION, EV_DESCRIPTION):
         unique_id = f"{entry.entry_id}_{description.key}"
         current_entity_id = registry.async_get_entity_id("switch", DOMAIN, unique_id)
         stable_entity_id = f"switch.home_energy_{description.key}"
@@ -44,6 +55,7 @@ async def async_setup_entry(
         (
             SafetyLockSwitch(entry.runtime_data, entry, SAFETY_DESCRIPTION),
             AutomaticExportSwitch(entry.runtime_data, entry, EXPORT_DESCRIPTION),
+            AutomaticEvControlSwitch(entry.runtime_data, entry, EV_DESCRIPTION),
         )
     )
 
@@ -123,4 +135,45 @@ class AutomaticExportSwitch(CoordinatorEntity[EnergyCoordinator], SwitchEntity):
         controller = self.coordinator.active_controller
         if controller is not None:
             await controller.async_reconcile()
+        self.coordinator.async_update_listeners()
+
+
+class AutomaticEvControlSwitch(CoordinatorEntity[EnergyCoordinator], SwitchEntity):
+    """Independent default-off EV intent; no writer exists in this milestone."""
+
+    entity_description: SwitchEntityDescription
+
+    def __init__(
+        self,
+        coordinator: EnergyCoordinator,
+        entry: ConfigEntry,
+        description: SwitchEntityDescription,
+    ) -> None:
+        super().__init__(coordinator)
+        self.entity_description = description
+        self._entry = entry
+        self._attr_unique_id = f"{entry.entry_id}_{description.key}"
+        self.entity_id = f"switch.home_energy_{description.key}"
+        self._attr_has_entity_name = True
+
+    @property
+    def is_on(self) -> bool:
+        return bool(
+            self.coordinator.config.get(CONF_EV_AUTOMATIC_CONTROL_ENABLED, False)
+        )
+
+    async def async_turn_on(self, **kwargs: object) -> None:
+        await self._set_enabled(True)
+
+    async def async_turn_off(self, **kwargs: object) -> None:
+        await self._set_enabled(False)
+
+    async def _set_enabled(self, enabled: bool) -> None:
+        config = {
+            **self._entry.data,
+            CONF_EV_AUTOMATIC_CONTROL_ENABLED: enabled,
+        }
+        self.hass.config_entries.async_update_entry(self._entry, data=config)
+        self.coordinator.config[CONF_EV_AUTOMATIC_CONTROL_ENABLED] = enabled
+        self.async_write_ha_state()
         self.coordinator.async_update_listeners()

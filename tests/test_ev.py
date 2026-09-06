@@ -9,6 +9,8 @@ from custom_components.home_energy_orchestrator.planner.ev import (
     ChargeLimitInputs,
     FreeWindowCurrentInputs,
     apply_daily_allowance_ceiling,
+    estimate_other_free_window_import_kwh,
+    estimate_vehicle_energy_to_target_kwh,
     plan_charge_limit_target,
     plan_free_window_current,
 )
@@ -162,3 +164,35 @@ def test_exhausted_allowance_cannot_claim_zero_when_path_requires_baseline():
 def test_allowance_validation_rejects_invalid_topology():
     with pytest.raises(ValueError):
         apply_daily_allowance_ceiling(replace(ALLOWANCE, phase_count=0))
+
+
+def test_vehicle_need_uses_live_stored_energy_instead_of_fixed_capacity():
+    # 45 kWh stored at 60% implies 75 kWh usable capacity. Reaching 80%
+    # requires 15 kWh in the pack, or 16.667 kWh at 90% wall efficiency.
+    assert estimate_vehicle_energy_to_target_kwh(
+        stored_energy_kwh=45,
+        current_soc_percent=60,
+        target_soc_percent=80,
+        charge_efficiency_percent=90,
+    ) == 16.667
+
+
+def test_small_vehicle_top_up_projection_is_not_a_fixed_site_value():
+    assert estimate_vehicle_energy_to_target_kwh(
+        stored_energy_kwh=72,
+        current_soc_percent=96,
+        target_soc_percent=100,
+        charge_efficiency_percent=90,
+    ) == 3.333
+
+
+def test_other_projection_combines_configured_battery_gap_and_live_house_load():
+    # 8 kWh pack gap at 80% efficiency plus 2 kW for two hours.
+    assert estimate_other_free_window_import_kwh(
+        battery_capacity_kwh=40,
+        battery_soc_percent=70,
+        battery_target_percent=90,
+        battery_charge_efficiency_percent=80,
+        house_load_kw=2,
+        remaining_window_hours=2,
+    ) == 14

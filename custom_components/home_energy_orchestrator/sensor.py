@@ -15,6 +15,7 @@ from . import EnergyConfigEntry
 from .const import (
     CONF_AUTOMATIC_CONTROL_ENABLED,
     CONF_AUTOMATIC_EXPORT_ENABLED,
+    CONF_EV_AUTOMATIC_CONTROL_ENABLED,
     CONF_FOXESS_CONTROL_OWNER,
     CONF_REHEARSAL_MODE,
     CONF_SOLAR_POWER,
@@ -409,6 +410,9 @@ class EnergySensor(CoordinatorEntity[EnergyCoordinator], SensorEntity):
         export_enabled = bool(
             self.coordinator.config.get(CONF_AUTOMATIC_EXPORT_ENABLED, False)
         )
+        ev_requested = bool(
+            self.coordinator.config.get(CONF_EV_AUTOMATIC_CONTROL_ENABLED, False)
+        )
         if foxess_owner == FOXESS_CONTROL_OWNER_CLOUD:
             control_mode = "foxcloud_scheduler"
         elif foxess_enabled and export_enabled:
@@ -439,6 +443,11 @@ class EnergySensor(CoordinatorEntity[EnergyCoordinator], SensorEntity):
             "foxess_modbus_control_effective": foxess_enabled,
             "foxess_control_owner": foxess_owner,
             "automatic_export_enabled": export_enabled,
+            "ev_automatic_control_enabled": ev_requested,
+            "ev_control_gate": (
+                "blocked_adapter_not_implemented" if ev_requested else "disabled"
+            ),
+            "ev_writes_enabled": False,
             "export_session_phase": (
                 self.coordinator.active_controller.export_session.phase
                 if self.coordinator.active_controller

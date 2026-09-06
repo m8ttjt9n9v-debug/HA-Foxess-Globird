@@ -25,6 +25,7 @@ from .const import (
     CONF_DAILY_IMPORT_ENTITY,
     CONF_DISCHARGE_EFFICIENCY_PERCENT,
     CONF_EV_AT_HOME,
+    CONF_EV_AUTOMATIC_CONTROL_ENABLED,
     CONF_EV_CABLE_CONNECTED,
     CONF_EV_MAX_CURRENT,
     CONF_EV_MIN_CURRENT,
@@ -71,6 +72,7 @@ from .const import (
     DEFAULT_DAILY_CHARGE,
     DEFAULT_DAILY_FREE_ALLOWANCE_KWH,
     DEFAULT_DISCHARGE_EFFICIENCY_PERCENT,
+    DEFAULT_EV_AUTOMATIC_CONTROL_ENABLED,
     DEFAULT_EV_MAX_CURRENT,
     DEFAULT_EV_MIN_CURRENT,
     DEFAULT_EV_PHASE_COUNT,
@@ -357,6 +359,13 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     ),
                 ): selector.BooleanSelector(),
                 vol.Required(
+                    CONF_EV_AUTOMATIC_CONTROL_ENABLED,
+                    default=defaults.get(
+                        CONF_EV_AUTOMATIC_CONTROL_ENABLED,
+                        DEFAULT_EV_AUTOMATIC_CONTROL_ENABLED,
+                    ),
+                ): selector.BooleanSelector(),
+                vol.Required(
                     CONF_REHEARSAL_MODE,
                     default=defaults.get(CONF_REHEARSAL_MODE, DEFAULT_REHEARSAL_MODE),
                 ): selector.BooleanSelector(),
@@ -375,7 +384,6 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             "bonus_load_following_percent",
             "non_free_load_following_percent",
             "load_following_override",
-            "ev_automatic_control_enabled",
             "ev_charge_limit_entity",
             "ev_current_limit_entity",
             "ev_charge_switch_entity",
@@ -449,6 +457,10 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             ),
             CONF_AUTOMATIC_EXPORT_ENABLED: data.get(
                 CONF_AUTOMATIC_EXPORT_ENABLED, DEFAULT_AUTOMATIC_EXPORT_ENABLED
+            ),
+            CONF_EV_AUTOMATIC_CONTROL_ENABLED: data.get(
+                CONF_EV_AUTOMATIC_CONTROL_ENABLED,
+                DEFAULT_EV_AUTOMATIC_CONTROL_ENABLED,
             ),
             CONF_FOXESS_CONTROL_OWNER: data.get(
                 CONF_FOXESS_CONTROL_OWNER, DEFAULT_FOXESS_CONTROL_OWNER
