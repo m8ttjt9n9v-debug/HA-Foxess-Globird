@@ -14,11 +14,13 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from . import EnergyConfigEntry
 from .const import (
     CONF_AUTOMATIC_CONTROL_ENABLED,
-    CONF_EV_AUTOMATIC_CONTROL_ENABLED,
+    CONF_AUTOMATIC_EXPORT_ENABLED,
     CONF_FOXESS_CONTROL_OWNER,
     CONF_REHEARSAL_MODE,
     CONF_SOLAR_POWER,
+    CONF_ZERO_IMPORT_THRESHOLD_KW,
     DEFAULT_FOXESS_CONTROL_OWNER,
+    DEFAULT_ZERO_IMPORT_THRESHOLD_KW,
     DOMAIN,
     FOXESS_CONTROL_OWNER_CLOUD,
 )
@@ -189,18 +191,6 @@ DESCRIPTIONS = (
     ),
     SensorEntityDescription(key="zerohero_export_status", name="ZEROHERO Export Status"),
     SensorEntityDescription(
-        key="free_charge_completion",
-        name="Free-Window Charge Completion Mode",
-    ),
-    SensorEntityDescription(
-        key="free_charge_power_target",
-        name="Free-Window Charge Power Target",
-        native_unit_of_measurement=UnitOfPower.KILO_WATT,
-        device_class="power",
-        state_class="measurement",
-        suggested_display_precision=2,
-    ),
-    SensorEntityDescription(
         key="learned_house_energy",
         name="Learned House Energy Budget",
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
@@ -367,16 +357,6 @@ class EnergySensor(CoordinatorEntity[EnergyCoordinator], SensorEntity):
                 if self.coordinator.active_controller is None
                 else self.coordinator.active_controller.export_session.phase
             ),
-            "free_charge_completion": (
-                None
-                if self.coordinator.free_charge_completion is None
-                else self.coordinator.free_charge_completion.action
-            ),
-            "free_charge_power_target": (
-                None
-                if self.coordinator.free_charge_plan is None
-                else self.coordinator.free_charge_plan.target_charge_power_kw
-            ),
             "learned_house_energy": learning.cycle_budget_kwh,
             "remaining_house_energy": self.coordinator.learning_remaining_kwh,
             "learning_samples": learning.sample_count,
@@ -408,7 +388,7 @@ class EnergySensor(CoordinatorEntity[EnergyCoordinator], SensorEntity):
                     None if accumulator.last_at is None else accumulator.last_at.isoformat()
                 ),
                 "threshold_kwh_per_hour": self.coordinator.config.get(
-                    "zero_import_threshold_kw", 0.03
+                    CONF_ZERO_IMPORT_THRESHOLD_KW, DEFAULT_ZERO_IMPORT_THRESHOLD_KW
                 ),
             }
         if self.entity_description.key != "status":
@@ -426,25 +406,15 @@ class EnergySensor(CoordinatorEntity[EnergyCoordinator], SensorEntity):
             else "unavailable"
         )
         foxess_enabled = foxess_gate == "ready"
-        ev_requested = bool(
-            self.coordinator.config.get(CONF_EV_AUTOMATIC_CONTROL_ENABLED, False)
+        export_enabled = bool(
+            self.coordinator.config.get(CONF_AUTOMATIC_EXPORT_ENABLED, False)
         )
-        ev_gate = (
-            self.coordinator.active_controller.ev_controller.gate_status
-            if self.coordinator.active_controller
-            else "unavailable"
-        )
-        ev_enabled = ev_gate == "ready"
-        if foxess_owner == FOXESS_CONTROL_OWNER_CLOUD and ev_enabled:
-            control_mode = "foxcloud_scheduler_ev"
-        elif foxess_owner == FOXESS_CONTROL_OWNER_CLOUD:
+        if foxess_owner == FOXESS_CONTROL_OWNER_CLOUD:
             control_mode = "foxcloud_scheduler"
-        elif foxess_enabled and ev_enabled:
-            control_mode = "automatic_foxess_ev"
+        elif foxess_enabled and export_enabled:
+            control_mode = "zerohero_export"
         elif foxess_enabled:
-            control_mode = "automatic_foxess"
-        elif ev_enabled:
-            control_mode = "automatic_ev"
+            control_mode = "local_modbus_ready"
         else:
             control_mode = "observe"
         return {
@@ -465,55 +435,10 @@ class EnergySensor(CoordinatorEntity[EnergyCoordinator], SensorEntity):
                 if self.coordinator.active_controller
                 else 0
             ),
-            "ev_control_gate": ev_gate,
-            "ev_last_control_reason": (
-                self.coordinator.active_controller.ev_controller.last_reason
-                if self.coordinator.active_controller
-                else "unavailable"
-            ),
-            "ev_last_control_actions": (
-                self.coordinator.active_controller.ev_controller.last_actions
-                if self.coordinator.active_controller
-                else ()
-            ),
-            "ev_writes_performed": (
-                self.coordinator.active_controller.ev_controller.writes_performed
-                if self.coordinator.active_controller
-                else 0
-            ),
-            "ev_allowance_remaining_kwh": (
-                self.coordinator.active_controller.ev_controller.allowance_remaining_kwh
-                if self.coordinator.active_controller
-                else None
-            ),
-            "ev_allowance_current_ceiling_a": (
-                self.coordinator.active_controller.ev_controller.allowance_current_ceiling_a
-                if self.coordinator.active_controller
-                else None
-            ),
-            "ev_allowance_target_site_import_kw": (
-                self.coordinator.active_controller.ev_controller.allowance_target_site_import_kw
-                if self.coordinator.active_controller
-                else None
-            ),
-            "ev_allowance_non_ev_import_kw": (
-                self.coordinator.active_controller.ev_controller.allowance_non_ev_import_kw
-                if self.coordinator.active_controller
-                else None
-            ),
-            "ev_allowance_budget_remaining_kwh": (
-                self.coordinator.active_controller.ev_controller.allowance_ev_budget_remaining_kwh
-                if self.coordinator.active_controller
-                else None
-            ),
             "automatic_control_enabled": foxess_requested,
             "foxess_modbus_control_effective": foxess_enabled,
             "foxess_control_owner": foxess_owner,
-            "ev_automatic_control_enabled": ev_requested,
-            "ev_control_effective": ev_enabled,
-            "automatic_export_enabled": self.coordinator.config.get(
-                "automatic_export_enabled", False
-            ),
+            "automatic_export_enabled": export_enabled,
             "export_session_phase": (
                 self.coordinator.active_controller.export_session.phase
                 if self.coordinator.active_controller

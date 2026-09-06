@@ -24,17 +24,11 @@ What the available evidence says:
   testing, not a FoxESS firmware guarantee, so HEO does not generalise it into
   a safe mixed-control mode.
 
-## Consequence for the 50 kWh window
+## Consequence for the free-energy window
 
-If Home Assistant owns the window, it can pace the charge target and apply the
-three completion outcomes in the integration policy:
-
-1. At the configured import cutoff (49 kWh by default), restore Self Use and
-   stop deliberate grid import, regardless of battery SoC.
-2. At 100% SoC below the import cutoff, restore Back-up so the
-   remaining allowance can serve the house from the grid.
-3. While below the cutoff and below 100% SoC, continue Force Charge. Equality
-   at the cutoff is deliberately treated as the no-more-import boundary.
+HEO does not currently automate FoxESS free-window charging. A future local
+controller could dynamically coordinate the allowance, but only after the
+Mangerton policy is faithfully ported and the H3 transition fault is traced.
 
 If FoxCloud/Mode Scheduler owns the window, a Modbus change made by Home
 Assistant may be overwritten or may cancel the remainder of the cloud period.
@@ -55,7 +49,7 @@ The HACS integration requires one explicit owner:
 - **Local Modbus**: FoxCloud Mode Scheduler must be disabled. HEO may use the
   commissioned local actuator mappings.
 - **FoxCloud Mode Scheduler**: all HEO Modbus automation and diagnostics are
-  blocked for the entire day. Tessie retains its independent gate.
+  blocked for the entire day.
 
 Dynamic evening export under FoxCloud ownership requires a cloud-schedule
 adapter that reads the complete schedule, preserves the standing free-charge

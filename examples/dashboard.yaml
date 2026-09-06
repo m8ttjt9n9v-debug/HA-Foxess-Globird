@@ -88,12 +88,6 @@ views:
             heading_style: title
             icon: mdi:chart-line
           - type: tile
-            entity: sensor.home_energy_free_charge_completion
-            name: Full-battery action
-          - type: tile
-            entity: sensor.home_energy_free_charge_power_target
-            name: Free-window charge target
-          - type: tile
             entity: sensor.home_energy_learned_house_energy
             name: Learned house budget
           - type: tile
@@ -159,11 +153,11 @@ views:
             name: EV maximum power
           - type: markdown
             content: >-
-              The integration adjusts the explicitly mapped Tessie/Tessy
-              charge-current number only when active control is commissioned.
-              Add the vehicle's own Tessie cards here if desired; entity names
-              vary by vehicle and are deliberately not hard-coded in this
-              portable template.
+              EV values are observation and planning inputs only in this
+              release. Automatic Tessie charging was removed pending a
+              faithful port of the proven Mangerton behavior. Add the
+              vehicle's own Tessie cards here if desired; entity names vary by
+              vehicle and are deliberately not hard-coded in this template.
       - type: grid
         cards:
           - type: heading
@@ -174,15 +168,13 @@ views:
             entities:
               - entity: sensor.home_energy_status
                 name: Orchestrator status
-              - entity: sensor.home_energy_free_charge_power_target
-                name: Planned charge target
               - entity: sensor.home_energy_free_charge_allowed
                 name: Free allowance remaining
           - type: markdown
             content: >-
-              Confirm the vehicle is home, plugged in, and mapped to the
-              correct Tessie/Tessy entities before enabling automatic control.
-              Keep Rehearsal mode enabled during commissioning.
+              Confirm EV telemetry against Tessie before relying on planning
+              values. This release cannot write Tessie current, charge limit,
+              or charging state.
   - type: sections
     max_columns: 2
     title: Commissioning
@@ -212,8 +204,8 @@ views:
             content: >-
               This view is intentionally read-only.  Check the signed grid
               import/export values against a known load before enabling any
-              FoxESS or EV writes.  HEO remains observer-only until the
-              automatic-control gate is deliberately commissioned.
+              FoxESS writes. HEO remains observer-only until Local Modbus
+              ownership and the relevant FoxESS gates are commissioned.
   - type: sections
     max_columns: 2
     title: Diagnostics

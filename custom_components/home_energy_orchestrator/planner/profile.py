@@ -33,7 +33,7 @@ def validate_foxess_profile(
     errors: list[str] = []
     if not profile.model.strip():
         errors.append("model_missing")
-    if profile.phase_count not in (1, 3):
+    if profile.phase_count < 1:
         errors.append("phase_count_invalid")
     if not profile.battery_model.strip():
         errors.append("battery_model_missing")

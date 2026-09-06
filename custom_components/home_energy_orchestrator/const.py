@@ -35,20 +35,12 @@ CONF_EV_MAX_CURRENT = "ev_max_current"
 CONF_EV_MIN_CURRENT = "ev_min_current"
 CONF_EV_VOLTAGE = "ev_voltage"
 CONF_EV_PHASE_COUNT = "ev_phase_count"
-CONF_EV_CHARGER_PROFILE = "ev_charger_profile"
-CONF_INVERTER_CAPACITY = "inverter_capacity_kw"
-CONF_BONUS_LOAD_FOLLOWING_PERCENT = "bonus_load_following_percent"
-CONF_NON_FREE_LOAD_FOLLOWING_PERCENT = "non_free_load_following_percent"
-CONF_LOAD_FOLLOWING_OVERRIDE = "load_following_override"
 CONF_BONUS_WINDOW_START = "bonus_window_start"
 CONF_BONUS_WINDOW_END = "bonus_window_end"
 CONF_ZERO_IMPORT_THRESHOLD_KW = "zero_import_threshold_kw"
 CONF_ZERO_IMPORT_CONFIRM_MINUTES = "zero_import_confirm_minutes"
 CONF_FREE_CHARGE_START = "free_charge_window_start"
 CONF_FREE_CHARGE_END = "free_charge_window_end"
-CONF_FREE_CHARGE_FULL_BATTERY_IMPORT_THRESHOLD_KWH = (
-    "free_charge_full_battery_import_threshold_kwh"
-)
 CONF_HOUSE_LEARNING_FALLBACK = "house_learning_fallback_kwh"
 CONF_AUTOMATIC_CONTROL_ENABLED = "automatic_control_enabled"
 CONF_AUTOMATIC_EXPORT_ENABLED = "automatic_export_enabled"
@@ -58,7 +50,6 @@ CONF_DISCHARGE_EFFICIENCY_PERCENT = "discharge_efficiency_percent"
 CONF_FORCE_DISCHARGE_FINISH = "force_discharge_finish"
 CONF_EV_PROTECTED_BASELINE_A = "ev_protected_baseline_a"
 CONF_FOXESS_CONTROL_OWNER = "foxess_control_owner"
-CONF_EV_AUTOMATIC_CONTROL_ENABLED = "ev_automatic_control_enabled"
 CONF_REHEARSAL_MODE = "rehearsal_mode"
 
 # Explicit, short-lived commissioning tests. These are independent of the
@@ -73,9 +64,8 @@ SERVICE_TEST_STOP = "test_stop"
 CONF_FOXESS_WORK_MODE = "foxess_work_mode_entity"
 CONF_FOXESS_FORCE_CHARGE_POWER = "foxess_force_charge_power_entity"
 CONF_FOXESS_FORCE_DISCHARGE_POWER = "foxess_force_discharge_power_entity"
-CONF_EV_CHARGE_LIMIT = "ev_charge_limit_entity"
-CONF_EV_CURRENT_LIMIT = "ev_current_limit_entity"
-CONF_EV_CHARGE_SWITCH = "ev_charge_switch_entity"
+CONF_EV_AT_HOME = "ev_at_home_entity"
+CONF_EV_CABLE_CONNECTED = "ev_cable_connected_entity"
 
 DEFAULT_BATTERY_FLOOR = 10.0
 DEFAULT_RESERVE_KWH = 0.0
@@ -98,12 +88,10 @@ DEFAULT_INVERTER_CHARGE_LIMIT_KW = 0.0
 DEFAULT_INVERTER_DISCHARGE_LIMIT_KW = 0.0
 DEFAULT_EV_VOLTAGE = 230.0
 DEFAULT_EV_PHASE_COUNT = 1
-DEFAULT_EV_CHARGER_PROFILE = "not_configured"
 DEFAULT_EV_MIN_CURRENT = 0.0
 DEFAULT_EV_MAX_CURRENT = 0.0
 DEFAULT_FREE_CHARGE_START = "12:01:00"
 DEFAULT_FREE_CHARGE_END = "14:59:00"
-DEFAULT_FREE_CHARGE_FULL_BATTERY_IMPORT_THRESHOLD_KWH = 49.0
 DEFAULT_HOUSE_LEARNING_FALLBACK_KWH = 17.5
 DEFAULT_AUTOMATIC_CONTROL_ENABLED = False
 DEFAULT_AUTOMATIC_EXPORT_ENABLED = False
@@ -121,25 +109,9 @@ FOXESS_CONTROL_OWNERS = (
     FOXESS_CONTROL_OWNER_CLOUD,
 )
 DEFAULT_FOXESS_CONTROL_OWNER = FOXESS_CONTROL_OWNER_OBSERVER
-DEFAULT_EV_AUTOMATIC_CONTROL_ENABLED = False
 DEFAULT_REHEARSAL_MODE = True
-DEFAULT_INVERTER_CAPACITY_KW = 0.0
-DEFAULT_BONUS_LOAD_FOLLOWING_PERCENT = 20.0
-DEFAULT_NON_FREE_LOAD_FOLLOWING_PERCENT = 30.0
-DEFAULT_LOAD_FOLLOWING_OVERRIDE = False
 DEFAULT_BONUS_WINDOW_START = "18:00:00"
 DEFAULT_BONUS_WINDOW_END = "21:00:00"
-
-# These are deliberately the only supported charger profiles in the setup
-# wizard. Current is per phase; total power is calculated from voltage and the
-# physical phase count rather than inferred from a nominal kW label.
-EV_CHARGER_PROFILES = {
-    "not_configured": (1, 0.0),
-    "single_phase_10a": (1, 10.0),
-    "single_phase_15a": (1, 15.0),
-    "single_phase_32a": (1, 32.0),
-    "three_phase_16a": (3, 16.0),
-}
 
 REASON_INVALID_CONFIGURATION = "invalid_configuration"
 REASON_MISSING_BATTERY_SOC = "missing_battery_soc"

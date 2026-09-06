@@ -4,6 +4,24 @@ This is the durable specification for the selling automation ported from the
 successful Mangerton Home Assistant configuration. HEO does not reinterpret
 the policy as a continuously modulated export controller.
 
+## Provenance map
+
+The canonical source is Mangerton `configuration_v1.4.24.yaml` at commit
+`5806b4a5313331fbc421108e9e0c98e661ca20fe`.
+
+| Mangerton source | Preserved HEO behavior |
+| --- | --- |
+| Lines 1008–1079 | enable/latch, allowance, fixed power, efficiency, export window, and finish inputs |
+| Lines 3654–3705 | protected house-energy forecast until the next free window |
+| Lines 3910–4250 | connected-EV mandatory baseline and energy protection |
+| Lines 4431–4648 | sellable energy, bounded plan, duration, and latest start |
+| Lines 7139–7375 | fluid pre-start plan, latched session, ordered Force Discharge command, finish, and Self Use recovery |
+
+HEO's pure equivalents are `planner/export.py` and
+`planner/export_session.py`; `active.py` supplies explicit entity mappings,
+ownership gates, persisted state, and bounded service calls. Site topology and
+limits enter through configuration rather than changing the policy equations.
+
 ## Ownership and authorization
 
 Automatic export requires all four conditions:

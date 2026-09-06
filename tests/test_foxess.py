@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from custom_components.home_energy_orchestrator.planner.control import ControlDecision
 from custom_components.home_energy_orchestrator.planner.foxess import (
+    ControlDecision,
     FoxessObservation,
     foxess_response_matches,
     plan_foxess_commands,
@@ -37,23 +37,6 @@ def test_restore_orders_mode_then_wait_then_clears_targets() -> None:
         ("select_mode", "Self Use", 5.0),
         ("set_discharge_power", 0.0, 0.0),
     ]
-
-
-def test_restore_backup_is_supported_for_full_battery_with_allowance_remaining() -> None:
-    plan = plan_foxess_commands(
-        ControlDecision("restore_backup", 0, "battery_full_before_import_threshold"),
-        FoxessObservation("Force Charge", 10, 0),
-        charge_power_max_kw=15,
-        discharge_power_max_kw=15,
-    )
-    assert [(command.action, command.value) for command in plan.commands] == [
-        ("select_mode", "Backup"),
-        ("set_charge_power", 0.0),
-    ]
-    assert foxess_response_matches(
-        ControlDecision("restore_backup", 0, "battery_full_before_import_threshold"),
-        FoxessObservation("Backup", 0, 0),
-    )
 
 
 def test_rehearsal_is_an_absolute_no_write_interlock() -> None:

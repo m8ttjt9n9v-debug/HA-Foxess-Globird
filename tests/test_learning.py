@@ -105,6 +105,30 @@ def test_cycle_sampler_uses_trapezoid_power_between_readings() -> None:
     assert sample.energy_kwh == 60
 
 
+def test_cycle_sampler_restores_an_in_progress_cycle_after_short_restart() -> None:
+    start = datetime(2026, 9, 1, 12, tzinfo=UTC)
+    sampler = DemandCycleSampler(time(12), time(15))
+    sampler.observe(start, 1.0)
+    sampler.observe(start + timedelta(minutes=5), 1.0)
+    payload = sampler.to_payload()
+
+    restored = DemandCycleSampler(time(12), time(15))
+    restored.restore(payload, start + timedelta(minutes=9))
+
+    assert restored.to_payload() == payload
+
+
+def test_cycle_sampler_rejects_stale_in_progress_state() -> None:
+    start = datetime(2026, 9, 1, 12, tzinfo=UTC)
+    sampler = DemandCycleSampler(time(12), time(15))
+    sampler.observe(start, 1.0)
+
+    restored = DemandCycleSampler(time(12), time(15))
+    restored.restore(sampler.to_payload(), start + timedelta(minutes=11))
+
+    assert restored.to_payload() is None
+
+
 def test_remaining_budget_scales_to_next_free_window() -> None:
     start = datetime(2026, 9, 1, 18, 1, tzinfo=UTC)
     remaining = remaining_protected_cycle_budget_kwh(

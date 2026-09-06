@@ -1,37 +1,21 @@
 # Clean Home Assistant pilot
 
-This is the clean-install test for the **observer-only** 0.2.9 release.
-It verifies that the application installs, calculates values, reacts to state
-changes, can be reconfigured, and can be removed. It must not be connected to
-an inverter, EV, EVSE, smart socket, or production credentials.
+Use a clean Home Assistant instance to validate installation and observer
+calculations without connecting actuators, an EV, production credentials, or a
+live inverter.
 
-## Supported pilot environment
+## Install
 
-- Home Assistant Core **2026.8.3** is the supported pilot baseline and is
-  exercised by the automated test suite.
-- A fresh Home Assistant OS, Container, or Core installation is suitable.
-- HACS is not needed for this first manual pilot.
-
-## Install the application
-
-1. Transfer the versioned integration archive from `dist/` to the new Home
-   Assistant host and extract it in the Home Assistant configuration directory.
-   It creates `custom_components/home_energy_orchestrator` in the correct
-   location. Alternatively, create `<Home Assistant config>/custom_components`
-   and copy the repository's complete `custom_components/home_energy_orchestrator`
-   directory into it.
+1. Copy `custom_components/home_energy_orchestrator` into the clean Home
+   Assistant configuration's `custom_components` directory, or install the
+   repository through HACS.
 2. Restart Home Assistant.
-3. Go to **Settings → Devices & services → Add integration** and choose
-   **FoxESS Globird Energy Observer**.
+3. Add **FoxESS Globird Energy Observer** under **Settings → Devices &
+   services**.
 
-Home Assistant will label it as an untested custom integration. That warning
-is expected until the integration has a published release and broader testing
-evidence.
+## Synthetic inputs
 
-## Create safe test inputs
-
-In **Developer Tools → States**, create these temporary states. State changes
-made here do not control hardware and disappear after a Home Assistant restart.
+In **Developer Tools → States**, create temporary states:
 
 | Entity ID | State | Attributes |
 | --- | ---: | --- |
@@ -39,86 +23,31 @@ made here do not control hardware and disappear after a Home Assistant restart.
 | `sensor.test_grid_power` | `1200` | `{ "unit_of_measurement": "W" }` |
 | `sensor.test_house_load` | `800` | `{ "unit_of_measurement": "W" }` |
 
-Complete setup with these values:
+Configure a 20 kWh battery, 10% floor, 2 kWh reserve, positive grid meaning
+import, and leave every FoxESS actuator blank. Keep ownership **Observer only**,
+automatic control off, and Safety Lock on. Site/EV electrical values may be
+entered explicitly for calculation tests; do not select an actuator or infer a
+charger profile.
 
-| Setup field | Value |
-| --- | --- |
-| Site name | `Pilot Site` |
-| Battery SOC | `sensor.test_battery_soc` |
-| Battery potential capacity | leave blank for this synthetic pilot |
-| Usable battery capacity | `20` kWh |
-| Minimum battery SOC | `10` % |
-| Additional reserve | `2` kWh |
-| Signed grid power | `sensor.test_grid_power` |
-| Positive grid means import | enabled |
-| Site supply phase count | `1` |
-| Service/import, export and inverter limits | `0` (not commissioned for synthetic pilot) |
-| Whole-house load | `sensor.test_house_load` |
-| Daily import meter | leave blank for this synthetic pilot |
-| Daily free-import allowance | `50` kWh |
-| EV minimum / maximum current | `6` A / `32` A |
-| EV charger profile | Single-phase 32 A |
-| Charging voltage | `230` V |
-| Bonus window | `18:00`–`21:00` |
-| Load-following ceilings | `20%` bonus / `30%` other paid periods |
-| Load-following override | disabled |
+Expected values are approximately:
 
-## Expected results
-
-The created device should expose these values within 30 seconds (normally it
-updates immediately):
-
-| Entity name | Expected state |
+| Entity | State |
 | --- | ---: |
 | Status | `observer_only` |
-| Available Battery Energy | `8` kWh |
-| Grid Import | `1.2` kW |
-| Grid Export | `0` kW |
-| EV Maximum Configured Power | `7.36` kW |
+| Available battery energy | `8` kWh |
+| Grid import | `1.2` kW |
+| Grid export | `0` kW |
 
-Change `sensor.test_grid_power` to `-2000` W. **Grid Export** must update to
-`2` kW without restarting Home Assistant. Then use **Reconfigure** on the
-integration to change usable capacity to `25` kWh; Home Assistant must reload
-the integration and retain the updated value.
+Change grid power to `-2000` W. Grid export should become `2` kW without a
+restart. Reconfigure usable capacity to `25` kWh and verify the entry reloads.
+No service-call events should be generated.
 
-Finally, remove the integration. Its entities will become unavailable; this is
-normal Home Assistant entity-registry behaviour and confirms the runtime has
-unloaded.
+## Record and remove
 
-## Disposable H3 commissioning matrix
+Record the Home Assistant and integration versions, values, reload behavior,
+and relevant log entries. Do not publish tokens, external hostnames, precise
+location data, or production history. Remove the integration and verify its
+entities unload.
 
-Only after the synthetic pilot passes, repeat the observer test on the
-disposable H3 instance. Map the real FoxESS entities, select **Three-phase 16 A**
-for the EV profile, set the H3's commissioned inverter limits, and, if a native
-cumulative import meter is available, map it. Otherwise the integration creates
-and persists its own local-calendar-day meter from the signed grid-power sensor.
-Confirm the following before any writer is
-considered:
-
-- a 16 A three-phase EV limit is shown as approximately 11.04 kW at 230 V;
-- the all-day and free-window import sensors remain distinct; the free-energy
-  allowance decreases only from imports observed inside the configured window;
-- the bonus guard remains false during any measured import and while its
-  zero-import interval is shorter than the configured confirmation period;
-- stale or unavailable telemetry produces an explicit degraded/unavailable
-  result; and
-- no Home Assistant service-call events are generated by the observer release.
-
-Do not perform this matrix against the live GloBird system. The live system is
-reserved for read-only comparison until a separately reviewed actuator release
-exists.
-
-## Record the pilot
-
-Record the Home Assistant version, installation method, test results, and any
-log entries. Do not include access tokens, external URLs, home coordinates, or
-production entity history in an issue or diagnostic.
-
-## After this pilot
-
-Once this installation passes, the next stage is to map read-only telemetry on
-the new site and compare the observer output over seven tariff cycles. Offering
-the project through HACS as a custom repository comes after a public GitHub
-repository and successful HACS/Hassfest checks; a GitHub release is preferred.
-HACS default-catalogue inclusion is a separate step that requires a full
-GitHub release after those checks pass.
+Use only a deliberately selected clean instance. Never treat a site as a test
+proxy merely because it is reachable from the development network.

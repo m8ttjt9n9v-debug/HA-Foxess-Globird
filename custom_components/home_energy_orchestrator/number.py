@@ -10,7 +10,12 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from . import EnergyConfigEntry
-from .const import CONF_INVERTER_CHARGE_LIMIT_KW, CONF_INVERTER_DISCHARGE_LIMIT_KW
+from .const import (
+    CONF_INVERTER_CHARGE_LIMIT_KW,
+    CONF_INVERTER_DISCHARGE_LIMIT_KW,
+    DEFAULT_INVERTER_CHARGE_LIMIT_KW,
+    DEFAULT_INVERTER_DISCHARGE_LIMIT_KW,
+)
 from .coordinator import EnergyCoordinator
 
 DESCRIPTIONS = (
@@ -20,7 +25,7 @@ DESCRIPTIONS = (
         icon="mdi:battery-arrow-up",
         native_unit_of_measurement=UnitOfPower.KILO_WATT,
         native_min_value=0.1,
-        native_max_value=15.0,
+        native_max_value=0.1,
         native_step=0.1,
     ),
     NumberEntityDescription(
@@ -29,7 +34,7 @@ DESCRIPTIONS = (
         icon="mdi:battery-arrow-down",
         native_unit_of_measurement=UnitOfPower.KILO_WATT,
         native_min_value=0.1,
-        native_max_value=15.0,
+        native_max_value=0.1,
         native_step=0.1,
     ),
     NumberEntityDescription(
@@ -99,10 +104,22 @@ class TestNumber(CoordinatorEntity[EnergyCoordinator], NumberEntity):
     def _max_value(self) -> float:
         if self.entity_description.key == "test_charge_power":
             return max(
-                float(self.coordinator.config.get(CONF_INVERTER_CHARGE_LIMIT_KW, 15.0)), 0.1
+                float(
+                    self.coordinator.config.get(
+                        CONF_INVERTER_CHARGE_LIMIT_KW,
+                        DEFAULT_INVERTER_CHARGE_LIMIT_KW,
+                    )
+                ),
+                0.1,
             )
         if self.entity_description.key == "test_discharge_power":
             return max(
-                float(self.coordinator.config.get(CONF_INVERTER_DISCHARGE_LIMIT_KW, 15.0)), 0.1
+                float(
+                    self.coordinator.config.get(
+                        CONF_INVERTER_DISCHARGE_LIMIT_KW,
+                        DEFAULT_INVERTER_DISCHARGE_LIMIT_KW,
+                    )
+                ),
+                0.1,
             )
-        return float(self.entity_description.native_max_value or 30.0)
+        return float(self.entity_description.native_max_value)

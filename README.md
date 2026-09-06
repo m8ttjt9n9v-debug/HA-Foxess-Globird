@@ -1,104 +1,81 @@
 # FoxESS Globird Energy Observer
 
-An Australia-scoped Home Assistant custom integration for an auditable,
-site-configured home-energy ledger. Version 0.3.8 is observer-by-default:
-it reads the entities selected during setup, normalises their units and signs,
-persists local tariff meters and demand-learning evidence, and only permits
-FoxESS writes after an explicit control opt-in, complete actuator mapping, and
-Rehearsal mode being disabled.
+A Home Assistant custom integration for a site-configured energy ledger,
+conservative demand learning, bounded FoxESS diagnostics, and the verified
+Mangerton ZEROHERO export policy.
+
+Version 0.4.0 deliberately removes automatic battery free-charging and Tessie
+control that were not faithful ports of the proven Mangerton system. They are
+tracked for port-first reimplementation in the [roadmap](ROADMAP.md). The
+current automatic write scope is **ZEROHERO export only**.
 
 ## Installation
 
-Install this repository in HACS as a custom **Integration** repository:
+Install this public repository in HACS as a custom **Integration** repository:
 
 `https://github.com/m8ttjt9n9v-debug/HA-Foxess-Globird`
 
-Then restart Home Assistant and add **FoxESS Globird Energy Observer** under
-**Settings → Devices & services**. The setup flow asks for the entity IDs and
-commissioned electrical limits for that site; no `configuration.yaml` edits
-are required. When Tessie/Tessy is installed, common EV entities are suggested
-only when the local match is unambiguous; ambiguous matches are left blank.
-See the [installation guide](docs/installation.md) and
-[commissioning checklist](docs/commissioning.md).
+Restart Home Assistant and add **FoxESS Globird Energy Observer** under
+**Settings → Devices & services**. No `configuration.yaml` edit is required.
+The setup flow explicitly maps telemetry and FoxESS actuators and asks for the
+commissioned limits for that site.
 
-An importable, generic two-column Lovelace starter dashboard is provided at
-[`examples/dashboard.yaml`](examples/dashboard.yaml). HACS installs the
-integration, not Lovelace dashboards; import the view and select the generated
-entities if your config-entry name differs from the example. The dashboard has
-Overview, EV, Commissioning, and Diagnostics views and intentionally contains no site
-background image or personal entity IDs. Version 0.2.31 gives the generated
-entities stable `sensor.home_energy_*` IDs regardless of the entry name.
+Read the [system requirements](docs/system-requirements.md),
+[installation guide](docs/installation.md), and
+[commissioning checklist](docs/commissioning.md) before enabling writes. HACS
+installs the integration, not dashboards; `examples/dashboard.yaml` is a
+generic Lovelace view for manual import.
 
-## What it provides
+## Current capabilities
 
-- battery SoC, potential/current/available energy, and signed grid import and
-  export sensors;
-- persisted daily and free-window import meters for new installations;
-- configurable GloBird tariff estimates and an hourly 6–9 pm ZEROHERO guard;
-- whole-house demand-learning evidence; and
-- explicit single-phase 10/15/32 A and three-phase 16 A EV profile calculations;
-- an optional, read-only free-window charge target at the commissioned inverter
-  limit while the configured import cutoff remains; house-load and AC-coupled
-  PV telemetry are retained for grid-import estimation;
-- a read-only completion-mode recommendation for the reviewed `Backup` /
-  `Self Use` outcomes at the configured import cutoff, regardless of battery SoC.
-- a read-only ZEROHERO import accumulator with the three hourly buckets exposed
-  in its attributes for evening review.
-- an opt-in FoxESS free-window controller that runs every 30 seconds only when
-  the automatic-control gate is enabled and all three FoxESS actuator entities
-  are mapped; and
-- an opt-in Tessie/Tessy current-setpoint controller that adjusts only the
-  mapped current number when a connected vehicle is confirmed at home and
-  local cable/current feedback is available. During the free window it paces
-  total measured site import below the configured daily kWh cutoff, dynamically
-  sharing the allowance with FoxESS and house load. It soaks measurable
-  post-window solar surplus once the battery is full,
-  and can perform a small reserve-aware pre-window backfill. It never applies
-  charging limits to an away vehicle. A guarded session may use the mapped
-  charge switch to start or stop only a session it owns; it does not change
-  the vehicle SoC limit.
-- independent automatic-control gates for FoxESS and Tessie/Tessy. Enabling
-  battery control never authorizes EV current or charge-switch writes, and EV
-  control can be commissioned without enabling automatic FoxESS writes. The
-  shared Safety Lock remains an absolute no-write interlock for both paths.
-- an exclusive FoxESS owner selector: Observer only, Local Modbus, or FoxCloud
-  Mode Scheduler. Selecting FoxCloud blocks all HEO Modbus automation and
-  diagnostic writes for the entire day, including outside configured cloud
-  periods. Cloud-schedule actuation is not yet implemented by HEO.
-- the proven Mangerton ZEROHERO selling policy behind its own default-off
-  toggle. Under Local Modbus ownership it protects the learned house budget
-  and mandatory connected-EV baseline, calculates the latest start for a
-  fixed-power sale, persists the session across restarts, and restores Self Use
-  at the deliberate 21:01 finish. See the
+- Normalized battery SoC/energy, signed grid import/export, solar, house-load,
+  and optional EV observation sensors.
+- Persisted daily import, free-window import, and hourly ZEROHERO evidence.
+- Configurable tariff estimates, electrical limits, tariff windows, allowance,
+  battery reserve, and export policy; control logic contains no personal entity
+  IDs.
+- Mapped protected-house demand learning outside the free window. In-progress cycles and
+  retained samples survive Home Assistant restarts; an over-gap cycle is
+  rejected instead of fabricating demand.
+- Explicit FoxESS ownership: Observer only, Local Modbus, or FoxCloud Mode
+  Scheduler. Cloud ownership blocks every HEO Modbus write for the entire day.
+- The proven Mangerton ZEROHERO export policy behind independent default-off
+  gates. It protects learned house energy and a configured mandatory connected-
+  EV baseline, computes the latest fixed-power start, persists its session,
+  bounds retries, observes the export cap, and deliberately restores Self Use
+  at the configured finish. See the
   [export policy](docs/zerohero-export-policy.md).
-- a preview-first Diagnostics view for short, explicit FoxESS force-charge and
-  force-discharge commissioning checks. Each test has editable power and
-  duration, a cost/earning preview, live feedback, a 120-minute maximum, and
-  automatic Self Use restoration. Force-charge tests are blocked outside the
-  free-charge window. Hardware tests require Rehearsal mode to be disabled,
-  complete actuator mapping, and an explicit confirmation; they do not enable
-  the automatic scheduler. Discharge previews use the configured standard or
-  ZEROHERO-window export rate automatically.
+- Preview-first, explicitly submitted FoxESS force-charge and force-discharge
+  diagnostics. Tests require Local Modbus ownership, the FoxESS gate, complete
+  actuator mapping, Safety Lock off, and confirmation. They are time-bounded
+  and restore Self Use; force-charge diagnostics are restricted to the
+  configured free window.
 
-The integration exposes `switch.home_energy_safety_lock`. It is ON when
-the no-write interlock is engaged; turning it OFF only opens the explicit
-commissioning gate and does not enable automatic control.
-`switch.home_energy_automatic_export` controls only the selling behavior; it
-cannot bypass the Local Modbus owner, main FoxESS gate, or Safety Lock.
+The integration exposes `switch.home_energy_safety_lock`: ON means no hardware
+writes. Turning it OFF does not enable automation. Automatic export additionally
+requires Local Modbus ownership, the FoxESS automatic gate, and
+`switch.home_energy_automatic_export`.
 
-The ZEROHERO guard checks each hourly bucket independently against the
-configured 0.03 kWh/hour threshold. A three-hour total below 0.09 kWh does not
-qualify if any individual hourly bucket exceeds 0.03 kWh/hour.
+## Not currently implemented
+
+- Automatic FoxESS free-window charging or post-charge reconciliation.
+- Automatic Tessie current, charge-limit, or charging-session writes.
+- Whole-site coordination of the daily free-energy allowance between house,
+  battery, and EV.
+- Mixed FoxCloud schedule and local Modbus control.
+
+These are intentionally absent rather than represented by simplified rewrite
+code. The [project source of truth](docs/source-of-truth.md) records the public
+engineering evidence; the [port-first guide](docs/port-first-development.md)
+defines the proof required before behavior returns.
 
 ## Safety boundary
 
-This integration is supervisory software, not electrical protection. The
-default is still no hardware writes. The optional FoxESS path is a pilot
-controller, not a substitute for electrical protection or installer
-commissioning; it requires explicit entity mapping, response tests, and
-rollback evidence. Review the [safety boundary](docs/safety.md) before use.
-
-Please report reproducible issues in the [issue tracker](https://github.com/m8ttjt9n9v-debug/HA-Foxess-Globird/issues) without including credentials, detailed home-location data, or production sensor history.
+Home Assistant is supervisory software, not electrical protection. Keep one
+inverter owner, validate grid sign and direct Modbus feedback, and retain a
+rollback path. Do not enable Local Modbus automation while FoxCloud Mode
+Scheduler or another inverter writer is active. Review the
+[safety boundary](docs/safety.md).
 
 Run the automated checks with:
 
@@ -106,3 +83,7 @@ Run the automated checks with:
 python -m pytest
 ruff check custom_components tests
 ```
+
+Report reproducible issues in the
+[issue tracker](https://github.com/m8ttjt9n9v-debug/HA-Foxess-Globird/issues)
+without credentials, precise location data, or production sensor history.

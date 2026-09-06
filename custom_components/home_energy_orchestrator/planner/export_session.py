@@ -10,8 +10,8 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 from datetime import datetime, timedelta
 
-from .control import ControlDecision
 from .foxess import (
+    ControlDecision,
     FoxessCommandPlan,
     FoxessObservation,
     foxess_response_matches,

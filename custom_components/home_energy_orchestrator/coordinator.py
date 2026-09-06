@@ -30,10 +30,10 @@ from .const import (
     CONF_EV_VOLTAGE,
     CONF_EXPORT_LIMIT_KW,
     CONF_FREE_CHARGE_END,
-    CONF_FREE_CHARGE_FULL_BATTERY_IMPORT_THRESHOLD_KWH,
     CONF_FREE_CHARGE_START,
     CONF_GRID_IMPORT_POSITIVE,
     CONF_GRID_POWER,
+    CONF_HOUSE_LEARNING_FALLBACK,
     CONF_HOUSE_LOAD,
     CONF_INVERTER_CHARGE_LIMIT_KW,
     CONF_INVERTER_DISCHARGE_LIMIT_KW,
@@ -55,7 +55,9 @@ from .const import (
     DEFAULT_DAILY_FREE_ALLOWANCE_KWH,
     DEFAULT_EV_PHASE_COUNT,
     DEFAULT_EXPORT_LIMIT_KW,
-    DEFAULT_FREE_CHARGE_FULL_BATTERY_IMPORT_THRESHOLD_KWH,
+    DEFAULT_FREE_CHARGE_END,
+    DEFAULT_FREE_CHARGE_START,
+    DEFAULT_HOUSE_LEARNING_FALLBACK_KWH,
     DEFAULT_INVERTER_CHARGE_LIMIT_KW,
     DEFAULT_INVERTER_DISCHARGE_LIMIT_KW,
     DEFAULT_OFFPEAK_BALANCE_RATE,
@@ -77,12 +79,6 @@ from .planner.daily_meter import (
     DailyImportAccumulator,
     HourlyWindowImportAccumulator,
     WindowImportAccumulator,
-)
-from .planner.free_charge import (
-    FreeChargeCompletion,
-    FreeChargePowerPlan,
-    calculate_free_charge_power,
-    decide_free_charge_completion,
 )
 from .planner.learning import (
     DemandCycleSampler,
@@ -110,8 +106,8 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
         self._zero_import_since: datetime | None = None
         self.daily_import = DailyImportAccumulator()
         self.free_window_import = WindowImportAccumulator(
-            window_start=self._configured_time(CONF_FREE_CHARGE_START, "12:01:00"),
-            window_end=self._configured_time(CONF_FREE_CHARGE_END, "14:59:00"),
+            window_start=self._configured_time(CONF_FREE_CHARGE_START, DEFAULT_FREE_CHARGE_START),
+            window_end=self._configured_time(CONF_FREE_CHARGE_END, DEFAULT_FREE_CHARGE_END),
         )
         self.peak_import = WindowImportAccumulator(
             window_start=self._configured_time(CONF_PEAK_WINDOW_START, DEFAULT_PEAK_WINDOW_START),
@@ -148,6 +144,7 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
         self._demand_store: Store[dict[str, object]] = Store(
             hass, 1, f"{DOMAIN}.{entry_id}.demand_history", private=True
         )
+        self._demand_sampler_last_saved_at: datetime | None = None
         self._unsub_source_updates: CALLBACK_TYPE | None = async_track_state_change_event(
             hass,
             tuple(
@@ -170,6 +167,8 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
         """Load and validate the rolling learner history from HA storage."""
         payload = await self._demand_store.async_load()
         self.demand_history = DemandHistory.from_payload(payload, dt_util.utcnow())
+        if self.demand_sampler is not None and isinstance(payload, dict):
+            self.demand_sampler.restore(payload.get("in_progress_cycle"), dt_util.now())
 
     async def async_load_daily_import(self) -> None:
         """Load the persisted same-day import accumulator."""
@@ -186,7 +185,7 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
         """Persist one completed protected-demand cycle for future planning."""
         observed_at = observed_at or dt_util.utcnow()
         self.demand_history.add(observed_at, energy_kwh)
-        await self._demand_store.async_save(self.demand_history.to_payload())
+        await self._async_save_demand_state()
         if self.data is not None:
             self.async_update_listeners()
 
@@ -217,11 +216,16 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
     def learning_result(self) -> DemandLearningResult:
         """Return the learned budget and warm-up evidence."""
         try:
-            fallback = float(self.config.get("house_learning_fallback_kwh", 0.0))
+            fallback = float(
+                self.config.get(
+                    CONF_HOUSE_LEARNING_FALLBACK,
+                    DEFAULT_HOUSE_LEARNING_FALLBACK_KWH,
+                )
+            )
         except (TypeError, ValueError):
-            fallback = 0.0
+            fallback = DEFAULT_HOUSE_LEARNING_FALLBACK_KWH
         if not isfinite(fallback) or fallback < 0:
-            fallback = 0.0
+            fallback = DEFAULT_HOUSE_LEARNING_FALLBACK_KWH
         return self.demand_history.select(fallback)
 
     @property
@@ -240,71 +244,10 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
         except ValueError:
             return None
 
-    @property
-    def free_charge_plan(self) -> FreeChargePowerPlan | None:
-        """Return a read-only full-rate charge target while the cutoff remains."""
-        if self.snapshot is None or self.data is None:
-            return None
-        imported = self.data.free_window_import_kwh
-        house = self.snapshot.house_load_kw
-        solar = self._power(self.config.get(CONF_SOLAR_POWER))
-        if imported is None:
-            return None
-        try:
-            allowance = self._configured_nonnegative(
-                CONF_DAILY_FREE_ALLOWANCE_KWH, DEFAULT_DAILY_FREE_ALLOWANCE_KWH
-            )
-            cutoff = min(
-                allowance,
-                self._configured_nonnegative(
-                    CONF_FREE_CHARGE_FULL_BATTERY_IMPORT_THRESHOLD_KWH, allowance
-                ),
-            )
-            limit = self._configured_nonnegative(
-                CONF_INVERTER_CHARGE_LIMIT_KW, DEFAULT_INVERTER_CHARGE_LIMIT_KW
-            )
-            now = dt_util.now()
-            hours_remaining = self._free_window_hours_remaining(now)
-            return calculate_free_charge_power(
-                allowance_remaining_kwh=max(cutoff - imported, 0.0),
-                hours_remaining=hours_remaining,
-                # The target is the commissioned battery limit; these two
-                # optional readings only refine the displayed grid estimate.
-                house_load_kw=max(house or 0.0, 0.0),
-                pv_generation_kw=max(solar or 0.0, 0.0),
-                inverter_charge_limit_kw=limit,
-            )
-        except (TypeError, ValueError):
-            return None
-
-    @property
-    def free_charge_completion(self) -> FreeChargeCompletion | None:
-        """Return the mode outcome for a completed free-window charge."""
-        if self.snapshot is None or self.data is None:
-            return None
-        imported = self.data.free_window_import_kwh
-        soc = self.snapshot.battery_soc
-        if imported is None or soc is None:
-            return None
-        try:
-            return decide_free_charge_completion(
-                imported_kwh=imported,
-                battery_soc=soc,
-                daily_allowance_kwh=self._configured_nonnegative(
-                    CONF_DAILY_FREE_ALLOWANCE_KWH, DEFAULT_DAILY_FREE_ALLOWANCE_KWH
-                ),
-                full_battery_import_threshold_kwh=self._configured_nonnegative(
-                    CONF_FREE_CHARGE_FULL_BATTERY_IMPORT_THRESHOLD_KWH,
-                    DEFAULT_FREE_CHARGE_FULL_BATTERY_IMPORT_THRESHOLD_KWH,
-                ),
-            )
-        except (TypeError, ValueError):
-            return None
-
     def _free_window_hours_remaining(self, now: datetime) -> float:
         """Return remaining hours in today's configured free-charge window."""
-        start = self._configured_time(CONF_FREE_CHARGE_START, "12:01:00")
-        end = self._configured_time(CONF_FREE_CHARGE_END, "14:59:00")
+        start = self._configured_time(CONF_FREE_CHARGE_START, DEFAULT_FREE_CHARGE_START)
+        end = self._configured_time(CONF_FREE_CHARGE_END, DEFAULT_FREE_CHARGE_END)
         current = now.timetz().replace(tzinfo=None)
         if start < end:
             if not start <= current < end:
@@ -349,17 +292,17 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
         return value
 
     def _configured_phase_count(self) -> int:
-        """Read the explicitly commissioned one- or three-phase EV topology."""
+        """Read the explicitly commissioned EV phase count."""
         value = float(self.config.get(CONF_EV_PHASE_COUNT, DEFAULT_EV_PHASE_COUNT))
-        if not isfinite(value) or value not in (1, 3):
-            raise ValueError(f"{CONF_EV_PHASE_COUNT} must be 1 or 3")
+        if not isfinite(value) or value < 1 or not value.is_integer():
+            raise ValueError(f"{CONF_EV_PHASE_COUNT} must be a positive integer")
         return int(value)
 
     def _configured_site_phase_count(self) -> int:
         """Read the commissioned supply topology without inferring it from power."""
         value = float(self.config.get(CONF_SITE_PHASE_COUNT, DEFAULT_SITE_PHASE_COUNT))
-        if not isfinite(value) or value not in (1, 3):
-            raise ValueError(f"{CONF_SITE_PHASE_COUNT} must be 1 or 3")
+        if not isfinite(value) or value < 1 or not value.is_integer():
+            raise ValueError(f"{CONF_SITE_PHASE_COUNT} must be a positive integer")
         return int(value)
 
     def _configured_nonnegative(self, key: str, default: float) -> float:
@@ -635,7 +578,21 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
         # project, Australia).  Using UTC here would shift a 12:01–14:59
         # window by ten or eleven hours and silently learn the wrong period.
         sample = self.demand_sampler.observe(dt_util.now(), house_load_kw)
-        if sample is None:
-            return
-        self.demand_history.add(sample.observed_at, sample.energy_kwh)
-        await self._demand_store.async_save(self.demand_history.to_payload())
+        now = dt_util.now()
+        if sample is not None:
+            self.demand_history.add(sample.observed_at, sample.energy_kwh)
+        save_interval = self.demand_sampler.max_gap / 2
+        if (
+            sample is not None
+            or self._demand_sampler_last_saved_at is None
+            or now - self._demand_sampler_last_saved_at >= save_interval
+        ):
+            await self._async_save_demand_state()
+            self._demand_sampler_last_saved_at = now
+
+    async def _async_save_demand_state(self) -> None:
+        """Persist completed history and the current partial cycle together."""
+        payload: dict[str, object] = self.demand_history.to_payload()
+        if self.demand_sampler is not None:
+            payload["in_progress_cycle"] = self.demand_sampler.to_payload()
+        await self._demand_store.async_save(payload)

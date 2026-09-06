@@ -18,20 +18,10 @@ HACS installation requires a public GitHub repository. This project publishes
 versioned GitHub releases for the custom-repository channel; inclusion in
 HACS's default catalogue is a separate review process.
 
-Version 0.3.8 separates automatic FoxESS and Tessie/Tessy authorization.
-Both controls default to disabled. Enabling the FoxESS control option does not
-authorize EV current or charge-switch writes, and enabling EV control does not
-authorize inverter writes. The shared Safety Lock must also be OFF before
-either commissioned controller can write.
-
-The integration is observer-by-default. Each active path requires its own
-automatic-control option, Safety Lock OFF, and complete actuator mapping. The
-EV path confirms that the Tessie/Tessy vehicle is at home before any write;
-away or unknown presence is fail-closed. Free-window battery charging uses the
-commissioned inverter limit while the configured import cutoff remains;
-post-window solar spill and reserve-aware pre-window backfill are bounded by
-the configured EV and inverter limits. Vehicle charge-limit writes remain
-disabled.
+Version 0.4.0 is observer-by-default. Automatic FoxESS free charging and
+automatic Tessie/Tessy control are not present; earlier simplified controllers
+were removed pending faithful Mangerton ports. The only automatic write path is
+ZEROHERO export. Bounded FoxESS Diagnostics remain explicitly submitted actions.
 
 Automatic ZEROHERO export is a third, default-off behavior toggle beneath the
 FoxESS gate. It operates only when **Local Modbus** is the selected FoxESS
@@ -43,19 +33,9 @@ mandatory connected-EV baseline during setup or reconfiguration. The full
 ported behavior is recorded in the
 [ZEROHERO export policy](zerohero-export-policy.md).
 
-Version 0.2.28 adds guarded EV session start/stop. A session can start only
-when the mapped Tessie/Tessy vehicle is home, connected, below its mapped
-charge-limit target, and the planner has a managed charging intent. The
-controller stops only sessions it started itself. Manually or cloud-started
-sessions are not stopped. Import [`examples/dashboard.yaml`](../examples/dashboard.yaml)
-as a Lovelace starter view; HACS does not install dashboards automatically.
-Version 0.2.29 also exposes the read-only ZEROHERO window accumulator and its
-hourly buckets as sensor attributes. Version 0.2.30 adds mapped battery SOC,
-solar, house-load, and EV SOC entities for the portable dashboard template.
-Version 0.2.31 gives generated entities stable `sensor.home_energy_*` IDs;
-existing entries are migrated only when the stable ID is unused.
-Version 0.2.32 updates the starter dashboard to reference those stable IDs
-correctly, including the descriptive telemetry and tariff sensors.
+Import [`examples/dashboard.yaml`](../examples/dashboard.yaml) as a Lovelace
+starter view; HACS does not install dashboards automatically. Generated
+entities use stable `sensor.home_energy_*` IDs where the stable ID is unused.
 
 Version 0.3.2 adds a separate **Diagnostics** dashboard view and matching
 commissioning entities. The editable power and duration fields only prepare a
@@ -69,7 +49,9 @@ remain disabled.
 
 ## Before setup
 
-- Keep your existing controller enabled; this release is designed to run beside it.
+- HEO may observe beside an existing controller. Before selecting Local Modbus
+  or enabling any write path, disable every other inverter writer and record
+  its previous state for rollback.
 - Identify a battery-SOC sensor and a signed grid-power sensor with a power unit of W, kW, or MW.
 - If available, select the battery potential-capacity sensor (for example, FoxESS Modbus
   `sensor.bms_kwh_remaining_1`). The observer treats this as 100%-SoC potential capacity and
@@ -77,8 +59,9 @@ remain disabled.
   explicit fallback when no measured capacity sensor is selected.
 - Confirm the grid sensor's sign convention using a known load. The setup form asks whether positive means import.
 - Record usable battery capacity, battery floor, and any reserve required for the site.
-- If you select a whole-house load sensor, set the free-charge window and the
-  explicit learning fallback in the setup form. The observer then records
-  non-free-window demand cycles locally; it does not control the inverter.
+- If you select a protected house-load sensor, set the free-charge window and
+  explicit learning fallback. At Mangerton this source excludes separately
+  forecast heaters. The observer records non-free-window cycles locally; the
+  learner itself does not control the inverter.
 
 If a sensor is unavailable or has an unsupported unit, the integration displays unavailable calculations rather than guessing.

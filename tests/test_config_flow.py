@@ -4,14 +4,8 @@ from homeassistant.config_entries import SOURCE_RECONFIGURE, SOURCE_USER
 from homeassistant.data_entry_flow import FlowResultType
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.home_energy_orchestrator.config_flow import ConfigFlow
 from custom_components.home_energy_orchestrator.const import (
     CONF_AUTOMATIC_EXPORT_ENABLED,
-    CONF_EV_AUTOMATIC_CONTROL_ENABLED,
-    CONF_EV_CHARGE_LIMIT,
-    CONF_EV_CHARGE_SWITCH,
-    CONF_EV_CURRENT_LIMIT,
-    CONF_EV_SOC,
     CONF_FOXESS_CONTROL_OWNER,
     DEFAULT_FOXESS_CONTROL_OWNER,
     DOMAIN,
@@ -47,23 +41,6 @@ async def test_user_flow_defaults_existing_single_phase_ev_configuration(hass):
     assert result["data"]["ev_phase_count"] == 1
 
 
-async def test_user_flow_defaults_legacy_ev_control_gate_to_disabled(hass):
-    legacy_data = {
-        key: value
-        for key, value in ENTRY_DATA.items()
-        if key != CONF_EV_AUTOMATIC_CONTROL_ENABLED
-    }
-
-    result = await hass.config_entries.flow.async_init(
-        DOMAIN,
-        context={"source": SOURCE_USER},
-        data={"name": "Legacy EV Site", **legacy_data},
-    )
-
-    assert result["type"] is FlowResultType.CREATE_ENTRY
-    assert result["data"][CONF_EV_AUTOMATIC_CONTROL_ENABLED] is False
-
-
 async def test_user_flow_defaults_legacy_foxess_owner_to_observer(hass):
     legacy_data = {
         key: value for key, value in ENTRY_DATA.items() if key != CONF_FOXESS_CONTROL_OWNER
@@ -94,14 +71,31 @@ async def test_user_flow_defaults_legacy_automatic_export_to_disabled(hass):
     assert result["data"][CONF_AUTOMATIC_EXPORT_ENABLED] is False
 
 
-async def test_user_flow_preserves_explicit_future_actuator_mappings(hass):
+async def test_user_flow_removes_obsolete_rewritten_controller_fields(hass):
+    legacy_fields = {
+        "ev_automatic_control_enabled": True,
+        "ev_current_limit_entity": "number.car_current",
+        "ev_charge_switch_entity": "switch.car_charge",
+        "ev_charger_profile": "single_phase_32a",
+        "free_charge_full_battery_import_threshold_kwh": 49.0,
+        "bonus_load_following_percent": 20.0,
+    }
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": SOURCE_USER},
+        data={"name": "Legacy rewritten site", **ENTRY_DATA, **legacy_fields},
+    )
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert not legacy_fields.keys() & result["data"].keys()
+
+
+async def test_user_flow_preserves_explicit_foxess_actuator_mappings(hass):
     mappings = {
         "foxess_work_mode_entity": "select.foxess_work_mode",
         "foxess_force_charge_power_entity": "number.foxess_force_charge_power",
         "foxess_force_discharge_power_entity": "number.foxess_force_discharge_power",
-        "ev_charge_limit_entity": "number.tessie_charge_limit",
-        "ev_current_limit_entity": "number.tessie_charge_current",
-        "ev_charge_switch_entity": "switch.tessie_charge",
     }
     result = await hass.config_entries.flow.async_init(
         DOMAIN,
@@ -111,35 +105,6 @@ async def test_user_flow_preserves_explicit_future_actuator_mappings(hass):
 
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert {key: result["data"][key] for key in mappings} == mappings
-
-
-async def test_entity_suggestions_find_common_tessie_entities(hass):
-    hass.states.async_set(
-        "sensor.tessy_battery_level", "59", {"friendly_name": "Tessy Battery level"}
-    )
-    hass.states.async_set(
-        "number.tessy_charge_limit", "71", {"friendly_name": "Tessy Charge limit"}
-    )
-    hass.states.async_set(
-        "number.tessy_charge_current", "16", {"friendly_name": "Tessy Charge current"}
-    )
-    hass.states.async_set("switch.tessy_charge", "off", {"friendly_name": "Tessy Charge"})
-    flow = ConfigFlow()
-    flow.hass = hass
-
-    assert flow._suggest_entity(CONF_EV_SOC) == "sensor.tessy_battery_level"
-    assert flow._suggest_entity(CONF_EV_CHARGE_LIMIT) == "number.tessy_charge_limit"
-    assert flow._suggest_entity(CONF_EV_CURRENT_LIMIT) == "number.tessy_charge_current"
-    assert flow._suggest_entity(CONF_EV_CHARGE_SWITCH) == "switch.tessy_charge"
-
-
-async def test_entity_suggestions_leave_ambiguous_matches_blank(hass):
-    hass.states.async_set("number.tessy_ev_charge_current", "16")
-    hass.states.async_set("number.tessy_car_charge_current", "16")
-    flow = ConfigFlow()
-    flow.hass = hass
-
-    assert flow._suggest_entity(CONF_EV_CURRENT_LIMIT) is None
 
 
 async def test_user_flow_rejects_partial_foxess_mapping(hass):
@@ -157,37 +122,39 @@ async def test_user_flow_rejects_partial_foxess_mapping(hass):
     assert result["errors"] == {"base": "incomplete_foxess_mapping"}
 
 
-async def test_user_flow_rejects_partial_ev_mapping(hass):
-    result = await hass.config_entries.flow.async_init(
-        DOMAIN,
-        context={"source": SOURCE_USER},
-        data={
-            "name": "Partial EV",
-            **ENTRY_DATA,
-            "ev_charge_limit_entity": "number.tessie_charge_limit",
-        },
-    )
-
-    assert result["type"] is FlowResultType.FORM
-    assert result["errors"] == {"base": "incomplete_ev_mapping"}
-
-
 async def test_user_flow_rejects_unsafe_limits(hass):
     result = await hass.config_entries.flow.async_init(
         DOMAIN,
         context={"source": SOURCE_USER},
-        data={"name": "Test Site", **ENTRY_DATA, "inverter_capacity_kw": -1},
+        data={"name": "Test Site", **ENTRY_DATA, "ev_phase_count": 0},
     )
 
     assert result["type"] is FlowResultType.FORM
     assert result["errors"] == {"base": "invalid_site_limits"}
 
 
-async def test_user_flow_rejects_invalid_load_following_rate(hass):
+async def test_user_flow_accepts_configured_phase_counts_without_a_profile_table(hass):
     result = await hass.config_entries.flow.async_init(
         DOMAIN,
         context={"source": SOURCE_USER},
-        data={"name": "Test Site", **ENTRY_DATA, "bonus_load_following_percent": 101},
+        data={
+            "name": "Explicit topology",
+            **ENTRY_DATA,
+            "site_phase_count": 2,
+            "ev_phase_count": 2,
+        },
+    )
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["data"]["site_phase_count"] == 2
+    assert result["data"]["ev_phase_count"] == 2
+
+
+async def test_user_flow_rejects_fractional_phase_counts(hass):
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": SOURCE_USER},
+        data={"name": "Invalid topology", **ENTRY_DATA, "site_phase_count": 1.5},
     )
 
     assert result["type"] is FlowResultType.FORM

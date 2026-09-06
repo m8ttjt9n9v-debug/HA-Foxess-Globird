@@ -18,18 +18,14 @@ from .const import (
     CONF_BATTERY_CAPACITY_ENTITY,
     CONF_BATTERY_FLOOR,
     CONF_BATTERY_SOC,
-    CONF_BONUS_LOAD_FOLLOWING_PERCENT,
     CONF_BONUS_WINDOW_END,
     CONF_BONUS_WINDOW_START,
     CONF_DAILY_CHARGE,
     CONF_DAILY_FREE_ALLOWANCE_KWH,
     CONF_DAILY_IMPORT_ENTITY,
     CONF_DISCHARGE_EFFICIENCY_PERCENT,
-    CONF_EV_AUTOMATIC_CONTROL_ENABLED,
-    CONF_EV_CHARGE_LIMIT,
-    CONF_EV_CHARGE_SWITCH,
-    CONF_EV_CHARGER_PROFILE,
-    CONF_EV_CURRENT_LIMIT,
+    CONF_EV_AT_HOME,
+    CONF_EV_CABLE_CONNECTED,
     CONF_EV_MAX_CURRENT,
     CONF_EV_MIN_CURRENT,
     CONF_EV_PHASE_COUNT,
@@ -46,17 +42,13 @@ from .const import (
     CONF_FOXESS_FORCE_DISCHARGE_POWER,
     CONF_FOXESS_WORK_MODE,
     CONF_FREE_CHARGE_END,
-    CONF_FREE_CHARGE_FULL_BATTERY_IMPORT_THRESHOLD_KWH,
     CONF_FREE_CHARGE_START,
     CONF_GRID_IMPORT_POSITIVE,
     CONF_GRID_POWER,
     CONF_HOUSE_LEARNING_FALLBACK,
     CONF_HOUSE_LOAD,
-    CONF_INVERTER_CAPACITY,
     CONF_INVERTER_CHARGE_LIMIT_KW,
     CONF_INVERTER_DISCHARGE_LIMIT_KW,
-    CONF_LOAD_FOLLOWING_OVERRIDE,
-    CONF_NON_FREE_LOAD_FOLLOWING_PERCENT,
     CONF_OFFPEAK_BALANCE_RATE,
     CONF_OFFPEAK_RATE,
     CONF_PEAK_RATE,
@@ -74,14 +66,11 @@ from .const import (
     DEFAULT_AUTOMATIC_CONTROL_ENABLED,
     DEFAULT_AUTOMATIC_EXPORT_ENABLED,
     DEFAULT_BATTERY_FLOOR,
-    DEFAULT_BONUS_LOAD_FOLLOWING_PERCENT,
     DEFAULT_BONUS_WINDOW_END,
     DEFAULT_BONUS_WINDOW_START,
     DEFAULT_DAILY_CHARGE,
     DEFAULT_DAILY_FREE_ALLOWANCE_KWH,
     DEFAULT_DISCHARGE_EFFICIENCY_PERCENT,
-    DEFAULT_EV_AUTOMATIC_CONTROL_ENABLED,
-    DEFAULT_EV_CHARGER_PROFILE,
     DEFAULT_EV_MAX_CURRENT,
     DEFAULT_EV_MIN_CURRENT,
     DEFAULT_EV_PHASE_COUNT,
@@ -94,14 +83,10 @@ from .const import (
     DEFAULT_FORCE_DISCHARGE_FINISH,
     DEFAULT_FOXESS_CONTROL_OWNER,
     DEFAULT_FREE_CHARGE_END,
-    DEFAULT_FREE_CHARGE_FULL_BATTERY_IMPORT_THRESHOLD_KWH,
     DEFAULT_FREE_CHARGE_START,
     DEFAULT_HOUSE_LEARNING_FALLBACK_KWH,
-    DEFAULT_INVERTER_CAPACITY_KW,
     DEFAULT_INVERTER_CHARGE_LIMIT_KW,
     DEFAULT_INVERTER_DISCHARGE_LIMIT_KW,
-    DEFAULT_LOAD_FOLLOWING_OVERRIDE,
-    DEFAULT_NON_FREE_LOAD_FOLLOWING_PERCENT,
     DEFAULT_OFFPEAK_BALANCE_RATE,
     DEFAULT_OFFPEAK_RATE,
     DEFAULT_PEAK_RATE,
@@ -116,14 +101,12 @@ from .const import (
     DEFAULT_ZERO_IMPORT_CONFIRM_MINUTES,
     DEFAULT_ZERO_IMPORT_THRESHOLD_KW,
     DOMAIN,
-    EV_CHARGER_PROFILES,
     FOXESS_CONTROL_OWNERS,
 )
 
 ENTITY = selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor"))
 SELECT_ENTITY = selector.EntitySelector(selector.EntitySelectorConfig(domain="select"))
 NUMBER_ENTITY = selector.EntitySelector(selector.EntitySelectorConfig(domain="number"))
-SWITCH_ENTITY = selector.EntitySelector(selector.EntitySelectorConfig(domain="switch"))
 
 
 class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -171,11 +154,9 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     def _schema(self, defaults: dict[str, object] | None = None) -> vol.Schema:
         """Keep setup and reconfigure field definitions identical."""
         defaults = defaults or {}
-        profile_default = ConfigFlow._profile_from_data(defaults) or DEFAULT_EV_CHARGER_PROFILE
-
         def optional_entity(key: str):
-            """Use an unambiguous integration entity as a UI-only suggestion."""
-            value = defaults.get(key) or self._suggest_entity(key)
+            """Require entity roles to be mapped explicitly by the user."""
+            value = defaults.get(key)
             return vol.Optional(key, default=value) if value else vol.Optional(key)
 
         return vol.Schema(
@@ -246,9 +227,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 vol.Required(
                     CONF_SITE_PHASE_COUNT,
                     default=defaults.get(CONF_SITE_PHASE_COUNT, DEFAULT_SITE_PHASE_COUNT),
-                ): selector.SelectSelector(
-                    selector.SelectSelectorConfig(options=["1", "3"])
-                ),
+                ): vol.Coerce(float),
                 vol.Required(
                     CONF_SERVICE_IMPORT_LIMIT_A,
                     default=defaults.get(
@@ -282,13 +261,6 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     default=defaults.get(CONF_FREE_CHARGE_END, DEFAULT_FREE_CHARGE_END),
                 ): selector.TimeSelector(),
                 vol.Required(
-                    CONF_FREE_CHARGE_FULL_BATTERY_IMPORT_THRESHOLD_KWH,
-                    default=defaults.get(
-                        CONF_FREE_CHARGE_FULL_BATTERY_IMPORT_THRESHOLD_KWH,
-                        DEFAULT_FREE_CHARGE_FULL_BATTERY_IMPORT_THRESHOLD_KWH,
-                    ),
-                ): vol.Coerce(float),
-                vol.Required(
                     CONF_HOUSE_LEARNING_FALLBACK,
                     default=defaults.get(
                         CONF_HOUSE_LEARNING_FALLBACK, DEFAULT_HOUSE_LEARNING_FALLBACK_KWH
@@ -296,42 +268,22 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 ): vol.Coerce(float),
                 optional_entity(CONF_EV_SOC): ENTITY,
                 vol.Required(
-                    CONF_EV_CHARGER_PROFILE, default=profile_default
-                ): selector.SelectSelector(
-                    selector.SelectSelectorConfig(
-                        options=list(EV_CHARGER_PROFILES), mode=selector.SelectSelectorMode.DROPDOWN
-                    )
-                ),
-                vol.Required(
                     CONF_EV_VOLTAGE, default=defaults.get(CONF_EV_VOLTAGE, DEFAULT_EV_VOLTAGE)
+                ): vol.Coerce(float),
+                vol.Required(
+                    CONF_EV_PHASE_COUNT,
+                    default=defaults.get(CONF_EV_PHASE_COUNT, DEFAULT_EV_PHASE_COUNT),
                 ): vol.Coerce(float),
                 vol.Required(
                     CONF_EV_MIN_CURRENT,
                     default=defaults.get(CONF_EV_MIN_CURRENT, DEFAULT_EV_MIN_CURRENT),
                 ): vol.Coerce(float),
                 vol.Required(
-                    CONF_INVERTER_CAPACITY,
-                    default=defaults.get(CONF_INVERTER_CAPACITY, DEFAULT_INVERTER_CAPACITY_KW),
+                    CONF_EV_MAX_CURRENT,
+                    default=defaults.get(CONF_EV_MAX_CURRENT, DEFAULT_EV_MAX_CURRENT),
                 ): vol.Coerce(float),
-                vol.Required(
-                    CONF_BONUS_LOAD_FOLLOWING_PERCENT,
-                    default=defaults.get(
-                        CONF_BONUS_LOAD_FOLLOWING_PERCENT, DEFAULT_BONUS_LOAD_FOLLOWING_PERCENT
-                    ),
-                ): vol.Coerce(float),
-                vol.Required(
-                    CONF_NON_FREE_LOAD_FOLLOWING_PERCENT,
-                    default=defaults.get(
-                        CONF_NON_FREE_LOAD_FOLLOWING_PERCENT,
-                        DEFAULT_NON_FREE_LOAD_FOLLOWING_PERCENT,
-                    ),
-                ): vol.Coerce(float),
-                vol.Required(
-                    CONF_LOAD_FOLLOWING_OVERRIDE,
-                    default=defaults.get(
-                        CONF_LOAD_FOLLOWING_OVERRIDE, DEFAULT_LOAD_FOLLOWING_OVERRIDE
-                    ),
-                ): selector.BooleanSelector(),
+                optional_entity(CONF_EV_AT_HOME): selector.EntitySelector(),
+                optional_entity(CONF_EV_CABLE_CONNECTED): selector.EntitySelector(),
                 vol.Required(
                     CONF_BONUS_WINDOW_START,
                     default=defaults.get(CONF_BONUS_WINDOW_START, DEFAULT_BONUS_WINDOW_START),
@@ -405,104 +357,35 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     ),
                 ): selector.BooleanSelector(),
                 vol.Required(
-                    CONF_EV_AUTOMATIC_CONTROL_ENABLED,
-                    default=defaults.get(
-                        CONF_EV_AUTOMATIC_CONTROL_ENABLED,
-                        DEFAULT_EV_AUTOMATIC_CONTROL_ENABLED,
-                    ),
-                ): selector.BooleanSelector(),
-                vol.Required(
                     CONF_REHEARSAL_MODE,
                     default=defaults.get(CONF_REHEARSAL_MODE, DEFAULT_REHEARSAL_MODE),
                 ): selector.BooleanSelector(),
                 optional_entity(CONF_FOXESS_WORK_MODE): SELECT_ENTITY,
                 optional_entity(CONF_FOXESS_FORCE_CHARGE_POWER): NUMBER_ENTITY,
                 optional_entity(CONF_FOXESS_FORCE_DISCHARGE_POWER): NUMBER_ENTITY,
-                optional_entity(CONF_EV_CHARGE_LIMIT): NUMBER_ENTITY,
-                optional_entity(CONF_EV_CURRENT_LIMIT): NUMBER_ENTITY,
-                optional_entity(CONF_EV_CHARGE_SWITCH): SWITCH_ENTITY,
             }
         )
-
-    def _suggest_entity(self, key: str) -> str | None:
-        """Suggest a common Tessie/Tessy entity only when it is unambiguous.
-
-        Entity IDs are installation-specific, so suggestions are deliberately
-        conservative: an exact known ID wins; otherwise exactly one matching
-        state is suggested. Ambiguous or unavailable candidates remain blank.
-        """
-        candidates = {
-            CONF_EV_SOC: ("sensor", ("battery_level", "state_of_charge", "soc")),
-            CONF_EV_CHARGE_LIMIT: ("number", ("charge_limit",)),
-            CONF_EV_CURRENT_LIMIT: ("number", ("charge_current", "charger_current")),
-            CONF_EV_CHARGE_SWITCH: ("switch", ("charge",)),
-        }
-        spec = candidates.get(key)
-        if spec is None:
-            return None
-        domain, tokens = spec
-        states = self.hass.states.async_all(domain)
-        matches: list[str] = []
-        for state in states:
-            entity_id = state.entity_id.casefold()
-            friendly_name = str(state.attributes.get("friendly_name", "")).casefold()
-            combined = f"{entity_id} {friendly_name}"
-            if not any(token in combined for token in tokens):
-                continue
-            if not any(marker in combined for marker in ("tessie", "tessy")):
-                continue
-            if state.state in ("unavailable", "unknown"):
-                continue
-            matches.append(state.entity_id)
-        if len(matches) == 1:
-            return matches[0]
-        exact = next(
-            (
-                entity_id
-                for entity_id in matches
-                if entity_id.casefold()
-                in {
-                    "sensor.tessie_battery_level",
-                    "number.tessie_charge_limit",
-                    "number.tessie_charge_current",
-                    "number.tessy_charge_current",
-                    "switch.tessie_charge",
-                    "switch.tessy_charge",
-                }
-            ),
-            None,
-        )
-        return exact
-
-    @staticmethod
-    def _profile_from_data(data: dict[str, object]) -> str | None:
-        """Infer a supported profile only when legacy values match exactly."""
-        profile = data.get(CONF_EV_CHARGER_PROFILE)
-        if profile in EV_CHARGER_PROFILES:
-            return str(profile)
-        try:
-            phase_count = int(float(data.get(CONF_EV_PHASE_COUNT, DEFAULT_EV_PHASE_COUNT)))
-            max_current = float(data.get(CONF_EV_MAX_CURRENT, DEFAULT_EV_MAX_CURRENT))
-        except (TypeError, ValueError):
-            return None
-        for name, (phases, current) in EV_CHARGER_PROFILES.items():
-            if phase_count == phases and max_current == current:
-                return name
-        return None
 
     @staticmethod
     def _apply_defaults(data: dict[str, object]) -> dict[str, object]:
         """Backfill options for entries created before learning was exposed."""
-        profile = ConfigFlow._profile_from_data(data) or DEFAULT_EV_CHARGER_PROFILE
-        profile_phases, profile_current = EV_CHARGER_PROFILES[profile]
+        removed = {
+            "ev_charger_profile",
+            "inverter_capacity_kw",
+            "bonus_load_following_percent",
+            "non_free_load_following_percent",
+            "load_following_override",
+            "ev_automatic_control_enabled",
+            "ev_charge_limit_entity",
+            "ev_current_limit_entity",
+            "ev_charge_switch_entity",
+            "free_charge_full_battery_import_threshold_kwh",
+        }
+        cleaned = {key: value for key, value in data.items() if key not in removed}
         return {
-            **data,
+            **cleaned,
             CONF_FREE_CHARGE_START: data.get(CONF_FREE_CHARGE_START, DEFAULT_FREE_CHARGE_START),
             CONF_FREE_CHARGE_END: data.get(CONF_FREE_CHARGE_END, DEFAULT_FREE_CHARGE_END),
-            CONF_FREE_CHARGE_FULL_BATTERY_IMPORT_THRESHOLD_KWH: data.get(
-                CONF_FREE_CHARGE_FULL_BATTERY_IMPORT_THRESHOLD_KWH,
-                DEFAULT_FREE_CHARGE_FULL_BATTERY_IMPORT_THRESHOLD_KWH,
-            ),
             CONF_SITE_PHASE_COUNT: data.get(CONF_SITE_PHASE_COUNT, DEFAULT_SITE_PHASE_COUNT),
             CONF_DAILY_FREE_ALLOWANCE_KWH: data.get(
                 CONF_DAILY_FREE_ALLOWANCE_KWH, DEFAULT_DAILY_FREE_ALLOWANCE_KWH
@@ -533,21 +416,8 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             CONF_HOUSE_LEARNING_FALLBACK: data.get(
                 CONF_HOUSE_LEARNING_FALLBACK, DEFAULT_HOUSE_LEARNING_FALLBACK_KWH
             ),
-            CONF_EV_CHARGER_PROFILE: profile,
-            CONF_EV_PHASE_COUNT: profile_phases,
-            CONF_EV_MAX_CURRENT: profile_current,
-            CONF_INVERTER_CAPACITY: data.get(
-                CONF_INVERTER_CAPACITY, DEFAULT_INVERTER_CAPACITY_KW
-            ),
-            CONF_BONUS_LOAD_FOLLOWING_PERCENT: data.get(
-                CONF_BONUS_LOAD_FOLLOWING_PERCENT, DEFAULT_BONUS_LOAD_FOLLOWING_PERCENT
-            ),
-            CONF_NON_FREE_LOAD_FOLLOWING_PERCENT: data.get(
-                CONF_NON_FREE_LOAD_FOLLOWING_PERCENT, DEFAULT_NON_FREE_LOAD_FOLLOWING_PERCENT
-            ),
-            CONF_LOAD_FOLLOWING_OVERRIDE: data.get(
-                CONF_LOAD_FOLLOWING_OVERRIDE, DEFAULT_LOAD_FOLLOWING_OVERRIDE
-            ),
+            CONF_EV_PHASE_COUNT: data.get(CONF_EV_PHASE_COUNT, DEFAULT_EV_PHASE_COUNT),
+            CONF_EV_MAX_CURRENT: data.get(CONF_EV_MAX_CURRENT, DEFAULT_EV_MAX_CURRENT),
             CONF_BONUS_WINDOW_START: data.get(
                 CONF_BONUS_WINDOW_START, DEFAULT_BONUS_WINDOW_START
             ),
@@ -583,10 +453,6 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             CONF_FOXESS_CONTROL_OWNER: data.get(
                 CONF_FOXESS_CONTROL_OWNER, DEFAULT_FOXESS_CONTROL_OWNER
             ),
-            CONF_EV_AUTOMATIC_CONTROL_ENABLED: data.get(
-                CONF_EV_AUTOMATIC_CONTROL_ENABLED,
-                DEFAULT_EV_AUTOMATIC_CONTROL_ENABLED,
-            ),
             CONF_REHEARSAL_MODE: data.get(CONF_REHEARSAL_MODE, DEFAULT_REHEARSAL_MODE),
         }
 
@@ -605,12 +471,11 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             CONF_HOUSE_LOAD,
             CONF_SOLAR_POWER,
             CONF_EV_SOC,
+            CONF_EV_AT_HOME,
+            CONF_EV_CABLE_CONNECTED,
             CONF_FOXESS_WORK_MODE,
             CONF_FOXESS_FORCE_CHARGE_POWER,
             CONF_FOXESS_FORCE_DISCHARGE_POWER,
-            CONF_EV_CHARGE_LIMIT,
-            CONF_EV_CURRENT_LIMIT,
-            CONF_EV_CHARGE_SWITCH,
         ):
             entity_id = data.get(key)
             if entity_id is not None and not valid_entity_id(str(entity_id)):
@@ -622,33 +487,20 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
         if any(foxess_mapping) and not all(foxess_mapping):
             return {"base": "incomplete_foxess_mapping"}
-        ev_mapping = (
-            data.get(CONF_EV_CHARGE_LIMIT),
-            data.get(CONF_EV_CURRENT_LIMIT),
-            data.get(CONF_EV_CHARGE_SWITCH),
-        )
-        if any(ev_mapping) and not all(ev_mapping):
-            return {"base": "incomplete_ev_mapping"}
         try:
             capacity = float(data[CONF_BATTERY_CAPACITY])
             floor = float(data[CONF_BATTERY_FLOOR])
             reserve = float(data[CONF_RESERVE])
-            site_phase_count = int(float(data[CONF_SITE_PHASE_COUNT]))
+            site_phase_count = float(data[CONF_SITE_PHASE_COUNT])
             daily_allowance = float(data[CONF_DAILY_FREE_ALLOWANCE_KWH])
-            full_battery_threshold = float(
-                data[CONF_FREE_CHARGE_FULL_BATTERY_IMPORT_THRESHOLD_KWH]
-            )
             service_import_limit = float(data[CONF_SERVICE_IMPORT_LIMIT_A])
             export_limit = float(data[CONF_EXPORT_LIMIT_KW])
             inverter_charge_limit = float(data[CONF_INVERTER_CHARGE_LIMIT_KW])
             inverter_discharge_limit = float(data[CONF_INVERTER_DISCHARGE_LIMIT_KW])
             min_current = float(data[CONF_EV_MIN_CURRENT])
             max_current = float(data[CONF_EV_MAX_CURRENT])
-            phase_count = int(float(data[CONF_EV_PHASE_COUNT]))
+            phase_count = float(data[CONF_EV_PHASE_COUNT])
             voltage = float(data[CONF_EV_VOLTAGE])
-            inverter_capacity = float(data[CONF_INVERTER_CAPACITY])
-            bonus_percent = float(data[CONF_BONUS_LOAD_FOLLOWING_PERCENT])
-            non_free_percent = float(data[CONF_NON_FREE_LOAD_FOLLOWING_PERCENT])
             zero_import_threshold = float(data[CONF_ZERO_IMPORT_THRESHOLD_KW])
             zero_import_minutes = float(data[CONF_ZERO_IMPORT_CONFIRM_MINUTES])
             daily_charge = float(data[CONF_DAILY_CHARGE])
@@ -684,8 +536,6 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             or fallback < 0
         ):
             return {"base": "invalid_schedule"}
-        profile = data.get(CONF_EV_CHARGER_PROFILE)
-        profile_values = EV_CHARGER_PROFILES.get(profile)
         values = (
             capacity,
             floor,
@@ -695,15 +545,11 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             inverter_charge_limit,
             inverter_discharge_limit,
             daily_allowance,
-            full_battery_threshold,
             zero_import_threshold,
             zero_import_minutes,
             min_current,
             max_current,
             voltage,
-            inverter_capacity,
-            bonus_percent,
-            non_free_percent,
             daily_charge,
             peak_rate,
             offpeak_rate,
@@ -717,15 +563,13 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             protected_ev_baseline,
         )
         if (
-            profile_values is None
-            or not all(math.isfinite(value) for value in values)
+            not all(math.isfinite(value) for value in values)
             or capacity <= 0
             or not 0 <= floor <= 100
             or reserve < 0
-            or site_phase_count not in (1, 3)
+            or site_phase_count < 1
+            or not site_phase_count.is_integer()
             or daily_allowance < 0
-            or full_battery_threshold < 0
-            or full_battery_threshold > daily_allowance
             or zero_import_threshold < 0
             or zero_import_minutes < 0
             or service_import_limit < 0
@@ -735,11 +579,8 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             or min_current < 0
             or max_current < min_current
             or voltage <= 0
-            or phase_count != profile_values[0]
-            or max_current != profile_values[1]
-            or not 0 <= bonus_percent <= 100
-            or not 0 <= non_free_percent <= 100
-            or inverter_capacity < 0
+            or phase_count < 1
+            or not phase_count.is_integer()
             or export_rate < 0
             or super_export_rate < 0
             or export_allowance < 0

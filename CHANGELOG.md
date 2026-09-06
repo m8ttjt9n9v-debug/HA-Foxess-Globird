@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.4.0 — port-first reset and durable project truth
+
+- Remove the rewritten automatic FoxESS free-charge/reconciliation controller
+  and simplified Tessie current/session controller. Neither had demonstrated
+  parity with the proven Mangerton behavior.
+- Retain automatic ZEROHERO export as the only verified automatic write path;
+  retain separately submitted, bounded FoxESS diagnostics.
+- Remove obsolete sensors, configuration fields, dashboard claims, and tests
+  that implied the removed controllers remained supported.
+- Persist an in-progress house-demand learning cycle across ordinary Home
+  Assistant restarts while continuing to reject cycles with excessive gaps.
+- Require explicit EV home/cable mappings for protected export baseline
+  calculations; missing evidence fails closed instead of being auto-discovered.
+- Add a repository instruction hook, source-of-truth record, port-first guide,
+  system requirements, and parity-based roadmap for future work.
+
 ## 0.3.8 — Mangerton ZEROHERO selling automation
 
 - Port the proven Mangerton surplus-energy ledger, calculated latest start,

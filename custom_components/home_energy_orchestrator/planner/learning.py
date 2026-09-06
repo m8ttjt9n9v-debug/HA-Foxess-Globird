@@ -154,6 +154,43 @@ class DemandCycleSampler:
         self._last_power_kw = house_power_kw
         return result
 
+    def restore(self, payload: Any, now: datetime) -> None:
+        """Restore one in-progress cycle after a short Home Assistant restart."""
+        if not isinstance(payload, dict) or now.tzinfo is None:
+            return
+        try:
+            last_at = datetime.fromisoformat(str(payload["last_at"]))
+            last_power_kw = float(payload["last_power_kw"])
+            cycle_energy_kwh = float(payload["cycle_energy_kwh"])
+            cycle_started = bool(payload["cycle_started"])
+        except (KeyError, TypeError, ValueError):
+            return
+        if (
+            last_at.tzinfo is None
+            or last_at > now
+            or now - last_at > self.max_gap
+            or not isfinite(last_power_kw)
+            or last_power_kw < 0
+            or not isfinite(cycle_energy_kwh)
+            or cycle_energy_kwh < 0
+        ):
+            return
+        self._last_at = last_at
+        self._last_power_kw = last_power_kw
+        self._cycle_started = cycle_started
+        self._cycle_energy_kwh = cycle_energy_kwh
+
+    def to_payload(self) -> dict[str, str | float | bool] | None:
+        """Encode the in-progress cycle for restart-safe persistence."""
+        if self._last_at is None or self._last_power_kw is None:
+            return None
+        return {
+            "last_at": self._last_at.isoformat(),
+            "last_power_kw": self._last_power_kw,
+            "cycle_started": self._cycle_started,
+            "cycle_energy_kwh": self._cycle_energy_kwh,
+        }
+
     def _reset(self, observed_at: datetime, house_power_kw: float | None) -> None:
         self._last_at = observed_at
         self._last_power_kw = house_power_kw

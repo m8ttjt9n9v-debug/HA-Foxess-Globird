@@ -1,9 +1,8 @@
-"""Explicitly opt-in FoxESS reconciliation for the commissioned path.
+"""Explicitly opt-in Mangerton ZEROHERO export controller.
 
 The observer remains the default. This controller only starts when the config
-entry selects Local Modbus ownership, enables automatic control, disables
-rehearsal mode, and provides a complete FoxESS actuator mapping. The companion
-EV controller has its own authorization gate.
+entry selects Local Modbus ownership, enables automatic control and export,
+disables rehearsal mode, and provides a complete FoxESS actuator mapping.
 """
 
 from __future__ import annotations
@@ -16,34 +15,37 @@ from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
-from .active_ev import ActiveEvController
 from .const import (
     CONF_AUTOMATIC_CONTROL_ENABLED,
     CONF_AUTOMATIC_EXPORT_ENABLED,
     CONF_BONUS_WINDOW_START,
     CONF_DISCHARGE_EFFICIENCY_PERCENT,
+    CONF_EV_AT_HOME,
+    CONF_EV_CABLE_CONNECTED,
+    CONF_EV_PHASE_COUNT,
+    CONF_EV_PROTECTED_BASELINE_A,
+    CONF_EV_VOLTAGE,
     CONF_EXPORT_ALLOWANCE_KWH,
     CONF_EXPORT_DISCHARGE_POWER_KW,
-    CONF_EXPORT_LIMIT_KW,
     CONF_FORCE_DISCHARGE_FINISH,
     CONF_FOXESS_CONTROL_OWNER,
     CONF_FOXESS_FORCE_CHARGE_POWER,
     CONF_FOXESS_FORCE_DISCHARGE_POWER,
     CONF_FOXESS_WORK_MODE,
     CONF_FREE_CHARGE_START,
-    CONF_INVERTER_CHARGE_LIMIT_KW,
     CONF_INVERTER_DISCHARGE_LIMIT_KW,
     CONF_REHEARSAL_MODE,
     DEFAULT_AUTOMATIC_EXPORT_ENABLED,
     DEFAULT_BONUS_WINDOW_START,
     DEFAULT_DISCHARGE_EFFICIENCY_PERCENT,
+    DEFAULT_EV_PHASE_COUNT,
+    DEFAULT_EV_PROTECTED_BASELINE_A,
+    DEFAULT_EV_VOLTAGE,
     DEFAULT_EXPORT_ALLOWANCE_KWH,
     DEFAULT_EXPORT_DISCHARGE_POWER_KW,
-    DEFAULT_EXPORT_LIMIT_KW,
     DEFAULT_FORCE_DISCHARGE_FINISH,
     DEFAULT_FOXESS_CONTROL_OWNER,
     DEFAULT_FREE_CHARGE_START,
-    DEFAULT_INVERTER_CHARGE_LIMIT_KW,
     DEFAULT_INVERTER_DISCHARGE_LIMIT_KW,
     FOXESS_CONTROL_OWNER_CLOUD,
     FOXESS_CONTROL_OWNER_MODBUS,
@@ -51,22 +53,19 @@ from .const import (
 from .coordinator import EnergyCoordinator
 from .foxess_adapter import FoxessEntityMap, FoxessServiceAdapter
 from .normalise import power_to_kw
-from .planner.control import ControlInputs, decide_control
 from .planner.export import ExportPlan, calculate_export_plan, calculate_export_start
 from .planner.export_session import ExportSessionState, advance_export_session
 from .planner.foxess import (
     FoxessCommand,
     FoxessCommandPlan,
     FoxessObservation,
-    plan_foxess_commands,
 )
-from .planner.reconciliation import reconcile_foxess_plan
 
 _LOGGER = logging.getLogger(__name__)
 
 
 class ActiveFoxessController:
-    """Run only commissioned, opt-in FoxESS charge and export policies."""
+    """Run only the commissioned, opt-in ZEROHERO export policy."""
 
     def __init__(self, hass: HomeAssistant, coordinator: EnergyCoordinator) -> None:
         self.hass = hass
@@ -76,10 +75,6 @@ class ActiveFoxessController:
         self.writes_performed = 0
         self.last_reason = "automatic_control_disabled"
         self.last_actions: tuple[str, ...] = ()
-        self._attempts = 0
-        self._last_attempt_at = None
-        self._last_plan_reason: str | None = None
-        self.ev_controller = ActiveEvController(hass, coordinator)
         self.export_session = ExportSessionState()
         self.export_plan: ExportPlan | None = None
         self.export_planned_start: datetime | None = None
@@ -122,7 +117,6 @@ class ActiveFoxessController:
                 self.hass, self._async_tick, timedelta(seconds=30)
             )
         await self.async_reconcile()
-        await self.ev_controller.async_reconcile()
 
     async def async_stop(self) -> None:
         """Stop the timer without changing inverter state."""
@@ -133,7 +127,6 @@ class ActiveFoxessController:
     async def _async_tick(self, _now) -> None:
         await self.coordinator.async_request_refresh()
         await self.async_reconcile()
-        await self.ev_controller.async_reconcile()
         self.coordinator.async_update_listeners()
 
     async def async_reconcile(self) -> None:
@@ -183,106 +176,8 @@ class ActiveFoxessController:
         observation = FoxessObservation(mode, charge_power, discharge_power)
         if await self._async_reconcile_export(observation, mapping, now):
             return
-        plan = self.coordinator.free_charge_plan
-        if plan is None:
-            self.last_reason = "free_charge_inputs_unavailable"
-            return
-        soc = self.coordinator.snapshot.battery_soc
-        grid_import = self.coordinator.data.grid_import_kw
-        if soc is None or grid_import is None:
-            self.last_reason = "telemetry_unavailable"
-            return
-        completion = self.coordinator.free_charge_completion
-        free_window_active = self.coordinator._free_window_hours_remaining(  # noqa: SLF001
-            now
-        ) > 0
-        restore_mode = (
-            "Backup"
-            if free_window_active and completion and completion.action == "backup"
-            else "Self Use"
-        )
-        control = decide_control(
-            ControlInputs(
-                rehearsal=False,
-                ready=True,
-                automatic_charge=free_window_active and plan.target_charge_power_kw > 0,
-                automatic_export=False,
-                free_window_active=free_window_active,
-                export_window_active=False,
-                current_mode=mode,
-                battery_soc=soc,
-                charge_target_soc=100.0,
-                requested_charge_power_kw=plan.target_charge_power_kw,
-                charge_power_max_kw=self._configured(
-                    CONF_INVERTER_CHARGE_LIMIT_KW, DEFAULT_INVERTER_CHARGE_LIMIT_KW
-                ),
-                planned_export_energy_kwh=0.0,
-                grid_import_kw=max(grid_import, 0.0),
-                export_import_limit_kw=self._configured(
-                    CONF_EXPORT_LIMIT_KW, DEFAULT_EXPORT_LIMIT_KW
-                ),
-                minimum_grid_soc=self.coordinator.snapshot.battery_floor_percent,
-                configured_export_rate_c_kwh=0.0,
-                minimum_export_rate_c_kwh=0.0,
-                requested_discharge_power_kw=0.0,
-                discharge_power_max_kw=self._configured(
-                    CONF_INVERTER_DISCHARGE_LIMIT_KW, DEFAULT_INVERTER_DISCHARGE_LIMIT_KW
-                ),
-                restore_mode=restore_mode,
-            )
-        )
-        if control.action == "force_charge" and control.power_kw <= 0:
-            self.last_reason = "inverter_charge_limit_unavailable"
-            _LOGGER.warning("Automatic control held: inverter charge limit is not commissioned")
-            return
-        foxess_plan = plan_foxess_commands(
-            control,
-            FoxessObservation(mode, charge_power, discharge_power),
-            charge_power_max_kw=self._configured(
-                CONF_INVERTER_CHARGE_LIMIT_KW, DEFAULT_INVERTER_CHARGE_LIMIT_KW
-            ),
-            discharge_power_max_kw=self._configured(
-                CONF_INVERTER_DISCHARGE_LIMIT_KW, DEFAULT_INVERTER_DISCHARGE_LIMIT_KW
-            ),
-        )
-        if foxess_plan.reason != self._last_plan_reason:
-            self._attempts = 0
-            self._last_attempt_at = None
-            self._last_plan_reason = foxess_plan.reason
-        reconciliation = reconcile_foxess_plan(
-            foxess_plan,
-            control,
-            FoxessObservation(mode, charge_power, discharge_power),
-            attempts=self._attempts,
-            last_attempt_at=self._last_attempt_at,
-            now=now,
-        )
-        if reconciliation.status == "satisfied":
-            self._attempts = 0
-            self._last_attempt_at = None
-            self.last_reason = reconciliation.reason
-            self.last_actions = ()
-            return
-        if reconciliation.status != "issue":
-            self.last_reason = reconciliation.reason
-            self.last_actions = ()
-            return
-        if self._adapter is None:
-            self._adapter = FoxessServiceAdapter(
-                self.hass,
-                FoxessEntityMap(str(mapping[0]), str(mapping[1]), str(mapping[2])),
-                allow_writes=True,
-            )
-        executed = await self._adapter.async_execute(
-            FoxessCommandPlan(reconciliation.commands, reconciliation.reason)
-        )
-        self._attempts = reconciliation.attempts
-        self._last_attempt_at = dt_util.now()
-        self.last_reason = reconciliation.reason
-        self.last_actions = executed
-        self.writes_performed += len(executed)
-        if executed:
-            _LOGGER.info("FoxESS automatic plan executed: %s", executed)
+        self.last_reason = "zerohero_export_not_active"
+        self.last_actions = ()
 
     async def _async_reconcile_export(
         self,
@@ -328,7 +223,7 @@ class ActiveFoxessController:
             protected_house = getattr(
                 self.coordinator, "learning_remaining_kwh", None
             )
-            protected_ev = self.ev_controller.protected_keepalive_energy_kwh(
+            protected_ev = self._protected_keepalive_energy_kwh(
                 self._hours_until_next_free(now)
             )
             self.export_protected_ev_kwh = protected_ev
@@ -465,6 +360,31 @@ class ActiveFoxessController:
         if target <= now:
             target += timedelta(days=1)
         return max((target - now).total_seconds() / 3600, 0.0)
+
+    def _protected_keepalive_energy_kwh(self, hours_until_free: float) -> float | None:
+        """Port Mangerton's mandatory connected-EV keepalive reservation.
+
+        Presence and cable state are explicitly mapped. Missing evidence blocks
+        a new export whenever a non-zero baseline is commissioned.
+        """
+        baseline_a = self._configured(
+            CONF_EV_PROTECTED_BASELINE_A, DEFAULT_EV_PROTECTED_BASELINE_A
+        )
+        if baseline_a <= 0:
+            return 0.0
+        home_entity = self.coordinator.config.get(CONF_EV_AT_HOME)
+        cable_entity = self.coordinator.config.get(CONF_EV_CABLE_CONNECTED)
+        if not home_entity or not cable_entity:
+            return None
+        home = self._state(str(home_entity))
+        cable = self._state(str(cable_entity))
+        if home is None or cable is None:
+            return None
+        if home not in {"home", "on"} or cable != "on":
+            return 0.0
+        voltage = self._configured(CONF_EV_VOLTAGE, DEFAULT_EV_VOLTAGE)
+        phases = self._configured(CONF_EV_PHASE_COUNT, DEFAULT_EV_PHASE_COUNT)
+        return round(max(hours_until_free, 0.0) * baseline_a * voltage * phases / 1000, 3)
 
     def _export_source_available(self, mode_entity: str) -> bool:
         state = self.hass.states.get(mode_entity)

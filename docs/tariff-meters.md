@@ -11,10 +11,10 @@ house-load or PV power. The observer calculates current battery energy as:
 
 `potential capacity × SoC ÷ 100`
 
-From **Tessie**, map the vehicle SoC sensor. The charger profile is selected
-explicitly (single-phase 10/15/32 A or three-phase 16 A), because the profile
-is a commissioned physical limit rather than a value that can safely be
-inferred from a transient charger reading.
+From **Tessie**, the optional vehicle SoC sensor may be mapped for observation.
+EV phase count, voltage, and current bounds are explicit commissioned values;
+they are never inferred from a transient charger reading. HEO does not
+currently write Tessie entities.
 
 ## Daily import on a new site
 

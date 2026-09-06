@@ -16,6 +16,8 @@ from homeassistant.helpers.event import async_call_later
 from homeassistant.util import dt as dt_util
 
 from .const import (
+    CONF_BONUS_WINDOW_END,
+    CONF_BONUS_WINDOW_START,
     CONF_EXPORT_RATE,
     CONF_FOXESS_CONTROL_OWNER,
     CONF_FOXESS_FORCE_CHARGE_POWER,
@@ -31,6 +33,8 @@ from .const import (
     CONF_REHEARSAL_MODE,
     CONF_SHOULDER_RATE,
     CONF_SUPER_EXPORT_RATE,
+    DEFAULT_BONUS_WINDOW_END,
+    DEFAULT_BONUS_WINDOW_START,
     DEFAULT_EXPORT_RATE,
     DEFAULT_FOXESS_CONTROL_OWNER,
     DEFAULT_SUPER_EXPORT_RATE,
@@ -39,8 +43,8 @@ from .const import (
 from .coordinator import EnergyCoordinator
 from .foxess_adapter import FoxessEntityMap, FoxessServiceAdapter
 from .normalise import power_to_kw
-from .planner.control import ControlDecision
 from .planner.foxess import (
+    ControlDecision,
     FoxessCommand,
     FoxessCommandPlan,
     FoxessObservation,
@@ -331,7 +335,11 @@ class ManualTestController:
         checker = getattr(self.coordinator, "_bonus_window_active", None)
         if checker is not None:
             return bool(checker(now))
-        start = self.coordinator._configured_time("bonus_window_start", "18:00:00")
-        end = self.coordinator._configured_time("bonus_window_end", "21:00:00")
+        start = self.coordinator._configured_time(
+            CONF_BONUS_WINDOW_START, DEFAULT_BONUS_WINDOW_START
+        )
+        end = self.coordinator._configured_time(
+            CONF_BONUS_WINDOW_END, DEFAULT_BONUS_WINDOW_END
+        )
         current = now.timetz().replace(tzinfo=None)
         return (start <= current < end) if start < end else (current >= start or current < end)

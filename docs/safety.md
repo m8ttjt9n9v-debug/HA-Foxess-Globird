@@ -2,24 +2,19 @@
 
 Home Assistant is supervisory software; it is not a substitute for compliant electrical design, equipment protections, breaker ratings, EVSE protections, or installer verification.
 
-Version 0.3.8 is observer-by-default. Its optional FoxESS path is a bounded
-pilot controller, enabled only by the FoxESS automatic-control setting,
-Local Modbus ownership, the Safety Lock being OFF, complete FoxESS actuator
-mapping, valid telemetry, and a commissioned inverter limit. ZEROHERO selling
-has another default-off toggle beneath those same FoxESS gates. The EV path has a separate automatic-control
-setting and writes only the explicitly mapped current number and, for a session
-it started itself, the mapped charge switch. Enabling either controller never
-authorizes the other. It never changes the vehicle charge-limit.
-Away, unknown, disconnected, or ambiguous vehicle presence fails closed. The
-repository does not claim hardware compatibility merely because a sensor can
-be selected in the setup form.
+Version 0.4.0 is observer-by-default. Its only automatic write path is ZEROHERO
+selling, enabled only by Local Modbus ownership, the FoxESS automatic setting,
+the separate automatic-export toggle, Safety Lock being OFF, complete FoxESS
+actuator mapping, valid telemetry, and commissioned limits. Automatic FoxESS
+free charging and Tessie writes are not implemented. The repository does not
+claim hardware compatibility merely because an entity can be selected.
 
 Before enabling actuation at any site, retain a backup, identify all existing
 writers (including FoxCloud schedules and Tessie automations), verify live
 signs and units, test outage/restart behaviour, and rehearse rollback on the
-disposable instance. Never enable the Local Modbus owner while FoxCloud Mode
-Scheduler is enabled. Do not enable the controller on the live H3 site until
-the unresolved writer has been identified and the checks have been recorded.
+designated test instance. Never enable the Local Modbus owner while FoxCloud
+Mode Scheduler is enabled. Do not enable a controller on a live site while an
+unresolved writer remains.
 
 The Diagnostics view is an explicit commissioning surface, not an automatic
 schedule. It refuses charge tests outside the free window, requires Rehearsal
