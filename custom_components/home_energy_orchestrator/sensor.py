@@ -26,6 +26,7 @@ from .const import (
     FOXESS_CONTROL_OWNER_CLOUD,
 )
 from .coordinator import EnergyCoordinator
+from .ev_adapter import ev_control_gate_status
 
 DESCRIPTIONS = (
     SensorEntityDescription(key="status", name="Status", icon="mdi:eye-outline"),
@@ -413,6 +414,7 @@ class EnergySensor(CoordinatorEntity[EnergyCoordinator], SensorEntity):
         ev_requested = bool(
             self.coordinator.config.get(CONF_EV_AUTOMATIC_CONTROL_ENABLED, False)
         )
+        ev_gate = ev_control_gate_status(self.coordinator.config)
         if foxess_owner == FOXESS_CONTROL_OWNER_CLOUD:
             control_mode = "foxcloud_scheduler"
         elif foxess_enabled and export_enabled:
@@ -444,10 +446,8 @@ class EnergySensor(CoordinatorEntity[EnergyCoordinator], SensorEntity):
             "foxess_control_owner": foxess_owner,
             "automatic_export_enabled": export_enabled,
             "ev_automatic_control_enabled": ev_requested,
-            "ev_control_gate": (
-                "blocked_adapter_not_implemented" if ev_requested else "disabled"
-            ),
-            "ev_writes_enabled": False,
+            "ev_control_gate": ev_gate,
+            "ev_writes_enabled": ev_gate == "ready",
             "export_session_phase": (
                 self.coordinator.active_controller.export_session.phase
                 if self.coordinator.active_controller

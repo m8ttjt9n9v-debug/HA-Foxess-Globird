@@ -33,6 +33,12 @@
   The plan preserves charge-limit/current/start ordering, treats the physical
   connector rating separately from Tessie's live transport maximum, requires
   writable metadata, and never invents a direct-path stop command.
+- Add explicit EV commissioning mappings and configurable Mangerton policy
+  inputs for location, priority, charge target, guaranteed current, settling,
+  limit headroom, efficiencies, battery target, service headroom, and allowance
+  margin. Legacy enabled state cannot bypass the separate commissioning flag.
+- Add restart-serializable three-minute average-step buffers with explicit age
+  coverage and latest-source validity for matched grid/EV feedback.
 
 ## 0.3.8 — Mangerton ZEROHERO selling automation
 

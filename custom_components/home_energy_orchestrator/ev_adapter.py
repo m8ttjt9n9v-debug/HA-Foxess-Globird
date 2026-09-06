@@ -7,6 +7,12 @@ from dataclasses import dataclass
 
 from homeassistant.core import HomeAssistant
 
+from .const import (
+    CONF_EV_AUTOMATIC_CONTROL_ENABLED,
+    CONF_EV_CONTROL_COMMISSIONED,
+    CONF_REHEARSAL_MODE,
+    EV_REQUIRED_ENTITY_KEYS,
+)
 from .planner.ev import EvCommand, EvCommandPlan
 
 
@@ -84,3 +90,18 @@ class EvServiceAdapter:
             )
         else:
             raise ValueError(f"unsupported EV command: {command.action}")
+
+
+def ev_control_gate_status(
+    config: dict[str, object], *, adapter_connected: bool = False
+) -> str:
+    """Return an honest, ordered EV authorization status."""
+    if not config.get(CONF_EV_AUTOMATIC_CONTROL_ENABLED, False):
+        return "disabled"
+    if config.get(CONF_REHEARSAL_MODE, True):
+        return "safety_locked"
+    if not config.get(CONF_EV_CONTROL_COMMISSIONED, False):
+        return "not_commissioned"
+    if not all(config.get(key) for key in EV_REQUIRED_ENTITY_KEYS):
+        return "incomplete_mapping"
+    return "ready" if adapter_connected else "adapter_not_connected"

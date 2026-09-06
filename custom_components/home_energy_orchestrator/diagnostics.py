@@ -18,6 +18,7 @@ from .const import (
     CONF_REHEARSAL_MODE,
     DEFAULT_FOXESS_CONTROL_OWNER,
 )
+from .ev_adapter import ev_control_gate_status
 
 
 async def async_get_config_entry_diagnostics(
@@ -37,6 +38,7 @@ async def async_get_config_entry_diagnostics(
     foxess_gate = (
         active_controller.gate_status if active_controller is not None else "unavailable"
     )
+    ev_gate = ev_control_gate_status(coordinator.config)
     return {
         "entry": {"version": entry.version, "options": {"mode": "observe"}},
         "actuators": {
@@ -52,11 +54,9 @@ async def async_get_config_entry_diagnostics(
                 entry.data.get(CONF_EV_AUTOMATIC_CONTROL_ENABLED, False)
             ),
             "ev_control_gate": (
-                "blocked_adapter_not_implemented"
-                if entry.data.get(CONF_EV_AUTOMATIC_CONTROL_ENABLED, False)
-                else "disabled"
+                ev_gate
             ),
-            "ev_writes_enabled": False,
+            "ev_writes_enabled": ev_gate == "ready",
             "export_session_phase": (
                 active_controller.export_session.phase
                 if active_controller is not None

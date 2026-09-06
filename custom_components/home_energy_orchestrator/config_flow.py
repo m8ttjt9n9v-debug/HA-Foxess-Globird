@@ -16,7 +16,9 @@ from .const import (
     CONF_AUTOMATIC_EXPORT_ENABLED,
     CONF_BATTERY_CAPACITY,
     CONF_BATTERY_CAPACITY_ENTITY,
+    CONF_BATTERY_CHARGE_EFFICIENCY,
     CONF_BATTERY_FLOOR,
+    CONF_BATTERY_FREE_WINDOW_TARGET,
     CONF_BATTERY_SOC,
     CONF_BONUS_WINDOW_END,
     CONF_BONUS_WINDOW_START,
@@ -24,14 +26,30 @@ from .const import (
     CONF_DAILY_FREE_ALLOWANCE_KWH,
     CONF_DAILY_IMPORT_ENTITY,
     CONF_DISCHARGE_EFFICIENCY_PERCENT,
+    CONF_EV_ACTUAL_CURRENT,
+    CONF_EV_ALLOWANCE_GUARD_ENABLED,
+    CONF_EV_ALLOWANCE_SAFETY_MARGIN,
     CONF_EV_AT_HOME,
     CONF_EV_AUTOMATIC_CONTROL_ENABLED,
     CONF_EV_CABLE_CONNECTED,
+    CONF_EV_CHARGE_EFFICIENCY,
+    CONF_EV_CHARGE_LIMIT,
+    CONF_EV_CHARGE_SWITCH,
+    CONF_EV_CHARGING_STATE,
+    CONF_EV_CONTROL_COMMISSIONED,
+    CONF_EV_CURRENT_LIMIT,
+    CONF_EV_DIRECT_LIMIT_HEADROOM,
+    CONF_EV_FREE_WINDOW_CHARGE_LIMIT,
+    CONF_EV_FREE_WINDOW_MINIMUM_CURRENT,
+    CONF_EV_FREE_WINDOW_PRIORITY,
+    CONF_EV_FREE_WINDOW_SETTLE_MINUTES,
+    CONF_EV_LOCATION_MODE,
     CONF_EV_MAX_CURRENT,
     CONF_EV_MIN_CURRENT,
     CONF_EV_PHASE_COUNT,
     CONF_EV_PROTECTED_BASELINE_A,
     CONF_EV_SOC,
+    CONF_EV_STORED_ENERGY,
     CONF_EV_VOLTAGE,
     CONF_EXPORT_ALLOWANCE_KWH,
     CONF_EXPORT_DISCHARGE_POWER_KW,
@@ -59,6 +77,7 @@ from .const import (
     CONF_RESERVE,
     CONF_SERVICE_IMPORT_LIMIT_A,
     CONF_SHOULDER_RATE,
+    CONF_SITE_GRID_HEADROOM_CURRENT,
     CONF_SITE_PHASE_COUNT,
     CONF_SOLAR_POWER,
     CONF_SUPER_EXPORT_RATE,
@@ -66,13 +85,25 @@ from .const import (
     CONF_ZERO_IMPORT_THRESHOLD_KW,
     DEFAULT_AUTOMATIC_CONTROL_ENABLED,
     DEFAULT_AUTOMATIC_EXPORT_ENABLED,
+    DEFAULT_BATTERY_CHARGE_EFFICIENCY,
     DEFAULT_BATTERY_FLOOR,
+    DEFAULT_BATTERY_FREE_WINDOW_TARGET,
     DEFAULT_BONUS_WINDOW_END,
     DEFAULT_BONUS_WINDOW_START,
     DEFAULT_DAILY_CHARGE,
     DEFAULT_DAILY_FREE_ALLOWANCE_KWH,
     DEFAULT_DISCHARGE_EFFICIENCY_PERCENT,
+    DEFAULT_EV_ALLOWANCE_GUARD_ENABLED,
+    DEFAULT_EV_ALLOWANCE_SAFETY_MARGIN,
     DEFAULT_EV_AUTOMATIC_CONTROL_ENABLED,
+    DEFAULT_EV_CHARGE_EFFICIENCY,
+    DEFAULT_EV_CONTROL_COMMISSIONED,
+    DEFAULT_EV_DIRECT_LIMIT_HEADROOM,
+    DEFAULT_EV_FREE_WINDOW_CHARGE_LIMIT,
+    DEFAULT_EV_FREE_WINDOW_MINIMUM_CURRENT,
+    DEFAULT_EV_FREE_WINDOW_PRIORITY,
+    DEFAULT_EV_FREE_WINDOW_SETTLE_MINUTES,
+    DEFAULT_EV_LOCATION_MODE,
     DEFAULT_EV_MAX_CURRENT,
     DEFAULT_EV_MIN_CURRENT,
     DEFAULT_EV_PHASE_COUNT,
@@ -98,17 +129,21 @@ from .const import (
     DEFAULT_RESERVE_KWH,
     DEFAULT_SERVICE_IMPORT_LIMIT_A,
     DEFAULT_SHOULDER_RATE,
+    DEFAULT_SITE_GRID_HEADROOM_CURRENT,
     DEFAULT_SITE_PHASE_COUNT,
     DEFAULT_SUPER_EXPORT_RATE,
     DEFAULT_ZERO_IMPORT_CONFIRM_MINUTES,
     DEFAULT_ZERO_IMPORT_THRESHOLD_KW,
     DOMAIN,
+    EV_FREE_WINDOW_PRIORITIES,
+    EV_LOCATION_MODES,
     FOXESS_CONTROL_OWNERS,
 )
 
 ENTITY = selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor"))
 SELECT_ENTITY = selector.EntitySelector(selector.EntitySelectorConfig(domain="select"))
 NUMBER_ENTITY = selector.EntitySelector(selector.EntitySelectorConfig(domain="number"))
+SWITCH_ENTITY = selector.EntitySelector(selector.EntitySelectorConfig(domain="switch"))
 
 
 class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -286,6 +321,100 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 ): vol.Coerce(float),
                 optional_entity(CONF_EV_AT_HOME): selector.EntitySelector(),
                 optional_entity(CONF_EV_CABLE_CONNECTED): selector.EntitySelector(),
+                optional_entity(CONF_EV_CHARGING_STATE): ENTITY,
+                optional_entity(CONF_EV_ACTUAL_CURRENT): ENTITY,
+                optional_entity(CONF_EV_STORED_ENERGY): ENTITY,
+                optional_entity(CONF_EV_CURRENT_LIMIT): NUMBER_ENTITY,
+                optional_entity(CONF_EV_CHARGE_LIMIT): NUMBER_ENTITY,
+                optional_entity(CONF_EV_CHARGE_SWITCH): SWITCH_ENTITY,
+                vol.Required(
+                    CONF_EV_LOCATION_MODE,
+                    default=defaults.get(CONF_EV_LOCATION_MODE, DEFAULT_EV_LOCATION_MODE),
+                ): selector.SelectSelector(
+                    selector.SelectSelectorConfig(options=list(EV_LOCATION_MODES))
+                ),
+                vol.Required(
+                    CONF_EV_FREE_WINDOW_PRIORITY,
+                    default=defaults.get(
+                        CONF_EV_FREE_WINDOW_PRIORITY, DEFAULT_EV_FREE_WINDOW_PRIORITY
+                    ),
+                ): selector.SelectSelector(
+                    selector.SelectSelectorConfig(options=list(EV_FREE_WINDOW_PRIORITIES))
+                ),
+                vol.Required(
+                    CONF_EV_FREE_WINDOW_CHARGE_LIMIT,
+                    default=defaults.get(
+                        CONF_EV_FREE_WINDOW_CHARGE_LIMIT,
+                        DEFAULT_EV_FREE_WINDOW_CHARGE_LIMIT,
+                    ),
+                ): vol.Coerce(float),
+                vol.Required(
+                    CONF_EV_FREE_WINDOW_MINIMUM_CURRENT,
+                    default=defaults.get(
+                        CONF_EV_FREE_WINDOW_MINIMUM_CURRENT,
+                        DEFAULT_EV_FREE_WINDOW_MINIMUM_CURRENT,
+                    ),
+                ): vol.Coerce(float),
+                vol.Required(
+                    CONF_EV_FREE_WINDOW_SETTLE_MINUTES,
+                    default=defaults.get(
+                        CONF_EV_FREE_WINDOW_SETTLE_MINUTES,
+                        DEFAULT_EV_FREE_WINDOW_SETTLE_MINUTES,
+                    ),
+                ): vol.Coerce(float),
+                vol.Required(
+                    CONF_EV_DIRECT_LIMIT_HEADROOM,
+                    default=defaults.get(
+                        CONF_EV_DIRECT_LIMIT_HEADROOM, DEFAULT_EV_DIRECT_LIMIT_HEADROOM
+                    ),
+                ): vol.Coerce(float),
+                vol.Required(
+                    CONF_EV_CHARGE_EFFICIENCY,
+                    default=defaults.get(
+                        CONF_EV_CHARGE_EFFICIENCY, DEFAULT_EV_CHARGE_EFFICIENCY
+                    ),
+                ): vol.Coerce(float),
+                vol.Required(
+                    CONF_SITE_GRID_HEADROOM_CURRENT,
+                    default=defaults.get(
+                        CONF_SITE_GRID_HEADROOM_CURRENT,
+                        DEFAULT_SITE_GRID_HEADROOM_CURRENT,
+                    ),
+                ): vol.Coerce(float),
+                vol.Required(
+                    CONF_BATTERY_FREE_WINDOW_TARGET,
+                    default=defaults.get(
+                        CONF_BATTERY_FREE_WINDOW_TARGET,
+                        DEFAULT_BATTERY_FREE_WINDOW_TARGET,
+                    ),
+                ): vol.Coerce(float),
+                vol.Required(
+                    CONF_BATTERY_CHARGE_EFFICIENCY,
+                    default=defaults.get(
+                        CONF_BATTERY_CHARGE_EFFICIENCY,
+                        DEFAULT_BATTERY_CHARGE_EFFICIENCY,
+                    ),
+                ): vol.Coerce(float),
+                vol.Required(
+                    CONF_EV_ALLOWANCE_GUARD_ENABLED,
+                    default=defaults.get(
+                        CONF_EV_ALLOWANCE_GUARD_ENABLED,
+                        DEFAULT_EV_ALLOWANCE_GUARD_ENABLED,
+                    ),
+                ): selector.BooleanSelector(),
+                vol.Required(
+                    CONF_EV_ALLOWANCE_SAFETY_MARGIN,
+                    default=defaults.get(
+                        CONF_EV_ALLOWANCE_SAFETY_MARGIN,
+                        DEFAULT_EV_ALLOWANCE_SAFETY_MARGIN,
+                    ),
+                ): vol.Coerce(float),
+                vol.Required(
+                    CONF_EV_CONTROL_COMMISSIONED,
+                    default=defaults.get(
+                        CONF_EV_CONTROL_COMMISSIONED, DEFAULT_EV_CONTROL_COMMISSIONED
+                    ),
+                ): selector.BooleanSelector(),
                 vol.Required(
                     CONF_BONUS_WINDOW_START,
                     default=defaults.get(CONF_BONUS_WINDOW_START, DEFAULT_BONUS_WINDOW_START),
@@ -384,9 +513,6 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             "bonus_load_following_percent",
             "non_free_load_following_percent",
             "load_following_override",
-            "ev_charge_limit_entity",
-            "ev_current_limit_entity",
-            "ev_charge_switch_entity",
             "free_charge_full_battery_import_threshold_kwh",
         }
         cleaned = {key: value for key, value in data.items() if key not in removed}
@@ -426,6 +552,48 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             ),
             CONF_EV_PHASE_COUNT: data.get(CONF_EV_PHASE_COUNT, DEFAULT_EV_PHASE_COUNT),
             CONF_EV_MAX_CURRENT: data.get(CONF_EV_MAX_CURRENT, DEFAULT_EV_MAX_CURRENT),
+            CONF_EV_LOCATION_MODE: data.get(
+                CONF_EV_LOCATION_MODE, DEFAULT_EV_LOCATION_MODE
+            ),
+            CONF_EV_FREE_WINDOW_PRIORITY: data.get(
+                CONF_EV_FREE_WINDOW_PRIORITY, DEFAULT_EV_FREE_WINDOW_PRIORITY
+            ),
+            CONF_EV_FREE_WINDOW_CHARGE_LIMIT: data.get(
+                CONF_EV_FREE_WINDOW_CHARGE_LIMIT,
+                DEFAULT_EV_FREE_WINDOW_CHARGE_LIMIT,
+            ),
+            CONF_EV_FREE_WINDOW_MINIMUM_CURRENT: data.get(
+                CONF_EV_FREE_WINDOW_MINIMUM_CURRENT,
+                DEFAULT_EV_FREE_WINDOW_MINIMUM_CURRENT,
+            ),
+            CONF_EV_FREE_WINDOW_SETTLE_MINUTES: data.get(
+                CONF_EV_FREE_WINDOW_SETTLE_MINUTES,
+                DEFAULT_EV_FREE_WINDOW_SETTLE_MINUTES,
+            ),
+            CONF_EV_DIRECT_LIMIT_HEADROOM: data.get(
+                CONF_EV_DIRECT_LIMIT_HEADROOM, DEFAULT_EV_DIRECT_LIMIT_HEADROOM
+            ),
+            CONF_EV_CHARGE_EFFICIENCY: data.get(
+                CONF_EV_CHARGE_EFFICIENCY, DEFAULT_EV_CHARGE_EFFICIENCY
+            ),
+            CONF_SITE_GRID_HEADROOM_CURRENT: data.get(
+                CONF_SITE_GRID_HEADROOM_CURRENT, DEFAULT_SITE_GRID_HEADROOM_CURRENT
+            ),
+            CONF_BATTERY_FREE_WINDOW_TARGET: data.get(
+                CONF_BATTERY_FREE_WINDOW_TARGET, DEFAULT_BATTERY_FREE_WINDOW_TARGET
+            ),
+            CONF_BATTERY_CHARGE_EFFICIENCY: data.get(
+                CONF_BATTERY_CHARGE_EFFICIENCY, DEFAULT_BATTERY_CHARGE_EFFICIENCY
+            ),
+            CONF_EV_ALLOWANCE_GUARD_ENABLED: data.get(
+                CONF_EV_ALLOWANCE_GUARD_ENABLED, DEFAULT_EV_ALLOWANCE_GUARD_ENABLED
+            ),
+            CONF_EV_ALLOWANCE_SAFETY_MARGIN: data.get(
+                CONF_EV_ALLOWANCE_SAFETY_MARGIN, DEFAULT_EV_ALLOWANCE_SAFETY_MARGIN
+            ),
+            CONF_EV_CONTROL_COMMISSIONED: data.get(
+                CONF_EV_CONTROL_COMMISSIONED, DEFAULT_EV_CONTROL_COMMISSIONED
+            ),
             CONF_BONUS_WINDOW_START: data.get(
                 CONF_BONUS_WINDOW_START, DEFAULT_BONUS_WINDOW_START
             ),
@@ -485,6 +653,12 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             CONF_EV_SOC,
             CONF_EV_AT_HOME,
             CONF_EV_CABLE_CONNECTED,
+            CONF_EV_CHARGING_STATE,
+            CONF_EV_ACTUAL_CURRENT,
+            CONF_EV_STORED_ENERGY,
+            CONF_EV_CURRENT_LIMIT,
+            CONF_EV_CHARGE_LIMIT,
+            CONF_EV_CHARGE_SWITCH,
             CONF_FOXESS_WORK_MODE,
             CONF_FOXESS_FORCE_CHARGE_POWER,
             CONF_FOXESS_FORCE_DISCHARGE_POWER,
@@ -499,6 +673,23 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
         if any(foxess_mapping) and not all(foxess_mapping):
             return {"base": "incomplete_foxess_mapping"}
+        ev_mapping = (
+            data.get(CONF_EV_SOC),
+            data.get(CONF_EV_AT_HOME),
+            data.get(CONF_EV_CABLE_CONNECTED),
+            data.get(CONF_EV_CHARGING_STATE),
+            data.get(CONF_EV_ACTUAL_CURRENT),
+            data.get(CONF_EV_STORED_ENERGY),
+            data.get(CONF_EV_CURRENT_LIMIT),
+            data.get(CONF_EV_CHARGE_LIMIT),
+            data.get(CONF_EV_CHARGE_SWITCH),
+        )
+        if data.get(CONF_EV_CONTROL_COMMISSIONED) and not all(ev_mapping):
+            return {"base": "incomplete_ev_mapping"}
+        if data.get(CONF_EV_LOCATION_MODE) not in EV_LOCATION_MODES:
+            return {CONF_EV_LOCATION_MODE: "invalid_ev_location_mode"}
+        if data.get(CONF_EV_FREE_WINDOW_PRIORITY) not in EV_FREE_WINDOW_PRIORITIES:
+            return {CONF_EV_FREE_WINDOW_PRIORITY: "invalid_ev_priority"}
         try:
             capacity = float(data[CONF_BATTERY_CAPACITY])
             floor = float(data[CONF_BATTERY_FLOOR])
@@ -526,6 +717,15 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             export_discharge_power = float(data[CONF_EXPORT_DISCHARGE_POWER_KW])
             discharge_efficiency = float(data[CONF_DISCHARGE_EFFICIENCY_PERCENT])
             protected_ev_baseline = float(data[CONF_EV_PROTECTED_BASELINE_A])
+            ev_free_limit = float(data[CONF_EV_FREE_WINDOW_CHARGE_LIMIT])
+            ev_free_minimum = float(data[CONF_EV_FREE_WINDOW_MINIMUM_CURRENT])
+            ev_settle_minutes = float(data[CONF_EV_FREE_WINDOW_SETTLE_MINUTES])
+            ev_limit_headroom = float(data[CONF_EV_DIRECT_LIMIT_HEADROOM])
+            ev_charge_efficiency = float(data[CONF_EV_CHARGE_EFFICIENCY])
+            site_headroom = float(data[CONF_SITE_GRID_HEADROOM_CURRENT])
+            battery_target = float(data[CONF_BATTERY_FREE_WINDOW_TARGET])
+            battery_efficiency = float(data[CONF_BATTERY_CHARGE_EFFICIENCY])
+            allowance_margin = float(data[CONF_EV_ALLOWANCE_SAFETY_MARGIN])
             fallback = float(data[CONF_HOUSE_LEARNING_FALLBACK])
         except (KeyError, TypeError, ValueError):
             return {"base": "invalid_site_limits"}
@@ -573,6 +773,15 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             export_discharge_power,
             discharge_efficiency,
             protected_ev_baseline,
+            ev_free_limit,
+            ev_free_minimum,
+            ev_settle_minutes,
+            ev_limit_headroom,
+            ev_charge_efficiency,
+            site_headroom,
+            battery_target,
+            battery_efficiency,
+            allowance_margin,
         )
         if (
             not all(math.isfinite(value) for value in values)
@@ -599,6 +808,21 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             or export_discharge_power < 0
             or not 50 <= discharge_efficiency <= 100
             or protected_ev_baseline < 0
+            or not 0 <= ev_free_limit <= 100
+            or ev_free_minimum < 0
+            or ev_free_minimum > max_current
+            or ev_settle_minutes < 0
+            or ev_limit_headroom < 0
+            or not 0 < ev_charge_efficiency <= 100
+            or site_headroom < 0
+            or (service_import_limit > 0 and site_headroom > service_import_limit)
+            or not 0 <= battery_target <= 100
+            or not 0 < battery_efficiency <= 100
+            or allowance_margin < 0
+            or (
+                bool(data.get(CONF_EV_CONTROL_COMMISSIONED))
+                and service_import_limit <= 0
+            )
         ):
             return {"base": "invalid_site_limits"}
         return {}

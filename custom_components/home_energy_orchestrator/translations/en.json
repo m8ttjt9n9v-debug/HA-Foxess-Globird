@@ -40,6 +40,25 @@
           "foxess_force_discharge_power_entity": "FoxESS force-discharge power number (required for ZEROHERO export or diagnostics)",
           "ev_at_home_entity": "EV at-home evidence entity (required when mandatory EV baseline is non-zero)",
           "ev_cable_connected_entity": "EV cable-connected entity (required when mandatory EV baseline is non-zero)",
+          "ev_charging_state_entity": "Tessie charging-state sensor",
+          "ev_actual_current_entity": "Tessie actual charging-current sensor",
+          "ev_stored_energy_entity": "Tessie stored-energy sensor",
+          "ev_current_limit_entity": "Tessie writable charging-current number",
+          "ev_charge_limit_entity": "Tessie writable charge-limit number",
+          "ev_charge_switch_entity": "Tessie charge switch",
+          "ev_location_mode": "EV location policy",
+          "ev_free_window_priority": "Free-window charging priority",
+          "ev_free_window_charge_limit_percent": "Free-window EV charge target (%)",
+          "ev_free_window_minimum_current_a": "Guaranteed free-window EV current (A)",
+          "ev_free_window_settle_minutes": "Battery-charging settle time before house-priority control (minutes)",
+          "ev_direct_limit_headroom_percent": "Powered-connector charge-limit headroom (%)",
+          "ev_charge_efficiency_percent": "EV wall-to-battery charging efficiency (%)",
+          "site_grid_headroom_current_a": "Service-current safety headroom per phase (A)",
+          "battery_free_window_target_percent": "Expected free-window home-battery target (%)",
+          "battery_charge_efficiency_percent": "Home-battery charging efficiency (%)",
+          "ev_allowance_guard_enabled": "Protect the configured whole-site free-energy allowance",
+          "ev_allowance_safety_margin_kwh": "Free-energy allowance safety margin (kWh)",
+          "ev_control_commissioned": "EV mappings and electrical limits commissioned",
           "ev_phase_count": "EV charging phase count",
           "ev_max_current": "Commissioned EV maximum current (A)",
           "ev_min_current": "Commissioned EV minimum current (A)",
@@ -99,6 +118,25 @@
           "foxess_force_discharge_power_entity": "FoxESS force-discharge power number (required for ZEROHERO export or diagnostics)",
           "ev_at_home_entity": "EV at-home evidence entity (required when mandatory EV baseline is non-zero)",
           "ev_cable_connected_entity": "EV cable-connected entity (required when mandatory EV baseline is non-zero)",
+          "ev_charging_state_entity": "Tessie charging-state sensor",
+          "ev_actual_current_entity": "Tessie actual charging-current sensor",
+          "ev_stored_energy_entity": "Tessie stored-energy sensor",
+          "ev_current_limit_entity": "Tessie writable charging-current number",
+          "ev_charge_limit_entity": "Tessie writable charge-limit number",
+          "ev_charge_switch_entity": "Tessie charge switch",
+          "ev_location_mode": "EV location policy",
+          "ev_free_window_priority": "Free-window charging priority",
+          "ev_free_window_charge_limit_percent": "Free-window EV charge target (%)",
+          "ev_free_window_minimum_current_a": "Guaranteed free-window EV current (A)",
+          "ev_free_window_settle_minutes": "Battery-charging settle time before house-priority control (minutes)",
+          "ev_direct_limit_headroom_percent": "Powered-connector charge-limit headroom (%)",
+          "ev_charge_efficiency_percent": "EV wall-to-battery charging efficiency (%)",
+          "site_grid_headroom_current_a": "Service-current safety headroom per phase (A)",
+          "battery_free_window_target_percent": "Expected free-window home-battery target (%)",
+          "battery_charge_efficiency_percent": "Home-battery charging efficiency (%)",
+          "ev_allowance_guard_enabled": "Protect the configured whole-site free-energy allowance",
+          "ev_allowance_safety_margin_kwh": "Free-energy allowance safety margin (kWh)",
+          "ev_control_commissioned": "EV mappings and electrical limits commissioned",
           "ev_phase_count": "EV charging phase count",
           "ev_max_current": "Commissioned EV maximum current (A)",
           "ev_min_current": "Commissioned EV minimum current (A)",
@@ -124,6 +162,9 @@
       "invalid_name": "Enter a site name.",
       "invalid_entity": "Select a valid Home Assistant entity.",
       "incomplete_foxess_mapping": "Map all three FoxESS control entities, or leave all three unmapped.",
+      "incomplete_ev_mapping": "Commissioned EV control requires every Tessie telemetry and actuator mapping.",
+      "invalid_ev_location_mode": "Choose Auto, Home, or Away EV location policy.",
+      "invalid_ev_priority": "Choose house-battery or EV free-window priority.",
       "invalid_site_limits": "Check capacity, floor, reserve, charger, inverter, current, and voltage limits.",
       "invalid_schedule": "Choose different free-charge times and a non-negative fallback.",
       "invalid_foxess_control_owner": "Choose observer only, local Modbus, or FoxCloud Mode Scheduler."
@@ -135,6 +176,19 @@
         "observer_only": "Observer only (no FoxESS writes)",
         "local_modbus": "Local Modbus (FoxCloud Mode Scheduler must be disabled)",
         "foxcloud_scheduler": "FoxCloud Mode Scheduler (blocks HEO Modbus writes)"
+      }
+    },
+    "ev_location_mode": {
+      "options": {
+        "auto": "Auto (mapped location must be home)",
+        "home": "Home override",
+        "away": "Away override"
+      }
+    },
+    "ev_free_window_priority": {
+      "options": {
+        "house_battery": "House battery",
+        "ev": "EV"
       }
     }
   }

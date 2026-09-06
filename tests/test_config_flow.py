@@ -105,7 +105,57 @@ async def test_user_flow_removes_obsolete_rewritten_controller_fields(hass):
     )
 
     assert result["type"] is FlowResultType.CREATE_ENTRY
-    assert not legacy_fields.keys() & result["data"].keys()
+    assert result["data"]["ev_current_limit_entity"] == "number.car_current"
+    assert result["data"]["ev_charge_switch_entity"] == "switch.car_charge"
+    removed = {
+        "ev_charger_profile",
+        "free_charge_full_battery_import_threshold_kwh",
+        "bonus_load_following_percent",
+    }
+    assert not removed & result["data"].keys()
+
+
+async def test_ev_commissioning_requires_complete_explicit_mapping(hass):
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": SOURCE_USER},
+        data={
+            "name": "Incomplete EV",
+            **ENTRY_DATA,
+            "service_import_limit_a": 63,
+            "ev_control_commissioned": True,
+            "ev_soc_entity": "sensor.car_soc",
+        },
+    )
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"] == {"base": "incomplete_ev_mapping"}
+
+
+async def test_ev_commissioning_accepts_complete_explicit_mapping(hass):
+    mappings = {
+        "ev_soc_entity": "sensor.car_soc",
+        "ev_at_home_entity": "device_tracker.car",
+        "ev_cable_connected_entity": "binary_sensor.car_cable",
+        "ev_charging_state_entity": "sensor.car_charging",
+        "ev_actual_current_entity": "sensor.car_current",
+        "ev_stored_energy_entity": "sensor.car_energy",
+        "ev_current_limit_entity": "number.car_current",
+        "ev_charge_limit_entity": "number.car_limit",
+        "ev_charge_switch_entity": "switch.car_charge",
+    }
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": SOURCE_USER},
+        data={
+            "name": "Commissioned EV",
+            **ENTRY_DATA,
+            **mappings,
+            "service_import_limit_a": 63,
+            "ev_control_commissioned": True,
+        },
+    )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert {key: result["data"][key] for key in mappings} == mappings
 
 
 async def test_user_flow_preserves_explicit_foxess_actuator_mappings(hass):

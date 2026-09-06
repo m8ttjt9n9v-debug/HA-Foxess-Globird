@@ -6,12 +6,11 @@ deployment target.
 
 ## Scope and status
 
-The pure planning layer is ported and characterized. It performs no Home
-Assistant service calls. The independent, default-off EV intent switch is
-restored, but reports `blocked_adapter_not_implemented` if enabled. The active
-Tessie adapter, persistent matched-sample state, actuator mappings, and
-commissioning workflow remain incomplete, so EV writes remain impossible in
-this milestone.
+The pure planning and direct-EVSE command layers are ported and characterized.
+The independent EV intent, commissioning flag, Safety Lock, and complete
+explicit mapping set are separate gates. Restart-serializable matched-average
+buffers are implemented, but runtime sampling and reconciliation are not yet
+connected. Therefore EV writes remain impossible in this milestone.
 
 ## Canonical mapping
 
@@ -93,13 +92,11 @@ phase count, connector rating, efficiency, time, or entity ID.
 
 ## Remaining implementation stages
 
-1. Port internal matched three-minute samples with restart-persistent state.
-2. Add explicit Tessie mappings, path selection, location mode, limits, and an
-   independent default-off automatic EV gate.
-3. Connect the now-characterized direct-path adapter with response
+1. Connect the ported matched three-minute samples to mapped runtime state.
+2. Connect the now-characterized direct-path adapter with response
    confirmation, bounded retries, service-call tracing, and rehearsal tests.
-4. Commission the higher-capacity direct path in observer/rehearsal mode before
+3. Commission the higher-capacity direct path in observer/rehearsal mode before
    enabling writes.
-5. Port the smart-socket sequence and one-attempt fault recovery for Mangerton.
-6. Port learned driving demand, pre-free backfill, and solar spill as separate
+4. Port the smart-socket sequence and one-attempt fault recovery for Mangerton.
+5. Port learned driving demand, pre-free backfill, and solar spill as separate
    provenance-tested behaviours.

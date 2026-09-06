@@ -22,6 +22,8 @@ Status here describes behavioral parity, not merely the presence of code.
 - [x] Fail-closed direct-EVSE command boundary and Tessie service adapter,
   still disconnected from the automatic gate pending mappings and runtime
   reconciliation tests.
+- [x] Explicit direct-path commissioning schema and restart-serializable
+  three-minute feedback primitive with coverage/source-validity evidence.
 
 ## Removed pending a faithful port
 
@@ -36,7 +38,8 @@ Mangerton parity.
   auditable house, FoxESS, and EV projections.
 - [x] Pure EV/house priority, guaranteed-current, service-overrun, settle, and
   feedback-hold policy.
-- [ ] Matched three-minute grid/current feedback and settling behavior.
+- [ ] Connect the matched three-minute grid/current primitive and settling
+  behavior to runtime state sampling and the direct-path planner.
 - [ ] Learned Tesla driving demand, arrival reserve, and charge-target policy.
 - [ ] Solar-spill EV charging after the battery is full.
 - [ ] Latest-start, reserve-aware pre-free EV backfill.
