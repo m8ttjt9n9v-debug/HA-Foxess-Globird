@@ -61,6 +61,19 @@ def test_active_session_remains_latched_when_telemetry_is_eligible() -> None:
     assert result.plan.commands == ()
 
 
+def test_active_session_ignores_ordinary_eligibility_recalculation() -> None:
+    state = ExportSessionState("active", 8, 0)
+    result = _advance(
+        state,
+        FoxessObservation("Force Discharge", 0, 8),
+        eligible=False,
+        requested_discharge_power_kw=1,
+    )
+    assert result.state.phase == "active"
+    assert result.state.requested_power_kw == 8
+    assert result.reason == "latched"
+
+
 def test_window_finish_restores_self_use() -> None:
     state = ExportSessionState("active", 8, 0)
     result = _advance(state, FoxessObservation("Force Discharge", 0, 8), window_active=False)
@@ -77,8 +90,41 @@ def test_source_loss_enters_recovery_without_writing() -> None:
     assert result.plan.commands == ()
 
 
+def test_repeated_source_loss_retains_recovery_latch() -> None:
+    state = ExportSessionState("recovering", 8, 1, NOW)
+    result = _advance(state, source_available=False)
+    assert result.state.phase == "recovering"
+    assert result.state.requested_power_kw == 8
+
+
+def test_source_return_after_finish_restores_before_clearing_latch() -> None:
+    state = ExportSessionState("recovering", 8, 1, NOW)
+    result = _advance(
+        state,
+        FoxessObservation("Force Discharge", 0, 8),
+        now=NOW + timedelta(hours=4),
+        window_active=False,
+        finish_requested=True,
+    )
+    assert result.state.phase == "stopping"
+    assert [command.action for command in result.plan.commands] == [
+        "select_mode",
+        "set_discharge_power",
+    ]
+
+
 def test_retries_are_bounded() -> None:
     state = ExportSessionState("starting", 8, 3, NOW - timedelta(seconds=31))
     result = _advance(state)
-    assert result.state.phase == "recovering"
+    assert result.state.phase == "starting"
+    assert result.state.attempts == 3
     assert result.plan.commands == ()
+
+
+def test_exhausted_retries_do_not_restart_on_next_tick() -> None:
+    state = ExportSessionState("starting", 8, 3, NOW - timedelta(minutes=2))
+    first = _advance(state)
+    second = _advance(first.state, now=NOW + timedelta(seconds=31))
+    assert first.reason == second.reason == "max_attempts_exceeded"
+    assert first.state == second.state == state
+    assert second.plan.commands == ()

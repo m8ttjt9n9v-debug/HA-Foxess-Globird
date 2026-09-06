@@ -154,6 +154,41 @@ DESCRIPTIONS = (
     ),
     SensorEntityDescription(key="tariff_status", name="Tariff Guard Status"),
     SensorEntityDescription(
+        key="zerohero_export_window",
+        name="ZEROHERO Export This Window",
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        device_class="energy",
+        state_class="total_increasing",
+        suggested_display_precision=2,
+    ),
+    SensorEntityDescription(
+        key="zerohero_sellable_energy",
+        name="ZEROHERO Sellable Energy",
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        device_class="energy",
+        suggested_display_precision=2,
+    ),
+    SensorEntityDescription(
+        key="zerohero_planned_export_energy",
+        name="ZEROHERO Planned Export Energy",
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        device_class="energy",
+        suggested_display_precision=2,
+    ),
+    SensorEntityDescription(
+        key="zerohero_planned_duration",
+        name="ZEROHERO Planned Duration",
+        native_unit_of_measurement="min",
+        device_class="duration",
+        suggested_display_precision=1,
+    ),
+    SensorEntityDescription(
+        key="zerohero_planned_start",
+        name="ZEROHERO Planned Start",
+        device_class="timestamp",
+    ),
+    SensorEntityDescription(key="zerohero_export_status", name="ZEROHERO Export Status"),
+    SensorEntityDescription(
         key="free_charge_completion",
         name="Free-Window Charge Completion Mode",
     ),
@@ -299,6 +334,39 @@ class EnergySensor(CoordinatorEntity[EnergyCoordinator], SensorEntity):
                 else round(sum(self.coordinator.zerohero_import.hourly_import_kwh.values()), 3)
             ),
             "tariff_status": ledger.tariff_reason,
+            "zerohero_export_window": round(
+                self.coordinator.zerohero_export.imported_kwh, 3
+            ),
+            "zerohero_sellable_energy": (
+                None
+                if self.coordinator.active_controller is None
+                or self.coordinator.active_controller.export_plan is None
+                else self.coordinator.active_controller.export_plan.sellable_energy_kwh
+            ),
+            "zerohero_planned_export_energy": (
+                None
+                if self.coordinator.active_controller is None
+                or self.coordinator.active_controller.export_plan is None
+                else self.coordinator.active_controller.export_plan.planned_export_energy_kwh
+            ),
+            "zerohero_planned_duration": (
+                None
+                if self.coordinator.active_controller is None
+                or self.coordinator.active_controller.export_plan is None
+                else round(
+                    self.coordinator.active_controller.export_plan.planned_duration_h * 60, 1
+                )
+            ),
+            "zerohero_planned_start": (
+                None
+                if self.coordinator.active_controller is None
+                else self.coordinator.active_controller.export_planned_start
+            ),
+            "zerohero_export_status": (
+                "unavailable"
+                if self.coordinator.active_controller is None
+                else self.coordinator.active_controller.export_session.phase
+            ),
             "free_charge_completion": (
                 None
                 if self.coordinator.free_charge_completion is None
@@ -443,6 +511,24 @@ class EnergySensor(CoordinatorEntity[EnergyCoordinator], SensorEntity):
             "foxess_control_owner": foxess_owner,
             "ev_automatic_control_enabled": ev_requested,
             "ev_control_effective": ev_enabled,
+            "automatic_export_enabled": self.coordinator.config.get(
+                "automatic_export_enabled", False
+            ),
+            "export_session_phase": (
+                self.coordinator.active_controller.export_session.phase
+                if self.coordinator.active_controller
+                else "unavailable"
+            ),
+            "export_allowance_remaining_kwh": (
+                self.coordinator.active_controller.export_allowance_remaining_kwh
+                if self.coordinator.active_controller
+                else None
+            ),
+            "export_protected_ev_kwh": (
+                self.coordinator.active_controller.export_protected_ev_kwh
+                if self.coordinator.active_controller
+                else None
+            ),
             "rehearsal_mode": self.coordinator.config.get(CONF_REHEARSAL_MODE, True),
             "integration": DOMAIN,
             "learning_model": learning.model,

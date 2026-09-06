@@ -11,13 +11,19 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from . import EnergyConfigEntry
-from .const import CONF_REHEARSAL_MODE, DOMAIN
+from .const import CONF_AUTOMATIC_EXPORT_ENABLED, CONF_REHEARSAL_MODE, DOMAIN
 from .coordinator import EnergyCoordinator
 
-DESCRIPTION = SwitchEntityDescription(
+SAFETY_DESCRIPTION = SwitchEntityDescription(
     key="safety_lock",
     name="Safety Lock",
     icon="mdi:lock",
+    entity_category=EntityCategory.CONFIG,
+)
+EXPORT_DESCRIPTION = SwitchEntityDescription(
+    key="automatic_export",
+    name="Automatic ZEROHERO Export",
+    icon="mdi:transmission-tower-export",
     entity_category=EntityCategory.CONFIG,
 )
 
@@ -27,13 +33,19 @@ async def async_setup_entry(
 ) -> None:
     """Expose the config-backed safety lock as an unambiguous switch."""
     registry = er.async_get(hass)
-    unique_id = f"{entry.entry_id}_{DESCRIPTION.key}"
-    current_entity_id = registry.async_get_entity_id("switch", DOMAIN, unique_id)
-    stable_entity_id = f"switch.home_energy_{DESCRIPTION.key}"
-    if current_entity_id and current_entity_id != stable_entity_id:
-        if registry.async_get(stable_entity_id) is None:
-            registry.async_update_entity(current_entity_id, new_entity_id=stable_entity_id)
-    async_add_entities((SafetyLockSwitch(entry.runtime_data, entry, DESCRIPTION),))
+    for description in (SAFETY_DESCRIPTION, EXPORT_DESCRIPTION):
+        unique_id = f"{entry.entry_id}_{description.key}"
+        current_entity_id = registry.async_get_entity_id("switch", DOMAIN, unique_id)
+        stable_entity_id = f"switch.home_energy_{description.key}"
+        if current_entity_id and current_entity_id != stable_entity_id:
+            if registry.async_get(stable_entity_id) is None:
+                registry.async_update_entity(current_entity_id, new_entity_id=stable_entity_id)
+    async_add_entities(
+        (
+            SafetyLockSwitch(entry.runtime_data, entry, SAFETY_DESCRIPTION),
+            AutomaticExportSwitch(entry.runtime_data, entry, EXPORT_DESCRIPTION),
+        )
+    )
 
 
 class SafetyLockSwitch(CoordinatorEntity[EnergyCoordinator], SwitchEntity):
@@ -72,4 +84,43 @@ class SafetyLockSwitch(CoordinatorEntity[EnergyCoordinator], SwitchEntity):
         self.hass.config_entries.async_update_entry(self._entry, data=config)
         self.coordinator.config[CONF_REHEARSAL_MODE] = locked
         self.async_write_ha_state()
+        self.coordinator.async_update_listeners()
+
+
+class AutomaticExportSwitch(CoordinatorEntity[EnergyCoordinator], SwitchEntity):
+    """Independent behavior toggle; ownership and Safety Lock remain mandatory."""
+
+    entity_description: SwitchEntityDescription
+
+    def __init__(
+        self,
+        coordinator: EnergyCoordinator,
+        entry: ConfigEntry,
+        description: SwitchEntityDescription,
+    ) -> None:
+        super().__init__(coordinator)
+        self.entity_description = description
+        self._entry = entry
+        self._attr_unique_id = f"{entry.entry_id}_{description.key}"
+        self.entity_id = f"switch.home_energy_{description.key}"
+        self._attr_has_entity_name = True
+
+    @property
+    def is_on(self) -> bool:
+        return bool(self.coordinator.config.get(CONF_AUTOMATIC_EXPORT_ENABLED, False))
+
+    async def async_turn_on(self, **kwargs: object) -> None:
+        await self._set_enabled(True)
+
+    async def async_turn_off(self, **kwargs: object) -> None:
+        await self._set_enabled(False)
+
+    async def _set_enabled(self, enabled: bool) -> None:
+        config = {**self._entry.data, CONF_AUTOMATIC_EXPORT_ENABLED: enabled}
+        self.hass.config_entries.async_update_entry(self._entry, data=config)
+        self.coordinator.config[CONF_AUTOMATIC_EXPORT_ENABLED] = enabled
+        self.async_write_ha_state()
+        controller = self.coordinator.active_controller
+        if controller is not None:
+            await controller.async_reconcile()
         self.coordinator.async_update_listeners()

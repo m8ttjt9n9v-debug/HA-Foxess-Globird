@@ -102,6 +102,7 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
     def __init__(self, hass: HomeAssistant, config: dict[str, object], entry_id: str) -> None:
         super().__init__(hass, _LOGGER, name=DOMAIN, update_interval=timedelta(seconds=30))
         self.config = config
+        self.entry_id = entry_id
         self.active_controller = None
         self.snapshot: SiteSnapshot | None = None
         self.demand_history = DemandHistory([])
@@ -120,6 +121,10 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
             window_start=self._configured_time(CONF_BONUS_WINDOW_START, DEFAULT_BONUS_WINDOW_START),
             window_end=self._configured_time(CONF_BONUS_WINDOW_END, DEFAULT_BONUS_WINDOW_END),
         )
+        self.zerohero_export = WindowImportAccumulator(
+            window_start=self._configured_time(CONF_BONUS_WINDOW_START, DEFAULT_BONUS_WINDOW_START),
+            window_end=self._configured_time(CONF_BONUS_WINDOW_END, DEFAULT_BONUS_WINDOW_END),
+        )
         self._daily_import_store: Store[dict[str, object]] = Store(
             hass, 1, f"{DOMAIN}.{entry_id}.daily_import", private=True
         )
@@ -133,9 +138,13 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
         self._zerohero_import_store: Store[dict[str, object]] = Store(
             hass, 1, f"{DOMAIN}.{entry_id}.zerohero_hourly_import", private=True
         )
+        self._zerohero_export_store: Store[dict[str, object]] = Store(
+            hass, 1, f"{DOMAIN}.{entry_id}.zerohero_export", private=True
+        )
         self._free_import_last_saved: float | None = None
         self._peak_import_last_saved: float | None = None
         self._zerohero_import_last_saved: float | None = None
+        self._zerohero_export_last_saved: float | None = None
         self._demand_store: Store[dict[str, object]] = Store(
             hass, 1, f"{DOMAIN}.{entry_id}.demand_history", private=True
         )
@@ -169,6 +178,7 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
         self.free_window_import.restore(await self._free_import_store.async_load(), now)
         self.peak_import.restore(await self._peak_import_store.async_load(), now)
         self.zerohero_import.restore(await self._zerohero_import_store.async_load(), now)
+        self.zerohero_export.restore(await self._zerohero_export_store.async_load(), now)
 
     async def async_record_demand_cycle(
         self, energy_kwh: float, observed_at: datetime | None = None
@@ -552,6 +562,18 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
             ):
                 await self._zerohero_import_store.async_save(self.zerohero_import.to_payload())
                 self._zerohero_import_last_saved = zerohero_total
+        export_kw = None if grid is None else max(-grid, 0.0)
+        if self.zerohero_export.observe(export_kw, now):
+            exported = self.zerohero_export.imported_kwh
+            if (
+                self._zerohero_export_last_saved is None
+                or exported < self._zerohero_export_last_saved
+                or exported - self._zerohero_export_last_saved >= 0.01
+            ):
+                await self._zerohero_export_store.async_save(
+                    self.zerohero_export.to_payload()
+                )
+                self._zerohero_export_last_saved = exported
         try:
             configured_capacity = self._configured_float(CONF_BATTERY_CAPACITY)
             measured_capacity = self._energy(self.config.get(CONF_BATTERY_CAPACITY_ENTITY))

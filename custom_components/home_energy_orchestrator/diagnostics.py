@@ -9,6 +9,7 @@ from homeassistant.core import HomeAssistant
 from . import EnergyConfigEntry
 from .const import (
     CONF_AUTOMATIC_CONTROL_ENABLED,
+    CONF_AUTOMATIC_EXPORT_ENABLED,
     CONF_EV_AUTOMATIC_CONTROL_ENABLED,
     CONF_EV_CHARGE_LIMIT,
     CONF_EV_CHARGE_SWITCH,
@@ -51,6 +52,14 @@ async def async_get_config_entry_diagnostics(
             "safety_lock_engaged": safety_locked,
             "foxess_automatic_control_enabled": bool(
                 entry.data.get(CONF_AUTOMATIC_CONTROL_ENABLED, False)
+            ),
+            "automatic_export_enabled": bool(
+                entry.data.get(CONF_AUTOMATIC_EXPORT_ENABLED, False)
+            ),
+            "export_session_phase": (
+                active_controller.export_session.phase
+                if active_controller is not None
+                else "unavailable"
             ),
             "foxess_control_owner": entry.data.get(
                 CONF_FOXESS_CONTROL_OWNER, DEFAULT_FOXESS_CONTROL_OWNER

@@ -1,6 +1,8 @@
-# Commissioning (0.1 observer release)
+# Commissioning
 
-The controller starts and remains in **observe** mode. Its status entity reports `observer_only` when the required battery input is valid, or a reason such as `missing_battery_soc` when it is not.
+The integration starts with Observer ownership, automatic controls off, and
+Safety Lock on. Its status entity reports the configured owner, each control
+gate, and the most recent guarded action.
 
 Confirm these values over at least seven complete tariff cycles before considering a future actuation release:
 
@@ -9,4 +11,11 @@ Confirm these values over at least seven complete tariff cycles before consideri
 - configured EV maximum power, if an EV current ceiling has been supplied; and
 - diagnostics that show expected availability without personal entity IDs.
 
-Do not disable the existing YAML controller, modify actuator ownership, or rely on this release for physical control. Actuation will be introduced only in a later separately commissioned release.
+Before commissioning FoxESS actuation, choose one owner for the entire day.
+Local Modbus requires FoxCloud Mode Scheduler and all legacy inverter writers
+to be disabled. Validate mapped mode and power feedback, then use only the
+bounded Diagnostics tests. Automatic charging and ZEROHERO selling remain
+separate default-off behaviors; enable them one at a time only after their
+feedback and rollback paths are recorded. The
+[ZEROHERO export policy](zerohero-export-policy.md) defines the ported selling
+algorithm and its persisted recovery behavior.

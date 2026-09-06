@@ -6,6 +6,7 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.home_energy_orchestrator.config_flow import ConfigFlow
 from custom_components.home_energy_orchestrator.const import (
+    CONF_AUTOMATIC_EXPORT_ENABLED,
     CONF_EV_AUTOMATIC_CONTROL_ENABLED,
     CONF_EV_CHARGE_LIMIT,
     CONF_EV_CHARGE_SWITCH,
@@ -76,6 +77,21 @@ async def test_user_flow_defaults_legacy_foxess_owner_to_observer(hass):
 
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["data"][CONF_FOXESS_CONTROL_OWNER] == DEFAULT_FOXESS_CONTROL_OWNER
+
+
+async def test_user_flow_defaults_legacy_automatic_export_to_disabled(hass):
+    legacy_data = {
+        key: value for key, value in ENTRY_DATA.items() if key != CONF_AUTOMATIC_EXPORT_ENABLED
+    }
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": SOURCE_USER},
+        data={"name": "Legacy export site", **legacy_data},
+    )
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["data"][CONF_AUTOMATIC_EXPORT_ENABLED] is False
 
 
 async def test_user_flow_preserves_explicit_future_actuator_mappings(hass):

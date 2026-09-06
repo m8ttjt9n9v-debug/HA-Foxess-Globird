@@ -18,7 +18,7 @@ HACS installation requires a public GitHub repository. This project publishes
 versioned GitHub releases for the custom-repository channel; inclusion in
 HACS's default catalogue is a separate review process.
 
-Version 0.3.5 separates automatic FoxESS and Tessie/Tessy authorization.
+Version 0.3.8 separates automatic FoxESS and Tessie/Tessy authorization.
 Both controls default to disabled. Enabling the FoxESS control option does not
 authorize EV current or charge-switch writes, and enabling EV control does not
 authorize inverter writes. The shared Safety Lock must also be OFF before
@@ -30,8 +30,18 @@ EV path confirms that the Tessie/Tessy vehicle is at home before any write;
 away or unknown presence is fail-closed. Free-window battery charging uses the
 commissioned inverter limit while the configured import cutoff remains;
 post-window solar spill and reserve-aware pre-window backfill are bounded by
-the configured EV and inverter limits. Vehicle charge-limit and export writes
-remain disabled.
+the configured EV and inverter limits. Vehicle charge-limit writes remain
+disabled.
+
+Automatic ZEROHERO export is a third, default-off behavior toggle beneath the
+FoxESS gate. It operates only when **Local Modbus** is the selected FoxESS
+owner, automatic FoxESS control is enabled, the complete Modbus actuator map
+is valid, and Safety Lock is OFF. Do not enable it while FoxCloud Mode
+Scheduler is enabled. Configure the boosted window, 21:01 restoration time,
+daily export cap, fixed discharge power, efficiency, and any physically
+mandatory connected-EV baseline during setup or reconfiguration. The full
+ported behavior is recorded in the
+[ZEROHERO export policy](zerohero-export-policy.md).
 
 Version 0.2.28 adds guarded EV session start/stop. A session can start only
 when the mapped Tessie/Tessy vehicle is home, connected, below its mapped

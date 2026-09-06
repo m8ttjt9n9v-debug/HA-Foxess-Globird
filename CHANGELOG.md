@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.3.8 — Mangerton ZEROHERO selling automation
+
+- Port the proven Mangerton surplus-energy ledger, calculated latest start,
+  fixed-power session latch, deliberate 21:01 finish, and Self Use recovery.
+- Require Local Modbus ownership, the FoxESS automatic gate, an independent
+  automatic-export toggle, and an unlocked Safety Lock before any export write.
+- Persist both boosted-window export energy and the active session latch across
+  Home Assistant restarts and Modbus outages.
+- Protect learned house demand plus only an explicitly configured mandatory
+  connected-EV baseline; optional EV target energy does not suppress a sale.
+- Bound start and restore retries, including a stable no-write state after
+  exhaustion so a competing writer cannot cause indefinite mode flapping.
+- Expose the plan, latest start, accumulated export, session phase, and
+  allowance evidence as portable sensors and diagnostics.
+
 ## 0.3.7 — exclusive FoxESS control ownership
 
 - Add an explicit FoxESS owner selector: Observer only, Local Modbus, or

@@ -1,7 +1,7 @@
 # FoxESS Globird Energy Observer
 
 An Australia-scoped Home Assistant custom integration for an auditable,
-site-configured home-energy ledger. Version 0.3.7 is observer-by-default:
+site-configured home-energy ledger. Version 0.3.8 is observer-by-default:
 it reads the entities selected during setup, normalises their units and signs,
 persists local tariff meters and demand-learning evidence, and only permits
 FoxESS writes after an explicit control opt-in, complete actuator mapping, and
@@ -65,6 +65,12 @@ entities stable `sensor.home_energy_*` IDs regardless of the entry name.
   Mode Scheduler. Selecting FoxCloud blocks all HEO Modbus automation and
   diagnostic writes for the entire day, including outside configured cloud
   periods. Cloud-schedule actuation is not yet implemented by HEO.
+- the proven Mangerton ZEROHERO selling policy behind its own default-off
+  toggle. Under Local Modbus ownership it protects the learned house budget
+  and mandatory connected-EV baseline, calculates the latest start for a
+  fixed-power sale, persists the session across restarts, and restores Self Use
+  at the deliberate 21:01 finish. See the
+  [export policy](docs/zerohero-export-policy.md).
 - a preview-first Diagnostics view for short, explicit FoxESS force-charge and
   force-discharge commissioning checks. Each test has editable power and
   duration, a cost/earning preview, live feedback, a 120-minute maximum, and
@@ -74,9 +80,11 @@ entities stable `sensor.home_energy_*` IDs regardless of the entry name.
   the automatic scheduler. Discharge previews use the configured standard or
   ZEROHERO-window export rate automatically.
 
-The integration also exposes `switch.home_energy_safety_lock`. It is ON when
+The integration exposes `switch.home_energy_safety_lock`. It is ON when
 the no-write interlock is engaged; turning it OFF only opens the explicit
 commissioning gate and does not enable automatic control.
+`switch.home_energy_automatic_export` controls only the selling behavior; it
+cannot bypass the Local Modbus owner, main FoxESS gate, or Safety Lock.
 
 The ZEROHERO guard checks each hourly bucket independently against the
 configured 0.03 kWh/hour threshold. A three-hour total below 0.09 kWh does not
@@ -88,8 +96,7 @@ This integration is supervisory software, not electrical protection. The
 default is still no hardware writes. The optional FoxESS path is a pilot
 controller, not a substitute for electrical protection or installer
 commissioning; it requires explicit entity mapping, response tests, and
-rollback evidence. Vehicle charge-limit and FoxESS export control remain
-outside this milestone. Review the [safety boundary](docs/safety.md) before use.
+rollback evidence. Review the [safety boundary](docs/safety.md) before use.
 
 Please report reproducible issues in the [issue tracker](https://github.com/m8ttjt9n9v-debug/HA-Foxess-Globird/issues) without including credentials, detailed home-location data, or production sensor history.
 

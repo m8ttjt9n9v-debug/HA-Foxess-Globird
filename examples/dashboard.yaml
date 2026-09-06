@@ -19,6 +19,8 @@ views:
                 name: Integration status
               - entity: switch.home_energy_safety_lock
                 name: Safety Lock (ON = locked)
+              - entity: switch.home_energy_automatic_export
+                name: Automatic ZEROHERO export
               - entity: sensor.home_energy_test_status
                 name: Diagnostic status
           - type: heading
@@ -73,6 +75,12 @@ views:
           - type: tile
             entity: sensor.home_energy_daily_import
             name: Grid import today
+          - type: tile
+            entity: sensor.home_energy_zerohero_export_window
+            name: ZEROHERO export this window
+          - type: tile
+            entity: sensor.home_energy_zerohero_export_status
+            name: Export session
       - type: grid
         cards:
           - type: heading
@@ -100,6 +108,18 @@ views:
           - type: tile
             entity: sensor.home_energy_status
             name: Controller status
+          - type: tile
+            entity: sensor.home_energy_zerohero_sellable_energy
+            name: Sellable energy
+          - type: tile
+            entity: sensor.home_energy_zerohero_planned_export_energy
+            name: Planned export
+          - type: tile
+            entity: sensor.home_energy_zerohero_planned_duration
+            name: Planned duration
+          - type: tile
+            entity: sensor.home_energy_zerohero_planned_start
+            name: Planned export start
       - type: grid
         column_span: 2
         cards:

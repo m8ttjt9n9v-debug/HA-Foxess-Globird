@@ -45,6 +45,7 @@ ENTRY_DATA = {
     "free_charge_full_battery_import_threshold_kwh": 49.0,
     "house_learning_fallback_kwh": 17.5,
     "automatic_control_enabled": False,
+    "automatic_export_enabled": False,
     "foxess_control_owner": "observer_only",
     "ev_automatic_control_enabled": False,
     "rehearsal_mode": True,
@@ -59,6 +60,11 @@ ENTRY_DATA = {
     "load_following_override": False,
     "bonus_window_start": "18:00:00",
     "bonus_window_end": "21:00:00",
+    "force_discharge_finish": "21:01:00",
+    "export_allowance_kwh": 15.0,
+    "export_discharge_power_kw": 10.0,
+    "discharge_efficiency_percent": 95.0,
+    "ev_protected_baseline_a": 0.0,
     "zero_import_threshold_kw": 0.05,
     "zero_import_confirm_minutes": 5.0,
 }
@@ -121,6 +127,29 @@ async def test_safety_lock_switch_is_on_by_default_and_persists_unlock(hass):
     assert hass.states.get("switch.home_energy_safety_lock").state == "off"
     assert entry.data["rehearsal_mode"] is False
     assert entry.runtime_data.config["rehearsal_mode"] is False
+
+
+async def test_automatic_export_switch_is_independent_and_persists(hass):
+    hass.states.async_set("sensor.test_battery_soc", "60", {"unit_of_measurement": "%"})
+    hass.states.async_set("sensor.test_grid_power", "0", {"unit_of_measurement": "kW"})
+    entry = MockConfigEntry(domain=DOMAIN, title="Export site", data=ENTRY_DATA)
+    entry.add_to_hass(hass)
+
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    assert hass.states.get("switch.home_energy_automatic_export").state == "off"
+
+    await hass.services.async_call(
+        "switch",
+        "turn_on",
+        {"entity_id": "switch.home_energy_automatic_export"},
+        blocking=True,
+    )
+
+    assert hass.states.get("switch.home_energy_automatic_export").state == "on"
+    assert entry.data["automatic_export_enabled"] is True
+    assert entry.data["automatic_control_enabled"] is False
+    assert entry.data["rehearsal_mode"] is True
 
 
 async def test_source_change_recalculates_without_a_restart(hass):

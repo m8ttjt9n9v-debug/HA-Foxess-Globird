@@ -19,6 +19,7 @@ from .const import (
     CONF_EV_MAX_CURRENT,
     CONF_EV_MIN_CURRENT,
     CONF_EV_PHASE_COUNT,
+    CONF_EV_PROTECTED_BASELINE_A,
     CONF_EV_VOLTAGE,
     CONF_FREE_CHARGE_FULL_BATTERY_IMPORT_THRESHOLD_KWH,
     CONF_FREE_CHARGE_START,
@@ -34,6 +35,7 @@ from .const import (
     DEFAULT_EV_MAX_CURRENT,
     DEFAULT_EV_MIN_CURRENT,
     DEFAULT_EV_PHASE_COUNT,
+    DEFAULT_EV_PROTECTED_BASELINE_A,
     DEFAULT_EV_VOLTAGE,
     DEFAULT_FREE_CHARGE_FULL_BATTERY_IMPORT_THRESHOLD_KWH,
     DEFAULT_INVERTER_CAPACITY_KW,
@@ -93,6 +95,33 @@ class ActiveEvController:
         if not self._feedback_entities():
             return "blocked_ev_feedback_unavailable"
         return "ready"
+
+    def protected_keepalive_energy_kwh(self, hours_until_free: float) -> float | None:
+        """Return only unavoidable connected-EV baseline energy.
+
+        Zero means the site has no mandatory powered direct path. If a baseline
+        is configured, missing presence or cable evidence blocks a new export
+        rather than assuming that energy is available to sell.
+        """
+        baseline_a = _configured(
+            self.coordinator.config,
+            CONF_EV_PROTECTED_BASELINE_A,
+            DEFAULT_EV_PROTECTED_BASELINE_A,
+        )
+        if baseline_a <= 0:
+            return 0.0
+        feedback = self._feedback_entities()
+        at_home = self._at_home()
+        if feedback is None or at_home is None:
+            return None
+        _, cable_sensor = feedback
+        if not at_home or cable_sensor.state != "on":
+            return 0.0
+        voltage = _configured(self.coordinator.config, CONF_EV_VOLTAGE, DEFAULT_EV_VOLTAGE)
+        phases = _configured(
+            self.coordinator.config, CONF_EV_PHASE_COUNT, DEFAULT_EV_PHASE_COUNT
+        )
+        return round(max(hours_until_free, 0.0) * baseline_a * voltage * phases / 1000, 3)
 
     async def async_reconcile(self) -> None:
         """Evaluate one bounded current adjustment; otherwise perform no write."""

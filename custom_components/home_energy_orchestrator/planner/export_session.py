@@ -64,7 +64,7 @@ def advance_export_session(
         retry_after,
         max_attempts,
     )
-    desired = (
+    new_session_desired = (
         source_available
         and window_active
         and eligible
@@ -73,7 +73,7 @@ def advance_export_session(
     )
     requested = round(min(requested_discharge_power_kw, discharge_power_max_kw), 3)
     if not source_available:
-        if state.phase in {"starting", "active", "stopping"}:
+        if state.phase in {"starting", "active", "stopping", "recovering"}:
             return ExportSessionTransition(
                 replace(state, phase="recovering"),
                 FoxessCommandPlan((), "source_unavailable"),
@@ -86,10 +86,19 @@ def advance_export_session(
         )
 
     if state.phase == "recovering":
-        state = replace(state, phase="idle", attempts=0, last_command_at=None)
+        if window_active and not finish_requested and state.requested_power_kw > 0:
+            return _start(
+                replace(state, phase="idle", attempts=0, last_command_at=None),
+                observation,
+                now,
+                state.requested_power_kw,
+                discharge_power_max_kw,
+                tolerance_kw,
+            )
+        return _stop(state, observation, now, tolerance_kw)
 
     if state.phase == "idle":
-        if not desired or requested <= 0:
+        if not new_session_desired or requested <= 0:
             return _idle("not_eligible")
         return _start(state, observation, now, requested, discharge_power_max_kw, tolerance_kw)
 
@@ -103,7 +112,7 @@ def advance_export_session(
                 FoxessCommandPlan((), "feedback_matches_plan"),
                 "active",
             )
-        if not desired:
+        if not window_active or finish_requested:
             return _stop(state, observation, now, tolerance_kw)
         if _within_retry(state, now, acceptance_timeout):
             return ExportSessionTransition(
@@ -111,21 +120,21 @@ def advance_export_session(
             )
         if state.attempts >= max_attempts:
             return ExportSessionTransition(
-                replace(state, phase="recovering"),
+                state,
                 FoxessCommandPlan((), "max_attempts_exceeded"),
                 "max_attempts_exceeded",
             )
         return _start(
-            replace(state, requested_power_kw=requested),
+            state,
             observation,
             now,
-            requested,
+            state.requested_power_kw,
             discharge_power_max_kw,
             tolerance_kw,
         )
 
     if state.phase == "active":
-        if not desired:
+        if not window_active or finish_requested:
             return _stop(state, observation, now, tolerance_kw)
         decision = ControlDecision(
             "force_discharge", state.requested_power_kw, "export_window_ready"
@@ -138,21 +147,21 @@ def advance_export_session(
             )
         if state.attempts >= max_attempts:
             return ExportSessionTransition(
-                replace(state, phase="recovering"),
+                state,
                 FoxessCommandPlan((), "max_attempts_exceeded"),
                 "max_attempts_exceeded",
             )
         return _start(
-            replace(state, phase="starting", requested_power_kw=requested),
+            replace(state, phase="starting"),
             observation,
             now,
-            requested,
+            state.requested_power_kw,
             discharge_power_max_kw,
             tolerance_kw,
         )
 
     if state.phase == "stopping":
-        if desired:
+        if new_session_desired:
             return _start(
                 replace(state, phase="idle", attempts=0),
                 observation,
@@ -170,7 +179,7 @@ def advance_export_session(
             )
         if state.attempts >= max_attempts:
             return ExportSessionTransition(
-                replace(state, phase="recovering"),
+                state,
                 FoxessCommandPlan((), "max_attempts_exceeded"),
                 "max_attempts_exceeded",
             )

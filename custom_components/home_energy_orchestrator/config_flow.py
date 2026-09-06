@@ -13,6 +13,7 @@ from homeassistant.helpers import selector
 
 from .const import (
     CONF_AUTOMATIC_CONTROL_ENABLED,
+    CONF_AUTOMATIC_EXPORT_ENABLED,
     CONF_BATTERY_CAPACITY,
     CONF_BATTERY_CAPACITY_ENTITY,
     CONF_BATTERY_FLOOR,
@@ -23,6 +24,7 @@ from .const import (
     CONF_DAILY_CHARGE,
     CONF_DAILY_FREE_ALLOWANCE_KWH,
     CONF_DAILY_IMPORT_ENTITY,
+    CONF_DISCHARGE_EFFICIENCY_PERCENT,
     CONF_EV_AUTOMATIC_CONTROL_ENABLED,
     CONF_EV_CHARGE_LIMIT,
     CONF_EV_CHARGE_SWITCH,
@@ -31,10 +33,14 @@ from .const import (
     CONF_EV_MAX_CURRENT,
     CONF_EV_MIN_CURRENT,
     CONF_EV_PHASE_COUNT,
+    CONF_EV_PROTECTED_BASELINE_A,
     CONF_EV_SOC,
     CONF_EV_VOLTAGE,
+    CONF_EXPORT_ALLOWANCE_KWH,
+    CONF_EXPORT_DISCHARGE_POWER_KW,
     CONF_EXPORT_LIMIT_KW,
     CONF_EXPORT_RATE,
+    CONF_FORCE_DISCHARGE_FINISH,
     CONF_FOXESS_CONTROL_OWNER,
     CONF_FOXESS_FORCE_CHARGE_POWER,
     CONF_FOXESS_FORCE_DISCHARGE_POWER,
@@ -66,20 +72,26 @@ from .const import (
     CONF_ZERO_IMPORT_CONFIRM_MINUTES,
     CONF_ZERO_IMPORT_THRESHOLD_KW,
     DEFAULT_AUTOMATIC_CONTROL_ENABLED,
+    DEFAULT_AUTOMATIC_EXPORT_ENABLED,
     DEFAULT_BATTERY_FLOOR,
     DEFAULT_BONUS_LOAD_FOLLOWING_PERCENT,
     DEFAULT_BONUS_WINDOW_END,
     DEFAULT_BONUS_WINDOW_START,
     DEFAULT_DAILY_CHARGE,
     DEFAULT_DAILY_FREE_ALLOWANCE_KWH,
+    DEFAULT_DISCHARGE_EFFICIENCY_PERCENT,
     DEFAULT_EV_AUTOMATIC_CONTROL_ENABLED,
     DEFAULT_EV_CHARGER_PROFILE,
     DEFAULT_EV_MAX_CURRENT,
     DEFAULT_EV_MIN_CURRENT,
     DEFAULT_EV_PHASE_COUNT,
+    DEFAULT_EV_PROTECTED_BASELINE_A,
     DEFAULT_EV_VOLTAGE,
+    DEFAULT_EXPORT_ALLOWANCE_KWH,
+    DEFAULT_EXPORT_DISCHARGE_POWER_KW,
     DEFAULT_EXPORT_LIMIT_KW,
     DEFAULT_EXPORT_RATE,
+    DEFAULT_FORCE_DISCHARGE_FINISH,
     DEFAULT_FOXESS_CONTROL_OWNER,
     DEFAULT_FREE_CHARGE_END,
     DEFAULT_FREE_CHARGE_FULL_BATTERY_IMPORT_THRESHOLD_KWH,
@@ -329,6 +341,38 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     default=defaults.get(CONF_BONUS_WINDOW_END, DEFAULT_BONUS_WINDOW_END),
                 ): selector.TimeSelector(),
                 vol.Required(
+                    CONF_FORCE_DISCHARGE_FINISH,
+                    default=defaults.get(
+                        CONF_FORCE_DISCHARGE_FINISH, DEFAULT_FORCE_DISCHARGE_FINISH
+                    ),
+                ): selector.TimeSelector(),
+                vol.Required(
+                    CONF_EXPORT_ALLOWANCE_KWH,
+                    default=defaults.get(
+                        CONF_EXPORT_ALLOWANCE_KWH, DEFAULT_EXPORT_ALLOWANCE_KWH
+                    ),
+                ): vol.Coerce(float),
+                vol.Required(
+                    CONF_EXPORT_DISCHARGE_POWER_KW,
+                    default=defaults.get(
+                        CONF_EXPORT_DISCHARGE_POWER_KW,
+                        DEFAULT_EXPORT_DISCHARGE_POWER_KW,
+                    ),
+                ): vol.Coerce(float),
+                vol.Required(
+                    CONF_DISCHARGE_EFFICIENCY_PERCENT,
+                    default=defaults.get(
+                        CONF_DISCHARGE_EFFICIENCY_PERCENT,
+                        DEFAULT_DISCHARGE_EFFICIENCY_PERCENT,
+                    ),
+                ): vol.Coerce(float),
+                vol.Required(
+                    CONF_EV_PROTECTED_BASELINE_A,
+                    default=defaults.get(
+                        CONF_EV_PROTECTED_BASELINE_A, DEFAULT_EV_PROTECTED_BASELINE_A
+                    ),
+                ): vol.Coerce(float),
+                vol.Required(
                     CONF_ZERO_IMPORT_THRESHOLD_KW,
                     default=defaults.get(
                         CONF_ZERO_IMPORT_THRESHOLD_KW, DEFAULT_ZERO_IMPORT_THRESHOLD_KW
@@ -352,6 +396,12 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     CONF_AUTOMATIC_CONTROL_ENABLED,
                     default=defaults.get(
                         CONF_AUTOMATIC_CONTROL_ENABLED, DEFAULT_AUTOMATIC_CONTROL_ENABLED
+                    ),
+                ): selector.BooleanSelector(),
+                vol.Required(
+                    CONF_AUTOMATIC_EXPORT_ENABLED,
+                    default=defaults.get(
+                        CONF_AUTOMATIC_EXPORT_ENABLED, DEFAULT_AUTOMATIC_EXPORT_ENABLED
                     ),
                 ): selector.BooleanSelector(),
                 vol.Required(
@@ -502,6 +552,22 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 CONF_BONUS_WINDOW_START, DEFAULT_BONUS_WINDOW_START
             ),
             CONF_BONUS_WINDOW_END: data.get(CONF_BONUS_WINDOW_END, DEFAULT_BONUS_WINDOW_END),
+            CONF_FORCE_DISCHARGE_FINISH: data.get(
+                CONF_FORCE_DISCHARGE_FINISH, DEFAULT_FORCE_DISCHARGE_FINISH
+            ),
+            CONF_EXPORT_ALLOWANCE_KWH: data.get(
+                CONF_EXPORT_ALLOWANCE_KWH, DEFAULT_EXPORT_ALLOWANCE_KWH
+            ),
+            CONF_EXPORT_DISCHARGE_POWER_KW: data.get(
+                CONF_EXPORT_DISCHARGE_POWER_KW, DEFAULT_EXPORT_DISCHARGE_POWER_KW
+            ),
+            CONF_DISCHARGE_EFFICIENCY_PERCENT: data.get(
+                CONF_DISCHARGE_EFFICIENCY_PERCENT,
+                DEFAULT_DISCHARGE_EFFICIENCY_PERCENT,
+            ),
+            CONF_EV_PROTECTED_BASELINE_A: data.get(
+                CONF_EV_PROTECTED_BASELINE_A, DEFAULT_EV_PROTECTED_BASELINE_A
+            ),
             CONF_ZERO_IMPORT_THRESHOLD_KW: data.get(
                 CONF_ZERO_IMPORT_THRESHOLD_KW, DEFAULT_ZERO_IMPORT_THRESHOLD_KW
             ),
@@ -510,6 +576,9 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             ),
             CONF_AUTOMATIC_CONTROL_ENABLED: data.get(
                 CONF_AUTOMATIC_CONTROL_ENABLED, DEFAULT_AUTOMATIC_CONTROL_ENABLED
+            ),
+            CONF_AUTOMATIC_EXPORT_ENABLED: data.get(
+                CONF_AUTOMATIC_EXPORT_ENABLED, DEFAULT_AUTOMATIC_EXPORT_ENABLED
             ),
             CONF_FOXESS_CONTROL_OWNER: data.get(
                 CONF_FOXESS_CONTROL_OWNER, DEFAULT_FOXESS_CONTROL_OWNER
@@ -589,6 +658,10 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             shoulder_rate = float(data[CONF_SHOULDER_RATE])
             export_rate = float(data[CONF_EXPORT_RATE])
             super_export_rate = float(data[CONF_SUPER_EXPORT_RATE])
+            export_allowance = float(data[CONF_EXPORT_ALLOWANCE_KWH])
+            export_discharge_power = float(data[CONF_EXPORT_DISCHARGE_POWER_KW])
+            discharge_efficiency = float(data[CONF_DISCHARGE_EFFICIENCY_PERCENT])
+            protected_ev_baseline = float(data[CONF_EV_PROTECTED_BASELINE_A])
             fallback = float(data[CONF_HOUSE_LEARNING_FALLBACK])
         except (KeyError, TypeError, ValueError):
             return {"base": "invalid_site_limits"}
@@ -597,6 +670,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             end = time.fromisoformat(str(data[CONF_FREE_CHARGE_END]))
             bonus_start = time.fromisoformat(str(data[CONF_BONUS_WINDOW_START]))
             bonus_end = time.fromisoformat(str(data[CONF_BONUS_WINDOW_END]))
+            discharge_finish = time.fromisoformat(str(data[CONF_FORCE_DISCHARGE_FINISH]))
             peak_start = time.fromisoformat(str(data[CONF_PEAK_WINDOW_START]))
             peak_end = time.fromisoformat(str(data[CONF_PEAK_WINDOW_END]))
         except (KeyError, TypeError, ValueError):
@@ -604,6 +678,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if (
             start == end
             or bonus_start == bonus_end
+            or discharge_finish == bonus_start
             or peak_start == peak_end
             or not math.isfinite(fallback)
             or fallback < 0
@@ -636,6 +711,10 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             shoulder_rate,
             export_rate,
             super_export_rate,
+            export_allowance,
+            export_discharge_power,
+            discharge_efficiency,
+            protected_ev_baseline,
         )
         if (
             profile_values is None
@@ -663,6 +742,10 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             or inverter_capacity < 0
             or export_rate < 0
             or super_export_rate < 0
+            or export_allowance < 0
+            or export_discharge_power < 0
+            or not 50 <= discharge_efficiency <= 100
+            or protected_ev_baseline < 0
         ):
             return {"base": "invalid_site_limits"}
         return {}

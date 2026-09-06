@@ -51,10 +51,16 @@
           "load_following_override": "Override load-following ceiling",
           "bonus_window_start": "Bonus zero-import window start",
           "bonus_window_end": "Bonus zero-import window end",
+          "force_discharge_finish": "Force Discharge finish (normally one minute after bonus window)",
+          "export_allowance_kwh": "Maximum boosted export per day (kWh)",
+          "export_discharge_power_kw": "Fixed ZEROHERO discharge power (kW)",
+          "discharge_efficiency_percent": "Battery discharge efficiency (%)",
+          "ev_protected_baseline_a": "Mandatory connected-EV baseline until free power (A; 0 if none)",
           "zero_import_threshold_kw": "ZEROHERO average import threshold (kWh/hour; contract says 0.03)",
           "zero_import_confirm_minutes": "Local telemetry debounce only (minutes)",
           "foxess_control_owner": "FoxESS control owner (never mix cloud scheduler and Modbus)",
           "automatic_control_enabled": "Enable HEO automatic FoxESS control (Local Modbus owner only)",
+          "automatic_export_enabled": "Enable automatic ZEROHERO export (Local Modbus owner only)",
           "ev_automatic_control_enabled": "Enable automatic Tessie EV control (commissioned sites only)",
           "rehearsal_mode": "Safety Lock (ON = no hardware writes)"
         }
@@ -109,10 +115,16 @@
           "load_following_override": "Override load-following ceiling",
           "bonus_window_start": "Bonus zero-import window start",
           "bonus_window_end": "Bonus zero-import window end",
+          "force_discharge_finish": "Force Discharge finish (normally one minute after bonus window)",
+          "export_allowance_kwh": "Maximum boosted export per day (kWh)",
+          "export_discharge_power_kw": "Fixed ZEROHERO discharge power (kW)",
+          "discharge_efficiency_percent": "Battery discharge efficiency (%)",
+          "ev_protected_baseline_a": "Mandatory connected-EV baseline until free power (A; 0 if none)",
           "zero_import_threshold_kw": "ZEROHERO average import threshold (kWh/hour; contract says 0.03)",
           "zero_import_confirm_minutes": "Local telemetry debounce only (minutes)",
           "foxess_control_owner": "FoxESS control owner (never mix cloud scheduler and Modbus)",
           "automatic_control_enabled": "Enable HEO automatic FoxESS control (Local Modbus owner only)",
+          "automatic_export_enabled": "Enable automatic ZEROHERO export (Local Modbus owner only)",
           "ev_automatic_control_enabled": "Enable automatic Tessie EV control (commissioned sites only)",
           "rehearsal_mode": "Safety Lock (ON = no hardware writes)"
         }
