@@ -48,12 +48,29 @@ The free-window planner evaluates these branches in order:
 No phase count, inverter size, tariff allowance, or site identity changes this
 branch order.
 
+## FoxESS SoC and usable energy
+
+The canonical control model retains the inverter's raw SoC and its configured
+minimum SoC as separate inputs. Usable battery energy is:
+
+`effective_capacity_kwh × max(raw_soc − minimum_soc, 0) / 100`
+
+A user-facing relative percentage may instead display
+`(raw_soc − minimum_soc) / (100 − minimum_soc) × 100`. That display value must
+not be substituted for raw SoC in the energy equation, because doing so would
+apply the minimum twice. A battery-capacity mapping must contain kWh capacity,
+not either form of SoC percentage.
+
 ## Daily allowance extension
 
 The whole-site allowance is an outer ceiling, not a replacement charging
 algorithm. It receives the already calculated base current plus explicit,
 configured projections for remaining non-EV import and EV energy need.
 
+- First calculate the physical site envelope from configured per-phase service
+  current, site voltage, phase count, and remaining window duration. If even
+  sustained service-limit import cannot reach the remaining allowance, the
+  allowance controller is provably unnecessary and leaves Mangerton unchanged.
 - If imported energy plus projected house, battery, EV, and safety margin fits
   under the configured kWh allowance, the base current passes through unchanged.
 - Only a projected overrun activates pacing. The remaining EV budget is
@@ -66,6 +83,10 @@ configured projections for remaining non-EV import and EV energy need.
 - FoxCloud ownership of the inverter does not by itself block the independent
   EV gate: the EV controller writes only explicitly mapped Tessie actuators.
   The shared Safety Lock remains an absolute write interlock.
+
+Service capacity limits instantaneous import; it does not allocate energy.
+Conversely, the kWh allowance limits total energy; it does not prove an
+instantaneous current is electrically safe. Both constraints must pass.
 
 The extension must never hard-code an allowance, service current, voltage,
 phase count, connector rating, efficiency, time, or entity ID.

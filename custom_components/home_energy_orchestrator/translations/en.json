@@ -56,6 +56,7 @@
           "foxess_control_owner": "FoxESS control owner (never mix cloud scheduler and Modbus)",
           "automatic_control_enabled": "Enable HEO Local Modbus master gate (ZEROHERO export only)",
           "automatic_export_enabled": "Enable automatic ZEROHERO export (Local Modbus owner only)",
+          "ev_automatic_control_enabled": "Request automatic EV control (independent, currently non-actuating)",
           "rehearsal_mode": "Safety Lock (ON = no hardware writes)"
         }
       },
@@ -114,6 +115,7 @@
           "foxess_control_owner": "FoxESS control owner (never mix cloud scheduler and Modbus)",
           "automatic_control_enabled": "Enable HEO Local Modbus master gate (ZEROHERO export only)",
           "automatic_export_enabled": "Enable automatic ZEROHERO export (Local Modbus owner only)",
+          "ev_automatic_control_enabled": "Request automatic EV control (independent, currently non-actuating)",
           "rehearsal_mode": "Safety Lock (ON = no hardware writes)"
         }
       }

@@ -23,6 +23,12 @@
 - Restore the independent, default-off Automatic EV Control intent switch.
   Until the Tessie adapter is completed it explicitly reports blocked and no
   EV service call can be made, even if the switch is turned on.
+- Use configured service current, site voltage, phase count, and remaining
+  window time to prove when the daily allowance is physically unreachable.
+  Only higher-capacity sites continue to the projected-energy pacing check.
+- Retain raw FoxESS SoC and subtract the configured minimum SoC once in the
+  energy ledger; do not feed a human-relative display percentage back into
+  control calculations.
 
 ## 0.3.8 — Mangerton ZEROHERO selling automation
 

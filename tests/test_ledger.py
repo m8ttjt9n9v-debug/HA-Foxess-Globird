@@ -25,6 +25,15 @@ def test_floor_and_reserve_are_each_subtracted_once():
     assert ledger.available_after_reserve_kwh == 8
 
 
+def test_raw_soc_above_hardware_floor_becomes_only_usable_energy():
+    ledger = calculate_ledger(
+        snapshot(battery_soc=20, battery_floor_percent=10, reserve_kwh=0)
+    )
+    assert ledger.battery_energy_kwh == 4
+    assert ledger.floor_energy_kwh == 2
+    assert ledger.available_after_floor_kwh == 2
+
+
 def test_energy_never_becomes_negative():
     ledger = calculate_ledger(snapshot(battery_soc=0, reserve_kwh=50))
     assert ledger.available_after_floor_kwh == 0

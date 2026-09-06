@@ -107,6 +107,9 @@ ALLOWANCE = AllowanceCeilingInputs(
     current_step_a=1,
     voltage_v=230,
     phase_count=3,
+    site_service_limit_a=80,
+    site_voltage_v=230,
+    site_phase_count=3,
     remaining_window_hours=2,
     allowance_kwh=50,
     imported_in_window_kwh=10,
@@ -119,6 +122,35 @@ def test_normal_small_session_is_not_evenly_spread_or_throttled():
     decision = apply_daily_allowance_ceiling(ALLOWANCE)
     assert decision.current_a == 16
     assert decision.phase == "allowance_not_constraining"
+
+
+def test_mangerton_service_envelope_cannot_reach_configured_allowance():
+    decision = apply_daily_allowance_ceiling(
+        replace(
+            ALLOWANCE,
+            site_service_limit_a=63,
+            site_voltage_v=230,
+            site_phase_count=1,
+            remaining_window_hours=2.9,
+            imported_in_window_kwh=0,
+            projected_other_import_kwh=40,
+            projected_ev_energy_kwh=30,
+        )
+    )
+    assert decision.current_a == 16
+    assert decision.phase == "allowance_physically_unreachable"
+
+
+def test_higher_capacity_site_continues_to_projection_check():
+    decision = apply_daily_allowance_ceiling(
+        replace(
+            ALLOWANCE,
+            projected_other_import_kwh=35,
+            projected_ev_energy_kwh=20,
+        )
+    )
+    assert decision.current_a == 3
+    assert decision.phase == "allowance_pacing"
 
 
 def test_projected_overrun_activates_topology_aware_allowance_pacing():

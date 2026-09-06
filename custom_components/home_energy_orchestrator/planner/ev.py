@@ -125,6 +125,9 @@ class AllowanceCeilingInputs:
     current_step_a: float
     voltage_v: float
     phase_count: int
+    site_service_limit_a: float
+    site_voltage_v: float
+    site_phase_count: int
     remaining_window_hours: float
     allowance_kwh: float
     imported_in_window_kwh: float | None
@@ -145,6 +148,20 @@ def apply_daily_allowance_ceiling(inputs: AllowanceCeilingInputs) -> EvCurrentDe
     baseline = min(inputs.protected_baseline_a, inputs.base_current_a)
     if inputs.imported_in_window_kwh is None:
         return _decision(baseline, "allowance_meter_unavailable")
+    maximum_remaining_site_import = (
+        inputs.site_service_limit_a
+        * inputs.site_voltage_v
+        * inputs.site_phase_count
+        / 1000
+        * inputs.remaining_window_hours
+    )
+    if (
+        inputs.imported_in_window_kwh
+        + maximum_remaining_site_import
+        + inputs.safety_margin_kwh
+        <= inputs.allowance_kwh
+    ):
+        return _decision(inputs.base_current_a, "allowance_physically_unreachable")
     projected_total = (
         inputs.imported_in_window_kwh
         + inputs.projected_other_import_kwh
@@ -275,6 +292,8 @@ def _validate_allowance_inputs(inputs: AllowanceCeilingInputs) -> None:
         inputs.minimum_charge_a,
         inputs.current_step_a,
         inputs.voltage_v,
+        inputs.site_service_limit_a,
+        inputs.site_voltage_v,
         inputs.remaining_window_hours,
         inputs.allowance_kwh,
         inputs.projected_other_import_kwh,
@@ -285,7 +304,14 @@ def _validate_allowance_inputs(inputs: AllowanceCeilingInputs) -> None:
         values += (inputs.imported_in_window_kwh,)
     if not all(isfinite(value) for value in values) or any(value < 0 for value in values):
         raise ValueError("allowance inputs must be finite and non-negative")
-    if inputs.current_step_a <= 0 or inputs.voltage_v <= 0 or inputs.phase_count < 1:
+    if (
+        inputs.current_step_a <= 0
+        or inputs.voltage_v <= 0
+        or inputs.phase_count < 1
+        or inputs.site_service_limit_a <= 0
+        or inputs.site_voltage_v <= 0
+        or inputs.site_phase_count < 1
+    ):
         raise ValueError("allowance topology and current step must be positive")
     if inputs.protected_baseline_a > inputs.base_current_a:
         raise ValueError("allowance baseline cannot exceed the base current")
