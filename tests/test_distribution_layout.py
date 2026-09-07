@@ -57,6 +57,24 @@ def test_example_dashboard_uses_the_integration_entity_ids() -> None:
     dashboard = yaml.safe_load(
         (REPOSITORY_ROOT / "examples" / "dashboard.yaml").read_text(encoding="utf-8")
     )
+    assert [view["title"] for view in dashboard["views"]] == [
+        "Overview",
+        "Tesla",
+        "House",
+        "Solar & Weather",
+        "Configuration",
+        "Advanced",
+        "Manual",
+    ]
+    assert [view["path"] for view in dashboard["views"]] == [
+        "overview",
+        "tesla",
+        "house",
+        "solar-weather",
+        "configuration",
+        "advanced",
+        "manual",
+    ]
     entity_ids = []
     for view in dashboard["views"]:
         for section in view.get("sections", []):

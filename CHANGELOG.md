@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Restore the proven dashboard's seven operational views—Overview, Tesla,
+  House, Solar & Weather, Configuration, Advanced, and Manual—in the portable
+  example. Shared cards use only HEO-owned entities; vehicle-native Tessie,
+  weather, room, and site-equipment cards remain explicit local overlays.
+
 - Port the Working Single Phase Pilot Site solar-spill EV controller behind a
   separate default-off option. It reconstructs current surplus from coherent
   signed grid, battery-flow, and Tessie telemetry, suppresses charging during

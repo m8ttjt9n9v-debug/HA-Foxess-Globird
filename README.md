@@ -25,11 +25,11 @@ Read the [system requirements](docs/system-requirements.md),
 [installation guide](docs/installation.md), and
 [commissioning checklist](docs/commissioning.md) before enabling writes. HACS
 installs the integration, not dashboards; `examples/dashboard.yaml` is a
-generic Lovelace view for manual import.
-
-Its EV view includes portable solar-spill status/current/surplus and pre-free
-phase/energy/latest-start/current cards; it contains no vehicle- or site-specific
-entity IDs.
+portable seven-view Lovelace dashboard for manual import. Its Overview, Tesla,
+House, Solar & Weather, Configuration, Advanced, and Manual structure preserves
+the proven site's operational information architecture while using only
+integration-owned entity IDs. Vehicle-native Tessie cards, local weather,
+rooms, and other site-specific cards belong in a local overlay.
 
 ## Current capabilities
 

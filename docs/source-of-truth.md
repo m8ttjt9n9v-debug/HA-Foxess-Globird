@@ -65,6 +65,10 @@ layers around the proven algorithm, not replacement algorithms.
 - A multiphase EV controller must receive explicit signed current for the
   most-loaded service phase. Aggregate power is not treated as proof that phase
   loading is balanced.
+- The portable dashboard preserves the proven operational view structure:
+  Overview, Tesla, House, Solar & Weather, Configuration, Advanced, and Manual.
+  Shared views use only HEO-owned entity IDs; vehicle-native, weather, room, and
+  other site-specific cards are local overlays rather than shared assumptions.
 
 ## Working Single Phase Pilot Site behaviors that remain the port target
 

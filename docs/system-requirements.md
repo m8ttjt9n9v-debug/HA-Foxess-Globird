@@ -85,6 +85,7 @@ freshness, units, signs, presence, connection, or ownership cannot be proven.
 ## Dashboard installation
 
 Import `examples/dashboard.yaml` manually or build a site-specific dashboard
-from the generated entities. HACS does not install Lovelace views. Personal
-backgrounds, room devices, heaters, and unrelated pilot-site dashboard cards
-are intentionally outside the portable integration.
+from the generated entities. HACS does not install Lovelace views. The example
+preserves the seven-view operational structure while using only HEO-owned
+entity IDs. Personal backgrounds, vehicle-native Tessie cards, weather, room
+devices, heaters, and unrelated site cards are intentionally local overlays.

@@ -81,8 +81,9 @@ Working Single Phase Pilot Site parity.
   them, and distinguish firmware capability from assumptions.
 - [ ] Design a cloud-schedule adapter only after the full schedule/remaining-mode
   semantics are proven. Never substitute mixed local Modbus commands.
-- [ ] Package dashboard views that expose the faithfully ported controls without
-  embedding personal entity IDs.
+- [x] Package the proven seven-view dashboard information architecture using
+  HEO-owned entities, with site-specific Tessie, weather, room, and equipment
+  cards explicitly retained as local overlays.
 
 ## Definition of done for each control item
 

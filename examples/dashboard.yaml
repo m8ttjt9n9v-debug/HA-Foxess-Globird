@@ -1,7 +1,7 @@
 title: FoxESS Globird Energy
-# Generic, two-column Lovelace starter view.  HACS installs the integration,
-# not dashboards.  Version 0.2.31 and later publish stable `sensor.home_energy_*`
-# IDs, so this view works regardless of the config-entry display name.
+# Portable counterpart of the proven site's operational dashboard. HACS installs
+# the integration, not dashboards. All entity IDs below are integration-owned;
+# vehicle, weather, room, and site-specific cards belong in a local overlay.
 views:
   - type: sections
     max_columns: 2
@@ -12,38 +12,25 @@ views:
       - type: grid
         column_span: 2
         cards:
-          - type: entities
-            title: Controls & safety
-            entities:
-              - entity: sensor.home_energy_status
-                name: Integration status
-              - entity: switch.home_energy_safety_lock
-                name: Safety Lock (ON = locked)
-              - entity: switch.home_energy_automatic_export
-                name: Automatic ZEROHERO export
-              - entity: switch.home_energy_automatic_ev_control
-                name: Automatic EV control
-              - entity: sensor.home_energy_test_status
-                name: Diagnostic status
           - type: heading
-            heading: Live energy
+            heading: Live Site Power
             heading_style: title
             icon: mdi:transmission-tower
           - type: tile
             entity: sensor.home_energy_battery_soc
-            name: Battery SOC
+            name: Home battery SOC
             features:
               - type: bar-gauge
             features_position: bottom
           - type: tile
-            entity: sensor.home_energy_battery_energy
-            name: Battery energy
-          - type: tile
-            entity: sensor.home_energy_available_energy
-            name: Available above reserve
+            entity: sensor.home_energy_ev_soc
+            name: EV SOC
+            features:
+              - type: bar-gauge
+            features_position: bottom
           - type: tile
             entity: sensor.home_energy_solar_power
-            name: Solar now
+            name: Solar generation
           - type: tile
             entity: sensor.home_energy_house_load
             name: House load
@@ -56,92 +43,57 @@ views:
       - type: grid
         cards:
           - type: heading
-            heading: Tariff and ZEROHERO
+            heading: Energy at a Glance
             heading_style: title
-            icon: mdi:cash-clock
+            icon: mdi:gauge
           - type: tile
-            entity: sensor.home_energy_free_window_import
-            name: Free-window import
+            entity: sensor.home_energy_available_energy
+            name: Available above reserve
           - type: tile
-            entity: sensor.home_energy_free_charge_allowed
-            name: Free allowance remaining
-          - type: tile
-            entity: sensor.home_energy_zerohero_import_window
-            name: ZEROHERO import this window
-          - type: tile
-            entity: sensor.home_energy_bonus_zero_import_allowed
-            name: ZEROHERO guard
-          - type: tile
-            entity: sensor.home_energy_estimated_energy_cost
-            name: Estimated cost today
+            entity: sensor.home_energy_free_energy_remaining
+            name: Free energy remaining
           - type: tile
             entity: sensor.home_energy_daily_import
             name: Grid import today
           - type: tile
-            entity: sensor.home_energy_zerohero_export_window
-            name: ZEROHERO export this window
-          - type: tile
-            entity: sensor.home_energy_zerohero_export_status
-            name: Export session
+            entity: sensor.home_energy_estimated_energy_cost
+            name: Estimated cost today
       - type: grid
         cards:
           - type: heading
-            heading: Planning and learning
+            heading: Current Plan
             heading_style: title
-            icon: mdi:chart-line
-          - type: tile
-            entity: sensor.home_energy_learned_house_energy
-            name: Learned house budget
-          - type: tile
-            entity: sensor.home_energy_remaining_house_energy
-            name: Remaining house budget
-          - type: tile
-            entity: sensor.home_energy_learning_samples
-            name: Learning samples
-          - type: tile
-            entity: sensor.home_energy_learning_status
-            name: Learning status
+            icon: mdi:calendar-clock
           - type: tile
             entity: sensor.home_energy_status
-            name: Controller status
+            name: Orchestrator status
+          - type: tile
+            entity: sensor.home_energy_zerohero_export_status
+            name: Export controller
           - type: tile
             entity: sensor.home_energy_zerohero_sellable_energy
             name: Sellable energy
+          - type: tile
+            entity: sensor.home_energy_zerohero_planned_start
+            name: Planned export start
           - type: tile
             entity: sensor.home_energy_zerohero_planned_export_energy
             name: Planned export
           - type: tile
             entity: sensor.home_energy_zerohero_planned_duration
             name: Planned duration
-          - type: tile
-            entity: sensor.home_energy_zerohero_planned_start
-            name: Planned export start
-      - type: grid
-        column_span: 2
-        cards:
-          - type: history-graph
-            title: Power and battery history
-            hours_to_show: 24
-            entities:
-              - entity: sensor.home_energy_grid_import
-                name: Grid import
-              - entity: sensor.home_energy_grid_export
-                name: Grid export
-              - entity: sensor.home_energy_house_load
-                name: House load
-              - entity: sensor.home_energy_solar_power
-                name: Solar
+
   - type: sections
     max_columns: 2
-    title: EV
-    path: ev
+    title: Tesla
+    path: tesla
     icon: mdi:car-electric
     sections:
       - type: grid
         column_span: 2
         cards:
           - type: heading
-            heading: EV charging
+            heading: Vehicle Status and Charging
             heading_style: title
             icon: mdi:ev-station
           - type: tile
@@ -176,16 +128,15 @@ views:
             name: Reconciliation attempts
           - type: markdown
             content: >-
-              The direct-EVSE free-window path is a faithful, independently
-              gated Working Single Phase Pilot Site port. It remains off until explicitly mapped,
-              commissioned, unlocked, and enabled. Add the vehicle's own
-              Tessie cards here if desired; entity names vary by vehicle and
-              are deliberately not hard-coded in this template.
+              HEO exposes the portable charging decision chain. Add the
+              vehicle's own Tessie status, access, climate, and health cards in
+              a site overlay; Tessie entity names are deliberately not embedded
+              in the shared dashboard.
       - type: grid
         column_span: 2
         cards:
           - type: heading
-            heading: Solar spill and pre-free backfill
+            heading: Solar Spill and Pre-Free Backfill
             heading_style: title
             icon: mdi:solar-power-variant
           - type: tile
@@ -209,53 +160,270 @@ views:
           - type: tile
             entity: sensor.home_energy_ev_pre_free_current_target
             name: Pre-free current
-          - type: markdown
-            content: >-
-              These stages are separately default-off and are configured by
-              reconfiguring the integration. Both require Local Modbus FoxESS
-              ownership; solar spill also requires a verified signed battery-
-              power mapping. Automatic EV Control authorizes Tessie intent and
-              Safety Lock remains the final no-write interlock.
+      - type: grid
+        column_span: 2
+        cards:
+          - type: history-graph
+            title: Tesla Battery and Charging — 24 Hours
+            hours_to_show: 24
+            entities:
+              - entity: sensor.home_energy_ev_soc
+                name: EV SOC
+              - entity: sensor.home_energy_ev_actual_current
+                name: Actual current
+              - entity: sensor.home_energy_ev_current_target
+                name: Current target
+
+  - type: sections
+    max_columns: 2
+    title: House
+    path: house
+    icon: mdi:home-battery
+    sections:
       - type: grid
         cards:
           - type: heading
-            heading: EV commissioning
+            heading: Home Battery
             heading_style: title
-            icon: mdi:clipboard-check-outline
-          - type: entities
+            icon: mdi:home-battery-outline
+          - type: tile
+            entity: sensor.home_energy_battery_soc
+            name: Battery SOC
+          - type: tile
+            entity: sensor.home_energy_battery_energy
+            name: Battery energy
+          - type: tile
+            entity: sensor.home_energy_battery_potential_capacity
+            name: Potential capacity
+          - type: tile
+            entity: sensor.home_energy_available_energy
+            name: Available above reserve
+      - type: grid
+        cards:
+          - type: heading
+            heading: House Demand and Protected Energy Ledger
+            heading_style: title
+            icon: mdi:home-lightning-bolt-outline
+          - type: tile
+            entity: sensor.home_energy_house_load
+            name: House load
+          - type: tile
+            entity: sensor.home_energy_learned_house_energy
+            name: Learned house budget
+          - type: tile
+            entity: sensor.home_energy_remaining_house_energy
+            name: Remaining house budget
+          - type: tile
+            entity: sensor.home_energy_learning_status
+            name: Learning status
+          - type: tile
+            entity: sensor.home_energy_learning_samples
+            name: Learning samples
+      - type: grid
+        column_span: 2
+        cards:
+          - type: heading
+            heading: Export Plan
+            heading_style: title
+            icon: mdi:transmission-tower-export
+          - type: tile
+            entity: sensor.home_energy_zerohero_export_window
+            name: Export window
+          - type: tile
+            entity: sensor.home_energy_zerohero_export_status
+            name: Export session
+          - type: tile
+            entity: sensor.home_energy_zerohero_sellable_energy
+            name: Sellable energy
+          - type: tile
+            entity: sensor.home_energy_zerohero_planned_export_energy
+            name: Planned export
+          - type: tile
+            entity: sensor.home_energy_zerohero_planned_duration
+            name: Planned duration
+          - type: tile
+            entity: sensor.home_energy_zerohero_planned_start
+            name: Latest start
+      - type: grid
+        column_span: 2
+        cards:
+          - type: history-graph
+            title: 24-Hour House History
+            hours_to_show: 24
             entities:
-              - entity: sensor.home_energy_status
-                name: Orchestrator status
-              - entity: sensor.home_energy_free_charge_allowed
-                name: Free allowance remaining
-              - entity: sensor.home_energy_ev_grid_current_average
-                name: Matched grid-current average
-              - entity: sensor.home_energy_ev_actual_current_average
-                name: Matched actual-EV-current average
-              - entity: switch.home_energy_safety_lock
-                name: Safety Lock (ON = no writes)
-              - entity: switch.home_energy_automatic_ev_control
-                name: Automatic EV control
-          - type: markdown
-            content: >-
-              Confirm EV telemetry, current/limit writable ranges, location,
-              cable state, and the service-current mapping before commissioning.
-              Multiphase sites require signed current for the most-loaded phase;
-              aggregate three-phase power is deliberately insufficient. Leave
-              Automatic EV Control off and Safety Lock on during verification.
+              - entity: sensor.home_energy_house_load
+                name: House load
+              - entity: sensor.home_energy_grid_import
+                name: Grid import
+              - entity: sensor.home_energy_grid_export
+                name: Grid export
+              - entity: sensor.home_energy_battery_soc
+                name: Battery SOC
+
   - type: sections
     max_columns: 2
-    title: Commissioning
-    path: commissioning
-    icon: mdi:shield-check
+    title: Solar & Weather
+    path: solar-weather
+    icon: mdi:weather-partly-cloudy
+    sections:
+      - type: grid
+        cards:
+          - type: heading
+            heading: Solar Generation
+            heading_style: title
+            icon: mdi:solar-power
+          - type: tile
+            entity: sensor.home_energy_solar_power
+            name: Solar generation
+          - type: tile
+            entity: sensor.home_energy_house_load
+            name: House load
+          - type: tile
+            entity: sensor.home_energy_grid_export
+            name: Grid export
+          - type: tile
+            entity: sensor.home_energy_ev_solar_spill_surplus
+            name: EV spill surplus
+      - type: grid
+        cards:
+          - type: heading
+            heading: Weather and Heating Demand
+            heading_style: title
+            icon: mdi:weather-sunny-alert
+          - type: markdown
+            content: >-
+              Weather and heating inputs are site-specific and are not yet HEO
+              control dependencies. Add the site's forecast, outside
+              temperature, and heating-demand cards here without changing the
+              portable controller. A future heater policy must be ported and
+              tested before shared control entities are added.
+      - type: grid
+        column_span: 2
+        cards:
+          - type: history-graph
+            title: Solar and Loads — 24 Hours
+            hours_to_show: 24
+            entities:
+              - entity: sensor.home_energy_solar_power
+                name: Solar
+              - entity: sensor.home_energy_house_load
+                name: House load
+              - entity: sensor.home_energy_grid_import
+                name: Grid import
+              - entity: sensor.home_energy_grid_export
+                name: Grid export
+
+  - type: sections
+    max_columns: 2
+    title: Configuration
+    path: configuration
+    icon: mdi:tune-variant
     sections:
       - type: grid
         column_span: 2
         cards:
           - type: heading
-            heading: Safety and data quality
+            heading: Operating Modes
             heading_style: title
-            icon: mdi:shield-check
+            icon: mdi:toggle-switch-outline
+          - type: entities
+            title: Controls and Safety
+            entities:
+              - entity: sensor.home_energy_status
+                name: Integration status
+              - entity: switch.home_energy_safety_lock
+                name: Safety Lock (ON = locked)
+              - entity: switch.home_energy_automatic_export
+                name: Automatic ZEROHERO export
+              - entity: switch.home_energy_automatic_ev_control
+                name: Automatic EV control
+              - entity: sensor.home_energy_test_status
+                name: Diagnostic status
+          - type: markdown
+            content: >-
+              Use Settings → Devices & services → FoxESS Globird Energy
+              Observer → Configure to map hardware and edit site limits,
+              tariff windows, ownership, charging policy, reserve, and export
+              settings. The shared dashboard never embeds one site's values.
+      - type: grid
+        cards:
+          - type: heading
+            heading: Free-Window Charging
+            heading_style: title
+            icon: mdi:battery-clock
+          - type: tile
+            entity: sensor.home_energy_free_window_import
+            name: Free-window import
+          - type: tile
+            entity: sensor.home_energy_free_charge_allowed
+            name: Free charge allowed
+          - type: tile
+            entity: sensor.home_energy_free_charge_completion
+            name: Completion estimate
+          - type: tile
+            entity: sensor.home_energy_free_charge_power_target
+            name: Battery power target
+          - type: tile
+            entity: sensor.home_energy_free_energy_remaining
+            name: Daily allowance remaining
+      - type: grid
+        cards:
+          - type: heading
+            heading: Tariff and ZEROHERO
+            heading_style: title
+            icon: mdi:cash-clock
+          - type: tile
+            entity: sensor.home_energy_tariff_status
+            name: Tariff status
+          - type: tile
+            entity: sensor.home_energy_zerohero_import_window
+            name: Import this window
+          - type: tile
+            entity: sensor.home_energy_bonus_zero_import_allowed
+            name: ZEROHERO guard
+          - type: tile
+            entity: sensor.home_energy_estimated_energy_cost
+            name: Estimated cost today
+
+  - type: sections
+    max_columns: 2
+    title: Advanced
+    path: advanced
+    icon: mdi:cog-outline
+    sections:
+      - type: grid
+        column_span: 2
+        cards:
+          - type: heading
+            heading: Tesla Controller Stages
+            heading_style: title
+            icon: mdi:state-machine
+          - type: entities
+            entities:
+              - entity: sensor.home_energy_ev_control_status
+                name: Controller decision
+              - entity: sensor.home_energy_ev_current_target
+                name: Target current
+              - entity: sensor.home_energy_ev_requested_current
+                name: Requested current
+              - entity: sensor.home_energy_ev_actual_current
+                name: Actual current
+              - entity: sensor.home_energy_ev_charge_limit_target
+                name: Target charge limit
+              - entity: sensor.home_energy_ev_applied_charge_limit
+                name: Applied charge limit
+              - entity: sensor.home_energy_ev_grid_current_average
+                name: Matched grid-current average
+              - entity: sensor.home_energy_ev_actual_current_average
+                name: Matched EV-current average
+              - entity: sensor.home_energy_ev_reconciliation_attempts
+                name: Reconciliation attempts
+      - type: grid
+        cards:
+          - type: heading
+            heading: Protection and Faults
+            heading_style: title
+            icon: mdi:shield-alert-outline
           - type: entities
             entities:
               - entity: sensor.home_energy_status
@@ -264,42 +432,89 @@ views:
                 name: Tariff guard
               - entity: sensor.home_energy_bonus_zero_import_allowed
                 name: ZEROHERO guard
+              - entity: sensor.home_energy_ev_solar_spill_status
+                name: Solar-spill status
+              - entity: sensor.home_energy_ev_pre_free_status
+                name: Pre-free status
+              - entity: switch.home_energy_safety_lock
+                name: Safety Lock
+      - type: grid
+        cards:
+          - type: heading
+            heading: Learning Diagnostics
+            heading_style: title
+            icon: mdi:chart-box-outline
+          - type: entities
+            entities:
               - entity: sensor.home_energy_learning_status
-                name: Learning model
+                name: Learning status
               - entity: sensor.home_energy_learning_samples
-                name: Learning samples
-          - type: markdown
-            content: >-
-              This view is intentionally read-only.  Check the signed grid
-              import/export values against a known load before enabling any
-              FoxESS writes. HEO remains observer-only until Local Modbus
-              ownership and the relevant FoxESS gates are commissioned.
+                name: Retained samples
+              - entity: sensor.home_energy_learned_house_energy
+                name: Learned demand
+              - entity: sensor.home_energy_remaining_house_energy
+                name: Remaining protected demand
+      - type: grid
+        column_span: 2
+        cards:
+          - type: history-graph
+            title: Controller History
+            hours_to_show: 24
+            entities:
+              - entity: sensor.home_energy_ev_current_target
+                name: EV current target
+              - entity: sensor.home_energy_ev_actual_current
+                name: EV actual current
+              - entity: sensor.home_energy_zerohero_export_status
+                name: Export status
+              - entity: sensor.home_energy_learning_status
+                name: Learning status
+
   - type: sections
     max_columns: 2
-    title: Diagnostics
-    path: diagnostics
-    icon: mdi:test-tube
+    title: Manual
+    path: manual
+    icon: mdi:book-open-variant
     sections:
       - type: grid
         column_span: 2
         cards:
           - type: heading
-            heading: Manual FoxESS diagnostics
+            heading: Dashboard Guide
+            heading_style: title
+            icon: mdi:information-outline
+          - type: markdown
+            content: >-
+              Overview answers where power is going and what HEO plans next.
+              Tesla shows portable vehicle decisions. House explains battery,
+              protected demand, and export planning. Solar & Weather separates
+              portable solar evidence from optional site weather cards.
+              Configuration contains routine gates and commissioning guidance.
+              Advanced exposes the decision chain and feedback health. Manual
+              contains explicit, bounded inverter tests.
+          - type: markdown
+            content: >-
+              **Units and signs:** power is shown in kW, energy in kWh, current
+              in A, and SOC in %. Confirm the mapped signed grid and battery
+              conventions against direct evidence before enabling writes.
+              Safety Lock ON blocks every HEO hardware write; turning it OFF
+              does not independently enable automation.
+      - type: grid
+        column_span: 2
+        cards:
+          - type: heading
+            heading: Manual FoxESS Diagnostics
             heading_style: title
             icon: mdi:flask-outline
           - type: markdown
             content: >-
-              Set the power and duration first.  The cost/earning preview is
-              calculated before submission.  The charge action is hard-blocked
-              outside the configured free window.  Both actions require
-              complete FoxESS mappings and the Safety Lock (Rehearsal mode)
-              disabled.  A test is
-              limited to 120 minutes and automatically restores Self Use when
-              it ends. This diagnostic surface does not enable the automatic
-              scheduler. The export preview uses the configured standard or
-              ZEROHERO-window export rate and updates with the current time.
+              Set power and duration before submitting a test. Charge tests are
+              blocked outside the configured free window. Both tests require
+              Local Modbus ownership, complete actuator mappings, the FoxESS
+              automatic gate, and Safety Lock OFF. Tests are bounded to 120
+              minutes and restore Self Use when stopped or completed.
           - type: entities
-            title: Diagnostics parameters
+            title: Diagnostic Parameters
             entities:
               - entity: number.home_energy_test_charge_power
                 name: Charge power
@@ -308,7 +523,7 @@ views:
               - entity: number.home_energy_test_duration
                 name: Duration
           - type: entities
-            title: Preview
+            title: Preview and Feedback
             entities:
               - entity: sensor.home_energy_test_charge_estimated_cost
                 name: Estimated charge cost
@@ -359,29 +574,10 @@ views:
                   confirmation:
                     text: Stop the active test and restore Self Use?
       - type: grid
+        column_span: 2
         cards:
-          - type: heading
-            heading: Live feedback
-            heading_style: title
-            icon: mdi:chart-timeline-variant
-          - type: entities
-            entities:
-              - entity: sensor.home_energy_status
-                name: Controller status
-              - entity: sensor.home_energy_battery_soc
-                name: Battery SOC
-              - entity: sensor.home_energy_battery_energy
-                name: Battery energy
-              - entity: sensor.home_energy_grid_import
-                name: Grid import
-              - entity: sensor.home_energy_grid_export
-                name: Grid export
-              - entity: sensor.home_energy_house_load
-                name: House load
-              - entity: sensor.home_energy_solar_power
-                name: Solar generation
           - type: history-graph
-            title: Test feedback history
+            title: Test Feedback History
             hours_to_show: 2
             entities:
               - entity: sensor.home_energy_grid_import
