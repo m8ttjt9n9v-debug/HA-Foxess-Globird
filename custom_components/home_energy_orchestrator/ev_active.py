@@ -23,6 +23,7 @@ from .const import (
     CONF_EV_CABLE_CONNECTED,
     CONF_EV_CHARGE_EFFICIENCY,
     CONF_EV_CHARGE_LIMIT,
+    CONF_EV_CHARGE_PATH,
     CONF_EV_CHARGE_SWITCH,
     CONF_EV_CHARGE_TO_FULL,
     CONF_EV_CHARGING_STATE,
@@ -36,6 +37,7 @@ from .const import (
     CONF_EV_MAX_CURRENT,
     CONF_EV_PHASE_COUNT,
     CONF_EV_PROTECTED_BASELINE_A,
+    CONF_EV_SMART_SOCKET,
     CONF_EV_SOC,
     CONF_EV_STORED_ENERGY,
     CONF_EV_VOLTAGE,
@@ -51,6 +53,7 @@ from .const import (
     DEFAULT_EV_ALLOWANCE_GUARD_ENABLED,
     DEFAULT_EV_ALLOWANCE_SAFETY_MARGIN,
     DEFAULT_EV_CHARGE_EFFICIENCY,
+    DEFAULT_EV_CHARGE_PATH,
     DEFAULT_EV_DIRECT_LIMIT_HEADROOM,
     DEFAULT_EV_FREE_WINDOW_CHARGE_LIMIT,
     DEFAULT_EV_FREE_WINDOW_MINIMUM_CURRENT,
@@ -65,6 +68,7 @@ from .const import (
     DEFAULT_SERVICE_IMPORT_LIMIT_A,
     DEFAULT_SITE_GRID_HEADROOM_CURRENT,
     DEFAULT_SITE_PHASE_COUNT,
+    EV_CHARGE_PATH_DIRECT,
 )
 from .coordinator import EnergyCoordinator
 from .ev_adapter import EvEntityMap, EvServiceAdapter, EvWriteBlocked, ev_control_gate_status
@@ -172,6 +176,14 @@ class ActiveEvController:
             gate = self.gate_status
             if gate != "ready":
                 self.last_reason = gate
+                return
+            if (
+                self.coordinator.config.get(
+                    CONF_EV_CHARGE_PATH, DEFAULT_EV_CHARGE_PATH
+                )
+                != EV_CHARGE_PATH_DIRECT
+            ):
+                self.last_reason = "smart_socket_runtime_not_connected"
                 return
             if (
                 self._float(CONF_SITE_PHASE_COUNT, DEFAULT_SITE_PHASE_COUNT) > 1
@@ -607,7 +619,14 @@ class ActiveEvController:
             return None
         return EvServiceAdapter(
             self.hass,
-            EvEntityMap(*(str(value) for value in mapping)),
+            EvEntityMap(
+                *(str(value) for value in mapping),
+                smart_socket_entity=(
+                    str(config[CONF_EV_SMART_SOCKET])
+                    if config.get(CONF_EV_SMART_SOCKET)
+                    else None
+                ),
+            ),
             allow_writes=True,
             write_guard=lambda: self.gate_status == "ready",
         )

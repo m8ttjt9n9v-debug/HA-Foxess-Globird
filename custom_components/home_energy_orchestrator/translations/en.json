@@ -46,6 +46,11 @@
           "ev_current_limit_entity": "Tessie writable charging-current number",
           "ev_charge_limit_entity": "Tessie writable charge-limit number",
           "ev_charge_switch_entity": "Tessie charge switch",
+          "ev_charge_path": "EV charging supply",
+          "ev_smart_socket_entity": "Smart-socket power switch (required only for smart-socket supply)",
+          "ev_smart_socket_current_limit_a": "Commissioned smart-socket current limit (A; 0 when unused)",
+          "ev_smart_socket_settle_seconds": "Smart-socket connector settle time (seconds)",
+          "ev_smart_socket_power_switching": "Allow zero-demand smart-socket power switching outside the free window",
           "ev_charge_to_full_entity": "Optional charge-to-full override entity",
           "ev_location_mode": "EV location policy",
           "ev_free_window_priority": "Free-window charging priority",
@@ -126,6 +131,11 @@
           "ev_current_limit_entity": "Tessie writable charging-current number",
           "ev_charge_limit_entity": "Tessie writable charge-limit number",
           "ev_charge_switch_entity": "Tessie charge switch",
+          "ev_charge_path": "EV charging supply",
+          "ev_smart_socket_entity": "Smart-socket power switch (required only for smart-socket supply)",
+          "ev_smart_socket_current_limit_a": "Commissioned smart-socket current limit (A; 0 when unused)",
+          "ev_smart_socket_settle_seconds": "Smart-socket connector settle time (seconds)",
+          "ev_smart_socket_power_switching": "Allow zero-demand smart-socket power switching outside the free window",
           "ev_charge_to_full_entity": "Optional charge-to-full override entity",
           "ev_location_mode": "EV location policy",
           "ev_free_window_priority": "Free-window charging priority",
@@ -170,6 +180,8 @@
       "multiphase_current_mapping_required": "Commissioned multiphase EV control requires a signed most-loaded phase grid-current sensor.",
       "invalid_ev_location_mode": "Choose Auto, Home, or Away EV location policy.",
       "invalid_ev_priority": "Choose house-battery or EV free-window priority.",
+      "invalid_ev_charge_path": "Choose direct EVSE or smart socket.",
+      "incomplete_smart_socket_mapping": "Commissioned smart-socket control requires its switch mapping and a current limit at least as high as the commissioned EV minimum.",
       "invalid_site_limits": "Check capacity, floor, reserve, charger, inverter, current, and voltage limits.",
       "invalid_schedule": "Choose different free-charge times and a non-negative fallback.",
       "invalid_foxess_control_owner": "Choose observer only, local Modbus, or FoxCloud Mode Scheduler."
@@ -194,6 +206,12 @@
       "options": {
         "house_battery": "House battery",
         "ev": "EV"
+      }
+    },
+    "ev_charge_path": {
+      "options": {
+        "direct_evse": "Direct / EVSE",
+        "smart_socket": "Smart socket"
       }
     }
   }

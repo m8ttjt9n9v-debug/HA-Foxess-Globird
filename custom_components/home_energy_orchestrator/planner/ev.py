@@ -110,6 +110,336 @@ class SmartSocketObservation:
     current_step_a: float | None
 
 
+@dataclass(frozen=True, slots=True)
+class SmartSocketRecoveryObservation:
+    """Coherent evidence consumed by the one-shot fault recovery."""
+
+    charging_state: str | None
+    charging_state_seconds: float
+    home_control_active: bool
+    cloud_evidence_stable: bool
+    smart_path_selected: bool
+    socket_on: bool | None
+    cable_connected: bool
+    charge_allowed: bool
+    actuator_writable: bool
+    target_current_a: float
+    requested_current_a: float | None
+    actual_current_a: float
+    vehicle_soc_percent: float
+    charge_limit_percent: float
+    writable_maximum_a: float | None
+    charge_switch_on: bool | None
+
+
+@dataclass(frozen=True, slots=True)
+class SmartSocketRecoveryState:
+    """Restart-serializable progress for one continuous no-power episode."""
+
+    attempted: bool = False
+    phase: str = "idle"
+    phase_started_at: datetime | None = None
+    recovery_current_a: float | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class SmartSocketRecoveryTransition:
+    """One recovery transition and its ordered commands."""
+
+    state: SmartSocketRecoveryState
+    plan: EvCommandPlan
+
+
+def reconcile_smart_socket_recovery(
+    state: SmartSocketRecoveryState,
+    observation: SmartSocketRecoveryObservation,
+    *,
+    now: datetime,
+    physical_minimum_a: float,
+    physical_ceiling_a: float,
+    current_tolerance_a: float,
+    idle_current_threshold_a: float,
+    no_power_confirm_seconds: float,
+    command_confirm_seconds: float,
+    power_off_seconds: float,
+    post_power_settle_seconds: float,
+    charging_confirm_seconds: float,
+    healthy_rearm_seconds: float,
+) -> SmartSocketRecoveryTransition:
+    """Port the one-attempt smart-socket recovery as an explicit state machine."""
+    if now.tzinfo is None or now.utcoffset() is None:
+        raise ValueError("recovery time must be timezone-aware")
+    timings = (
+        no_power_confirm_seconds,
+        command_confirm_seconds,
+        power_off_seconds,
+        post_power_settle_seconds,
+        charging_confirm_seconds,
+        healthy_rearm_seconds,
+    )
+    if not all(isfinite(value) and value >= 0 for value in timings):
+        raise ValueError("recovery timings must be finite and non-negative")
+    if (
+        physical_minimum_a <= 0
+        or physical_ceiling_a < physical_minimum_a
+        or not isfinite(current_tolerance_a)
+        or current_tolerance_a <= 0
+        or not isfinite(idle_current_threshold_a)
+        or idle_current_threshold_a < 0
+    ):
+        raise ValueError("recovery physical limits are invalid")
+
+    if not observation.smart_path_selected or (
+        observation.charging_state == "charging"
+        and observation.charging_state_seconds >= healthy_rearm_seconds
+    ):
+        return SmartSocketRecoveryTransition(
+            SmartSocketRecoveryState(), EvCommandPlan((), "recovery_rearmed")
+        )
+    if state.attempted and state.phase in {"recovered", "fault"}:
+        return SmartSocketRecoveryTransition(
+            state, EvCommandPlan((), "recovery_episode_latched")
+        )
+
+    if state.phase == "idle":
+        reason = _smart_recovery_eligibility(
+            observation,
+            physical_minimum_a=physical_minimum_a,
+            no_power_confirm_seconds=no_power_confirm_seconds,
+            idle_current_threshold_a=idle_current_threshold_a,
+        )
+        if reason is not None:
+            return SmartSocketRecoveryTransition(state, EvCommandPlan((), reason))
+        recovery_current = _smart_recovery_current(
+            observation,
+            physical_minimum_a=physical_minimum_a,
+            physical_ceiling_a=physical_ceiling_a,
+        )
+        if not _recovery_current_matches(
+            observation.requested_current_a, recovery_current, current_tolerance_a,
+            physical_minimum_a
+        ):
+            return SmartSocketRecoveryTransition(
+                SmartSocketRecoveryState(True, "confirming_current", now, recovery_current),
+                EvCommandPlan(
+                    (EvCommand("set_charge_current", recovery_current),),
+                    "recovery_current_staged",
+                ),
+            )
+        return SmartSocketRecoveryTransition(
+            SmartSocketRecoveryState(
+                True, "confirming_socket_off", now, recovery_current
+            ),
+            EvCommandPlan(
+                (EvCommand("turn_off_smart_socket"),),
+                "recovery_power_off_requested",
+            ),
+        )
+
+    elapsed = _recovery_phase_elapsed(state, now)
+    if state.phase == "confirming_current":
+        if _recovery_current_matches(
+            observation.requested_current_a,
+            state.recovery_current_a,
+            current_tolerance_a,
+            physical_minimum_a,
+        ):
+            return SmartSocketRecoveryTransition(
+                SmartSocketRecoveryState(
+                    True, "confirming_socket_off", now, state.recovery_current_a
+                ),
+                EvCommandPlan(
+                    (EvCommand("turn_off_smart_socket"),),
+                    "recovery_power_off_requested",
+                ),
+            )
+        if elapsed >= command_confirm_seconds:
+            return _smart_recovery_fault(state, "recovery_current_not_confirmed")
+        return SmartSocketRecoveryTransition(
+            state, EvCommandPlan((), "recovery_awaiting_current_confirmation")
+        )
+    if state.phase == "confirming_socket_off":
+        if observation.socket_on is False:
+            return SmartSocketRecoveryTransition(
+                SmartSocketRecoveryState(
+                    True, "power_off_dwell", now, state.recovery_current_a
+                ),
+                EvCommandPlan((), "recovery_socket_off_confirmed"),
+            )
+        if elapsed >= command_confirm_seconds:
+            return _smart_recovery_fault(state, "recovery_socket_off_not_confirmed")
+        return SmartSocketRecoveryTransition(
+            state, EvCommandPlan((), "recovery_awaiting_socket_off")
+        )
+    if state.phase == "power_off_dwell":
+        if elapsed < power_off_seconds:
+            return SmartSocketRecoveryTransition(
+                state, EvCommandPlan((), "recovery_power_off_dwell")
+            )
+        if not _smart_recovery_permissions_hold(observation):
+            return _smart_recovery_fault(state, "recovery_permissions_changed")
+        return SmartSocketRecoveryTransition(
+            SmartSocketRecoveryState(
+                True, "confirming_socket_on", now, state.recovery_current_a
+            ),
+            EvCommandPlan(
+                (EvCommand("turn_on_smart_socket"),),
+                "recovery_power_on_requested",
+            ),
+        )
+    if state.phase == "confirming_socket_on":
+        if observation.socket_on is True:
+            return SmartSocketRecoveryTransition(
+                SmartSocketRecoveryState(
+                    True, "post_power_settle", now, state.recovery_current_a
+                ),
+                EvCommandPlan((), "recovery_socket_on_confirmed"),
+            )
+        if elapsed >= command_confirm_seconds:
+            return _smart_recovery_fault(state, "recovery_socket_on_not_confirmed")
+        return SmartSocketRecoveryTransition(
+            state, EvCommandPlan((), "recovery_awaiting_socket_on")
+        )
+    if state.phase == "post_power_settle":
+        if elapsed < post_power_settle_seconds:
+            return SmartSocketRecoveryTransition(
+                state, EvCommandPlan((), "recovery_post_power_settle")
+            )
+        if not _smart_recovery_permissions_hold(observation) or not observation.actuator_writable:
+            return _smart_recovery_fault(state, "recovery_actuator_unavailable_after_power")
+        recovery_current = _smart_recovery_current(
+            observation,
+            physical_minimum_a=physical_minimum_a,
+            physical_ceiling_a=physical_ceiling_a,
+        )
+        commands: list[EvCommand] = []
+        if not _recovery_current_matches(
+            observation.requested_current_a, recovery_current, current_tolerance_a,
+            physical_minimum_a
+        ):
+            commands.append(EvCommand("set_charge_current", recovery_current))
+        if observation.charge_switch_on is False:
+            commands.append(EvCommand("start_charging"))
+        if observation.charge_switch_on is None:
+            return _smart_recovery_fault(state, "recovery_charge_switch_unavailable")
+        return SmartSocketRecoveryTransition(
+            SmartSocketRecoveryState(
+                True, "confirming_charging", now, recovery_current
+            ),
+            EvCommandPlan(tuple(commands), "recovery_charge_restart_requested"),
+        )
+    if state.phase == "confirming_charging":
+        if observation.charging_state == "charging":
+            return SmartSocketRecoveryTransition(
+                SmartSocketRecoveryState(
+                    True, "recovered", now, state.recovery_current_a
+                ),
+                EvCommandPlan((), "recovery_charging_confirmed"),
+            )
+        if elapsed >= charging_confirm_seconds:
+            return _smart_recovery_fault(state, "recovery_charging_not_confirmed")
+        return SmartSocketRecoveryTransition(
+            state, EvCommandPlan((), "recovery_awaiting_charging")
+        )
+    return _smart_recovery_fault(state, "recovery_state_invalid")
+
+
+def _smart_recovery_eligibility(
+    observation: SmartSocketRecoveryObservation,
+    *,
+    physical_minimum_a: float,
+    no_power_confirm_seconds: float,
+    idle_current_threshold_a: float,
+) -> str | None:
+    if observation.charging_state != "no_power":
+        return "recovery_no_fault"
+    if observation.charging_state_seconds < no_power_confirm_seconds:
+        return "recovery_fault_not_sustained"
+    if not observation.home_control_active or not observation.cloud_evidence_stable:
+        return "recovery_home_evidence_unavailable"
+    if not _smart_recovery_permissions_hold(observation):
+        return "recovery_not_permitted"
+    if observation.socket_on is not True or not observation.actuator_writable:
+        return "recovery_actuator_unavailable"
+    values = (
+        observation.target_current_a,
+        observation.actual_current_a,
+        observation.vehicle_soc_percent,
+        observation.charge_limit_percent,
+    )
+    if not all(isfinite(value) for value in values):
+        return "recovery_telemetry_invalid"
+    if (
+        observation.target_current_a < physical_minimum_a
+        or observation.actual_current_a >= idle_current_threshold_a
+        or observation.vehicle_soc_percent >= observation.charge_limit_percent
+    ):
+        return "recovery_demand_not_confirmed"
+    return None
+
+
+def _smart_recovery_permissions_hold(observation: SmartSocketRecoveryObservation) -> bool:
+    return (
+        observation.home_control_active
+        and observation.smart_path_selected
+        and observation.cable_connected
+        and observation.charge_allowed
+    )
+
+
+def _smart_recovery_current(
+    observation: SmartSocketRecoveryObservation,
+    *,
+    physical_minimum_a: float,
+    physical_ceiling_a: float,
+) -> float:
+    writable = observation.writable_maximum_a
+    accepted = (
+        writable
+        if writable is not None and isfinite(writable) and writable > 0
+        else physical_ceiling_a
+    )
+    return round(
+        max(min(observation.target_current_a, accepted, physical_ceiling_a), physical_minimum_a),
+        3,
+    )
+
+
+def _recovery_current_matches(
+    requested_current_a: float | None,
+    recovery_current_a: float | None,
+    tolerance_a: float,
+    physical_minimum_a: float,
+) -> bool:
+    return (
+        requested_current_a is not None
+        and recovery_current_a is not None
+        and isfinite(requested_current_a)
+        and requested_current_a >= physical_minimum_a
+        and abs(requested_current_a - recovery_current_a) < tolerance_a
+    )
+
+
+def _recovery_phase_elapsed(state: SmartSocketRecoveryState, now: datetime) -> float:
+    if state.phase_started_at is None or state.phase_started_at > now:
+        return 0.0
+    return (now - state.phase_started_at).total_seconds()
+
+
+def _smart_recovery_fault(
+    state: SmartSocketRecoveryState, reason: str
+) -> SmartSocketRecoveryTransition:
+    return SmartSocketRecoveryTransition(
+        SmartSocketRecoveryState(
+            attempted=True,
+            phase="fault",
+            phase_started_at=state.phase_started_at,
+            recovery_current_a=state.recovery_current_a,
+        ),
+        EvCommandPlan((), reason),
+    )
+
+
 def plan_smart_socket_commands(
     observation: SmartSocketObservation,
     *,

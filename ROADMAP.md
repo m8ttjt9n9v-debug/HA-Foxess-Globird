@@ -29,6 +29,9 @@ Status here describes behavioral parity, not merely the presence of code.
 - [x] Pure smart-socket command planner preserving staged current, explicit
   physical ceiling, outlet settling, zero-demand power policy, and ordered
   charge start. The outlet adapter and recovery runtime remain disconnected.
+- [x] Pure restart-serializable smart-socket `no_power` recovery state machine:
+  sustained/coherent evidence, current-first sequence, confirmed outlet cycle,
+  settle/restart, one-attempt latch, timeout faults, and sustained-health rearm.
 
 ## Removed pending a faithful port
 
@@ -47,8 +50,8 @@ Working Single Phase Pilot Site parity.
   behavior to runtime state sampling and the direct-path planner.
 - [ ] Solar-spill EV charging after the battery is full.
 - [ ] Latest-start, reserve-aware pre-free EV backfill.
-- [ ] Connect explicit smart-socket/direct-EVSE selection to the commissioned
-  adapter and port the restart-persistent one-attempt `no_power` recovery.
+- [ ] Connect the characterized smart-socket command and recovery state machines
+  to runtime only after restart storage and delayed gate rechecks are verified.
 - [x] Tesla location Auto/Home/Away overrides. Occupancy remains pending for
   the learned demand and pre-free policies that consume it.
 - [ ] Last priority: learned Tesla driving demand, arrival reserve, and

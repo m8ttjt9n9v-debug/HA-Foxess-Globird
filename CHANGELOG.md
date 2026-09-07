@@ -10,6 +10,14 @@
 - Rename all current public repository references to the source installation as
   “Working Single Phase Pilot Site”; learned driving targets are explicitly the
   last-priority compatibility stage pending a Tessie-native capability review.
+- Add an explicit direct-EVSE/smart-socket supply selection, mapped outlet,
+  configurable physical socket ceiling/settling/power policy, and adapter
+  boundary. Existing entries remain direct EVSE; selected smart-socket runtime
+  is deliberately non-writing until the full delayed sequence is connected.
+- Characterize the restart-serializable, one-attempt `no_power` recovery state
+  machine with coherent-evidence gates, confirmed current and outlet phases,
+  configurable dwell/timeout durations, post-power rebounding, latched failure,
+  and sustained-health/path-change rearm. It remains disconnected from runtime.
 
 ## 0.4.0 — port-first reset and durable project truth
 

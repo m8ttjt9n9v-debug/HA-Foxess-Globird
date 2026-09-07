@@ -43,8 +43,9 @@ because the controller must protect each phase's configured service limit.
 If that mapped multiphase current is unavailable, EV actuation is blocked.
 
 The direct path never issues a stop or pause outside the free window. The
-smart-socket policy is characterized but has no connected outlet adapter;
-driving-demand, pre-free, and solar-spill stages remain future ports.
+smart-socket policy and recovery are characterized and explicitly configurable,
+but have no connected runtime; driving-demand, pre-free, and solar-spill stages
+remain future ports.
 
 The Working Single Phase Pilot Site uses Tessie entities for these roles. Portable code must map roles,
 not embed that vehicle's `jns_x` entity IDs.

@@ -13,6 +13,8 @@ from custom_components.home_energy_orchestrator.planner.ev import (
     EvCommand,
     FreeWindowCurrentInputs,
     SmartSocketObservation,
+    SmartSocketRecoveryObservation,
+    SmartSocketRecoveryState,
     apply_daily_allowance_ceiling,
     direct_evse_response_matches,
     estimate_other_free_window_import_kwh,
@@ -22,6 +24,7 @@ from custom_components.home_energy_orchestrator.planner.ev import (
     plan_free_window_current,
     plan_smart_socket_commands,
     reconcile_direct_evse,
+    reconcile_smart_socket_recovery,
 )
 
 BASE = FreeWindowCurrentInputs(
@@ -367,6 +370,156 @@ def test_smart_socket_rating_is_configuration_not_a_literal():
         EvCommand("set_charge_current", 16),
         EvCommand("turn_on_smart_socket"),
     )
+
+
+RECOVERY = SmartSocketRecoveryObservation(
+    charging_state="no_power",
+    charging_state_seconds=120,
+    home_control_active=True,
+    cloud_evidence_stable=True,
+    smart_path_selected=True,
+    socket_on=True,
+    cable_connected=True,
+    charge_allowed=True,
+    actuator_writable=True,
+    target_current_a=10,
+    requested_current_a=6,
+    actual_current_a=0,
+    vehicle_soc_percent=40,
+    charge_limit_percent=80,
+    writable_maximum_a=24,
+    charge_switch_on=False,
+)
+
+
+def _recover(state, observation, now):
+    return reconcile_smart_socket_recovery(
+        state,
+        observation,
+        now=now,
+        physical_minimum_a=1,
+        physical_ceiling_a=10,
+        current_tolerance_a=1,
+        idle_current_threshold_a=0.5,
+        no_power_confirm_seconds=120,
+        command_confirm_seconds=60,
+        power_off_seconds=30,
+        post_power_settle_seconds=20,
+        charging_confirm_seconds=180,
+        healthy_rearm_seconds=120,
+    )
+
+
+def test_smart_socket_recovery_preserves_ordered_one_shot_sequence():
+    now = datetime(2026, 9, 7, 8, tzinfo=UTC)
+    transition = _recover(SmartSocketRecoveryState(), RECOVERY, now)
+    assert transition.state.attempted is True
+    assert transition.state.phase == "confirming_current"
+    assert transition.plan.commands == (EvCommand("set_charge_current", 10),)
+
+    transition = _recover(
+        transition.state, replace(RECOVERY, requested_current_a=10), now + timedelta(seconds=1)
+    )
+    assert transition.state.phase == "confirming_socket_off"
+    assert transition.plan.commands == (EvCommand("turn_off_smart_socket"),)
+
+    transition = _recover(
+        transition.state,
+        replace(RECOVERY, requested_current_a=10, socket_on=False),
+        now + timedelta(seconds=2),
+    )
+    assert transition.state.phase == "power_off_dwell"
+    assert transition.plan.commands == ()
+
+    transition = _recover(
+        transition.state,
+        replace(RECOVERY, requested_current_a=10, socket_on=False),
+        now + timedelta(seconds=32),
+    )
+    assert transition.state.phase == "confirming_socket_on"
+    assert transition.plan.commands == (EvCommand("turn_on_smart_socket"),)
+
+    transition = _recover(
+        transition.state,
+        replace(RECOVERY, requested_current_a=10, socket_on=True),
+        now + timedelta(seconds=33),
+    )
+    assert transition.state.phase == "post_power_settle"
+
+    transition = _recover(
+        transition.state,
+        replace(RECOVERY, requested_current_a=10, socket_on=True),
+        now + timedelta(seconds=53),
+    )
+    assert transition.state.phase == "confirming_charging"
+    assert transition.plan.commands == (EvCommand("start_charging"),)
+
+    transition = _recover(
+        transition.state,
+        replace(
+            RECOVERY,
+            charging_state="charging",
+            charging_state_seconds=1,
+            requested_current_a=10,
+        ),
+        now + timedelta(seconds=54),
+    )
+    assert transition.state.phase == "recovered"
+
+
+def test_smart_socket_recovery_latch_survives_failure_and_blocks_second_cycle():
+    now = datetime(2026, 9, 7, 8, tzinfo=UTC)
+    transition = _recover(SmartSocketRecoveryState(), RECOVERY, now)
+    transition = _recover(transition.state, RECOVERY, now + timedelta(seconds=60))
+    assert transition.state.phase == "fault"
+    assert transition.plan.reason == "recovery_current_not_confirmed"
+
+    repeated = _recover(transition.state, RECOVERY, now + timedelta(minutes=5))
+    assert repeated.state == transition.state
+    assert repeated.plan.commands == ()
+    assert repeated.plan.reason == "recovery_episode_latched"
+
+
+def test_smart_socket_recovery_rearms_only_after_sustained_health_or_path_change():
+    latched = SmartSocketRecoveryState(
+        attempted=True,
+        phase="recovered",
+        phase_started_at=datetime(2026, 9, 7, 8, tzinfo=UTC),
+        recovery_current_a=10,
+    )
+    now = datetime(2026, 9, 7, 9, tzinfo=UTC)
+    transient = _recover(
+        latched,
+        replace(RECOVERY, charging_state="charging", charging_state_seconds=119),
+        now,
+    )
+    assert transient.state == latched
+    healthy = _recover(
+        latched,
+        replace(RECOVERY, charging_state="charging", charging_state_seconds=120),
+        now,
+    )
+    assert healthy.state == SmartSocketRecoveryState()
+    path_changed = _recover(
+        latched, replace(RECOVERY, smart_path_selected=False), now
+    )
+    assert path_changed.state == SmartSocketRecoveryState()
+
+
+def test_smart_socket_recovery_requires_sustained_coherent_home_evidence():
+    now = datetime(2026, 9, 7, 8, tzinfo=UTC)
+    short_fault = _recover(
+        SmartSocketRecoveryState(),
+        replace(RECOVERY, charging_state_seconds=119),
+        now,
+    )
+    assert short_fault.plan.reason == "recovery_fault_not_sustained"
+    stale = _recover(
+        SmartSocketRecoveryState(),
+        replace(RECOVERY, cloud_evidence_stable=False),
+        now,
+    )
+    assert stale.plan.reason == "recovery_home_evidence_unavailable"
 
 
 def test_direct_path_orders_limit_current_then_start():

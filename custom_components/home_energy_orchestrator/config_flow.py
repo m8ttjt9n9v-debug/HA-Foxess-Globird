@@ -34,6 +34,7 @@ from .const import (
     CONF_EV_CABLE_CONNECTED,
     CONF_EV_CHARGE_EFFICIENCY,
     CONF_EV_CHARGE_LIMIT,
+    CONF_EV_CHARGE_PATH,
     CONF_EV_CHARGE_SWITCH,
     CONF_EV_CHARGE_TO_FULL,
     CONF_EV_CHARGING_STATE,
@@ -49,6 +50,10 @@ from .const import (
     CONF_EV_MIN_CURRENT,
     CONF_EV_PHASE_COUNT,
     CONF_EV_PROTECTED_BASELINE_A,
+    CONF_EV_SMART_SOCKET,
+    CONF_EV_SMART_SOCKET_CURRENT_LIMIT,
+    CONF_EV_SMART_SOCKET_POWER_SWITCHING,
+    CONF_EV_SMART_SOCKET_SETTLE_SECONDS,
     CONF_EV_SOC,
     CONF_EV_STORED_ENERGY,
     CONF_EV_VOLTAGE,
@@ -99,6 +104,7 @@ from .const import (
     DEFAULT_EV_ALLOWANCE_SAFETY_MARGIN,
     DEFAULT_EV_AUTOMATIC_CONTROL_ENABLED,
     DEFAULT_EV_CHARGE_EFFICIENCY,
+    DEFAULT_EV_CHARGE_PATH,
     DEFAULT_EV_CONTROL_COMMISSIONED,
     DEFAULT_EV_DIRECT_LIMIT_HEADROOM,
     DEFAULT_EV_FREE_WINDOW_CHARGE_LIMIT,
@@ -110,6 +116,9 @@ from .const import (
     DEFAULT_EV_MIN_CURRENT,
     DEFAULT_EV_PHASE_COUNT,
     DEFAULT_EV_PROTECTED_BASELINE_A,
+    DEFAULT_EV_SMART_SOCKET_CURRENT_LIMIT,
+    DEFAULT_EV_SMART_SOCKET_POWER_SWITCHING,
+    DEFAULT_EV_SMART_SOCKET_SETTLE_SECONDS,
     DEFAULT_EV_VOLTAGE,
     DEFAULT_EXPORT_ALLOWANCE_KWH,
     DEFAULT_EXPORT_DISCHARGE_POWER_KW,
@@ -137,6 +146,8 @@ from .const import (
     DEFAULT_ZERO_IMPORT_CONFIRM_MINUTES,
     DEFAULT_ZERO_IMPORT_THRESHOLD_KW,
     DOMAIN,
+    EV_CHARGE_PATH_SMART_SOCKET,
+    EV_CHARGE_PATHS,
     EV_FREE_WINDOW_PRIORITIES,
     EV_LOCATION_MODES,
     FOXESS_CONTROL_OWNERS,
@@ -329,6 +340,34 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 optional_entity(CONF_EV_CURRENT_LIMIT): NUMBER_ENTITY,
                 optional_entity(CONF_EV_CHARGE_LIMIT): NUMBER_ENTITY,
                 optional_entity(CONF_EV_CHARGE_SWITCH): SWITCH_ENTITY,
+                vol.Required(
+                    CONF_EV_CHARGE_PATH,
+                    default=defaults.get(CONF_EV_CHARGE_PATH, DEFAULT_EV_CHARGE_PATH),
+                ): selector.SelectSelector(
+                    selector.SelectSelectorConfig(options=list(EV_CHARGE_PATHS))
+                ),
+                optional_entity(CONF_EV_SMART_SOCKET): SWITCH_ENTITY,
+                vol.Required(
+                    CONF_EV_SMART_SOCKET_CURRENT_LIMIT,
+                    default=defaults.get(
+                        CONF_EV_SMART_SOCKET_CURRENT_LIMIT,
+                        DEFAULT_EV_SMART_SOCKET_CURRENT_LIMIT,
+                    ),
+                ): vol.Coerce(float),
+                vol.Required(
+                    CONF_EV_SMART_SOCKET_SETTLE_SECONDS,
+                    default=defaults.get(
+                        CONF_EV_SMART_SOCKET_SETTLE_SECONDS,
+                        DEFAULT_EV_SMART_SOCKET_SETTLE_SECONDS,
+                    ),
+                ): vol.Coerce(float),
+                vol.Required(
+                    CONF_EV_SMART_SOCKET_POWER_SWITCHING,
+                    default=defaults.get(
+                        CONF_EV_SMART_SOCKET_POWER_SWITCHING,
+                        DEFAULT_EV_SMART_SOCKET_POWER_SWITCHING,
+                    ),
+                ): selector.BooleanSelector(),
                 optional_entity(CONF_EV_CHARGE_TO_FULL): selector.EntitySelector(),
                 vol.Required(
                     CONF_EV_LOCATION_MODE,
@@ -556,6 +595,19 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             ),
             CONF_EV_PHASE_COUNT: data.get(CONF_EV_PHASE_COUNT, DEFAULT_EV_PHASE_COUNT),
             CONF_EV_MAX_CURRENT: data.get(CONF_EV_MAX_CURRENT, DEFAULT_EV_MAX_CURRENT),
+            CONF_EV_CHARGE_PATH: data.get(CONF_EV_CHARGE_PATH, DEFAULT_EV_CHARGE_PATH),
+            CONF_EV_SMART_SOCKET_CURRENT_LIMIT: data.get(
+                CONF_EV_SMART_SOCKET_CURRENT_LIMIT,
+                DEFAULT_EV_SMART_SOCKET_CURRENT_LIMIT,
+            ),
+            CONF_EV_SMART_SOCKET_SETTLE_SECONDS: data.get(
+                CONF_EV_SMART_SOCKET_SETTLE_SECONDS,
+                DEFAULT_EV_SMART_SOCKET_SETTLE_SECONDS,
+            ),
+            CONF_EV_SMART_SOCKET_POWER_SWITCHING: data.get(
+                CONF_EV_SMART_SOCKET_POWER_SWITCHING,
+                DEFAULT_EV_SMART_SOCKET_POWER_SWITCHING,
+            ),
             CONF_EV_LOCATION_MODE: data.get(
                 CONF_EV_LOCATION_MODE, DEFAULT_EV_LOCATION_MODE
             ),
@@ -663,6 +715,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             CONF_EV_CURRENT_LIMIT,
             CONF_EV_CHARGE_LIMIT,
             CONF_EV_CHARGE_SWITCH,
+            CONF_EV_SMART_SOCKET,
             CONF_EV_CHARGE_TO_FULL,
             CONF_SITE_GRID_CURRENT,
             CONF_FOXESS_WORK_MODE,
@@ -696,6 +749,8 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             return {CONF_EV_LOCATION_MODE: "invalid_ev_location_mode"}
         if data.get(CONF_EV_FREE_WINDOW_PRIORITY) not in EV_FREE_WINDOW_PRIORITIES:
             return {CONF_EV_FREE_WINDOW_PRIORITY: "invalid_ev_priority"}
+        if data.get(CONF_EV_CHARGE_PATH) not in EV_CHARGE_PATHS:
+            return {CONF_EV_CHARGE_PATH: "invalid_ev_charge_path"}
         try:
             capacity = float(data[CONF_BATTERY_CAPACITY])
             floor = float(data[CONF_BATTERY_FLOOR])
@@ -708,6 +763,8 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             inverter_discharge_limit = float(data[CONF_INVERTER_DISCHARGE_LIMIT_KW])
             min_current = float(data[CONF_EV_MIN_CURRENT])
             max_current = float(data[CONF_EV_MAX_CURRENT])
+            smart_socket_limit = float(data[CONF_EV_SMART_SOCKET_CURRENT_LIMIT])
+            smart_socket_settle = float(data[CONF_EV_SMART_SOCKET_SETTLE_SECONDS])
             phase_count = float(data[CONF_EV_PHASE_COUNT])
             voltage = float(data[CONF_EV_VOLTAGE])
             zero_import_threshold = float(data[CONF_ZERO_IMPORT_THRESHOLD_KW])
@@ -767,6 +824,8 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             zero_import_minutes,
             min_current,
             max_current,
+            smart_socket_limit,
+            smart_socket_settle,
             voltage,
             daily_charge,
             peak_rate,
@@ -805,6 +864,8 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             or inverter_discharge_limit < 0
             or min_current < 0
             or max_current < min_current
+            or smart_socket_limit < 0
+            or smart_socket_settle < 0
             or voltage <= 0
             or phase_count < 1
             or not phase_count.is_integer()
@@ -837,4 +898,14 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             and not data.get(CONF_SITE_GRID_CURRENT)
         ):
             return {"base": "multiphase_current_mapping_required"}
+        if (
+            data.get(CONF_EV_CONTROL_COMMISSIONED)
+            and data.get(CONF_EV_CHARGE_PATH) == EV_CHARGE_PATH_SMART_SOCKET
+            and (
+                not data.get(CONF_EV_SMART_SOCKET)
+                or smart_socket_limit < min_current
+                or smart_socket_limit <= 0
+            )
+        ):
+            return {"base": "incomplete_smart_socket_mapping"}
         return {}

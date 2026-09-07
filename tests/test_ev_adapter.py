@@ -126,3 +126,47 @@ async def test_ev_adapter_rechecks_safety_gate_between_ordered_commands(
         await adapter.async_execute(plan)
 
     assert adapter.last_executed == ("set_charge_limit",)
+
+
+async def test_ev_adapter_maps_smart_socket_commands_only_to_explicit_outlet(
+    hass: HomeAssistant,
+) -> None:
+    execution = []
+
+    async def record(call) -> None:
+        execution.append((call.service, call.data["entity_id"]))
+
+    hass.services.async_register("switch", "turn_on", record)
+    hass.services.async_register("switch", "turn_off", record)
+    adapter = EvServiceAdapter(
+        hass,
+        EvEntityMap(
+            "number.car_current",
+            "number.car_limit",
+            "switch.car_charge",
+            smart_socket_entity="switch.car_socket",
+        ),
+        allow_writes=True,
+    )
+    plan = EvCommandPlan(
+        (
+            EvCommand("turn_on_smart_socket"),
+            EvCommand("turn_off_smart_socket"),
+        ),
+        "test",
+    )
+
+    await adapter.async_execute(plan)
+
+    assert execution == [
+        ("turn_on", "switch.car_socket"),
+        ("turn_off", "switch.car_socket"),
+    ]
+
+
+async def test_ev_adapter_blocks_unmapped_smart_socket(hass: HomeAssistant) -> None:
+    adapter = EvServiceAdapter(hass, ENTITIES, allow_writes=True)
+    with pytest.raises(EvWriteBlocked, match="not mapped"):
+        await adapter.async_execute(
+            EvCommandPlan((EvCommand("turn_on_smart_socket"),), "test")
+        )

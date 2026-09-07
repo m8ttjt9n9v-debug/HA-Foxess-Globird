@@ -167,6 +167,32 @@ async def test_multiphase_runtime_blocks_when_mapped_current_is_unavailable(
     assert controller.writes_performed == 0
 
 
+async def test_smart_socket_selection_remains_non_writing_until_runtime_connected(
+    hass: HomeAssistant,
+) -> None:
+    _set_ev_states(hass)
+    hass.states.async_set("switch.car_socket", "on")
+    calls = []
+    hass.bus.async_listen(EVENT_CALL_SERVICE, calls.append)
+    controller = ActiveEvController(
+        hass,
+        _coordinator(
+            _controller_config(
+                ev_charge_path="smart_socket",
+                ev_smart_socket_entity="switch.car_socket",
+                ev_smart_socket_current_limit_a=10,
+            )
+        ),
+    )
+
+    await controller.async_reconcile(datetime(2026, 9, 7, 12, 1, tzinfo=UTC))
+
+    assert controller.gate_status == "ready"
+    assert controller.last_reason == "smart_socket_runtime_not_connected"
+    assert controller.writes_performed == 0
+    assert calls == []
+
+
 async def test_runtime_does_not_flap_forever_when_feedback_never_changes(
     hass: HomeAssistant,
 ) -> None:

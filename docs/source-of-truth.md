@@ -37,10 +37,14 @@ layers around the proven algorithm, not replacement algorithms.
 - Direct-EVSE free-window Tessie current, charge-limit, and charge-start control
   is implemented. It never stops or pauses direct charging outside the window,
   and one unchanged target is bounded to three feedback-confirmed attempts.
-- The smart-socket command policy is characterized but not connected to an
-  outlet adapter. It preserves the source ordering: bound/stage current before
+- The smart-socket command policy is characterized but not connected to active
+  runtime. It preserves the source ordering: bound/stage current before
   power, accept service-valid staged feedback, settle the configured interval,
   then bound current again and start charging. It cannot write an outlet yet.
+- Smart-socket configuration and adapter commands require an explicitly mapped
+  outlet and configured physical ceiling. The recovery sequence is represented
+  by a pure restart-serializable state machine, including the one-attempt fault
+  latch, but neither normal socket control nor recovery is connected to runtime.
 - Protected-house demand learning integrates the explicitly mapped source
   outside the free window, persists an in-progress cycle across ordinary
   restarts, rejects an over-gap cycle, and derives a conservative P80 model
@@ -63,6 +67,12 @@ priority, guaranteed free-window current, a free-window SoC target, matched
 three-minute grid/current feedback, a settling phase, restart-safe latches,
 solar-spill charging, latest-start pre-free backfill, learned driving demand and
 charge targets, and smart-socket recovery.
+
+The source file contains a P85 daily-driving model that contributes to its
+general charge limit outside the free window. It is not part of the active
+free-window current calculation. HACS does not currently implement it, and it
+is the last-priority EV compatibility item pending review of Tessie's native
+capabilities.
 
 Its export policy protects learned house demand and mandatory connected-EV
 energy, computes sellable energy and latest start, latches a fixed-power

@@ -10,11 +10,16 @@ from homeassistant.core import HomeAssistant
 
 from .const import (
     CONF_EV_AUTOMATIC_CONTROL_ENABLED,
+    CONF_EV_CHARGE_PATH,
     CONF_EV_CONTROL_COMMISSIONED,
+    CONF_EV_SMART_SOCKET,
+    CONF_EV_SMART_SOCKET_CURRENT_LIMIT,
     CONF_REHEARSAL_MODE,
     CONF_SITE_GRID_CURRENT,
     CONF_SITE_PHASE_COUNT,
+    DEFAULT_EV_CHARGE_PATH,
     DEFAULT_SITE_PHASE_COUNT,
+    EV_CHARGE_PATH_SMART_SOCKET,
     EV_REQUIRED_ENTITY_KEYS,
 )
 from .planner.ev import EvCommand, EvCommandPlan
@@ -31,6 +36,7 @@ class EvEntityMap:
     charge_current_entity: str
     charge_limit_entity: str
     charge_switch_entity: str
+    smart_socket_entity: str | None = None
 
 
 class EvServiceAdapter:
@@ -105,6 +111,18 @@ class EvServiceAdapter:
                 target={"entity_id": self.entities.charge_switch_entity},
                 blocking=True,
             )
+        elif command.action in {"turn_on_smart_socket", "turn_off_smart_socket"}:
+            if not self.entities.smart_socket_entity:
+                raise EvWriteBlocked("smart-socket actuator is not mapped")
+            service = (
+                "turn_on" if command.action == "turn_on_smart_socket" else "turn_off"
+            )
+            await self.hass.services.async_call(
+                "switch",
+                service,
+                target={"entity_id": self.entities.smart_socket_entity},
+                blocking=True,
+            )
         else:
             raise ValueError(f"unsupported EV command: {command.action}")
 
@@ -121,6 +139,15 @@ def ev_control_gate_status(
         return "not_commissioned"
     if not all(config.get(key) for key in EV_REQUIRED_ENTITY_KEYS):
         return "incomplete_mapping"
+    if config.get(CONF_EV_CHARGE_PATH, DEFAULT_EV_CHARGE_PATH) == EV_CHARGE_PATH_SMART_SOCKET:
+        if not config.get(CONF_EV_SMART_SOCKET):
+            return "smart_socket_mapping_required"
+        try:
+            smart_limit = float(config.get(CONF_EV_SMART_SOCKET_CURRENT_LIMIT, 0))
+        except (TypeError, ValueError):
+            return "smart_socket_limit_invalid"
+        if smart_limit <= 0:
+            return "smart_socket_limit_invalid"
     try:
         site_phases = float(config.get(CONF_SITE_PHASE_COUNT, DEFAULT_SITE_PHASE_COUNT))
     except (TypeError, ValueError):
