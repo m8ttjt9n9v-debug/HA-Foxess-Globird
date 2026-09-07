@@ -347,6 +347,7 @@ async def test_pre_free_runtime_latches_latest_start_and_uses_export_budget(
     await controller.async_reconcile(now)
 
     assert controller.pre_free_session.active is True
+    assert controller.pre_free_phase == "started"
     assert controller.pre_free_session.frozen_start == datetime(2026, 9, 7, 10, 34, tzinfo=UTC)
     assert controller.pre_free_plan is not None
     assert controller.pre_free_plan.planned_energy_kwh == 5

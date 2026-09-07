@@ -152,6 +152,7 @@ class ActiveEvController:
         self.reconciliation = DirectEvseReconciliationState()
         self.pre_free_session = PreFreeSessionState()
         self.pre_free_plan: PreFreePlan | None = None
+        self.pre_free_phase = "disabled"
         self.solar_spill = SolarSpillDecision(0.0, 0.0, "disabled")
         self.pre_free_current_a: float | None = None
         self.outside_control_active = False
@@ -235,6 +236,7 @@ class ActiveEvController:
             in_window, elapsed_minutes, remaining_hours = self._free_window(now)
             if not connected:
                 self.pre_free_session = PreFreeSessionState()
+                self.pre_free_phase = "not_eligible"
                 self.outside_control_active = False
                 self.outside_target_active = False
                 self.last_reason = connection_reason
@@ -693,6 +695,7 @@ class ActiveEvController:
                 planned_start=planned_start,
             )
             self.pre_free_session = transition.state
+            self.pre_free_phase = transition.phase
             if (
                 self.pre_free_session.active
                 and self.pre_free_session.frozen_start
@@ -720,6 +723,7 @@ class ActiveEvController:
             ).current_a
         else:
             self.pre_free_session = PreFreeSessionState()
+            self.pre_free_phase = "disabled"
 
         selected = select_outside_window_current(
             baseline_a=baseline,

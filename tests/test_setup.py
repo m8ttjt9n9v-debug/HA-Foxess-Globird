@@ -115,6 +115,8 @@ async def test_setup_observes_normalised_values_and_never_calls_services(hass):
     assert hass.states.get(status).attributes["writes_performed"] == 0
     assert hass.states.get(status).attributes["automatic_control_enabled"] is False
     assert hass.states.get(status).attributes["mode"] == "observe"
+    assert hass.states.get("sensor.home_energy_ev_solar_spill_status").state == "disabled"
+    assert hass.states.get("sensor.home_energy_ev_pre_free_status").state == "disabled"
     diagnostics = await async_get_config_entry_diagnostics(hass, entry)
     assert diagnostics["actuators"]["foxess_automatic_control_enabled"] is False
     assert diagnostics["actuators"]["foxess_control_owner"] == "observer_only"

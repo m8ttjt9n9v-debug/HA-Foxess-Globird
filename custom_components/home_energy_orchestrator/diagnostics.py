@@ -96,6 +96,9 @@ async def async_get_config_entry_diagnostics(
             "ev_pre_free_session_active": (
                 ev_controller.pre_free_session.active if ev_controller is not None else False
             ),
+            "ev_pre_free_phase": (
+                ev_controller.pre_free_phase if ev_controller is not None else "unavailable"
+            ),
             "ev_pre_free_planned_energy_kwh": (
                 ev_controller.pre_free_plan.planned_energy_kwh
                 if ev_controller is not None and ev_controller.pre_free_plan is not None

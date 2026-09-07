@@ -23,12 +23,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: EnergyConfigEntry) -> bo
     await coordinator.async_config_entry_first_refresh()
     coordinator.manual_test = ManualTestController(hass, coordinator)
     entry.runtime_data = coordinator
-    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     active = ActiveFoxessController(hass, coordinator)
     coordinator.active_controller = active
-    await active.async_start()
     ev_controller = ActiveEvController(hass, coordinator)
     coordinator.ev_controller = ev_controller
+    # Platform entities read controller diagnostics during their first state
+    # write, so attach both controllers before forwarding setup.
+    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    await active.async_start()
     await ev_controller.async_start()
     hass.data.setdefault("home_energy_orchestrator", {})[entry.entry_id] = {
         "coordinator": coordinator,

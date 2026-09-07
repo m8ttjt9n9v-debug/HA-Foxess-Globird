@@ -167,6 +167,44 @@ DESCRIPTIONS = (
         name="EV Reconciliation Attempts",
         state_class="measurement",
     ),
+    SensorEntityDescription(key="ev_solar_spill_status", name="EV Solar Spill Status"),
+    SensorEntityDescription(
+        key="ev_solar_spill_current_target",
+        name="EV Solar Spill Current Target",
+        native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
+        device_class="current",
+        state_class="measurement",
+        suggested_display_precision=1,
+    ),
+    SensorEntityDescription(
+        key="ev_solar_spill_surplus",
+        name="EV Reconstructed Solar Spill",
+        native_unit_of_measurement=UnitOfPower.KILO_WATT,
+        device_class="power",
+        state_class="measurement",
+        suggested_display_precision=2,
+    ),
+    SensorEntityDescription(key="ev_pre_free_status", name="EV Pre-Free Status"),
+    SensorEntityDescription(
+        key="ev_pre_free_planned_energy",
+        name="EV Pre-Free Planned Energy",
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        device_class="energy",
+        suggested_display_precision=2,
+    ),
+    SensorEntityDescription(
+        key="ev_pre_free_planned_start",
+        name="EV Pre-Free Planned Start",
+        device_class="timestamp",
+    ),
+    SensorEntityDescription(
+        key="ev_pre_free_current_target",
+        name="EV Pre-Free Current Target",
+        native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
+        device_class="current",
+        state_class="measurement",
+        suggested_display_precision=1,
+    ),
     SensorEntityDescription(
         key="free_energy_remaining",
         name="Free Energy Remaining Today",
@@ -401,6 +439,33 @@ class EnergySensor(CoordinatorEntity[EnergyCoordinator], SensorEntity):
             "ev_reconciliation_attempts": (
                 ev_controller.reconciliation.attempts if ev_controller is not None else 0
             ),
+            "ev_solar_spill_status": (
+                ev_controller.solar_spill.phase if ev_controller is not None else "unavailable"
+            ),
+            "ev_solar_spill_current_target": (
+                ev_controller.solar_spill.current_a if ev_controller is not None else None
+            ),
+            "ev_solar_spill_surplus": (
+                ev_controller.solar_spill.reconstructed_surplus_kw
+                if ev_controller is not None
+                else None
+            ),
+            "ev_pre_free_status": (
+                ev_controller.pre_free_phase if ev_controller is not None else "unavailable"
+            ),
+            "ev_pre_free_planned_energy": (
+                ev_controller.pre_free_plan.planned_energy_kwh
+                if ev_controller is not None and ev_controller.pre_free_plan is not None
+                else None
+            ),
+            "ev_pre_free_planned_start": (
+                ev_controller.pre_free_plan.planned_start
+                if ev_controller is not None and ev_controller.pre_free_plan is not None
+                else None
+            ),
+            "ev_pre_free_current_target": (
+                ev_controller.pre_free_current_a if ev_controller is not None else None
+            ),
             "free_energy_remaining": ledger.free_energy_remaining_kwh,
             "daily_import": ledger.daily_import_kwh,
             "free_window_import": ledger.free_window_import_kwh,
@@ -514,6 +579,7 @@ class EnergySensor(CoordinatorEntity[EnergyCoordinator], SensorEntity):
                 "solar_spill_current_a": controller.solar_spill.current_a,
                 "solar_spill_reconstructed_kw": (controller.solar_spill.reconstructed_surplus_kw),
                 "pre_free_session_active": controller.pre_free_session.active,
+                "pre_free_phase": controller.pre_free_phase,
                 "pre_free_frozen_start": controller.pre_free_session.frozen_start,
                 "pre_free_planned_energy_kwh": (
                     controller.pre_free_plan.planned_energy_kwh

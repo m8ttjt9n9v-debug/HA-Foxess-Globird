@@ -21,8 +21,9 @@
   transient writable maximum—is the planning ceiling. The live maximum bounds
   only an immediate service call and a later range refresh catches up directly.
 - Expose solar-spill and pre-free decisions through the EV status sensor and
-  redacted diagnostics. The complete suite now includes reference single-phase,
-  configurable three-phase, ownership, telemetry, restart, and runtime tests.
+  first-class portable sensors, the example dashboard, and redacted diagnostics.
+  The complete suite now includes reference single-phase, configurable
+  three-phase, ownership, telemetry, restart, and runtime tests.
 - Let a commissioned direct-EVSE path calculate read-only targets while Safety
   Lock is on. Rehearsal exposes ordered `would_*` actions but performs no retry
   transition and cannot pass the adapter's independent `ready` write guard.

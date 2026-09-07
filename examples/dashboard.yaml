@@ -182,6 +182,41 @@ views:
               Tessie cards here if desired; entity names vary by vehicle and
               are deliberately not hard-coded in this template.
       - type: grid
+        column_span: 2
+        cards:
+          - type: heading
+            heading: Solar spill and pre-free backfill
+            heading_style: title
+            icon: mdi:solar-power-variant
+          - type: tile
+            entity: sensor.home_energy_ev_solar_spill_status
+            name: Solar-spill decision
+          - type: tile
+            entity: sensor.home_energy_ev_solar_spill_current_target
+            name: Solar-spill current
+          - type: tile
+            entity: sensor.home_energy_ev_solar_spill_surplus
+            name: Reconstructed surplus
+          - type: tile
+            entity: sensor.home_energy_ev_pre_free_status
+            name: Pre-free phase
+          - type: tile
+            entity: sensor.home_energy_ev_pre_free_planned_energy
+            name: Pre-free energy budget
+          - type: tile
+            entity: sensor.home_energy_ev_pre_free_planned_start
+            name: Latest start
+          - type: tile
+            entity: sensor.home_energy_ev_pre_free_current_target
+            name: Pre-free current
+          - type: markdown
+            content: >-
+              These stages are separately default-off and are configured by
+              reconfiguring the integration. Both require Local Modbus FoxESS
+              ownership; solar spill also requires a verified signed battery-
+              power mapping. Automatic EV Control authorizes Tessie intent and
+              Safety Lock remains the final no-write interlock.
+      - type: grid
         cards:
           - type: heading
             heading: EV commissioning

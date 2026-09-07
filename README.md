@@ -27,6 +27,10 @@ Read the [system requirements](docs/system-requirements.md),
 installs the integration, not dashboards; `examples/dashboard.yaml` is a
 generic Lovelace view for manual import.
 
+Its EV view includes portable solar-spill status/current/surplus and pre-free
+phase/energy/latest-start/current cards; it contains no vehicle- or site-specific
+entity IDs.
+
 ## Current capabilities
 
 - Normalized battery SoC/energy, signed grid import/export, solar, house-load,
