@@ -6,11 +6,11 @@ deployment target.
 
 ## Scope and status
 
-The pure planning and direct-EVSE command layers are ported and characterized.
-The independent EV intent, commissioning flag, Safety Lock, and complete
-explicit mapping set are separate gates. Restart-serializable matched-average
-buffers are implemented, but runtime sampling and reconciliation are not yet
-connected. Therefore EV writes remain impossible in this milestone.
+The free-window planning, direct-EVSE command, matched sampling, and bounded
+runtime reconciliation layers are ported and characterized. The independent
+EV intent, commissioning flag, Safety Lock, and complete explicit mapping set
+are separate gates. The integration remains non-writing by default and has not
+been commissioned on a live site.
 
 ## Canonical mapping
 
@@ -90,13 +90,44 @@ instantaneous current is electrically safe. Both constraints must pass.
 The extension must never hard-code an allowance, service current, voltage,
 phase count, connector rating, efficiency, time, or entity ID.
 
+## Runtime and anti-flapping boundary
+
+- Samples are retained as restart-safe, time-weighted three-minute windows.
+  Grid feedback requires at least 67% age coverage and a currently valid source.
+  EV current is counted only while the mapped Tessie state explicitly says
+  `charging`; a known non-charging state contributes zero and unavailable input
+  is invalid.
+- Single-phase sites may derive signed grid current from the mapped signed grid
+  power and configured per-phase voltage. Multiphase commissioning requires an
+  explicit sensor in amperes representing the signed current on the most-loaded
+  service phase, positive for import. Aggregate three-phase power is not assumed
+  to be balanced and cannot satisfy this safety mapping. Missing live feedback
+  from that mapping blocks multiphase actuation before the Mangerton priority
+  branches are evaluated.
+- Auto location requires mapped at-home evidence to report `home` or `on`. The
+  cable must report `on`, and an unavailable or explicitly disconnected
+  charging state blocks all writes. Manual Home is available as a deliberate
+  location override but does not bypass cable or charge-state evidence.
+- Direct actuation exists only inside the configured free window. It orders a
+  changed charge limit, then current, then charge start. It never issues a
+  direct-path stop or pause outside the window.
+- The requested current, charge limit, and switch response are confirmed from
+  mapped Tessie feedback. One unchanged target receives at most three attempts,
+  no faster than 30 seconds apart. Failure latches
+  `fault_maximum_attempts`; only a genuinely changed target re-arms writes.
+  This prevents another writer or stale cloud feedback causing indefinite
+  current flapping.
+- The runtime, target/requested/actual current chain, target/applied charge
+  limits, policy phase, allowance phase, feedback coverage, attempts, last
+  actions, and write count are exposed through portable sensors, status
+  attributes, and redacted diagnostics.
+- The mapped house-load source used for allowance projection must exclude EV
+  charging, matching Mangerton's `non_tesla_house_load` role.
+
 ## Remaining implementation stages
 
-1. Connect the ported matched three-minute samples to mapped runtime state.
-2. Connect the now-characterized direct-path adapter with response
-   confirmation, bounded retries, service-call tracing, and rehearsal tests.
-3. Commission the higher-capacity direct path in observer/rehearsal mode before
+1. Commission the higher-capacity direct path in observer/rehearsal mode before
    enabling writes.
-4. Port the smart-socket sequence and one-attempt fault recovery for Mangerton.
-5. Port learned driving demand, pre-free backfill, and solar spill as separate
+2. Port the smart-socket sequence and one-attempt fault recovery for Mangerton.
+3. Port learned driving demand, pre-free backfill, and solar spill as separate
    provenance-tested behaviours.

@@ -35,6 +35,7 @@ from .const import (
     CONF_EV_CHARGE_EFFICIENCY,
     CONF_EV_CHARGE_LIMIT,
     CONF_EV_CHARGE_SWITCH,
+    CONF_EV_CHARGE_TO_FULL,
     CONF_EV_CHARGING_STATE,
     CONF_EV_CONTROL_COMMISSIONED,
     CONF_EV_CURRENT_LIMIT,
@@ -77,6 +78,7 @@ from .const import (
     CONF_RESERVE,
     CONF_SERVICE_IMPORT_LIMIT_A,
     CONF_SHOULDER_RATE,
+    CONF_SITE_GRID_CURRENT,
     CONF_SITE_GRID_HEADROOM_CURRENT,
     CONF_SITE_PHASE_COUNT,
     CONF_SOLAR_POWER,
@@ -327,6 +329,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 optional_entity(CONF_EV_CURRENT_LIMIT): NUMBER_ENTITY,
                 optional_entity(CONF_EV_CHARGE_LIMIT): NUMBER_ENTITY,
                 optional_entity(CONF_EV_CHARGE_SWITCH): SWITCH_ENTITY,
+                optional_entity(CONF_EV_CHARGE_TO_FULL): selector.EntitySelector(),
                 vol.Required(
                     CONF_EV_LOCATION_MODE,
                     default=defaults.get(CONF_EV_LOCATION_MODE, DEFAULT_EV_LOCATION_MODE),
@@ -381,6 +384,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         DEFAULT_SITE_GRID_HEADROOM_CURRENT,
                     ),
                 ): vol.Coerce(float),
+                optional_entity(CONF_SITE_GRID_CURRENT): ENTITY,
                 vol.Required(
                     CONF_BATTERY_FREE_WINDOW_TARGET,
                     default=defaults.get(
@@ -659,6 +663,8 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             CONF_EV_CURRENT_LIMIT,
             CONF_EV_CHARGE_LIMIT,
             CONF_EV_CHARGE_SWITCH,
+            CONF_EV_CHARGE_TO_FULL,
+            CONF_SITE_GRID_CURRENT,
             CONF_FOXESS_WORK_MODE,
             CONF_FOXESS_FORCE_CHARGE_POWER,
             CONF_FOXESS_FORCE_DISCHARGE_POWER,
@@ -825,4 +831,10 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             )
         ):
             return {"base": "invalid_site_limits"}
+        if (
+            data.get(CONF_EV_CONTROL_COMMISSIONED)
+            and site_phase_count > 1
+            and not data.get(CONF_SITE_GRID_CURRENT)
+        ):
+            return {"base": "multiphase_current_mapping_required"}
         return {}

@@ -19,11 +19,13 @@ Status here describes behavioral parity, not merely the presence of code.
 - [x] Pure Mangerton free-window EV current planner with golden branch-order
   tests, separate charge-policy/anti-pause limit planning, and a topology-aware
   daily-allowance ceiling that is inert for ordinary sessions that fit.
-- [x] Fail-closed direct-EVSE command boundary and Tessie service adapter,
-  still disconnected from the automatic gate pending mappings and runtime
-  reconciliation tests.
+- [x] Fail-closed direct-EVSE command boundary and Tessie service adapter.
 - [x] Explicit direct-path commissioning schema and restart-serializable
   three-minute feedback primitive with coverage/source-validity evidence.
+- [x] Independent, default-off direct-EVSE runtime with matched sampling,
+  allowance projection, ordered Tessie commands, feedback confirmation,
+  restart-persistent state, and a three-attempt anti-flapping latch.
+- [x] Auto/Home/Away EV location policy with cable and charge-state evidence.
 
 ## Removed pending a faithful port
 
@@ -32,27 +34,29 @@ controllers. They were removed because passing tests did not demonstrate
 Mangerton parity.
 
 - [ ] Automatic FoxESS free-window charging and completion reconciliation.
-- [ ] Active Tessie automatic current/session adapter. Its independent,
-  default-off intent gate is restored but deliberately remains non-actuating.
-- [ ] Connect the tested whole-site daily-free-energy ceiling to explicit,
+- [x] Active Tessie automatic current/session adapter for the direct-EVSE
+  free-window path. It remains uncommissioned and default-off.
+- [x] Connect the tested whole-site daily-free-energy ceiling to explicit,
   auditable house, FoxESS, and EV projections.
 - [x] Pure EV/house priority, guaranteed-current, service-overrun, settle, and
   feedback-hold policy.
-- [ ] Connect the matched three-minute grid/current primitive and settling
+- [x] Connect the matched three-minute grid/current primitive and settling
   behavior to runtime state sampling and the direct-path planner.
 - [ ] Learned Tesla driving demand, arrival reserve, and charge-target policy.
 - [ ] Solar-spill EV charging after the battery is full.
 - [ ] Latest-start, reserve-aware pre-free EV backfill.
 - [ ] Explicit smart-socket/direct-EVSE selection and smart-socket recovery.
-- [ ] Occupancy and Tesla location Auto/Home/Away overrides.
+- [x] Tesla location Auto/Home/Away overrides. Occupancy remains pending for
+  the learned demand and pre-free policies that consume it.
 
 ## Required extensions and investigation
 
-- [ ] Make the faithful Mangerton policy topology-aware for arbitrary phase
+- [x] Make the free-window allowance topology-aware for arbitrary phase
   count, per-phase service limits, charger phases, voltage, and commissioned
-  current/power limits without changing its base decisions.
-- [ ] Add coherent-source freshness and matched-sample validation for all
-  multi-sensor control decisions.
+  current limits without changing its base decisions. Multiphase active control
+  requires an explicit most-loaded-phase signed current mapping.
+- [x] Add coherent-source validity and matched-sample validation to the active
+  free-window EV decision. Other future multi-sensor policies retain this rule.
 - [ ] Add durable Home Assistant service-call and direct-Modbus transition
   tracing sufficient to identify any post-test or time-boundary writer.
 - [ ] Read and record FoxESS schedule registers where supported, without writing

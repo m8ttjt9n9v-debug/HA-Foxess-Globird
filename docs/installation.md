@@ -18,10 +18,11 @@ HACS installation requires a public GitHub repository. This project publishes
 versioned GitHub releases for the custom-repository channel; inclusion in
 HACS's default catalogue is a separate review process.
 
-Version 0.4.0 is observer-by-default. Automatic FoxESS free charging and
-automatic Tessie/Tessy control are not present; earlier simplified controllers
-were removed pending faithful Mangerton ports. The only automatic write path is
-ZEROHERO export. Bounded FoxESS Diagnostics remain explicitly submitted actions.
+Version 0.4.0 is observer-by-default. Automatic FoxESS free charging is not
+present; the earlier simplified controller remains removed. The verified
+ZEROHERO export path and the faithful direct-EVSE free-window Tessie path are
+separately gated. Bounded FoxESS Diagnostics remain explicitly submitted
+actions.
 
 Automatic ZEROHERO export is a third, default-off behavior toggle beneath the
 FoxESS gate. It operates only when **Local Modbus** is the selected FoxESS
@@ -36,6 +37,15 @@ ported behavior is recorded in the
 Import [`examples/dashboard.yaml`](../examples/dashboard.yaml) as a Lovelace
 starter view; HACS does not install dashboards automatically. Generated
 entities use stable `sensor.home_energy_*` IDs where the stable ID is unused.
+
+Direct-EVSE control requires every Tessie telemetry and actuator mapping, a
+commissioned physical current ceiling, a positive service limit, the independent
+**Automatic EV Control** switch, and Safety Lock OFF. It operates only during
+the configured free window and never writes FoxESS. A multiphase site must also
+map a signed amperage sensor for the most-loaded service phase, positive for
+import; HEO deliberately refuses to infer per-phase safety from aggregate
+three-phase power. Commission first with the EV intent off, verify all portable
+diagnostic values, and keep any competing Tesla current automation disabled.
 
 Version 0.3.2 adds a separate **Diagnostics** dashboard view and matching
 commissioning entities. The editable power and duration fields only prepare a

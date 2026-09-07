@@ -39,6 +39,16 @@
   margin. Legacy enabled state cannot bypass the separate commissioning flag.
 - Add restart-serializable three-minute average-step buffers with explicit age
   coverage and latest-source validity for matched grid/EV feedback.
+- Connect the direct-EVSE free-window runtime behind the independent default-off
+  EV intent, explicit commissioning, complete mappings, and shared Safety Lock.
+  The path writes Tessie only, so FoxCloud may continue to own the inverter.
+- Require explicit most-loaded-phase signed current feedback for multiphase EV
+  commissioning instead of assuming aggregate site power is balanced.
+- Persist matched samples and direct-EVSE reconciliation state. Confirm current,
+  charge limit, and switch feedback; bound one unchanged target to three writes
+  at least 30 seconds apart, then latch a visible anti-flapping fault.
+- Expose the EV decision phase, allowance phase, target current/limit, averages,
+  retry state, last actions, and write count for dashboard and diagnostics use.
 
 ## 0.3.8 — Mangerton ZEROHERO selling automation
 

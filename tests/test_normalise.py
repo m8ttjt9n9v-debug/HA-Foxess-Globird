@@ -1,11 +1,19 @@
 import pytest
 
 from custom_components.home_energy_orchestrator.normalise import (
+    current_to_a,
     energy_to_kwh,
     percent,
     power_to_kw,
     signed_grid_power_to_import_kw,
 )
+
+
+@pytest.mark.parametrize(
+    ("value", "unit", "expected"), [(1000, "mA", 1), (1, "A", 1), (0.001, "kA", 1)]
+)
+def test_current_units_normalise_once(value, unit, expected):
+    assert current_to_a(value, unit) == expected
 
 
 @pytest.mark.parametrize(
@@ -25,6 +33,11 @@ def test_power_units_normalise_once(value, unit, expected):
 def test_unknown_power_unit_is_not_treated_as_zero():
     with pytest.raises(ValueError):
         power_to_kw(1, "A")
+
+
+def test_unknown_current_unit_is_not_treated_as_amperes():
+    with pytest.raises(ValueError):
+        current_to_a(1, None)
 
 
 def test_grid_sign_is_explicit():

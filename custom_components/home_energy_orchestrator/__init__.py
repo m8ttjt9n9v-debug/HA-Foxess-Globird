@@ -8,6 +8,7 @@ from homeassistant.core import HomeAssistant
 from .active import ActiveFoxessController
 from .const import PLATFORMS
 from .coordinator import EnergyCoordinator
+from .ev_active import ActiveEvController
 from .manual_test import ManualTestController
 from .services import register_services, unregister_services
 
@@ -26,6 +27,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: EnergyConfigEntry) -> bo
     active = ActiveFoxessController(hass, coordinator)
     coordinator.active_controller = active
     await active.async_start()
+    ev_controller = ActiveEvController(hass, coordinator)
+    coordinator.ev_controller = ev_controller
+    await ev_controller.async_start()
     hass.data.setdefault("home_energy_orchestrator", {})[entry.entry_id] = {
         "coordinator": coordinator,
         "manual_test": coordinator.manual_test,
@@ -39,6 +43,9 @@ async def async_unload_entry(hass: HomeAssistant, entry: EnergyConfigEntry) -> b
     active = getattr(entry.runtime_data, "active_controller", None)
     if active is not None:
         await active.async_stop()
+    ev_controller = getattr(entry.runtime_data, "ev_controller", None)
+    if ev_controller is not None:
+        await ev_controller.async_stop()
     manual_test = getattr(entry.runtime_data, "manual_test", None)
     if manual_test is not None:
         await manual_test.async_stop("integration_unloaded")

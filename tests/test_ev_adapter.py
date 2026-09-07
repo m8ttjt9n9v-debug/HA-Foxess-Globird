@@ -72,3 +72,57 @@ async def test_ev_adapter_preserves_reviewed_command_order(hass: HomeAssistant) 
         "entity_id": "number.car_current",
         "value": 14,
     } in service_data
+
+
+async def test_ev_adapter_retains_partial_trace_when_a_later_service_fails(
+    hass: HomeAssistant,
+) -> None:
+    calls = 0
+
+    async def fail_second(_call) -> None:
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            raise RuntimeError("transport failed")
+
+    hass.services.async_register("number", "set_value", fail_second)
+    adapter = EvServiceAdapter(hass, ENTITIES, allow_writes=True)
+    plan = EvCommandPlan(
+        (
+            EvCommand("set_charge_limit", 90),
+            EvCommand("set_charge_current", 14),
+        ),
+        "test",
+    )
+
+    with pytest.raises(RuntimeError, match="transport failed"):
+        await adapter.async_execute(plan)
+
+    assert adapter.last_executed == ("set_charge_limit",)
+
+
+async def test_ev_adapter_rechecks_safety_gate_between_ordered_commands(
+    hass: HomeAssistant,
+) -> None:
+    gate_open = True
+
+    async def close_gate(_call) -> None:
+        nonlocal gate_open
+        gate_open = False
+
+    hass.services.async_register("number", "set_value", close_gate)
+    adapter = EvServiceAdapter(
+        hass, ENTITIES, allow_writes=True, write_guard=lambda: gate_open
+    )
+    plan = EvCommandPlan(
+        (
+            EvCommand("set_charge_limit", 90),
+            EvCommand("set_charge_current", 14),
+        ),
+        "test",
+    )
+
+    with pytest.raises(EvWriteBlocked, match="closed during"):
+        await adapter.async_execute(plan)
+
+    assert adapter.last_executed == ("set_charge_limit",)

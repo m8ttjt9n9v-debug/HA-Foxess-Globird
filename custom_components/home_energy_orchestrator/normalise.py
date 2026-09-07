@@ -2,6 +2,7 @@
 
 POWER_TO_KW = {"W": 0.001, "kW": 1.0, "MW": 1000.0}
 ENERGY_TO_KWH = {"Wh": 0.001, "kWh": 1.0, "MWh": 1000.0}
+CURRENT_TO_A = {"mA": 0.001, "A": 1.0, "kA": 1000.0}
 
 
 def power_to_kw(value: float, unit: str | None) -> float:
@@ -18,6 +19,14 @@ def energy_to_kwh(value: float, unit: str | None) -> float:
         return value * ENERGY_TO_KWH[unit or ""]
     except KeyError as err:
         raise ValueError(f"Unsupported energy unit: {unit!r}") from err
+
+
+def current_to_a(value: float, unit: str | None) -> float:
+    """Convert a supported current value to amperes; reject ambiguity."""
+    try:
+        return value * CURRENT_TO_A[unit or ""]
+    except KeyError as err:
+        raise ValueError(f"Unsupported current unit: {unit!r}") from err
 
 
 def percent(value: float) -> float:

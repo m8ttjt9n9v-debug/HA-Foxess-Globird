@@ -25,21 +25,31 @@ layers around the proven algorithm, not replacement algorithms.
 ## Current software truth
 
 - HEO is observer-by-default.
-- The only automatic write behavior retained is the verified Mangerton
-  ZEROHERO export port, behind Local Modbus ownership, the FoxESS automatic
-  gate, the independent export toggle, and the Safety Lock.
+- The verified Mangerton ZEROHERO export port is behind Local Modbus ownership,
+  the FoxESS automatic gate, the independent export toggle, and the Safety
+  Lock.
+- A faithful direct-EVSE free-window Tessie path is present behind its own
+  default-off intent, explicit commissioning flag, complete mappings, and the
+  shared Safety Lock. It has not been enabled on a live site.
 - Bounded, explicitly submitted FoxESS diagnostics remain available behind
   their guards. They are not schedules.
 - Automatic FoxESS free-window charging is not implemented.
-- Automatic Tessie current, charge-limit, or session control is not implemented.
+- Direct-EVSE free-window Tessie current, charge-limit, and charge-start control
+  is implemented. It never stops or pauses direct charging outside the window,
+  and one unchanged target is bounded to three feedback-confirmed attempts.
 - Protected-house demand learning integrates the explicitly mapped source
   outside the free window, persists an in-progress cycle across ordinary
   restarts, rejects an over-gap cycle, and derives a conservative P80 model
   from up to 28 valid samples over 35 days.
 - FoxCloud ownership blocks all HEO Modbus writes for the entire day. HEO does
   not mix cloud scheduling and local Modbus automation.
+- FoxCloud inverter ownership does not block the independent Tessie path,
+  because it does not write FoxESS. The shared Safety Lock blocks both paths.
 - Entity roles and physical topology are explicitly configured. HEO does not
   guess actuator mappings or infer electrical limits from transient readings.
+- A multiphase EV controller must receive explicit signed current for the
+  most-loaded service phase. Aggregate power is not treated as proof that phase
+  loading is balanced.
 
 ## Mangerton behaviors that remain the port target
 

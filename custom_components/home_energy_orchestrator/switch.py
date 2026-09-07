@@ -139,7 +139,7 @@ class AutomaticExportSwitch(CoordinatorEntity[EnergyCoordinator], SwitchEntity):
 
 
 class AutomaticEvControlSwitch(CoordinatorEntity[EnergyCoordinator], SwitchEntity):
-    """Independent default-off EV intent; no writer exists in this milestone."""
+    """Independent default-off EV intent; Safety Lock remains authoritative."""
 
     entity_description: SwitchEntityDescription
 
@@ -176,4 +176,7 @@ class AutomaticEvControlSwitch(CoordinatorEntity[EnergyCoordinator], SwitchEntit
         self.hass.config_entries.async_update_entry(self._entry, data=config)
         self.coordinator.config[CONF_EV_AUTOMATIC_CONTROL_ENABLED] = enabled
         self.async_write_ha_state()
+        controller = self.coordinator.ev_controller
+        if controller is not None:
+            await controller.async_reconcile()
         self.coordinator.async_update_listeners()

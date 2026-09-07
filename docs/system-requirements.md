@@ -22,10 +22,10 @@ dashboard, commission electrical limits, or migrate personal entity mappings.
 The FoxESS work-mode and force-power entities must be explicitly mapped. Entity
 availability alone does not prove safe hardware compatibility.
 
-## Required for future faithful Tessie automation
+## Required for direct-EVSE Tessie automation
 
-Tessie is not required for the current automatic feature set. Restoring the
-Mangerton EV policy will require explicitly mapped capabilities equivalent to:
+Tessie is optional when EV control is not commissioned. The ported direct-EVSE
+free-window policy requires explicitly mapped capabilities equivalent to:
 
 - vehicle SoC and stored energy;
 - lifetime driving energy for demand learning;
@@ -33,7 +33,17 @@ Mangerton EV policy will require explicitly mapped capabilities equivalent to:
 - cable connection, charging state, and actual current;
 - writable charge current and its min/max/step metadata;
 - charge-limit state/control where the source policy requires it; and
-- an explicit charge start/stop path when the controller owns the session.
+- an explicit charge-start switch.
+
+Single-phase sites may derive service current from signed grid power. A
+multiphase site must additionally provide signed current in amperes for the
+most-loaded service phase, positive for import. This may be a trustworthy
+template/helper built from phase sensors. Aggregate power is not a substitute
+because the controller must protect each phase's configured service limit.
+If that mapped multiphase current is unavailable, EV actuation is blocked.
+
+The direct path never issues a stop or pause outside the free window. The smart
+socket, driving-demand, pre-free, and solar-spill stages remain future ports.
 
 Mangerton uses Tessie entities for these roles. Portable code must map roles,
 not embed that vehicle's `jns_x` entity IDs.

@@ -9,7 +9,11 @@ silently replace its branch order.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime, timedelta
 from math import ceil, floor, isfinite
+
+DIRECT_EVSE_MAX_ATTEMPTS = 3
+DIRECT_EVSE_RETRY_INTERVAL = timedelta(seconds=30)
 
 
 @dataclass(frozen=True, slots=True)
@@ -58,6 +62,25 @@ class EvCommandPlan:
 
     commands: tuple[EvCommand, ...]
     reason: str
+
+
+@dataclass(frozen=True, slots=True)
+class DirectEvseReconciliationState:
+    """Restart-safe, bounded command/feedback state for one direct EVSE."""
+
+    target_current_a: float | None = None
+    target_limit_percent: float | None = None
+    attempts: int = 0
+    last_command_at: datetime | None = None
+    phase: str = "idle"
+
+
+@dataclass(frozen=True, slots=True)
+class DirectEvseReconciliation:
+    """One reconciliation transition and any permitted command plan."""
+
+    state: DirectEvseReconciliationState
+    plan: EvCommandPlan
 
 
 @dataclass(frozen=True, slots=True)
@@ -152,6 +175,100 @@ def direct_evse_response_matches(
         start_allowed=True,
     )
     return plan.reason == "direct_path_ready" and not plan.commands
+
+
+def reconcile_direct_evse(
+    state: DirectEvseReconciliationState,
+    observation: DirectEvseObservation,
+    *,
+    target_current_a: float,
+    target_limit_percent: float,
+    physical_ceiling_a: float,
+    now: datetime,
+    retry_interval: timedelta = DIRECT_EVSE_RETRY_INTERVAL,
+    maximum_attempts: int = DIRECT_EVSE_MAX_ATTEMPTS,
+) -> DirectEvseReconciliation:
+    """Bound feedback retries so another writer cannot cause endless flapping."""
+    if now.tzinfo is None or now.utcoffset() is None:
+        raise ValueError("reconciliation time must be timezone-aware")
+    if retry_interval < timedelta(0) or maximum_attempts < 1:
+        raise ValueError("retry policy must be non-negative and have attempts")
+    target_changed = (
+        state.target_current_a != target_current_a
+        or state.target_limit_percent != target_limit_percent
+    )
+    if target_changed:
+        state = DirectEvseReconciliationState(
+            target_current_a=target_current_a,
+            target_limit_percent=target_limit_percent,
+            phase="target_changed",
+        )
+    if direct_evse_response_matches(
+        observation,
+        target_current_a=target_current_a,
+        target_limit_percent=target_limit_percent,
+        physical_ceiling_a=physical_ceiling_a,
+    ):
+        return DirectEvseReconciliation(
+            DirectEvseReconciliationState(
+                target_current_a,
+                target_limit_percent,
+                state.attempts,
+                state.last_command_at,
+                "confirmed",
+            ),
+            EvCommandPlan((), "feedback_confirmed"),
+        )
+    if state.attempts >= maximum_attempts:
+        return DirectEvseReconciliation(
+            DirectEvseReconciliationState(
+                target_current_a,
+                target_limit_percent,
+                state.attempts,
+                state.last_command_at,
+                "fault_maximum_attempts",
+            ),
+            EvCommandPlan((), "maximum_attempts_reached"),
+        )
+    if state.last_command_at is not None and now - state.last_command_at < retry_interval:
+        return DirectEvseReconciliation(
+            DirectEvseReconciliationState(
+                target_current_a,
+                target_limit_percent,
+                state.attempts,
+                state.last_command_at,
+                "awaiting_feedback",
+            ),
+            EvCommandPlan((), "awaiting_feedback"),
+        )
+    plan = plan_direct_evse_commands(
+        observation,
+        target_current_a=target_current_a,
+        target_limit_percent=target_limit_percent,
+        physical_ceiling_a=physical_ceiling_a,
+        start_allowed=True,
+    )
+    if not plan.commands:
+        return DirectEvseReconciliation(
+            DirectEvseReconciliationState(
+                target_current_a,
+                target_limit_percent,
+                state.attempts,
+                state.last_command_at,
+                "blocked",
+            ),
+            plan,
+        )
+    return DirectEvseReconciliation(
+        DirectEvseReconciliationState(
+            target_current_a,
+            target_limit_percent,
+            state.attempts + 1,
+            now,
+            "awaiting_feedback",
+        ),
+        plan,
+    )
 
 
 def plan_free_window_current(inputs: FreeWindowCurrentInputs) -> EvCurrentDecision:

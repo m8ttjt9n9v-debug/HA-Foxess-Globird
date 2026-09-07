@@ -19,3 +19,13 @@ ZEROHERO selling remains default-off; enable it only after its feedback and
 rollback paths are recorded. The
 [ZEROHERO export policy](zerohero-export-policy.md) defines the ported selling
 algorithm and its persisted recovery behavior.
+
+Direct-EVSE commissioning is independent of FoxESS ownership. First leave
+Automatic EV Control off and Safety Lock on, then verify mapped SoC, stored
+energy, at-home evidence, cable state, charging state, actual current, writable
+current range, writable charge-limit range, and charge switch. Confirm the
+configured physical connector rating and service limit. A multiphase site also
+requires a signed most-loaded-phase current sensor in amperes; aggregate site
+power is not accepted. After rehearsal, disable competing Tesla writers before
+unlocking and enabling this path. A latched maximum-attempt fault is evidence
+to investigate, not permission to toggle the gate repeatedly.

@@ -31,3 +31,13 @@ def test_gate_priority_is_explicit_and_fail_closed():
     assert (
         ev_control_gate_status(commissioned_config(), adapter_connected=True) == "ready"
     )
+
+
+def test_multiphase_control_requires_explicit_most_loaded_phase_current():
+    config = commissioned_config(site_phase_count=3)
+    assert (
+        ev_control_gate_status(config, adapter_connected=True)
+        == "multiphase_current_mapping_required"
+    )
+    config["site_grid_current_entity"] = "sensor.grid_max_phase_current"
+    assert ev_control_gate_status(config, adapter_connected=True) == "ready"

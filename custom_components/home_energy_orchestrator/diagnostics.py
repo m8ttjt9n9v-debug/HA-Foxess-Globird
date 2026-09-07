@@ -35,10 +35,15 @@ async def async_get_config_entry_diagnostics(
     )
     safety_locked = bool(entry.data.get(CONF_REHEARSAL_MODE, True))
     active_controller = getattr(coordinator, "active_controller", None)
+    ev_controller = getattr(coordinator, "ev_controller", None)
     foxess_gate = (
         active_controller.gate_status if active_controller is not None else "unavailable"
     )
-    ev_gate = ev_control_gate_status(coordinator.config)
+    ev_gate = (
+        ev_controller.gate_status
+        if ev_controller is not None
+        else ev_control_gate_status(coordinator.config)
+    )
     return {
         "entry": {"version": entry.version, "options": {"mode": "observe"}},
         "actuators": {
@@ -53,10 +58,39 @@ async def async_get_config_entry_diagnostics(
             "ev_automatic_control_enabled": bool(
                 entry.data.get(CONF_EV_AUTOMATIC_CONTROL_ENABLED, False)
             ),
-            "ev_control_gate": (
-                ev_gate
-            ),
+            "ev_control_gate": ev_gate,
             "ev_writes_enabled": ev_gate == "ready",
+            "ev_last_reason": (
+                ev_controller.last_reason if ev_controller is not None else "unavailable"
+            ),
+            "ev_last_actions": (ev_controller.last_actions if ev_controller is not None else ()),
+            "ev_writes_performed": (
+                ev_controller.writes_performed if ev_controller is not None else 0
+            ),
+            "ev_target_current_a": (
+                ev_controller.target_current_a if ev_controller is not None else None
+            ),
+            "ev_target_limit_percent": (
+                ev_controller.target_limit_percent if ev_controller is not None else None
+            ),
+            "ev_requested_current_a": (
+                ev_controller.requested_current_a if ev_controller is not None else None
+            ),
+            "ev_actual_current_a": (
+                ev_controller.actual_current_a if ev_controller is not None else None
+            ),
+            "ev_applied_limit_percent": (
+                ev_controller.applied_limit_percent if ev_controller is not None else None
+            ),
+            "ev_charge_switch_on": (
+                ev_controller.charge_switch_on if ev_controller is not None else None
+            ),
+            "ev_reconciliation_phase": (
+                ev_controller.reconciliation.phase if ev_controller is not None else "unavailable"
+            ),
+            "ev_reconciliation_attempts": (
+                ev_controller.reconciliation.attempts if ev_controller is not None else 0
+            ),
             "export_session_phase": (
                 active_controller.export_session.phase
                 if active_controller is not None

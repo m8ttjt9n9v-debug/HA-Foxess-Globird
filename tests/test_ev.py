@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -8,6 +9,7 @@ from custom_components.home_energy_orchestrator.planner.ev import (
     AllowanceCeilingInputs,
     ChargeLimitInputs,
     DirectEvseObservation,
+    DirectEvseReconciliationState,
     FreeWindowCurrentInputs,
     apply_daily_allowance_ceiling,
     direct_evse_response_matches,
@@ -16,6 +18,7 @@ from custom_components.home_energy_orchestrator.planner.ev import (
     plan_charge_limit_target,
     plan_direct_evse_commands,
     plan_free_window_current,
+    reconcile_direct_evse,
 )
 
 BASE = FreeWindowCurrentInputs(
@@ -327,3 +330,132 @@ def test_direct_feedback_match_requires_current_limit_and_switch():
         target_limit_percent=90,
         physical_ceiling_a=15,
     )
+
+
+def test_direct_reconciliation_retries_are_bounded_and_fault_visible():
+    now = datetime(2026, 9, 7, 12, 1, tzinfo=UTC)
+    state = DirectEvseReconciliationState()
+    for attempt in range(3):
+        transition = reconcile_direct_evse(
+            state,
+            DIRECT,
+            target_current_a=14,
+            target_limit_percent=90,
+            physical_ceiling_a=15,
+            now=now + timedelta(seconds=30 * attempt),
+        )
+        assert transition.plan.commands
+        state = transition.state
+    fault = reconcile_direct_evse(
+        state,
+        DIRECT,
+        target_current_a=14,
+        target_limit_percent=90,
+        physical_ceiling_a=15,
+        now=now + timedelta(seconds=90),
+    )
+    assert fault.plan.commands == ()
+    assert fault.plan.reason == "maximum_attempts_reached"
+    assert fault.state.phase == "fault_maximum_attempts"
+    assert fault.state.attempts == 3
+
+
+def test_direct_reconciliation_waits_for_feedback_between_attempts():
+    now = datetime(2026, 9, 7, 12, 1, tzinfo=UTC)
+    first = reconcile_direct_evse(
+        DirectEvseReconciliationState(),
+        DIRECT,
+        target_current_a=14,
+        target_limit_percent=90,
+        physical_ceiling_a=15,
+        now=now,
+    )
+    waiting = reconcile_direct_evse(
+        first.state,
+        DIRECT,
+        target_current_a=14,
+        target_limit_percent=90,
+        physical_ceiling_a=15,
+        now=now + timedelta(seconds=10),
+    )
+    assert waiting.plan.commands == ()
+    assert waiting.plan.reason == "awaiting_feedback"
+    assert waiting.state.attempts == 1
+
+
+def test_new_target_rearms_bounded_reconciliation():
+    now = datetime(2026, 9, 7, 12, 1, tzinfo=UTC)
+    exhausted = DirectEvseReconciliationState(14, 90, 3, now, "fault_maximum_attempts")
+    changed = reconcile_direct_evse(
+        exhausted,
+        DIRECT,
+        target_current_a=10,
+        target_limit_percent=90,
+        physical_ceiling_a=15,
+        now=now + timedelta(seconds=1),
+    )
+    assert changed.plan.commands
+    assert changed.state.attempts == 1
+
+
+def test_matching_feedback_confirms_without_rearming_same_target():
+    now = datetime(2026, 9, 7, 12, 1, tzinfo=UTC)
+    matched = replace(
+        DIRECT,
+        requested_current_a=14,
+        charge_limit_percent=90,
+        charge_switch_on=True,
+    )
+    result = reconcile_direct_evse(
+        DirectEvseReconciliationState(14, 90, 2, now, "awaiting_feedback"),
+        matched,
+        target_current_a=14,
+        target_limit_percent=90,
+        physical_ceiling_a=15,
+        now=now + timedelta(seconds=30),
+    )
+    assert result.plan.reason == "feedback_confirmed"
+    assert result.state.phase == "confirmed"
+    assert result.state.attempts == 2
+
+
+def test_competing_writer_cannot_rearm_by_briefly_accepting_same_target():
+    now = datetime(2026, 9, 7, 12, 1, tzinfo=UTC)
+    matched = replace(
+        DIRECT,
+        requested_current_a=14,
+        charge_limit_percent=90,
+        charge_switch_on=True,
+    )
+    state = DirectEvseReconciliationState()
+    for attempt in range(3):
+        sent = reconcile_direct_evse(
+            state,
+            DIRECT,
+            target_current_a=14,
+            target_limit_percent=90,
+            physical_ceiling_a=15,
+            now=now + timedelta(seconds=60 * attempt),
+        )
+        assert sent.plan.commands
+        confirmed = reconcile_direct_evse(
+            sent.state,
+            matched,
+            target_current_a=14,
+            target_limit_percent=90,
+            physical_ceiling_a=15,
+            now=now + timedelta(seconds=60 * attempt + 30),
+        )
+        assert confirmed.state.phase == "confirmed"
+        assert confirmed.state.attempts == attempt + 1
+        state = confirmed.state
+    fault = reconcile_direct_evse(
+        state,
+        DIRECT,
+        target_current_a=14,
+        target_limit_percent=90,
+        physical_ceiling_a=15,
+        now=now + timedelta(seconds=180),
+    )
+    assert fault.plan.reason == "maximum_attempts_reached"
+    assert fault.state.phase == "fault_maximum_attempts"

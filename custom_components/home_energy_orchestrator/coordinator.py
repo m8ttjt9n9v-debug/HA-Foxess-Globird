@@ -100,6 +100,7 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
         self.config = config
         self.entry_id = entry_id
         self.active_controller = None
+        self.ev_controller = None
         self.snapshot: SiteSnapshot | None = None
         self.demand_history = DemandHistory([])
         self.demand_sampler = self._create_demand_sampler(config)

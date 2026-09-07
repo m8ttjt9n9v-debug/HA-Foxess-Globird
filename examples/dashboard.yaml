@@ -21,6 +21,8 @@ views:
                 name: Safety Lock (ON = locked)
               - entity: switch.home_energy_automatic_export
                 name: Automatic ZEROHERO export
+              - entity: switch.home_energy_automatic_ev_control
+                name: Automatic EV control
               - entity: sensor.home_energy_test_status
                 name: Diagnostic status
           - type: heading
@@ -151,13 +153,34 @@ views:
           - type: tile
             entity: sensor.home_energy_ev_max_power
             name: EV maximum power
+          - type: tile
+            entity: sensor.home_energy_ev_control_status
+            name: EV controller
+          - type: tile
+            entity: sensor.home_energy_ev_current_target
+            name: Current target
+          - type: tile
+            entity: sensor.home_energy_ev_requested_current
+            name: Tessie current setting
+          - type: tile
+            entity: sensor.home_energy_ev_actual_current
+            name: Current actually flowing
+          - type: tile
+            entity: sensor.home_energy_ev_charge_limit_target
+            name: Charge-limit target
+          - type: tile
+            entity: sensor.home_energy_ev_applied_charge_limit
+            name: Car-reported charge limit
+          - type: tile
+            entity: sensor.home_energy_ev_reconciliation_attempts
+            name: Reconciliation attempts
           - type: markdown
             content: >-
-              EV values are observation and planning inputs only in this
-              release. Automatic Tessie charging was removed pending a
-              faithful port of the proven Mangerton behavior. Add the
-              vehicle's own Tessie cards here if desired; entity names vary by
-              vehicle and are deliberately not hard-coded in this template.
+              The direct-EVSE free-window path is a faithful, independently
+              gated Mangerton port. It remains off until explicitly mapped,
+              commissioned, unlocked, and enabled. Add the vehicle's own
+              Tessie cards here if desired; entity names vary by vehicle and
+              are deliberately not hard-coded in this template.
       - type: grid
         cards:
           - type: heading
@@ -170,11 +193,21 @@ views:
                 name: Orchestrator status
               - entity: sensor.home_energy_free_charge_allowed
                 name: Free allowance remaining
+              - entity: sensor.home_energy_ev_grid_current_average
+                name: Matched grid-current average
+              - entity: sensor.home_energy_ev_actual_current_average
+                name: Matched actual-EV-current average
+              - entity: switch.home_energy_safety_lock
+                name: Safety Lock (ON = no writes)
+              - entity: switch.home_energy_automatic_ev_control
+                name: Automatic EV control
           - type: markdown
             content: >-
-              Confirm EV telemetry against Tessie before relying on planning
-              values. This release cannot write Tessie current, charge limit,
-              or charging state.
+              Confirm EV telemetry, current/limit writable ranges, location,
+              cable state, and the service-current mapping before commissioning.
+              Multiphase sites require signed current for the most-loaded phase;
+              aggregate three-phase power is deliberately insufficient. Leave
+              Automatic EV Control off and Safety Lock on during verification.
   - type: sections
     max_columns: 2
     title: Commissioning

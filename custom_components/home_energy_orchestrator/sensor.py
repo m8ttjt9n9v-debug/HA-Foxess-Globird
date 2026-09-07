@@ -4,12 +4,13 @@ from __future__ import annotations
 
 from homeassistant.components.sensor import SensorEntity, SensorEntityDescription
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import UnitOfEnergy, UnitOfPower
+from homeassistant.const import UnitOfElectricCurrent, UnitOfEnergy, UnitOfPower
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from homeassistant.util import dt as dt_util
 
 from . import EnergyConfigEntry
 from .const import (
@@ -27,6 +28,7 @@ from .const import (
 )
 from .coordinator import EnergyCoordinator
 from .ev_adapter import ev_control_gate_status
+from .planner.ev import DIRECT_EVSE_MAX_ATTEMPTS
 
 DESCRIPTIONS = (
     SensorEntityDescription(key="status", name="Status", icon="mdi:eye-outline"),
@@ -106,6 +108,64 @@ DESCRIPTIONS = (
         device_class="power",
         state_class="measurement",
         suggested_display_precision=2,
+    ),
+    SensorEntityDescription(key="ev_control_status", name="EV Control Status"),
+    SensorEntityDescription(
+        key="ev_current_target",
+        name="EV Current Target",
+        native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
+        device_class="current",
+        state_class="measurement",
+        suggested_display_precision=1,
+    ),
+    SensorEntityDescription(
+        key="ev_requested_current",
+        name="EV Requested Current",
+        native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
+        device_class="current",
+        state_class="measurement",
+        suggested_display_precision=1,
+    ),
+    SensorEntityDescription(
+        key="ev_actual_current",
+        name="EV Actual Charging Current",
+        native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
+        device_class="current",
+        state_class="measurement",
+        suggested_display_precision=1,
+    ),
+    SensorEntityDescription(
+        key="ev_charge_limit_target",
+        name="EV Charge Limit Target",
+        native_unit_of_measurement="%",
+        suggested_display_precision=0,
+    ),
+    SensorEntityDescription(
+        key="ev_applied_charge_limit",
+        name="EV Applied Charge Limit",
+        native_unit_of_measurement="%",
+        suggested_display_precision=0,
+    ),
+    SensorEntityDescription(
+        key="ev_grid_current_average",
+        name="EV Controller Grid Current Average",
+        native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
+        device_class="current",
+        state_class="measurement",
+        suggested_display_precision=1,
+    ),
+    SensorEntityDescription(
+        key="ev_actual_current_average",
+        name="EV Actual Current Average",
+        native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
+        device_class="current",
+        state_class="measurement",
+        suggested_display_precision=1,
+    ),
+    SensorEntityDescription(
+        key="ev_reconciliation_attempts",
+        name="EV Reconciliation Attempts",
+        state_class="measurement",
     ),
     SensorEntityDescription(
         key="free_energy_remaining",
@@ -294,6 +354,14 @@ class EnergySensor(CoordinatorEntity[EnergyCoordinator], SensorEntity):
         ledger = self.coordinator.data
         learning = self.coordinator.learning_result
         snapshot = self.coordinator.snapshot
+        ev_controller = self.coordinator.ev_controller
+        now = dt_util.now()
+        ev_grid_average = (
+            ev_controller.grid_average.result(now) if ev_controller is not None else None
+        )
+        ev_current_average = (
+            ev_controller.ev_average.result(now) if ev_controller is not None else None
+        )
         values = {
             "status": ledger.reason,
             "battery_soc": None if snapshot is None else snapshot.battery_soc,
@@ -308,6 +376,33 @@ class EnergySensor(CoordinatorEntity[EnergyCoordinator], SensorEntity):
             ),
             "ev_soc": None if snapshot is None else snapshot.ev_soc,
             "ev_max_power": ledger.ev_max_power_kw,
+            "ev_control_status": (
+                ev_controller.last_reason if ev_controller is not None else "unavailable"
+            ),
+            "ev_current_target": (
+                ev_controller.target_current_a if ev_controller is not None else None
+            ),
+            "ev_requested_current": (
+                ev_controller.requested_current_a if ev_controller is not None else None
+            ),
+            "ev_actual_current": (
+                ev_controller.actual_current_a if ev_controller is not None else None
+            ),
+            "ev_charge_limit_target": (
+                ev_controller.target_limit_percent if ev_controller is not None else None
+            ),
+            "ev_applied_charge_limit": (
+                ev_controller.applied_limit_percent if ev_controller is not None else None
+            ),
+            "ev_grid_current_average": (
+                ev_grid_average.value if ev_grid_average is not None else None
+            ),
+            "ev_actual_current_average": (
+                ev_current_average.value if ev_current_average is not None else None
+            ),
+            "ev_reconciliation_attempts": (
+                ev_controller.reconciliation.attempts if ev_controller is not None else 0
+            ),
             "free_energy_remaining": ledger.free_energy_remaining_kwh,
             "daily_import": ledger.daily_import_kwh,
             "free_window_import": ledger.free_window_import_kwh,
@@ -393,6 +488,33 @@ class EnergySensor(CoordinatorEntity[EnergyCoordinator], SensorEntity):
                     CONF_ZERO_IMPORT_THRESHOLD_KW, DEFAULT_ZERO_IMPORT_THRESHOLD_KW
                 ),
             }
+        if self.entity_description.key == "ev_control_status":
+            controller = self.coordinator.ev_controller
+            if controller is None:
+                return {"gate": "unavailable"}
+            now = dt_util.now()
+            grid = controller.grid_average.result(now)
+            actual = controller.ev_average.result(now)
+            return {
+                "gate": controller.gate_status,
+                "decision_phase": controller.decision_phase,
+                "allowance_phase": controller.allowance_phase,
+                "target_current_a": controller.target_current_a,
+                "target_limit_percent": controller.target_limit_percent,
+                "requested_current_a": controller.requested_current_a,
+                "actual_current_a": controller.actual_current_a,
+                "applied_limit_percent": controller.applied_limit_percent,
+                "charge_switch_on": controller.charge_switch_on,
+                "reconciliation_phase": controller.reconciliation.phase,
+                "reconciliation_attempts": controller.reconciliation.attempts,
+                "maximum_reconciliation_attempts": DIRECT_EVSE_MAX_ATTEMPTS,
+                "grid_average_coverage": grid.age_coverage_ratio,
+                "grid_source_valid": grid.source_value_valid,
+                "ev_average_source_valid": actual.source_value_valid,
+                "last_actions": controller.last_actions,
+                "writes_performed": controller.writes_performed,
+                "last_write_at": controller.last_write_at,
+            }
         if self.entity_description.key != "status":
             return None
         learning = self.coordinator.learning_result
@@ -414,7 +536,12 @@ class EnergySensor(CoordinatorEntity[EnergyCoordinator], SensorEntity):
         ev_requested = bool(
             self.coordinator.config.get(CONF_EV_AUTOMATIC_CONTROL_ENABLED, False)
         )
-        ev_gate = ev_control_gate_status(self.coordinator.config)
+        ev_controller = self.coordinator.ev_controller
+        ev_gate = (
+            ev_controller.gate_status
+            if ev_controller is not None
+            else ev_control_gate_status(self.coordinator.config)
+        )
         if foxess_owner == FOXESS_CONTROL_OWNER_CLOUD:
             control_mode = "foxcloud_scheduler"
         elif foxess_enabled and export_enabled:
@@ -448,6 +575,36 @@ class EnergySensor(CoordinatorEntity[EnergyCoordinator], SensorEntity):
             "ev_automatic_control_enabled": ev_requested,
             "ev_control_gate": ev_gate,
             "ev_writes_enabled": ev_gate == "ready",
+            "ev_last_control_reason": (
+                ev_controller.last_reason if ev_controller is not None else "unavailable"
+            ),
+            "ev_last_control_actions": (
+                ev_controller.last_actions if ev_controller is not None else ()
+            ),
+            "ev_writes_performed": (
+                ev_controller.writes_performed if ev_controller is not None else 0
+            ),
+            "ev_decision_phase": (
+                ev_controller.decision_phase if ev_controller is not None else "unavailable"
+            ),
+            "ev_allowance_phase": (
+                ev_controller.allowance_phase if ev_controller is not None else "unavailable"
+            ),
+            "ev_target_current_a": (
+                ev_controller.target_current_a if ev_controller is not None else None
+            ),
+            "ev_target_limit_percent": (
+                ev_controller.target_limit_percent if ev_controller is not None else None
+            ),
+            "ev_reconciliation_phase": (
+                ev_controller.reconciliation.phase if ev_controller is not None else "unavailable"
+            ),
+            "ev_reconciliation_attempts": (
+                ev_controller.reconciliation.attempts if ev_controller is not None else 0
+            ),
+            "ev_last_write_at": (
+                ev_controller.last_write_at if ev_controller is not None else None
+            ),
             "export_session_phase": (
                 self.coordinator.active_controller.export_session.phase
                 if self.coordinator.active_controller

@@ -46,6 +46,7 @@
           "ev_current_limit_entity": "Tessie writable charging-current number",
           "ev_charge_limit_entity": "Tessie writable charge-limit number",
           "ev_charge_switch_entity": "Tessie charge switch",
+          "ev_charge_to_full_entity": "Optional charge-to-full override entity",
           "ev_location_mode": "EV location policy",
           "ev_free_window_priority": "Free-window charging priority",
           "ev_free_window_charge_limit_percent": "Free-window EV charge target (%)",
@@ -54,6 +55,7 @@
           "ev_direct_limit_headroom_percent": "Powered-connector charge-limit headroom (%)",
           "ev_charge_efficiency_percent": "EV wall-to-battery charging efficiency (%)",
           "site_grid_headroom_current_a": "Service-current safety headroom per phase (A)",
+          "site_grid_current_entity": "Most-loaded phase signed grid current (A; required for multiphase EV control)",
           "battery_free_window_target_percent": "Expected free-window home-battery target (%)",
           "battery_charge_efficiency_percent": "Home-battery charging efficiency (%)",
           "ev_allowance_guard_enabled": "Protect the configured whole-site free-energy allowance",
@@ -75,7 +77,7 @@
           "foxess_control_owner": "FoxESS control owner (never mix cloud scheduler and Modbus)",
           "automatic_control_enabled": "Enable HEO Local Modbus master gate (ZEROHERO export only)",
           "automatic_export_enabled": "Enable automatic ZEROHERO export (Local Modbus owner only)",
-          "ev_automatic_control_enabled": "Request automatic EV control (independent, currently non-actuating)",
+          "ev_automatic_control_enabled": "Request automatic EV control (independent of FoxESS ownership)",
           "rehearsal_mode": "Safety Lock (ON = no hardware writes)"
         }
       },
@@ -124,6 +126,7 @@
           "ev_current_limit_entity": "Tessie writable charging-current number",
           "ev_charge_limit_entity": "Tessie writable charge-limit number",
           "ev_charge_switch_entity": "Tessie charge switch",
+          "ev_charge_to_full_entity": "Optional charge-to-full override entity",
           "ev_location_mode": "EV location policy",
           "ev_free_window_priority": "Free-window charging priority",
           "ev_free_window_charge_limit_percent": "Free-window EV charge target (%)",
@@ -132,6 +135,7 @@
           "ev_direct_limit_headroom_percent": "Powered-connector charge-limit headroom (%)",
           "ev_charge_efficiency_percent": "EV wall-to-battery charging efficiency (%)",
           "site_grid_headroom_current_a": "Service-current safety headroom per phase (A)",
+          "site_grid_current_entity": "Most-loaded phase signed grid current (A; required for multiphase EV control)",
           "battery_free_window_target_percent": "Expected free-window home-battery target (%)",
           "battery_charge_efficiency_percent": "Home-battery charging efficiency (%)",
           "ev_allowance_guard_enabled": "Protect the configured whole-site free-energy allowance",
@@ -153,7 +157,7 @@
           "foxess_control_owner": "FoxESS control owner (never mix cloud scheduler and Modbus)",
           "automatic_control_enabled": "Enable HEO Local Modbus master gate (ZEROHERO export only)",
           "automatic_export_enabled": "Enable automatic ZEROHERO export (Local Modbus owner only)",
-          "ev_automatic_control_enabled": "Request automatic EV control (independent, currently non-actuating)",
+          "ev_automatic_control_enabled": "Request automatic EV control (independent of FoxESS ownership)",
           "rehearsal_mode": "Safety Lock (ON = no hardware writes)"
         }
       }
@@ -163,6 +167,7 @@
       "invalid_entity": "Select a valid Home Assistant entity.",
       "incomplete_foxess_mapping": "Map all three FoxESS control entities, or leave all three unmapped.",
       "incomplete_ev_mapping": "Commissioned EV control requires every Tessie telemetry and actuator mapping.",
+      "multiphase_current_mapping_required": "Commissioned multiphase EV control requires a signed most-loaded phase grid-current sensor.",
       "invalid_ev_location_mode": "Choose Auto, Home, or Away EV location policy.",
       "invalid_ev_priority": "Choose house-battery or EV free-window priority.",
       "invalid_site_limits": "Check capacity, floor, reserve, charger, inverter, current, and voltage limits.",

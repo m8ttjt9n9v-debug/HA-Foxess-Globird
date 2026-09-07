@@ -1,13 +1,14 @@
 # FoxESS Globird Energy Observer
 
 A Home Assistant custom integration for a site-configured energy ledger,
-conservative demand learning, bounded FoxESS diagnostics, and the verified
-Mangerton ZEROHERO export policy.
+conservative demand learning, bounded FoxESS diagnostics, the verified
+Mangerton ZEROHERO export policy, and a faithful direct-EVSE free-window port.
 
-Version 0.4.0 deliberately removes automatic battery free-charging and Tessie
-control that were not faithful ports of the proven Mangerton system. They are
-tracked for port-first reimplementation in the [roadmap](ROADMAP.md). The
-current automatic write scope is **ZEROHERO export only**.
+Version 0.4.0 deliberately removes the automatic battery and Tessie controllers
+that were not faithful ports of the proven Mangerton system. Automatic FoxESS
+free charging remains absent. A separately gated direct-EVSE free-window Tessie
+path has now returned through port-first characterization and bounded feedback
+reconciliation. Remaining behaviors are tracked in the [roadmap](ROADMAP.md).
 
 ## Installation
 
@@ -45,6 +46,13 @@ generic Lovelace view for manual import.
   bounds retries, observes the export cap, and deliberately restores Self Use
   at the configured finish. See the
   [export policy](docs/zerohero-export-policy.md).
+- The Mangerton direct-EVSE free-window current policy behind its own
+  default-off intent, explicit commissioning, complete Tessie mappings, and the
+  shared Safety Lock. It preserves matched three-minute service feedback,
+  charge-limit/current/start ordering, the separate anti-pause limit, and the
+  configured whole-site allowance as an outer ceiling. An unchanged target is
+  limited to three feedback-confirmed command attempts. See the
+  [EV charging policy](docs/ev-charging-policy.md).
 - Preview-first, explicitly submitted FoxESS force-charge and force-discharge
   diagnostics. Tests require Local Modbus ownership, the FoxESS gate, complete
   actuator mapping, Safety Lock off, and confirmation. They are time-bounded
@@ -55,13 +63,15 @@ The integration exposes `switch.home_energy_safety_lock`: ON means no hardware
 writes. Turning it OFF does not enable automation. Automatic export additionally
 requires Local Modbus ownership, the FoxESS automatic gate, and
 `switch.home_energy_automatic_export`.
+Direct-EVSE control instead requires `switch.home_energy_automatic_ev_control`,
+explicit EV commissioning, and complete mappings. It writes no FoxESS entity,
+so FoxCloud may remain the inverter owner; Safety Lock still blocks both paths.
 
 ## Not currently implemented
 
 - Automatic FoxESS free-window charging or post-charge reconciliation.
-- Automatic Tessie current, charge-limit, or charging-session writes.
-- Whole-site coordination of the daily free-energy allowance between house,
-  battery, and EV.
+- Tessie smart-socket recovery, learned driving targets, pre-free backfill, and
+  solar-spill charging.
 - Mixed FoxCloud schedule and local Modbus control.
 
 These are intentionally absent rather than represented by simplified rewrite

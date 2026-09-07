@@ -158,6 +158,49 @@ async def test_ev_commissioning_accepts_complete_explicit_mapping(hass):
     assert {key: result["data"][key] for key in mappings} == mappings
 
 
+async def test_multiphase_ev_commissioning_requires_controlling_current_mapping(hass):
+    mappings = {
+        "ev_soc_entity": "sensor.car_soc",
+        "ev_at_home_entity": "device_tracker.car",
+        "ev_cable_connected_entity": "binary_sensor.car_cable",
+        "ev_charging_state_entity": "sensor.car_charging",
+        "ev_actual_current_entity": "sensor.car_current",
+        "ev_stored_energy_entity": "sensor.car_energy",
+        "ev_current_limit_entity": "number.car_current",
+        "ev_charge_limit_entity": "number.car_limit",
+        "ev_charge_switch_entity": "switch.car_charge",
+    }
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": SOURCE_USER},
+        data={
+            "name": "Multiphase EV",
+            **ENTRY_DATA,
+            **mappings,
+            "site_phase_count": 3,
+            "service_import_limit_a": 80,
+            "ev_control_commissioned": True,
+        },
+    )
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"] == {"base": "multiphase_current_mapping_required"}
+
+    accepted = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": SOURCE_USER},
+        data={
+            "name": "Multiphase EV mapped",
+            **ENTRY_DATA,
+            **mappings,
+            "site_phase_count": 3,
+            "service_import_limit_a": 80,
+            "site_grid_current_entity": "sensor.most_loaded_phase_current",
+            "ev_control_commissioned": True,
+        },
+    )
+    assert accepted["type"] is FlowResultType.CREATE_ENTRY
+
+
 async def test_user_flow_preserves_explicit_foxess_actuator_mappings(hass):
     mappings = {
         "foxess_work_mode_entity": "select.foxess_work_mode",
