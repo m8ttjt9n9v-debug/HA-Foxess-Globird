@@ -28,10 +28,11 @@ Status here describes behavioral parity, not merely the presence of code.
 - [x] Safety-Lock rehearsal planning with visible ordered `would_*` actions,
   zero retry-state mutation, and an independently closed service adapter.
 - [x] Auto/Home/Away EV location policy with cable and charge-state evidence.
-- [x] Pure smart-socket command planner preserving staged current, explicit
-  physical ceiling, outlet settling, zero-demand power policy, and ordered
-  charge start. The outlet adapter and recovery runtime remain disconnected.
-- [x] Pure restart-serializable smart-socket `no_power` recovery state machine:
+- [x] Smart-socket command/runtime preserving staged current, explicit physical
+  ceiling, outlet settling, periodic retry, zero-demand power policy, ordered
+  charge start, restart state, and delayed gate rechecks.
+- [x] Restart-serializable smart-socket `no_power` recovery state machine and
+  runtime:
   sustained/coherent evidence, current-first sequence, confirmed outlet cycle,
   settle/restart, one-attempt latch, timeout faults, and sustained-health rearm.
 - [x] Faithful, default-off solar-spill EV charging: coherent signed grid,
@@ -60,8 +61,8 @@ Working Single Phase Pilot Site parity.
   behavior to runtime state sampling and the direct-path planner.
 - [x] Solar-spill EV charging after the battery is full.
 - [x] Latest-start, reserve-aware pre-free EV backfill.
-- [ ] Connect the characterized smart-socket command and recovery state machines
-  to runtime only after restart storage and delayed gate rechecks are verified.
+- [x] Connect the characterized smart-socket command and recovery state machines
+  to runtime with restart storage and delayed gate rechecks verified.
 - [x] Tesla location Auto/Home/Away overrides, including the presence gates
   consumed by solar-spill and pre-free control.
 - [ ] Last priority: learned Tesla driving demand, arrival reserve, and

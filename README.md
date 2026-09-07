@@ -4,11 +4,12 @@ A Home Assistant custom integration for a site-configured energy ledger,
 conservative demand learning, bounded FoxESS diagnostics, the verified
 Working Single Phase Pilot Site ZEROHERO export policy, and a faithful direct-EVSE free-window port.
 
-Version 0.4.0 deliberately removes the automatic battery and Tessie controllers
-that were not faithful ports of the proven Working Single Phase Pilot Site. Automatic FoxESS
-free charging remains absent. A separately gated direct-EVSE free-window Tessie
-path has now returned through port-first characterization and bounded feedback
-reconciliation. Remaining behaviors are tracked in the [roadmap](ROADMAP.md).
+Version 0.5.0 deliberately excludes the rewritten automatic battery controller
+that was not a faithful port of the proven Working Single Phase Pilot Site.
+Automatic FoxESS free charging remains absent. Separately gated direct-EVSE and
+smart-socket Tessie paths have returned through port-first characterization and
+restart-safe reconciliation. Remaining behaviors are tracked in the
+[roadmap](ROADMAP.md).
 
 ## Installation
 
@@ -62,6 +63,10 @@ rooms, and other site-specific cards belong in a local overlay.
   pre-free backfill spends only protected post-export energy that the vehicle
   can accept before the next free window. See the
   [outside-window policy](docs/ev-solar-spill-and-pre-free-policy.md).
+- The explicitly selected smart-socket path stages a service-valid current
+  before outlet power, waits the configured connector-settle period, then
+  re-bounds current and starts charging. A sustained `no_power` fault receives
+  at most one restart-safe, current-first outlet recovery cycle before latching.
 - Preview-first, explicitly submitted FoxESS force-charge and force-discharge
   diagnostics. Tests require Local Modbus ownership, the FoxESS gate, complete
   actuator mapping, Safety Lock off, and confirmation. They are time-bounded
@@ -81,7 +86,7 @@ default-off. Safety Lock blocks every hardware write.
 ## Not currently implemented
 
 - Automatic FoxESS free-window charging or post-charge reconciliation.
-- Tessie smart-socket runtime/recovery and learned driving targets.
+- Learned Tessie driving targets.
 - Mixed FoxCloud schedule and local Modbus control.
 
 These are intentionally absent rather than represented by simplified rewrite

@@ -126,6 +126,9 @@ views:
           - type: tile
             entity: sensor.home_energy_ev_reconciliation_attempts
             name: Reconciliation attempts
+          - type: tile
+            entity: sensor.home_energy_ev_smart_socket_recovery_status
+            name: Smart-socket recovery
           - type: markdown
             content: >-
               HEO exposes the portable charging decision chain. Add the
@@ -418,6 +421,8 @@ views:
                 name: Matched EV-current average
               - entity: sensor.home_energy_ev_reconciliation_attempts
                 name: Reconciliation attempts
+              - entity: sensor.home_energy_ev_smart_socket_recovery_status
+                name: Smart-socket recovery
       - type: grid
         cards:
           - type: heading
@@ -436,6 +441,8 @@ views:
                 name: Solar-spill status
               - entity: sensor.home_energy_ev_pre_free_status
                 name: Pre-free status
+              - entity: sensor.home_energy_ev_smart_socket_recovery_status
+                name: Smart-socket recovery
               - entity: switch.home_energy_safety_lock
                 name: Safety Lock
       - type: grid

@@ -160,7 +160,8 @@ def reconcile_smart_socket_recovery(
     current_tolerance_a: float,
     idle_current_threshold_a: float,
     no_power_confirm_seconds: float,
-    command_confirm_seconds: float,
+    current_confirm_seconds: float,
+    socket_confirm_seconds: float,
     power_off_seconds: float,
     post_power_settle_seconds: float,
     charging_confirm_seconds: float,
@@ -171,7 +172,8 @@ def reconcile_smart_socket_recovery(
         raise ValueError("recovery time must be timezone-aware")
     timings = (
         no_power_confirm_seconds,
-        command_confirm_seconds,
+        current_confirm_seconds,
+        socket_confirm_seconds,
         power_off_seconds,
         post_power_settle_seconds,
         charging_confirm_seconds,
@@ -253,7 +255,7 @@ def reconcile_smart_socket_recovery(
                     "recovery_power_off_requested",
                 ),
             )
-        if elapsed >= command_confirm_seconds:
+        if elapsed >= current_confirm_seconds:
             return _smart_recovery_fault(state, "recovery_current_not_confirmed")
         return SmartSocketRecoveryTransition(
             state, EvCommandPlan((), "recovery_awaiting_current_confirmation")
@@ -266,7 +268,7 @@ def reconcile_smart_socket_recovery(
                 ),
                 EvCommandPlan((), "recovery_socket_off_confirmed"),
             )
-        if elapsed >= command_confirm_seconds:
+        if elapsed >= socket_confirm_seconds:
             return _smart_recovery_fault(state, "recovery_socket_off_not_confirmed")
         return SmartSocketRecoveryTransition(
             state, EvCommandPlan((), "recovery_awaiting_socket_off")
@@ -295,7 +297,7 @@ def reconcile_smart_socket_recovery(
                 ),
                 EvCommandPlan((), "recovery_socket_on_confirmed"),
             )
-        if elapsed >= command_confirm_seconds:
+        if elapsed >= socket_confirm_seconds:
             return _smart_recovery_fault(state, "recovery_socket_on_not_confirmed")
         return SmartSocketRecoveryTransition(
             state, EvCommandPlan((), "recovery_awaiting_socket_on")
@@ -305,28 +307,45 @@ def reconcile_smart_socket_recovery(
             return SmartSocketRecoveryTransition(
                 state, EvCommandPlan((), "recovery_post_power_settle")
             )
-        if not _smart_recovery_permissions_hold(observation) or not observation.actuator_writable:
-            return _smart_recovery_fault(state, "recovery_actuator_unavailable_after_power")
-        recovery_current = _smart_recovery_current(
+        if (
+            not _smart_recovery_permissions_hold(observation)
+            or observation.socket_on is not True
+        ):
+            return _smart_recovery_fault(state, "recovery_permissions_changed")
+        if not observation.actuator_writable:
+            return SmartSocketRecoveryTransition(
+                SmartSocketRecoveryState(
+                    True, "awaiting_actuator", now, state.recovery_current_a
+                ),
+                EvCommandPlan((), "recovery_awaiting_actuator"),
+            )
+        return _smart_recovery_restart(
+            state,
             observation,
+            now=now,
             physical_minimum_a=physical_minimum_a,
             physical_ceiling_a=physical_ceiling_a,
+            current_tolerance_a=current_tolerance_a,
         )
-        commands: list[EvCommand] = []
-        if not _recovery_current_matches(
-            observation.requested_current_a, recovery_current, current_tolerance_a,
-            physical_minimum_a
+    if state.phase == "awaiting_actuator":
+        if (
+            not _smart_recovery_permissions_hold(observation)
+            or observation.socket_on is not True
         ):
-            commands.append(EvCommand("set_charge_current", recovery_current))
-        if observation.charge_switch_on is False:
-            commands.append(EvCommand("start_charging"))
-        if observation.charge_switch_on is None:
-            return _smart_recovery_fault(state, "recovery_charge_switch_unavailable")
+            return _smart_recovery_fault(state, "recovery_permissions_changed")
+        if observation.actuator_writable:
+            return _smart_recovery_restart(
+                state,
+                observation,
+                now=now,
+                physical_minimum_a=physical_minimum_a,
+                physical_ceiling_a=physical_ceiling_a,
+                current_tolerance_a=current_tolerance_a,
+            )
+        if elapsed >= current_confirm_seconds:
+            return _smart_recovery_fault(state, "recovery_actuator_unavailable_after_power")
         return SmartSocketRecoveryTransition(
-            SmartSocketRecoveryState(
-                True, "confirming_charging", now, recovery_current
-            ),
-            EvCommandPlan(tuple(commands), "recovery_charge_restart_requested"),
+            state, EvCommandPlan((), "recovery_awaiting_actuator")
         )
     if state.phase == "confirming_charging":
         if observation.charging_state == "charging":
@@ -384,6 +403,39 @@ def _smart_recovery_permissions_hold(observation: SmartSocketRecoveryObservation
         and observation.smart_path_selected
         and observation.cable_connected
         and observation.charge_allowed
+    )
+
+
+def _smart_recovery_restart(
+    state: SmartSocketRecoveryState,
+    observation: SmartSocketRecoveryObservation,
+    *,
+    now: datetime,
+    physical_minimum_a: float,
+    physical_ceiling_a: float,
+    current_tolerance_a: float,
+) -> SmartSocketRecoveryTransition:
+    """Recompute the post-power command from the refreshed Tessie range."""
+    recovery_current = _smart_recovery_current(
+        observation,
+        physical_minimum_a=physical_minimum_a,
+        physical_ceiling_a=physical_ceiling_a,
+    )
+    commands: list[EvCommand] = []
+    if not _recovery_current_matches(
+        observation.requested_current_a,
+        recovery_current,
+        current_tolerance_a,
+        physical_minimum_a,
+    ):
+        commands.append(EvCommand("set_charge_current", recovery_current))
+    if observation.charge_switch_on is False:
+        commands.append(EvCommand("start_charging"))
+    if observation.charge_switch_on is None:
+        return _smart_recovery_fault(state, "recovery_charge_switch_unavailable")
+    return SmartSocketRecoveryTransition(
+        SmartSocketRecoveryState(True, "confirming_charging", now, recovery_current),
+        EvCommandPlan(tuple(commands), "recovery_charge_restart_requested"),
     )
 
 

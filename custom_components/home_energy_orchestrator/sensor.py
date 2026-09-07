@@ -167,6 +167,10 @@ DESCRIPTIONS = (
         name="EV Reconciliation Attempts",
         state_class="measurement",
     ),
+    SensorEntityDescription(
+        key="ev_smart_socket_recovery_status",
+        name="EV Smart Socket Recovery Status",
+    ),
     SensorEntityDescription(key="ev_solar_spill_status", name="EV Solar Spill Status"),
     SensorEntityDescription(
         key="ev_solar_spill_current_target",
@@ -439,6 +443,11 @@ class EnergySensor(CoordinatorEntity[EnergyCoordinator], SensorEntity):
             "ev_reconciliation_attempts": (
                 ev_controller.reconciliation.attempts if ev_controller is not None else 0
             ),
+            "ev_smart_socket_recovery_status": (
+                ev_controller.smart_recovery.phase
+                if ev_controller is not None
+                else "unavailable"
+            ),
             "ev_solar_spill_status": (
                 ev_controller.solar_spill.phase if ev_controller is not None else "unavailable"
             ),
@@ -569,6 +578,14 @@ class EnergySensor(CoordinatorEntity[EnergyCoordinator], SensorEntity):
                 "reconciliation_phase": controller.reconciliation.phase,
                 "reconciliation_attempts": controller.reconciliation.attempts,
                 "maximum_reconciliation_attempts": DIRECT_EVSE_MAX_ATTEMPTS,
+                "smart_socket_recovery_phase": controller.smart_recovery.phase,
+                "smart_socket_recovery_attempted": controller.smart_recovery.attempted,
+                "smart_socket_recovery_started_at": (
+                    controller.smart_recovery.phase_started_at
+                ),
+                "smart_socket_recovery_current_a": (
+                    controller.smart_recovery.recovery_current_a
+                ),
                 "grid_average_coverage": grid.age_coverage_ratio,
                 "grid_source_valid": grid.source_value_valid,
                 "ev_average_source_valid": actual.source_value_valid,

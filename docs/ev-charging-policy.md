@@ -7,8 +7,8 @@ deployment target.
 ## Scope and status
 
 The free-window planning, solar-spill and latest-start pre-free planning,
-direct-EVSE command, matched sampling, bounded runtime reconciliation, and pure
-smart-socket command layers are ported and characterized. The independent
+direct-EVSE command, matched sampling, bounded runtime reconciliation, and
+smart-socket command/recovery runtime are ported and characterized. The independent
 EV intent, commissioning flag, Safety Lock, and complete explicit mapping set
 are separate gates. The integration remains non-writing by default and has not
 been commissioned on a live site.
@@ -25,7 +25,8 @@ been commissioned on a live site.
 | Tessie limit target | `tesla_charge_limit_target` | Retain the existing limit away; when a powered baseline is required, round live SoC plus configured headroom upward. |
 | Current command | `tesla_charge_current_target`, `tesla_charge_current_command` | Free-window result is bounded by connector and entity constraints; outside-window behaviours are separate later stages. |
 | Direct-path actuation | `tesla_automatic_connector_controller_v3` | Set a changed current within the live writable range, then start charging if required; never operate a smart socket. |
-| Smart-socket actuation and recovery | `tesla_automatic_connector_controller_v3`, `tesla_10a_socket_fault_recovery_v2` | Required for Working Single Phase Pilot Site compatibility, but not part of the first direct-path commissioning stage. |
+| Smart-socket actuation | `tesla_automatic_connector_controller_v3` | Stage a bounded current before power, confirm a service-valid value, energise the selected outlet, settle, recheck every permission, then re-bound current and start. |
+| Smart-socket fault recovery | `tesla_10a_socket_fault_recovery_v2`, `tesla_10a_socket_fault_recovery_latch_reset_v1` | Require sustained `no_power` and stable cloud evidence; latch before physical action; permit one confirmed power cycle; rearm only after sustained charging or a direct-path selection. |
 
 The canonical private deployment file and revision are recorded in the
 maintainer source-of-truth document. Public code contains no personal entity
@@ -130,10 +131,10 @@ phase count, connector rating, efficiency, time, or entity ID.
 - The mapped house-load source used for allowance projection must exclude EV
   charging, matching the pilot site's `non_tesla_house_load` role.
 
-## Smart-socket extraction boundary
+## Smart-socket runtime
 
-The pure planner now preserves the source controller's observable command
-decisions without embedding its 10 A installation value. The physical minimum,
+The planner and active runtime preserve the source controller's observable
+command decisions without embedding its installation rating. The physical minimum,
 physical ceiling, and outlet settle duration are explicit inputs. When the
 outlet is off, current is bounded by both the selected physical ceiling and the
 temporarily writable Tessie maximum, with the physical ceiling used when that
@@ -145,29 +146,42 @@ orders current before charge start. Zero-demand outlet removal remains limited
 to outside the free window when explicit power switching is enabled or the EV
 is no longer connected for planning.
 
-The configuration and adapter boundary now accepts a smart-socket path only
+The configuration and adapter boundary accepts a smart-socket path only
 with an explicitly mapped outlet and a physical ceiling at least as high as the
 configured EV minimum. Existing installations default to direct EVSE. The
-adapter can issue power commands only to that mapped outlet. Runtime still
-returns `smart_socket_runtime_not_connected`, so selecting the path cannot
-accidentally execute the direct-EVSE writer.
+adapter can issue power commands only to that mapped outlet. Safety Lock
+computes visible `would_*` actions without advancing the recovery latch or
+calling any service.
 
-The one-attempt `no_power` recovery is now a pure restart-serializable state
+The one-attempt `no_power` recovery is a connected restart-serializable state
 machine. It preserves sustained fault and coherent home/cable evidence, latches
 before the first command, confirms current before removing power, confirms the
 outlet off and on around configurable dwell times, rechecks permissions after
 delays, re-bounds current after power returns, starts charging, and rearms only
 after sustained healthy charging or a supply-path change. Timeout and changed-
-permission outcomes remain latched. Runtime storage and delayed execution are
-not connected yet, so this code cannot power-cycle an outlet.
+permission outcomes remain latched and create one visible Home Assistant
+notification. Recovery success dismisses it.
+
+The pilot's timing values remain defaults but are explicit configuration:
+120 seconds sustained `no_power` and cloud evidence, 60 seconds for current
+confirmation, 15 seconds for each outlet confirmation, 30 seconds without
+mains, 20 seconds post-power settling, 60 seconds for the repowered Tessie
+actuator, 180 seconds for charging confirmation, and 120 seconds of healthy
+charging before rearm. The normal staged-current failure is retried on the
+pilot's five-minute cadence rather than every 30-second runtime tick.
+
+Outside the free window, a selected smart outlet is de-energised on zero demand
+only when configured power switching is enabled or the vehicle is no longer
+connected for planning. Inside the free window it is not removed by the
+zero-demand rule. Changing to Direct / EVSE rearms a persisted recovery episode
+even when connection telemetry is absent, matching the separate pilot latch
+reset automation.
 
 ## Remaining implementation stages
 
 1. Commission the higher-capacity direct path in observer/rehearsal mode before
    enabling writes.
-2. Connect the characterized smart-socket sequence and recovery state machine
-   with restart storage and gate rechecks between every delayed action.
-3. Last priority: assess Tessie's native driving-demand capability, then port
+2. Last priority: assess Tessie's native driving-demand capability, then port
    the pilot site's learned target only if it is still required.
 
 The canonical YAML contains a P85 daily-driving model and uses it for the

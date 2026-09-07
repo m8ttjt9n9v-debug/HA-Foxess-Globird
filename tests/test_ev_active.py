@@ -10,6 +10,9 @@ from homeassistant.core import HomeAssistant
 
 from custom_components.home_energy_orchestrator.ev_active import ActiveEvController
 from custom_components.home_energy_orchestrator.models import SiteSnapshot
+from custom_components.home_energy_orchestrator.planner.ev import (
+    SmartSocketRecoveryState,
+)
 from custom_components.home_energy_orchestrator.planner.ev_outside_window import (
     PreFreeSessionState,
 )
@@ -414,7 +417,7 @@ async def test_multiphase_runtime_blocks_when_mapped_current_is_unavailable(
     assert controller.writes_performed == 0
 
 
-async def test_smart_socket_selection_remains_non_writing_until_runtime_connected(
+async def test_smart_socket_runtime_respects_connector_settle_time(
     hass: HomeAssistant,
 ) -> None:
     _set_ev_states(hass)
@@ -435,9 +438,231 @@ async def test_smart_socket_selection_remains_non_writing_until_runtime_connecte
     await controller.async_reconcile(datetime(2026, 9, 7, 12, 1, tzinfo=UTC))
 
     assert controller.gate_status == "ready"
-    assert controller.last_reason == "smart_socket_runtime_not_connected"
+    assert controller.last_reason == "smart_socket_settling"
     assert controller.writes_performed == 0
     assert calls == []
+
+
+@pytest.mark.freeze_time("2026-09-07 12:01:00+00:00")
+async def test_smart_socket_runtime_preserves_pilot_command_order(
+    hass: HomeAssistant,
+) -> None:
+    _set_ev_states(hass)
+    hass.states.async_set("switch.car_socket", "off")
+    actions = []
+
+    async def set_number(call):
+        actions.append(("set_charge_current", call.data["value"]))
+        old = hass.states.get("number.car_current")
+        assert old is not None
+        hass.states.async_set("number.car_current", str(call.data["value"]), old.attributes)
+
+    async def turn_on(call):
+        entity = call.data["entity_id"]
+        if entity == "switch.car_socket":
+            actions.append(("turn_on_smart_socket", None))
+            hass.states.async_set(entity, "on")
+        else:
+            actions.append(("start_charging", None))
+            hass.states.async_set(entity, "on")
+
+    hass.services.async_register("number", "set_value", set_number)
+    hass.services.async_register("switch", "turn_on", turn_on)
+    controller = ActiveEvController(
+        hass,
+        _coordinator(
+            _controller_config(
+                ev_charge_path="smart_socket",
+                ev_smart_socket_entity="switch.car_socket",
+                ev_smart_socket_current_limit_a=10,
+            )
+        ),
+    )
+    start = datetime(2026, 9, 7, 12, 1, tzinfo=UTC)
+
+    await controller.async_reconcile(start)
+    assert actions == [
+        ("set_charge_current", 10),
+        ("turn_on_smart_socket", None),
+    ]
+
+    await controller.async_reconcile(start + timedelta(seconds=10))
+    assert controller.last_reason == "smart_socket_settling"
+    assert actions[-1] == ("turn_on_smart_socket", None)
+
+    await controller.async_reconcile(start + timedelta(seconds=16))
+    assert actions[-1] == ("start_charging", None)
+    assert [action for action, _value in actions] == [
+        "set_charge_current",
+        "turn_on_smart_socket",
+        "start_charging",
+    ]
+
+
+@pytest.mark.freeze_time("2026-09-07 00:01:00+00:00")
+async def test_smart_socket_runtime_turns_off_disconnected_socket_outside_window(
+    hass: HomeAssistant,
+) -> None:
+    _set_ev_states(hass)
+    hass.states.async_set("sensor.car_charging", "disconnected")
+    hass.states.async_set("binary_sensor.car_cable", "off")
+    hass.states.async_set("switch.car_socket", "on")
+    calls = []
+
+    async def turn_off(call):
+        calls.append(call.data["entity_id"])
+        hass.states.async_set("switch.car_socket", "off")
+
+    hass.services.async_register("switch", "turn_off", turn_off)
+    controller = ActiveEvController(
+        hass,
+        _coordinator(
+            _controller_config(
+                ev_charge_path="smart_socket",
+                ev_smart_socket_entity="switch.car_socket",
+                ev_smart_socket_current_limit_a=10,
+            )
+        ),
+    )
+
+    await controller.async_reconcile(datetime(2026, 9, 7, 0, 1, tzinfo=UTC))
+
+    assert calls == ["switch.car_socket"]
+    assert controller.last_actions == ("turn_off_smart_socket",)
+    assert controller.last_reason == "smart_socket_no_charge_command"
+
+
+@pytest.mark.freeze_time("2026-09-07 12:01:00+00:00")
+async def test_smart_socket_recovery_safety_lock_never_latches_or_writes(
+    hass: HomeAssistant,
+) -> None:
+    _set_ev_states(hass)
+    hass.states.async_set("sensor.car_charging", "no_power")
+    hass.states.async_set("switch.car_socket", "on")
+    calls = []
+    hass.bus.async_listen(EVENT_CALL_SERVICE, calls.append)
+    controller = ActiveEvController(
+        hass,
+        _coordinator(
+            _controller_config(
+                rehearsal_mode=True,
+                ev_charge_path="smart_socket",
+                ev_smart_socket_entity="switch.car_socket",
+                ev_smart_socket_current_limit_a=10,
+            )
+        ),
+    )
+
+    await controller.async_reconcile(datetime(2026, 9, 7, 12, 3, tzinfo=UTC))
+
+    assert controller.smart_recovery == SmartSocketRecoveryState()
+    assert controller.last_actions == ("would_set_charge_current",)
+    assert controller.last_reason == "rehearsal_recovery_current_staged"
+    assert calls == []
+
+
+async def test_direct_path_rearms_persisted_smart_socket_recovery_without_telemetry(
+    hass: HomeAssistant,
+) -> None:
+    _set_ev_states(hass)
+    hass.states.async_set("sensor.car_charging", "unavailable")
+    controller = ActiveEvController(
+        hass,
+        _coordinator(_controller_config(rehearsal_mode=True)),
+    )
+    controller.smart_recovery = SmartSocketRecoveryState(
+        attempted=True,
+        phase="fault",
+        phase_started_at=datetime(2026, 9, 7, 0, 0, tzinfo=UTC),
+        recovery_current_a=10,
+    )
+
+    await controller.async_reconcile(datetime(2026, 9, 7, 12, 1, tzinfo=UTC))
+
+    assert controller.smart_recovery == SmartSocketRecoveryState()
+
+
+@pytest.mark.freeze_time("2026-09-07 12:01:00+00:00")
+async def test_smart_socket_recovery_runtime_is_ordered_and_restart_latched(
+    hass: HomeAssistant,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _set_ev_states(hass)
+    hass.states.async_set("sensor.car_charging", "no_power")
+    hass.states.async_set("switch.car_socket", "on")
+    actions = []
+
+    async def set_number(call):
+        actions.append("set_charge_current")
+        old = hass.states.get("number.car_current")
+        assert old is not None
+        hass.states.async_set("number.car_current", str(call.data["value"]), old.attributes)
+
+    async def turn_off(call):
+        actions.append("turn_off_smart_socket")
+        hass.states.async_set(call.data["entity_id"], "off")
+
+    async def turn_on(call):
+        entity = call.data["entity_id"]
+        if entity == "switch.car_socket":
+            actions.append("turn_on_smart_socket")
+            hass.states.async_set(entity, "on")
+        else:
+            actions.append("start_charging")
+            hass.states.async_set(entity, "on")
+
+    hass.services.async_register("number", "set_value", set_number)
+    hass.services.async_register("switch", "turn_off", turn_off)
+    hass.services.async_register("switch", "turn_on", turn_on)
+    coordinator = _coordinator(
+        _controller_config(
+            ev_charge_path="smart_socket",
+            ev_smart_socket_entity="switch.car_socket",
+            ev_smart_socket_current_limit_a=10,
+        )
+    )
+    controller = ActiveEvController(hass, coordinator)
+    start = datetime(2026, 9, 7, 12, 3, tzinfo=UTC)
+
+    await controller.async_reconcile(start)
+    await controller.async_reconcile(start + timedelta(seconds=1))
+    await controller.async_reconcile(start + timedelta(seconds=2))
+    await controller.async_reconcile(start + timedelta(seconds=32))
+    await controller.async_reconcile(start + timedelta(seconds=33))
+    await controller.async_reconcile(start + timedelta(seconds=53))
+
+    assert actions == [
+        "set_charge_current",
+        "turn_off_smart_socket",
+        "turn_on_smart_socket",
+        "start_charging",
+    ]
+    assert controller.smart_recovery.phase == "confirming_charging"
+
+    hass.states.async_set(
+        "sensor.car_charging",
+        "charging",
+        timestamp=(start + timedelta(seconds=54)).timestamp(),
+    )
+    await controller.async_reconcile(start + timedelta(seconds=54))
+    assert controller.smart_recovery.phase == "recovered"
+
+    monkeypatch.setattr(
+        "custom_components.home_energy_orchestrator.ev_active.dt_util.now",
+        lambda: start + timedelta(seconds=54),
+    )
+    restored = ActiveEvController(hass, coordinator)
+    await restored._async_restore()  # noqa: SLF001
+    assert restored.smart_recovery.phase == "recovered"
+
+    hass.states.async_set(
+        "sensor.car_charging",
+        "no_power",
+        timestamp=(start + timedelta(seconds=55)).timestamp(),
+    )
+    await restored.async_reconcile(start + timedelta(seconds=55))
+    assert restored.smart_recovery.phase == "recovered"
+    assert actions.count("turn_off_smart_socket") == 1
 
 
 async def test_runtime_does_not_flap_forever_when_feedback_never_changes(

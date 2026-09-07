@@ -30,5 +30,6 @@ These instructions are mandatory for AI-assisted work in this repository.
   behavior as current capability.
 - Do not change a Home Assistant host clock. Treat direct inverter Modbus
   registers as authoritative when Home Assistant entities are stale.
-- Current automatic scope is only the verified ZEROHERO export port. Automatic
-  FoxESS free charging and Tessie writes are not implemented.
+- Current automatic scope is the verified ZEROHERO export port and independently
+  gated Tessie direct/smart-socket paths. Automatic FoxESS free charging is not
+  implemented.

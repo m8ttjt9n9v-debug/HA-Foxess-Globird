@@ -2,11 +2,11 @@
 
 Home Assistant is supervisory software; it is not a substitute for compliant electrical design, equipment protections, breaker ratings, EVSE protections, or installer verification.
 
-Version 0.4.0 is observer-by-default. ZEROHERO selling requires Local Modbus
+Version 0.5.0 is observer-by-default. ZEROHERO selling requires Local Modbus
 ownership, the FoxESS automatic setting, the separate automatic-export toggle,
 Safety Lock being OFF, complete FoxESS actuator mapping, valid telemetry, and
-commissioned limits. The independent direct-EVSE free-window path requires its
-own intent, commissioning and complete Tessie mappings. Automatic FoxESS free
+commissioned limits. The independent direct-EVSE/smart-socket free-window path
+requires its own intent, commissioning and complete Tessie mappings. Automatic FoxESS free
 charging is not implemented. The repository does not claim hardware
 compatibility merely because an entity can be selected.
 
@@ -17,8 +17,8 @@ designated test instance. Never enable the Local Modbus owner while FoxCloud
 Mode Scheduler is enabled. Do not enable a controller on a live site while an
 unresolved writer remains.
 
-FoxCloud may own the inverter while the direct-EVSE path is used because that
-path writes only mapped Tessie entities. This does not permit mixed FoxESS
+FoxCloud may own the inverter while the EV path is used because that path writes
+only mapped Tessie and, when selected, smart-outlet entities. This does not permit mixed FoxESS
 control. Disable every other Tesla current/charge-limit writer before EV
 commissioning. The controller confirms feedback and stops retrying an unchanged
 target after three command attempts rather than flapping indefinitely.

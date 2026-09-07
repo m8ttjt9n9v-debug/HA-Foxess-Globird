@@ -18,11 +18,10 @@ HACS installation requires a public GitHub repository. This project publishes
 versioned GitHub releases for the custom-repository channel; inclusion in
 HACS's default catalogue is a separate review process.
 
-Version 0.4.0 is observer-by-default. Automatic FoxESS free charging is not
+Version 0.5.0 is observer-by-default. Automatic FoxESS free charging is not
 present; the earlier simplified controller remains removed. The verified
-ZEROHERO export path and the faithful direct-EVSE free-window Tessie path are
-separately gated. Bounded FoxESS Diagnostics remain explicitly submitted
-actions.
+ZEROHERO export path and the faithful direct-EVSE/smart-socket Tessie paths are
+separately gated. Bounded FoxESS Diagnostics remain explicitly submitted actions.
 
 Automatic ZEROHERO export is a third, default-off behavior toggle beneath the
 FoxESS gate. It operates only when **Local Modbus** is the selected FoxESS
@@ -38,7 +37,7 @@ Import [`examples/dashboard.yaml`](../examples/dashboard.yaml) as a Lovelace
 starter view; HACS does not install dashboards automatically. Generated
 entities use stable `sensor.home_energy_*` IDs where the stable ID is unused.
 
-Direct-EVSE control requires every Tessie telemetry and actuator mapping, a
+EV control requires every Tessie telemetry and actuator mapping, a
 commissioned physical current ceiling, a positive service limit, the independent
 **Automatic EV Control** switch, and Safety Lock OFF. It operates only during
 the configured free window and never writes FoxESS. A multiphase site must also
@@ -50,6 +49,10 @@ Solar-spill and latest-start pre-free control are additional default-off setup
 options. Both require Local Modbus ownership; solar spill also requires a signed
 battery-power mapping and verified charge-positive convention. Enabling either
 while FoxCloud owns the inverter is rejected during configuration.
+Selecting the smart-socket path additionally requires a mapped outlet and its
+commissioned current limit. Commission it with Safety Lock on first: verify the
+current-before-power sequence, settle status, and recovery phase before allowing
+the outlet adapter to write.
 
 Version 0.3.2 adds a separate **Diagnostics** dashboard view and matching
 commissioning entities. The editable power and duration fields only prepare a

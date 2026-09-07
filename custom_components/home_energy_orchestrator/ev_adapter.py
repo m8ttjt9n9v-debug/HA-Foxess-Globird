@@ -40,7 +40,7 @@ class EvEntityMap:
 
 
 class EvServiceAdapter:
-    """Execute a reviewed direct-EVSE plan through Home Assistant services."""
+    """Execute a reviewed EV plan through explicitly mapped Home Assistant services."""
 
     def __init__(
         self,

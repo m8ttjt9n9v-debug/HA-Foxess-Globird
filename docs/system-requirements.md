@@ -22,13 +22,12 @@ dashboard, commission electrical limits, or migrate personal entity mappings.
 The FoxESS work-mode and force-power entities must be explicitly mapped. Entity
 availability alone does not prove safe hardware compatibility.
 
-## Required for direct-EVSE Tessie automation
+## Required for Tessie EV automation
 
-Tessie is optional when EV control is not commissioned. The ported direct-EVSE
+Tessie is optional when EV control is not commissioned. The ported EV
 free-window policy requires explicitly mapped capabilities equivalent to:
 
 - vehicle SoC and stored energy;
-- lifetime driving energy for demand learning;
 - location/at-home state and user override;
 - cable connection, charging state, and actual current;
 - writable charge current and its min/max/step metadata;
@@ -42,26 +41,30 @@ template/helper built from phase sensors. Aggregate power is not a substitute
 because the controller must protect each phase's configured service limit.
 If that mapped multiphase current is unavailable, EV actuation is blocked.
 
-The direct path never issues a stop or pause. Solar-spill control additionally
+The direct path never issues a stop or pause. The smart-socket path additionally
+requires a mapped on/off outlet, its commissioned physical current ceiling,
+and selected recovery/settling timings. It does not depend on a particular
+outlet vendor.
+
+Solar-spill control additionally
 requires an explicitly mapped signed battery-power sensor, its charge-positive
 sign convention, battery SoC threshold, and coherent grid/battery/Tessie
 timestamps. Latest-start pre-free backfill additionally requires the Local
 Modbus ZEROHERO export ledger. Both outside-window stages are independently
 default-off and are rejected unless Local Modbus is selected as FoxESS owner.
 
-The smart-socket policy and recovery are characterized and explicitly
-configurable but have no connected runtime. Learned driving demand remains a
-future, last-priority port pending review of Tessie's native capabilities.
+Learned driving demand remains a future, last-priority port pending review of
+Tessie's native capabilities. Lifetime driving-energy data is therefore not a
+current installation requirement.
 
 The Working Single Phase Pilot Site uses Tessie entities for these roles. Portable code must map roles,
 not embed that vehicle's `jns_x` entity IDs.
 
 ## Optional equipment and integrations
 
-- The Working Single Phase Pilot Site supports a switchable 10 A smart-socket charging path in addition
-  to direct EVSE charging. Its current switch is provided by eWeLink, but a
-  future port must depend on the explicitly mapped switch capability, not the
-  vendor name.
+- The Working Single Phase Pilot Site uses an eWeLink-provided switch for its
+  smart-socket charging path, but HEO depends only on the explicitly mapped
+  on/off switch capability, not the vendor name.
 - Weather forecast data supports the Working Single Phase Pilot Site's weather-conditioned heater-energy
   model. It is optional unless that policy is ported.
 - FoxESS cloud telemetry may be used as read-only corroboration. FoxCloud Mode

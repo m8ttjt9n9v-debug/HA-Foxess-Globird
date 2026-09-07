@@ -1,4 +1,4 @@
-"""Commissioned direct-EVSE runtime for the ported pilot-site free-window policy."""
+"""Commissioned EV runtime for the ported pilot-site charging policy."""
 
 from __future__ import annotations
 
@@ -7,6 +7,7 @@ import logging
 from datetime import datetime, timedelta
 from math import isfinite
 
+from homeassistant.components import persistent_notification
 from homeassistant.core import CALLBACK_TYPE, HomeAssistant
 from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.helpers.storage import Store
@@ -43,7 +44,19 @@ from .const import (
     CONF_EV_PHASE_COUNT,
     CONF_EV_PRE_FREE_ENABLED,
     CONF_EV_PROTECTED_BASELINE_A,
+    CONF_EV_SMART_RECOVERY_CHARGING_CONFIRM_SECONDS,
+    CONF_EV_SMART_RECOVERY_CURRENT_CONFIRM_SECONDS,
+    CONF_EV_SMART_RECOVERY_IDLE_CURRENT_A,
+    CONF_EV_SMART_RECOVERY_NO_POWER_SECONDS,
+    CONF_EV_SMART_RECOVERY_POST_POWER_SECONDS,
+    CONF_EV_SMART_RECOVERY_POWER_OFF_SECONDS,
+    CONF_EV_SMART_RECOVERY_REARM_SECONDS,
+    CONF_EV_SMART_RECOVERY_SOCKET_CONFIRM_SECONDS,
     CONF_EV_SMART_SOCKET,
+    CONF_EV_SMART_SOCKET_CURRENT_LIMIT,
+    CONF_EV_SMART_SOCKET_POWER_SWITCHING,
+    CONF_EV_SMART_SOCKET_RETRY_SECONDS,
+    CONF_EV_SMART_SOCKET_SETTLE_SECONDS,
     CONF_EV_SOC,
     CONF_EV_SOLAR_SPILL_BATTERY_SOC,
     CONF_EV_SOLAR_SPILL_ENABLED,
@@ -80,6 +93,18 @@ from .const import (
     DEFAULT_EV_PHASE_COUNT,
     DEFAULT_EV_PRE_FREE_ENABLED,
     DEFAULT_EV_PROTECTED_BASELINE_A,
+    DEFAULT_EV_SMART_RECOVERY_CHARGING_CONFIRM_SECONDS,
+    DEFAULT_EV_SMART_RECOVERY_CURRENT_CONFIRM_SECONDS,
+    DEFAULT_EV_SMART_RECOVERY_IDLE_CURRENT_A,
+    DEFAULT_EV_SMART_RECOVERY_NO_POWER_SECONDS,
+    DEFAULT_EV_SMART_RECOVERY_POST_POWER_SECONDS,
+    DEFAULT_EV_SMART_RECOVERY_POWER_OFF_SECONDS,
+    DEFAULT_EV_SMART_RECOVERY_REARM_SECONDS,
+    DEFAULT_EV_SMART_RECOVERY_SOCKET_CONFIRM_SECONDS,
+    DEFAULT_EV_SMART_SOCKET_CURRENT_LIMIT,
+    DEFAULT_EV_SMART_SOCKET_POWER_SWITCHING,
+    DEFAULT_EV_SMART_SOCKET_RETRY_SECONDS,
+    DEFAULT_EV_SMART_SOCKET_SETTLE_SECONDS,
     DEFAULT_EV_SOLAR_SPILL_BATTERY_SOC,
     DEFAULT_EV_SOLAR_SPILL_ENABLED,
     DEFAULT_EV_TELEMETRY_MAX_AGE_SECONDS,
@@ -92,7 +117,7 @@ from .const import (
     DEFAULT_SERVICE_IMPORT_LIMIT_A,
     DEFAULT_SITE_GRID_HEADROOM_CURRENT,
     DEFAULT_SITE_PHASE_COUNT,
-    EV_CHARGE_PATH_DIRECT,
+    EV_CHARGE_PATH_SMART_SOCKET,
     FOXESS_CONTROL_OWNER_MODBUS,
 )
 from .coordinator import EnergyCoordinator
@@ -104,14 +129,20 @@ from .planner.ev import (
     ChargeLimitInputs,
     DirectEvseObservation,
     DirectEvseReconciliationState,
+    EvCommandPlan,
     FreeWindowCurrentInputs,
+    SmartSocketObservation,
+    SmartSocketRecoveryObservation,
+    SmartSocketRecoveryState,
     apply_daily_allowance_ceiling,
     estimate_other_free_window_import_kwh,
     estimate_vehicle_energy_to_target_kwh,
     plan_charge_limit_target,
     plan_direct_evse_commands,
     plan_free_window_current,
+    plan_smart_socket_commands,
     reconcile_direct_evse,
+    reconcile_smart_socket_recovery,
 )
 from .planner.ev_outside_window import (
     PreFreeCurrentInputs,
@@ -133,7 +164,7 @@ _UNKNOWN_STATES = {"unknown", "unavailable", ""}
 
 
 class ActiveEvController:
-    """Run only the commissioned direct Tessie path; never write FoxESS."""
+    """Run the selected commissioned Tessie supply path; never write FoxESS."""
 
     def __init__(self, hass: HomeAssistant, coordinator: EnergyCoordinator) -> None:
         self.hass = hass
@@ -150,6 +181,9 @@ class ActiveEvController:
         self.grid_average = TimedAverageWindow(timedelta(minutes=3))
         self.ev_average = TimedAverageWindow(timedelta(minutes=3))
         self.reconciliation = DirectEvseReconciliationState()
+        self.smart_recovery = SmartSocketRecoveryState()
+        self.smart_stage_target_a: float | None = None
+        self.smart_stage_started_at: datetime | None = None
         self.pre_free_session = PreFreeSessionState()
         self.pre_free_plan: PreFreePlan | None = None
         self.pre_free_phase = "disabled"
@@ -223,12 +257,22 @@ class ActiveEvController:
             if gate not in {"ready", "safety_locked"}:
                 self.last_reason = gate
                 return
-            if (
-                self.coordinator.config.get(CONF_EV_CHARGE_PATH, DEFAULT_EV_CHARGE_PATH)
-                != EV_CHARGE_PATH_DIRECT
+            charge_path = self.coordinator.config.get(
+                CONF_EV_CHARGE_PATH, DEFAULT_EV_CHARGE_PATH
+            )
+            smart_path = charge_path == EV_CHARGE_PATH_SMART_SOCKET
+            if not smart_path and (
+                self.smart_recovery != SmartSocketRecoveryState()
+                or self.smart_stage_target_a is not None
+                or self.smart_stage_started_at is not None
             ):
-                self.last_reason = "smart_socket_runtime_not_connected"
-                return
+                # Faithful port of the pilot latch-reset automation: changing
+                # to Direct / EVSE ends the smart-socket fault episode even if
+                # Tessie connection telemetry is currently unavailable.
+                self.smart_recovery = SmartSocketRecoveryState()
+                self.smart_stage_target_a = None
+                self.smart_stage_started_at = None
+                await self._async_save(now)
             if self._float(CONF_SITE_PHASE_COUNT, DEFAULT_SITE_PHASE_COUNT) > 1 and not grid_valid:
                 self.last_reason = "multiphase_current_feedback_unavailable"
                 return
@@ -239,6 +283,17 @@ class ActiveEvController:
                 self.pre_free_phase = "not_eligible"
                 self.outside_control_active = False
                 self.outside_target_active = False
+                if smart_path and observation is not None and self._home_control_active():
+                    await self._async_reconcile_disconnected_smart_socket(
+                        now,
+                        observation,
+                        in_window=in_window,
+                        gate=gate,
+                    )
+                    if self.last_actions or self.last_reason.startswith(
+                        ("smart_socket_", "rehearsal_smart_socket_")
+                    ):
+                        return
                 self.last_reason = connection_reason
                 return
             if observation is None:
@@ -313,6 +368,15 @@ class ActiveEvController:
             if self.target_current_a is None or self.target_limit_percent is None:
                 self.last_reason = "ev_target_unavailable"
                 return
+            if smart_path:
+                await self._async_reconcile_smart_socket(
+                    now,
+                    observation,
+                    in_window=in_window,
+                    connected_for_planning=connected,
+                    gate=gate,
+                )
+                return
             if gate == "safety_locked":
                 rehearsal_plan = plan_direct_evse_commands(
                     observation,
@@ -376,6 +440,363 @@ class ActiveEvController:
             self.last_reason = "ev_commands_sent_awaiting_feedback"
             await self._async_save(now)
 
+    async def _async_reconcile_disconnected_smart_socket(
+        self,
+        now: datetime,
+        observation: DirectEvseObservation,
+        *,
+        in_window: bool,
+        gate: str,
+    ) -> None:
+        """Port the pilot's outside-window socket-off rule when unplugged."""
+        smart = self._smart_socket_observation(now, observation)
+        physical_minimum = observation.current_minimum_a
+        if smart is None or physical_minimum is None:
+            self.last_reason = "smart_socket_feedback_unavailable"
+            return
+        plan = plan_smart_socket_commands(
+            smart,
+            target_current_a=0.0,
+            physical_minimum_a=physical_minimum,
+            physical_ceiling_a=self._path_ceiling_a(),
+            settle_seconds=self._float(
+                CONF_EV_SMART_SOCKET_SETTLE_SECONDS,
+                DEFAULT_EV_SMART_SOCKET_SETTLE_SECONDS,
+            ),
+            charge_allowed=False,
+            in_free_window=in_window,
+            connected_for_planning=False,
+            power_switching_enabled=bool(
+                self.coordinator.config.get(
+                    CONF_EV_SMART_SOCKET_POWER_SWITCHING,
+                    DEFAULT_EV_SMART_SOCKET_POWER_SWITCHING,
+                )
+            ),
+        )
+        if gate == "safety_locked":
+            self.last_actions = tuple(
+                f"would_{command.action}" for command in plan.commands
+            )
+            self.last_reason = f"rehearsal_{plan.reason}"
+            return
+        if plan.commands:
+            await self._async_execute_ev_plan(plan, now)
+            return
+        self.last_reason = plan.reason
+
+    async def _async_reconcile_smart_socket(
+        self,
+        now: datetime,
+        observation: DirectEvseObservation,
+        *,
+        in_window: bool,
+        connected_for_planning: bool,
+        gate: str,
+    ) -> None:
+        """Run the selected smart-socket path and its one-shot recovery."""
+        smart = self._smart_socket_observation(now, observation)
+        if smart is None:
+            self.last_reason = "smart_socket_feedback_unavailable"
+            return
+        physical_minimum = observation.current_minimum_a
+        physical_ceiling = self._path_ceiling_a()
+        if physical_minimum is None or physical_ceiling < physical_minimum:
+            self.last_reason = "smart_socket_physical_limits_invalid"
+            return
+
+        recovery_observation = self._smart_recovery_observation(
+            now,
+            observation,
+            smart,
+            connected_for_planning=connected_for_planning,
+            physical_minimum_a=physical_minimum,
+        )
+        recovery = reconcile_smart_socket_recovery(
+            self.smart_recovery,
+            recovery_observation,
+            now=now,
+            physical_minimum_a=physical_minimum,
+            physical_ceiling_a=physical_ceiling,
+            current_tolerance_a=observation.current_step_a or physical_minimum,
+            idle_current_threshold_a=self._float(
+                CONF_EV_SMART_RECOVERY_IDLE_CURRENT_A,
+                DEFAULT_EV_SMART_RECOVERY_IDLE_CURRENT_A,
+            ),
+            no_power_confirm_seconds=self._float(
+                CONF_EV_SMART_RECOVERY_NO_POWER_SECONDS,
+                DEFAULT_EV_SMART_RECOVERY_NO_POWER_SECONDS,
+            ),
+            current_confirm_seconds=self._float(
+                CONF_EV_SMART_RECOVERY_CURRENT_CONFIRM_SECONDS,
+                DEFAULT_EV_SMART_RECOVERY_CURRENT_CONFIRM_SECONDS,
+            ),
+            socket_confirm_seconds=self._float(
+                CONF_EV_SMART_RECOVERY_SOCKET_CONFIRM_SECONDS,
+                DEFAULT_EV_SMART_RECOVERY_SOCKET_CONFIRM_SECONDS,
+            ),
+            power_off_seconds=self._float(
+                CONF_EV_SMART_RECOVERY_POWER_OFF_SECONDS,
+                DEFAULT_EV_SMART_RECOVERY_POWER_OFF_SECONDS,
+            ),
+            post_power_settle_seconds=self._float(
+                CONF_EV_SMART_RECOVERY_POST_POWER_SECONDS,
+                DEFAULT_EV_SMART_RECOVERY_POST_POWER_SECONDS,
+            ),
+            charging_confirm_seconds=self._float(
+                CONF_EV_SMART_RECOVERY_CHARGING_CONFIRM_SECONDS,
+                DEFAULT_EV_SMART_RECOVERY_CHARGING_CONFIRM_SECONDS,
+            ),
+            healthy_rearm_seconds=self._float(
+                CONF_EV_SMART_RECOVERY_REARM_SECONDS,
+                DEFAULT_EV_SMART_RECOVERY_REARM_SECONDS,
+            ),
+        )
+        recovery_active = recovery.state.phase in {
+            "confirming_current",
+            "confirming_socket_off",
+            "power_off_dwell",
+            "confirming_socket_on",
+            "post_power_settle",
+            "awaiting_actuator",
+            "confirming_charging",
+        }
+        if gate == "safety_locked" and (recovery_active or recovery.plan.commands):
+            self.last_actions = tuple(
+                f"would_{command.action}" for command in recovery.plan.commands
+            )
+            self.last_reason = f"rehearsal_{recovery.plan.reason}"
+            return
+        previous_recovery = self.smart_recovery
+        self.smart_recovery = recovery.state
+        self._publish_smart_recovery_transition(
+            previous_recovery,
+            self.smart_recovery,
+            recovery.plan.reason,
+        )
+        if self.smart_recovery != previous_recovery:
+            await self._async_save(now)
+        if recovery.plan.commands:
+            await self._async_execute_ev_plan(recovery.plan, now)
+            return
+        if recovery_active:
+            self.last_reason = recovery.plan.reason
+            return
+
+        plan = plan_smart_socket_commands(
+            smart,
+            target_current_a=self.target_current_a or 0.0,
+            physical_minimum_a=physical_minimum,
+            physical_ceiling_a=physical_ceiling,
+            settle_seconds=self._float(
+                CONF_EV_SMART_SOCKET_SETTLE_SECONDS,
+                DEFAULT_EV_SMART_SOCKET_SETTLE_SECONDS,
+            ),
+            charge_allowed=(
+                connected_for_planning
+                and (self.target_current_a or 0.0) >= physical_minimum
+            ),
+            in_free_window=in_window,
+            connected_for_planning=connected_for_planning,
+            power_switching_enabled=bool(
+                self.coordinator.config.get(
+                    CONF_EV_SMART_SOCKET_POWER_SWITCHING,
+                    DEFAULT_EV_SMART_SOCKET_POWER_SWITCHING,
+                )
+            ),
+        )
+        if gate == "safety_locked":
+            self.last_actions = tuple(
+                f"would_{command.action}" for command in plan.commands
+            )
+            self.last_reason = f"rehearsal_{plan.reason}"
+            return
+        plan = self._suppress_unconfirmed_smart_stage(plan, smart, now)
+        if not plan.commands:
+            self.last_reason = plan.reason
+            return
+        await self._async_execute_ev_plan(plan, now)
+
+    def _publish_smart_recovery_transition(
+        self,
+        previous: SmartSocketRecoveryState,
+        current: SmartSocketRecoveryState,
+        reason: str,
+    ) -> None:
+        """Port the pilot's one notification for a latched recovery outcome."""
+        notification_id = f"heo_{self.coordinator.entry_id}_smart_socket_recovery"
+        if current.phase == "fault" and previous.phase != "fault":
+            persistent_notification.async_create(
+                self.hass,
+                (
+                    "The selected EV smart-socket recovery stopped safely and "
+                    f"will not power-cycle again in this fault episode ({reason})."
+                ),
+                "EV smart-socket recovery failed",
+                notification_id,
+            )
+        elif current.phase == "recovered" and previous.phase != "recovered":
+            persistent_notification.async_dismiss(self.hass, notification_id)
+
+    def _smart_socket_observation(
+        self, now: datetime, observation: DirectEvseObservation
+    ) -> SmartSocketObservation | None:
+        socket_entity = self.coordinator.config.get(CONF_EV_SMART_SOCKET)
+        socket_state = self.hass.states.get(str(socket_entity)) if socket_entity else None
+        if socket_state is None or socket_state.state.lower() not in {"on", "off"}:
+            return None
+        socket_on = socket_state.state.lower() == "on"
+        socket_on_seconds = (
+            max((now - socket_state.last_changed).total_seconds(), 0.0)
+            if socket_on
+            else 0.0
+        )
+        return SmartSocketObservation(
+            requested_current_a=observation.requested_current_a,
+            charge_switch_on=observation.charge_switch_on,
+            socket_on=socket_on,
+            socket_on_seconds=socket_on_seconds,
+            current_maximum_a=observation.current_maximum_a,
+            current_step_a=observation.current_step_a,
+        )
+
+    def _smart_recovery_observation(
+        self,
+        now: datetime,
+        observation: DirectEvseObservation,
+        smart: SmartSocketObservation,
+        *,
+        connected_for_planning: bool,
+        physical_minimum_a: float,
+    ) -> SmartSocketRecoveryObservation:
+        charging_entity = self.coordinator.config.get(CONF_EV_CHARGING_STATE)
+        charging_state = (
+            self.hass.states.get(str(charging_entity)) if charging_entity else None
+        )
+        charging_value = (
+            charging_state.state.lower()
+            if charging_state is not None
+            and charging_state.state.lower() not in _UNKNOWN_STATES
+            else None
+        )
+        stable_seconds = self._float(
+            CONF_EV_SMART_RECOVERY_NO_POWER_SECONDS,
+            DEFAULT_EV_SMART_RECOVERY_NO_POWER_SECONDS,
+        )
+        at_home_state = self.hass.states.get(
+            str(self.coordinator.config.get(CONF_EV_AT_HOME, ""))
+        )
+        cable_state = self.hass.states.get(
+            str(self.coordinator.config.get(CONF_EV_CABLE_CONNECTED, ""))
+        )
+        charge_switch_state = self.hass.states.get(
+            str(self.coordinator.config.get(CONF_EV_CHARGE_SWITCH, ""))
+        )
+        evidence_states = (at_home_state, cable_state, charge_switch_state)
+        evidence_age_stable = all(
+            state is not None
+            and state.state.lower() not in _UNKNOWN_STATES
+            and 0 <= (now - state.last_changed).total_seconds()
+            and (now - state.last_changed).total_seconds() >= stable_seconds
+            for state in evidence_states
+        )
+        cloud_stable = bool(
+            evidence_age_stable
+            and at_home_state is not None
+            and at_home_state.state.lower() in {"home", "on"}
+            and cable_state is not None
+            and cable_state.state.lower() == "on"
+            and charge_switch_state is not None
+            and charge_switch_state.state.lower() in {"on", "off"}
+        )
+        vehicle_soc = self._entity_number(CONF_EV_SOC)
+        actual_current, actual_valid = self._actual_ev_current_a()
+        return SmartSocketRecoveryObservation(
+            charging_state=charging_value,
+            charging_state_seconds=(
+                max((now - charging_state.last_changed).total_seconds(), 0.0)
+                if charging_state is not None
+                else 0.0
+            ),
+            home_control_active=self._home_control_active(),
+            cloud_evidence_stable=cloud_stable,
+            smart_path_selected=True,
+            socket_on=smart.socket_on,
+            cable_connected=self._is_on(CONF_EV_CABLE_CONNECTED),
+            charge_allowed=(self.target_current_a or 0.0) >= physical_minimum_a,
+            actuator_writable=(
+                observation.current_maximum_a is not None
+                and observation.current_maximum_a > 0
+                and observation.charge_switch_on is not None
+            ),
+            target_current_a=self.target_current_a or 0.0,
+            requested_current_a=observation.requested_current_a,
+            actual_current_a=actual_current if actual_valid else float("nan"),
+            vehicle_soc_percent=vehicle_soc if vehicle_soc is not None else float("nan"),
+            charge_limit_percent=observation.charge_limit_percent,
+            writable_maximum_a=observation.current_maximum_a,
+            charge_switch_on=observation.charge_switch_on,
+        )
+
+    def _suppress_unconfirmed_smart_stage(
+        self,
+        plan: EvCommandPlan,
+        observation: SmartSocketObservation,
+        now: datetime,
+    ) -> EvCommandPlan:
+        stage_only = (
+            not observation.socket_on
+            and len(plan.commands) == 1
+            and plan.commands[0].action == "set_charge_current"
+        )
+        if not stage_only:
+            if any(command.action == "turn_on_smart_socket" for command in plan.commands):
+                self.smart_stage_target_a = None
+                self.smart_stage_started_at = None
+            return plan
+        target = plan.commands[0].value
+        if target != self.smart_stage_target_a or self.smart_stage_started_at is None:
+            self.smart_stage_target_a = target
+            self.smart_stage_started_at = now
+            return plan
+        elapsed = (now - self.smart_stage_started_at).total_seconds()
+        timeout = self._float(
+            CONF_EV_SMART_RECOVERY_CURRENT_CONFIRM_SECONDS,
+            DEFAULT_EV_SMART_RECOVERY_CURRENT_CONFIRM_SECONDS,
+        )
+        retry = self._float(
+            CONF_EV_SMART_SOCKET_RETRY_SECONDS,
+            DEFAULT_EV_SMART_SOCKET_RETRY_SECONDS,
+        )
+        if elapsed >= retry:
+            # The pilot retries its stopped one-minute wait from a five-minute
+            # reconciliation trigger. Preserve that cadence without issuing a
+            # current write every 30-second HACS controller tick.
+            self.smart_stage_started_at = now
+            return plan
+        reason = (
+            "smart_socket_awaiting_staged_current"
+            if elapsed < timeout
+            else "smart_socket_staged_current_not_confirmed"
+        )
+        return EvCommandPlan((), reason)
+
+    async def _async_execute_ev_plan(self, plan: EvCommandPlan, now: datetime) -> None:
+        try:
+            self.last_actions = await self._adapter.async_execute(plan)  # type: ignore[union-attr]
+        except EvWriteBlocked:
+            self.last_actions = self._adapter.last_executed  # type: ignore[union-attr]
+            self.last_reason = "ev_write_gate_closed"
+        except Exception:
+            self.last_actions = self._adapter.last_executed  # type: ignore[union-attr]
+            self.last_reason = "ev_service_call_failed"
+            _LOGGER.exception("Smart-socket EV service call failed")
+        else:
+            self.last_reason = plan.reason
+        self.writes_performed += len(self.last_actions)
+        if self.last_actions:
+            self.last_write_at = now
+        await self._async_save(now)
+
     def _calculate_target(
         self,
         now: datetime,
@@ -398,7 +819,7 @@ class ActiveEvController:
         # The commissioned connector rating is the planning ceiling. Tessie's
         # transient number maximum is only a transport bound in the command
         # planner, matching the pilot's v1.4.19+ anti-ramp behavior.
-        ceiling = self._float(CONF_EV_MAX_CURRENT, 0.0)
+        ceiling = self._path_ceiling_a()
         if ceiling <= 0:
             self.last_reason = "ev_physical_ceiling_uncommissioned"
             return False
@@ -613,7 +1034,7 @@ class ActiveEvController:
         if current_minimum is None or current_step is None:
             self.last_reason = "ev_actuator_metadata_unavailable"
             return False
-        ceiling = self._float(CONF_EV_MAX_CURRENT, 0.0)
+        ceiling = self._path_ceiling_a()
         if ceiling <= 0:
             self.last_reason = "ev_physical_ceiling_uncommissioned"
             return False
@@ -898,7 +1319,7 @@ class ActiveEvController:
         mode = str(self.coordinator.config.get(CONF_EV_LOCATION_MODE, DEFAULT_EV_LOCATION_MODE))
         if mode == "away":
             return False, "ev_location_away"
-        if mode == "auto" and self._entity_state(CONF_EV_AT_HOME) not in {"home", "on"}:
+        if not self._home_control_active():
             return False, "ev_location_not_confirmed_home"
         if self._entity_state(CONF_EV_CABLE_CONNECTED) != "on":
             return False, "ev_cable_not_connected"
@@ -906,6 +1327,13 @@ class ActiveEvController:
         if charging is None or charging == "disconnected":
             return False, "ev_connection_state_unavailable"
         return True, "ev_connected_at_home"
+
+    def _home_control_active(self) -> bool:
+        """Port the pilot's explicit Home/Auto/Away current-write scope."""
+        mode = str(self.coordinator.config.get(CONF_EV_LOCATION_MODE, DEFAULT_EV_LOCATION_MODE))
+        return mode == "home" or (
+            mode == "auto" and self._entity_state(CONF_EV_AT_HOME) in {"home", "on"}
+        )
 
     def _grid_current_a(self) -> tuple[float, bool]:
         mapped = self.coordinator.config.get(CONF_SITE_GRID_CURRENT)
@@ -1042,6 +1470,17 @@ class ActiveEvController:
             return default
         return value if isfinite(value) else default
 
+    def _path_ceiling_a(self) -> float:
+        if (
+            self.coordinator.config.get(CONF_EV_CHARGE_PATH, DEFAULT_EV_CHARGE_PATH)
+            == EV_CHARGE_PATH_SMART_SOCKET
+        ):
+            return self._float(
+                CONF_EV_SMART_SOCKET_CURRENT_LIMIT,
+                DEFAULT_EV_SMART_SOCKET_CURRENT_LIMIT,
+            )
+        return self._float(CONF_EV_MAX_CURRENT, 0.0)
+
     async def _async_restore(self) -> None:
         payload = await self._store.async_load()
         if not isinstance(payload, dict):
@@ -1111,10 +1550,56 @@ class ActiveEvController:
                 frozen_start=frozen_start,
             )
             self.outside_control_active = bool(payload.get("outside_control_active", False))
+            smart_recovery = payload.get("smart_recovery", {})
+            if not isinstance(smart_recovery, dict):
+                raise ValueError
+            recovery_started_raw = smart_recovery.get("phase_started_at")
+            recovery_started = (
+                datetime.fromisoformat(str(recovery_started_raw))
+                if recovery_started_raw
+                else None
+            )
+            recovery_current = (
+                float(smart_recovery["recovery_current_a"])
+                if smart_recovery.get("recovery_current_a") is not None
+                else None
+            )
+            recovery_phase = str(smart_recovery.get("phase", "idle"))
+            if (
+                recovery_phase
+                not in {
+                    "idle",
+                    "confirming_current",
+                    "confirming_socket_off",
+                    "power_off_dwell",
+                    "confirming_socket_on",
+                    "post_power_settle",
+                    "awaiting_actuator",
+                    "confirming_charging",
+                    "recovered",
+                    "fault",
+                }
+                or (
+                    recovery_started is not None
+                    and (recovery_started.tzinfo is None or recovery_started > now)
+                )
+                or (
+                    recovery_current is not None
+                    and (not isfinite(recovery_current) or recovery_current < 0)
+                )
+            ):
+                raise ValueError
+            self.smart_recovery = SmartSocketRecoveryState(
+                attempted=bool(smart_recovery.get("attempted", False)),
+                phase=recovery_phase,
+                phase_started_at=recovery_started,
+                recovery_current_a=recovery_current,
+            )
         except (KeyError, TypeError, ValueError):
             self.reconciliation = DirectEvseReconciliationState()
             self.pre_free_session = PreFreeSessionState()
             self.outside_control_active = False
+            self.smart_recovery = SmartSocketRecoveryState()
 
     async def _async_save(self, now: datetime | None = None) -> None:
         state = self.reconciliation
@@ -1142,6 +1627,16 @@ class ActiveEvController:
                     ),
                 },
                 "outside_control_active": self.outside_control_active,
+                "smart_recovery": {
+                    "attempted": self.smart_recovery.attempted,
+                    "phase": self.smart_recovery.phase,
+                    "phase_started_at": (
+                        self.smart_recovery.phase_started_at.isoformat()
+                        if self.smart_recovery.phase_started_at is not None
+                        else None
+                    ),
+                    "recovery_current_a": self.smart_recovery.recovery_current_a,
+                },
             }
         )
         self.last_saved_at = now or dt_util.now()

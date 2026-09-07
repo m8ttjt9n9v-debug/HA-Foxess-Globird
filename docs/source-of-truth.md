@@ -42,14 +42,15 @@ layers around the proven algorithm, not replacement algorithms.
   and signed battery flow. Pre-free backfill consumes no more than the local
   protected export plan and the vehicle's wall-energy room, starts as late as
   possible, and persists only its active phase and frozen start.
-- The smart-socket command policy is characterized but not connected to active
+- The smart-socket command policy is connected to the independently gated EV
   runtime. It preserves the source ordering: bound/stage current before
   power, accept service-valid staged feedback, settle the configured interval,
   then bound current again and start charging. It cannot write an outlet yet.
 - Smart-socket configuration and adapter commands require an explicitly mapped
-  outlet and configured physical ceiling. The recovery sequence is represented
-  by a pure restart-serializable state machine, including the one-attempt fault
-  latch, but neither normal socket control nor recovery is connected to runtime.
+  outlet and configured physical ceiling. Recovery is a restart-serializable
+  state machine with a pre-action latch, current and outlet confirmation,
+  configurable dwell/timeout periods, delayed permission rechecks, one physical
+  cycle per fault episode, visible status, and sustained-health/path rearming.
 - Protected-house demand learning integrates the explicitly mapped source
   outside the free window, persists an in-progress cycle across ordinary
   restarts, rejects an over-gap cycle, and derives a conservative P80 model
@@ -77,8 +78,8 @@ and charge-state evidence, two charging supplies, configurable current ceilings,
 priority, guaranteed free-window current, a free-window SoC target, matched
 three-minute grid/current feedback, a settling phase, restart-safe latches,
 solar-spill charging, latest-start pre-free backfill, learned driving demand and
-charge targets, and smart-socket recovery. Solar spill and pre-free backfill
-are now retained ports; smart-socket runtime and learned driving targets remain.
+charge targets, and smart-socket recovery. Solar spill, pre-free backfill, and
+smart-socket runtime are now retained ports; learned driving targets remain.
 
 The source file contains a P85 daily-driving model that contributes to its
 general charge limit outside the free window. It is not part of the active

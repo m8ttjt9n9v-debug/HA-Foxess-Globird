@@ -402,7 +402,8 @@ def _recover(state, observation, now):
         current_tolerance_a=1,
         idle_current_threshold_a=0.5,
         no_power_confirm_seconds=120,
-        command_confirm_seconds=60,
+        current_confirm_seconds=60,
+        socket_confirm_seconds=15,
         power_off_seconds=30,
         post_power_settle_seconds=20,
         charging_confirm_seconds=180,
@@ -478,6 +479,39 @@ def test_smart_socket_recovery_latch_survives_failure_and_blocks_second_cycle():
     assert repeated.state == transition.state
     assert repeated.plan.commands == ()
     assert repeated.plan.reason == "recovery_episode_latched"
+
+
+def test_smart_socket_recovery_waits_for_post_power_actuator_like_pilot():
+    now = datetime(2026, 9, 7, 8, tzinfo=UTC)
+    post_power = SmartSocketRecoveryState(
+        attempted=True,
+        phase="post_power_settle",
+        phase_started_at=now - timedelta(seconds=20),
+        recovery_current_a=10,
+    )
+
+    waiting = _recover(
+        post_power,
+        replace(RECOVERY, actuator_writable=False, charge_switch_on=None),
+        now,
+    )
+    assert waiting.state.phase == "awaiting_actuator"
+    assert waiting.plan.reason == "recovery_awaiting_actuator"
+
+    still_waiting = _recover(
+        waiting.state,
+        replace(RECOVERY, actuator_writable=False, charge_switch_on=None),
+        now + timedelta(seconds=59),
+    )
+    assert still_waiting.state.phase == "awaiting_actuator"
+
+    writable = _recover(
+        waiting.state,
+        replace(RECOVERY, requested_current_a=10),
+        now + timedelta(seconds=30),
+    )
+    assert writable.state.phase == "confirming_charging"
+    assert writable.plan.commands == (EvCommand("start_charging"),)
 
 
 def test_smart_socket_recovery_rearms_only_after_sustained_health_or_path_change():

@@ -53,9 +53,18 @@ from .const import (
     CONF_EV_PHASE_COUNT,
     CONF_EV_PRE_FREE_ENABLED,
     CONF_EV_PROTECTED_BASELINE_A,
+    CONF_EV_SMART_RECOVERY_CHARGING_CONFIRM_SECONDS,
+    CONF_EV_SMART_RECOVERY_CURRENT_CONFIRM_SECONDS,
+    CONF_EV_SMART_RECOVERY_IDLE_CURRENT_A,
+    CONF_EV_SMART_RECOVERY_NO_POWER_SECONDS,
+    CONF_EV_SMART_RECOVERY_POST_POWER_SECONDS,
+    CONF_EV_SMART_RECOVERY_POWER_OFF_SECONDS,
+    CONF_EV_SMART_RECOVERY_REARM_SECONDS,
+    CONF_EV_SMART_RECOVERY_SOCKET_CONFIRM_SECONDS,
     CONF_EV_SMART_SOCKET,
     CONF_EV_SMART_SOCKET_CURRENT_LIMIT,
     CONF_EV_SMART_SOCKET_POWER_SWITCHING,
+    CONF_EV_SMART_SOCKET_RETRY_SECONDS,
     CONF_EV_SMART_SOCKET_SETTLE_SECONDS,
     CONF_EV_SOC,
     CONF_EV_SOLAR_SPILL_BATTERY_SOC,
@@ -125,8 +134,17 @@ from .const import (
     DEFAULT_EV_PHASE_COUNT,
     DEFAULT_EV_PRE_FREE_ENABLED,
     DEFAULT_EV_PROTECTED_BASELINE_A,
+    DEFAULT_EV_SMART_RECOVERY_CHARGING_CONFIRM_SECONDS,
+    DEFAULT_EV_SMART_RECOVERY_CURRENT_CONFIRM_SECONDS,
+    DEFAULT_EV_SMART_RECOVERY_IDLE_CURRENT_A,
+    DEFAULT_EV_SMART_RECOVERY_NO_POWER_SECONDS,
+    DEFAULT_EV_SMART_RECOVERY_POST_POWER_SECONDS,
+    DEFAULT_EV_SMART_RECOVERY_POWER_OFF_SECONDS,
+    DEFAULT_EV_SMART_RECOVERY_REARM_SECONDS,
+    DEFAULT_EV_SMART_RECOVERY_SOCKET_CONFIRM_SECONDS,
     DEFAULT_EV_SMART_SOCKET_CURRENT_LIMIT,
     DEFAULT_EV_SMART_SOCKET_POWER_SWITCHING,
+    DEFAULT_EV_SMART_SOCKET_RETRY_SECONDS,
     DEFAULT_EV_SMART_SOCKET_SETTLE_SECONDS,
     DEFAULT_EV_SOLAR_SPILL_BATTERY_SOC,
     DEFAULT_EV_SOLAR_SPILL_ENABLED,
@@ -383,12 +401,75 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     ),
                 ): vol.Coerce(float),
                 vol.Required(
+                    CONF_EV_SMART_SOCKET_RETRY_SECONDS,
+                    default=defaults.get(
+                        CONF_EV_SMART_SOCKET_RETRY_SECONDS,
+                        DEFAULT_EV_SMART_SOCKET_RETRY_SECONDS,
+                    ),
+                ): vol.Coerce(float),
+                vol.Required(
                     CONF_EV_SMART_SOCKET_POWER_SWITCHING,
                     default=defaults.get(
                         CONF_EV_SMART_SOCKET_POWER_SWITCHING,
                         DEFAULT_EV_SMART_SOCKET_POWER_SWITCHING,
                     ),
                 ): selector.BooleanSelector(),
+                vol.Required(
+                    CONF_EV_SMART_RECOVERY_NO_POWER_SECONDS,
+                    default=defaults.get(
+                        CONF_EV_SMART_RECOVERY_NO_POWER_SECONDS,
+                        DEFAULT_EV_SMART_RECOVERY_NO_POWER_SECONDS,
+                    ),
+                ): vol.Coerce(float),
+                vol.Required(
+                    CONF_EV_SMART_RECOVERY_CURRENT_CONFIRM_SECONDS,
+                    default=defaults.get(
+                        CONF_EV_SMART_RECOVERY_CURRENT_CONFIRM_SECONDS,
+                        DEFAULT_EV_SMART_RECOVERY_CURRENT_CONFIRM_SECONDS,
+                    ),
+                ): vol.Coerce(float),
+                vol.Required(
+                    CONF_EV_SMART_RECOVERY_SOCKET_CONFIRM_SECONDS,
+                    default=defaults.get(
+                        CONF_EV_SMART_RECOVERY_SOCKET_CONFIRM_SECONDS,
+                        DEFAULT_EV_SMART_RECOVERY_SOCKET_CONFIRM_SECONDS,
+                    ),
+                ): vol.Coerce(float),
+                vol.Required(
+                    CONF_EV_SMART_RECOVERY_POWER_OFF_SECONDS,
+                    default=defaults.get(
+                        CONF_EV_SMART_RECOVERY_POWER_OFF_SECONDS,
+                        DEFAULT_EV_SMART_RECOVERY_POWER_OFF_SECONDS,
+                    ),
+                ): vol.Coerce(float),
+                vol.Required(
+                    CONF_EV_SMART_RECOVERY_POST_POWER_SECONDS,
+                    default=defaults.get(
+                        CONF_EV_SMART_RECOVERY_POST_POWER_SECONDS,
+                        DEFAULT_EV_SMART_RECOVERY_POST_POWER_SECONDS,
+                    ),
+                ): vol.Coerce(float),
+                vol.Required(
+                    CONF_EV_SMART_RECOVERY_CHARGING_CONFIRM_SECONDS,
+                    default=defaults.get(
+                        CONF_EV_SMART_RECOVERY_CHARGING_CONFIRM_SECONDS,
+                        DEFAULT_EV_SMART_RECOVERY_CHARGING_CONFIRM_SECONDS,
+                    ),
+                ): vol.Coerce(float),
+                vol.Required(
+                    CONF_EV_SMART_RECOVERY_REARM_SECONDS,
+                    default=defaults.get(
+                        CONF_EV_SMART_RECOVERY_REARM_SECONDS,
+                        DEFAULT_EV_SMART_RECOVERY_REARM_SECONDS,
+                    ),
+                ): vol.Coerce(float),
+                vol.Required(
+                    CONF_EV_SMART_RECOVERY_IDLE_CURRENT_A,
+                    default=defaults.get(
+                        CONF_EV_SMART_RECOVERY_IDLE_CURRENT_A,
+                        DEFAULT_EV_SMART_RECOVERY_IDLE_CURRENT_A,
+                    ),
+                ): vol.Coerce(float),
                 optional_entity(CONF_EV_CHARGE_TO_FULL): selector.EntitySelector(),
                 vol.Required(
                     CONF_EV_LOCATION_MODE,
@@ -651,9 +732,45 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 CONF_EV_SMART_SOCKET_SETTLE_SECONDS,
                 DEFAULT_EV_SMART_SOCKET_SETTLE_SECONDS,
             ),
+            CONF_EV_SMART_SOCKET_RETRY_SECONDS: data.get(
+                CONF_EV_SMART_SOCKET_RETRY_SECONDS,
+                DEFAULT_EV_SMART_SOCKET_RETRY_SECONDS,
+            ),
             CONF_EV_SMART_SOCKET_POWER_SWITCHING: data.get(
                 CONF_EV_SMART_SOCKET_POWER_SWITCHING,
                 DEFAULT_EV_SMART_SOCKET_POWER_SWITCHING,
+            ),
+            CONF_EV_SMART_RECOVERY_NO_POWER_SECONDS: data.get(
+                CONF_EV_SMART_RECOVERY_NO_POWER_SECONDS,
+                DEFAULT_EV_SMART_RECOVERY_NO_POWER_SECONDS,
+            ),
+            CONF_EV_SMART_RECOVERY_CURRENT_CONFIRM_SECONDS: data.get(
+                CONF_EV_SMART_RECOVERY_CURRENT_CONFIRM_SECONDS,
+                DEFAULT_EV_SMART_RECOVERY_CURRENT_CONFIRM_SECONDS,
+            ),
+            CONF_EV_SMART_RECOVERY_SOCKET_CONFIRM_SECONDS: data.get(
+                CONF_EV_SMART_RECOVERY_SOCKET_CONFIRM_SECONDS,
+                DEFAULT_EV_SMART_RECOVERY_SOCKET_CONFIRM_SECONDS,
+            ),
+            CONF_EV_SMART_RECOVERY_POWER_OFF_SECONDS: data.get(
+                CONF_EV_SMART_RECOVERY_POWER_OFF_SECONDS,
+                DEFAULT_EV_SMART_RECOVERY_POWER_OFF_SECONDS,
+            ),
+            CONF_EV_SMART_RECOVERY_POST_POWER_SECONDS: data.get(
+                CONF_EV_SMART_RECOVERY_POST_POWER_SECONDS,
+                DEFAULT_EV_SMART_RECOVERY_POST_POWER_SECONDS,
+            ),
+            CONF_EV_SMART_RECOVERY_CHARGING_CONFIRM_SECONDS: data.get(
+                CONF_EV_SMART_RECOVERY_CHARGING_CONFIRM_SECONDS,
+                DEFAULT_EV_SMART_RECOVERY_CHARGING_CONFIRM_SECONDS,
+            ),
+            CONF_EV_SMART_RECOVERY_REARM_SECONDS: data.get(
+                CONF_EV_SMART_RECOVERY_REARM_SECONDS,
+                DEFAULT_EV_SMART_RECOVERY_REARM_SECONDS,
+            ),
+            CONF_EV_SMART_RECOVERY_IDLE_CURRENT_A: data.get(
+                CONF_EV_SMART_RECOVERY_IDLE_CURRENT_A,
+                DEFAULT_EV_SMART_RECOVERY_IDLE_CURRENT_A,
             ),
             CONF_EV_LOCATION_MODE: data.get(CONF_EV_LOCATION_MODE, DEFAULT_EV_LOCATION_MODE),
             CONF_EV_FREE_WINDOW_PRIORITY: data.get(
@@ -834,6 +951,19 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             max_current = float(data[CONF_EV_MAX_CURRENT])
             smart_socket_limit = float(data[CONF_EV_SMART_SOCKET_CURRENT_LIMIT])
             smart_socket_settle = float(data[CONF_EV_SMART_SOCKET_SETTLE_SECONDS])
+            smart_socket_retry = float(data[CONF_EV_SMART_SOCKET_RETRY_SECONDS])
+            smart_recovery_timings = (
+                float(data[CONF_EV_SMART_RECOVERY_NO_POWER_SECONDS]),
+                float(data[CONF_EV_SMART_RECOVERY_CURRENT_CONFIRM_SECONDS]),
+                float(data[CONF_EV_SMART_RECOVERY_SOCKET_CONFIRM_SECONDS]),
+                float(data[CONF_EV_SMART_RECOVERY_POWER_OFF_SECONDS]),
+                float(data[CONF_EV_SMART_RECOVERY_POST_POWER_SECONDS]),
+                float(data[CONF_EV_SMART_RECOVERY_CHARGING_CONFIRM_SECONDS]),
+                float(data[CONF_EV_SMART_RECOVERY_REARM_SECONDS]),
+            )
+            smart_recovery_idle_current = float(
+                data[CONF_EV_SMART_RECOVERY_IDLE_CURRENT_A]
+            )
             phase_count = float(data[CONF_EV_PHASE_COUNT])
             voltage = float(data[CONF_EV_VOLTAGE])
             zero_import_threshold = float(data[CONF_ZERO_IMPORT_THRESHOLD_KW])
@@ -898,6 +1028,9 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             max_current,
             smart_socket_limit,
             smart_socket_settle,
+            smart_socket_retry,
+            *smart_recovery_timings,
+            smart_recovery_idle_current,
             voltage,
             daily_charge,
             peak_rate,
@@ -941,6 +1074,9 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             or max_current < min_current
             or smart_socket_limit < 0
             or smart_socket_settle < 0
+            or smart_socket_retry <= 0
+            or any(value <= 0 for value in smart_recovery_timings)
+            or smart_recovery_idle_current < 0
             or voltage <= 0
             or phase_count < 1
             or not phase_count.is_integer()

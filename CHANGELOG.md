@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.5.0 — faithful smart-socket runtime and recovery
+
+- Connect the characterized Working Single Phase Pilot Site smart-socket path
+  to the independent EV runtime. Preserve the source order: stage a bounded
+  service-valid current, energise only the explicitly selected outlet, settle,
+  recheck permissions, re-bound current, and then start charging.
+- Retain the source zero-demand policy: do not remove outlet power inside the
+  free window; outside it, remove power only when configured switching is
+  enabled or the vehicle is no longer connected for planning.
+- Connect restart-persistent one-shot `no_power` recovery. Require sustained
+  fault and stable home/cable/charge-switch evidence, latch before physical
+  action, confirm current and each outlet transition, observe configured dwell
+  times, wait for Tessie to become writable after power returns, and recheck
+  permission before every delayed transition.
+- Rearm recovery only after configured sustained healthy charging or selection
+  of Direct / EVSE, including when connection telemetry is unavailable. A
+  failed episode remains latched, exposes its phase in sensors/diagnostics, and
+  raises one persistent notification; a confirmed recovery dismisses it.
+- Preserve the pilot's five-minute staged-current retry cadence as a configurable
+  default so the 30-second runtime does not create a new rapid retry loop.
+- Add active-runtime tests for ordered commands, Safety Lock non-mutation,
+  disconnected outlet handling, direct-path rearm, delayed actuator recovery,
+  one physical cycle per episode, and restart latch restoration.
+
 ## 0.4.0 — port-first reset and direct-EVSE parity
 
 - Restore the proven dashboard's seven operational views—Overview, Tesla,
