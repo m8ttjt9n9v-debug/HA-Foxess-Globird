@@ -35,8 +35,13 @@ layers around the proven algorithm, not replacement algorithms.
   their guards. They are not schedules.
 - Automatic FoxESS free-window charging is not implemented.
 - Direct-EVSE free-window Tessie current, charge-limit, and charge-start control
-  is implemented. It never stops or pauses direct charging outside the window,
-  and one unchanged target is bounded to three feedback-confirmed attempts.
+  is implemented. Default-off solar-spill and latest-start pre-free stages are
+  also implemented for Local Modbus ownership. All three use the same bounded
+  feedback reconciliation; no direct path issues a stop or pause command.
+- Solar spill reconstructs only measured surplus from EV power, grid export,
+  and signed battery flow. Pre-free backfill consumes no more than the local
+  protected export plan and the vehicle's wall-energy room, starts as late as
+  possible, and persists only its active phase and frozen start.
 - The smart-socket command policy is characterized but not connected to active
   runtime. It preserves the source ordering: bound/stage current before
   power, accept service-valid staged feedback, settle the configured interval,
@@ -51,8 +56,10 @@ layers around the proven algorithm, not replacement algorithms.
   from up to 28 valid samples over 35 days.
 - FoxCloud ownership blocks all HEO Modbus writes for the entire day. HEO does
   not mix cloud scheduling and local Modbus automation.
-- FoxCloud inverter ownership does not block the independent Tessie path,
-  because it does not write FoxESS. The shared Safety Lock blocks both paths.
+- FoxCloud inverter ownership does not block free-window Tessie control,
+  because that path does not write FoxESS. It does block solar-spill and
+  pre-free stages: both are explicitly Local-Modbus-only policies. The shared
+  Safety Lock blocks every write path.
 - Entity roles and physical topology are explicitly configured. HEO does not
   guess actuator mappings or infer electrical limits from transient readings.
 - A multiphase EV controller must receive explicit signed current for the
@@ -66,7 +73,8 @@ and charge-state evidence, two charging supplies, configurable current ceilings,
 priority, guaranteed free-window current, a free-window SoC target, matched
 three-minute grid/current feedback, a settling phase, restart-safe latches,
 solar-spill charging, latest-start pre-free backfill, learned driving demand and
-charge targets, and smart-socket recovery.
+charge targets, and smart-socket recovery. Solar spill and pre-free backfill
+are now retained ports; smart-socket runtime and learned driving targets remain.
 
 The source file contains a P85 daily-driving model that contributes to its
 general charge limit outside the free window. It is not part of the active

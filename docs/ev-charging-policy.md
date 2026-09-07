@@ -6,9 +6,9 @@ deployment target.
 
 ## Scope and status
 
-The free-window planning, direct-EVSE command, matched sampling, bounded
-runtime reconciliation, and pure smart-socket command layers are ported and
-characterized. The independent
+The free-window planning, solar-spill and latest-start pre-free planning,
+direct-EVSE command, matched sampling, bounded runtime reconciliation, and pure
+smart-socket command layers are ported and characterized. The independent
 EV intent, commissioning flag, Safety Lock, and complete explicit mapping set
 are separate gates. The integration remains non-writing by default and has not
 been commissioned on a live site.
@@ -109,9 +109,10 @@ phase count, connector rating, efficiency, time, or entity ID.
   cable must report `on`, and an unavailable or explicitly disconnected
   charging state blocks all writes. Manual Home is available as a deliberate
   location override but does not bypass cable or charge-state evidence.
-- Direct actuation exists only inside the configured free window. It orders a
-  changed charge limit, then current, then charge start. It never issues a
-  direct-path stop or pause outside the window.
+- Direct actuation orders a changed charge limit, then current, then charge
+  start. Outside the free window it remains inert by default; explicitly
+  enabled Local-Modbus-only solar-spill and pre-free stages use the same bounded
+  actuator and return to the protected baseline without issuing stop or pause.
 - The requested current, charge limit, and switch response are confirmed from
   mapped Tessie feedback. One unchanged target receives at most three attempts,
   no faster than 30 seconds apart. Failure latches
@@ -166,11 +167,13 @@ not connected yet, so this code cannot power-cycle an outlet.
    enabling writes.
 2. Connect the characterized smart-socket sequence and recovery state machine
    with restart storage and gate rechecks between every delayed action.
-3. Port pre-free backfill and solar spill as separate provenance-tested behaviours.
-4. Last priority: assess Tessie's native driving-demand capability, then port
+3. Last priority: assess Tessie's native driving-demand capability, then port
    the pilot site's learned target only if it is still required.
 
 The canonical YAML contains a P85 daily-driving model and uses it for the
 general charge limit outside the free window. It does not set the active
 free-window current target. This is a genuine compatibility behavior, but it is
 deliberately last priority for the H3 hands-off free-window objective.
+
+The completed outside-window stages are specified separately in
+[`ev-solar-spill-and-pre-free-policy.md`](ev-solar-spill-and-pre-free-policy.md).

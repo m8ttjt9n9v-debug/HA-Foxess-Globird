@@ -371,9 +371,7 @@ class EnergySensor(CoordinatorEntity[EnergyCoordinator], SensorEntity):
             "grid_import": ledger.grid_import_kw,
             "grid_export": ledger.grid_export_kw,
             "house_load": None if snapshot is None else snapshot.house_load_kw,
-            "solar_power": self.coordinator._power(
-                self.coordinator.config.get(CONF_SOLAR_POWER)
-            ),
+            "solar_power": self.coordinator._power(self.coordinator.config.get(CONF_SOLAR_POWER)),
             "ev_soc": None if snapshot is None else snapshot.ev_soc,
             "ev_max_power": ledger.ev_max_power_kw,
             "ev_control_status": (
@@ -421,9 +419,7 @@ class EnergySensor(CoordinatorEntity[EnergyCoordinator], SensorEntity):
                 else round(sum(self.coordinator.zerohero_import.hourly_import_kwh.values()), 3)
             ),
             "tariff_status": ledger.tariff_reason,
-            "zerohero_export_window": round(
-                self.coordinator.zerohero_export.imported_kwh, 3
-            ),
+            "zerohero_export_window": round(self.coordinator.zerohero_export.imported_kwh, 3),
             "zerohero_sellable_energy": (
                 None
                 if self.coordinator.active_controller is None
@@ -514,13 +510,28 @@ class EnergySensor(CoordinatorEntity[EnergyCoordinator], SensorEntity):
                 "last_actions": controller.last_actions,
                 "writes_performed": controller.writes_performed,
                 "last_write_at": controller.last_write_at,
+                "solar_spill_phase": controller.solar_spill.phase,
+                "solar_spill_current_a": controller.solar_spill.current_a,
+                "solar_spill_reconstructed_kw": (controller.solar_spill.reconstructed_surplus_kw),
+                "pre_free_session_active": controller.pre_free_session.active,
+                "pre_free_frozen_start": controller.pre_free_session.frozen_start,
+                "pre_free_planned_energy_kwh": (
+                    controller.pre_free_plan.planned_energy_kwh
+                    if controller.pre_free_plan is not None
+                    else None
+                ),
+                "pre_free_planned_start": (
+                    controller.pre_free_plan.planned_start
+                    if controller.pre_free_plan is not None
+                    else None
+                ),
+                "pre_free_current_a": controller.pre_free_current_a,
+                "outside_control_active": controller.outside_control_active,
             }
         if self.entity_description.key != "status":
             return None
         learning = self.coordinator.learning_result
-        foxess_requested = bool(
-            self.coordinator.config.get(CONF_AUTOMATIC_CONTROL_ENABLED, False)
-        )
+        foxess_requested = bool(self.coordinator.config.get(CONF_AUTOMATIC_CONTROL_ENABLED, False))
         foxess_owner = self.coordinator.config.get(
             CONF_FOXESS_CONTROL_OWNER, DEFAULT_FOXESS_CONTROL_OWNER
         )
@@ -530,12 +541,8 @@ class EnergySensor(CoordinatorEntity[EnergyCoordinator], SensorEntity):
             else "unavailable"
         )
         foxess_enabled = foxess_gate == "ready"
-        export_enabled = bool(
-            self.coordinator.config.get(CONF_AUTOMATIC_EXPORT_ENABLED, False)
-        )
-        ev_requested = bool(
-            self.coordinator.config.get(CONF_EV_AUTOMATIC_CONTROL_ENABLED, False)
-        )
+        export_enabled = bool(self.coordinator.config.get(CONF_AUTOMATIC_EXPORT_ENABLED, False))
+        ev_requested = bool(self.coordinator.config.get(CONF_EV_AUTOMATIC_CONTROL_ENABLED, False))
         ev_controller = self.coordinator.ev_controller
         ev_gate = (
             ev_controller.gate_status

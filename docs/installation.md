@@ -46,6 +46,10 @@ map a signed amperage sensor for the most-loaded service phase, positive for
 import; HEO deliberately refuses to infer per-phase safety from aggregate
 three-phase power. Commission first with the EV intent off, verify all portable
 diagnostic values, and keep any competing Tesla current automation disabled.
+Solar-spill and latest-start pre-free control are additional default-off setup
+options. Both require Local Modbus ownership; solar spill also requires a signed
+battery-power mapping and verified charge-positive convention. Enabling either
+while FoxCloud owns the inverter is rejected during configuration.
 
 Version 0.3.2 adds a separate **Diagnostics** dashboard view and matching
 commissioning entities. The editable power and duration fields only prepare a

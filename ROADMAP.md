@@ -34,6 +34,14 @@ Status here describes behavioral parity, not merely the presence of code.
 - [x] Pure restart-serializable smart-socket `no_power` recovery state machine:
   sustained/coherent evidence, current-first sequence, confirmed outlet cycle,
   settle/restart, one-attempt latch, timeout faults, and sustained-health rearm.
+- [x] Faithful, default-off solar-spill EV charging: coherent signed grid,
+  battery-flow, and Tessie telemetry; battery-full/vehicle-room/export-window
+  gates; reconstructed live surplus; whole-step current; and protected-baseline
+  restoration.
+- [x] Faithful, default-off latest-start pre-free EV backfill: protected export
+  budget, vehicle wall-energy room, additional-power calculation, backwards
+  scheduling, restart-persistent phase/start, live current reduction, and
+  export-session exclusion.
 
 ## Removed pending a faithful port
 
@@ -50,12 +58,12 @@ Working Single Phase Pilot Site parity.
   feedback-hold policy.
 - [x] Connect the matched three-minute grid/current primitive and settling
   behavior to runtime state sampling and the direct-path planner.
-- [ ] Solar-spill EV charging after the battery is full.
-- [ ] Latest-start, reserve-aware pre-free EV backfill.
+- [x] Solar-spill EV charging after the battery is full.
+- [x] Latest-start, reserve-aware pre-free EV backfill.
 - [ ] Connect the characterized smart-socket command and recovery state machines
   to runtime only after restart storage and delayed gate rechecks are verified.
-- [x] Tesla location Auto/Home/Away overrides. Occupancy remains pending for
-  the learned demand and pre-free policies that consume it.
+- [x] Tesla location Auto/Home/Away overrides, including the presence gates
+  consumed by solar-spill and pre-free control.
 - [ ] Last priority: learned Tesla driving demand, arrival reserve, and
   charge-target policy. Confirm Tessie's native capability before porting.
 

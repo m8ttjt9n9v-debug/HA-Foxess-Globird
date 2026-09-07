@@ -36,9 +36,7 @@ async def async_get_config_entry_diagnostics(
     safety_locked = bool(entry.data.get(CONF_REHEARSAL_MODE, True))
     active_controller = getattr(coordinator, "active_controller", None)
     ev_controller = getattr(coordinator, "ev_controller", None)
-    foxess_gate = (
-        active_controller.gate_status if active_controller is not None else "unavailable"
-    )
+    foxess_gate = active_controller.gate_status if active_controller is not None else "unavailable"
     ev_gate = (
         ev_controller.gate_status
         if ev_controller is not None
@@ -52,9 +50,7 @@ async def async_get_config_entry_diagnostics(
             "foxess_automatic_control_enabled": bool(
                 entry.data.get(CONF_AUTOMATIC_CONTROL_ENABLED, False)
             ),
-            "automatic_export_enabled": bool(
-                entry.data.get(CONF_AUTOMATIC_EXPORT_ENABLED, False)
-            ),
+            "automatic_export_enabled": bool(entry.data.get(CONF_AUTOMATIC_EXPORT_ENABLED, False)),
             "ev_automatic_control_enabled": bool(
                 entry.data.get(CONF_EV_AUTOMATIC_CONTROL_ENABLED, False)
             ),
@@ -90,6 +86,31 @@ async def async_get_config_entry_diagnostics(
             ),
             "ev_reconciliation_attempts": (
                 ev_controller.reconciliation.attempts if ev_controller is not None else 0
+            ),
+            "ev_solar_spill_phase": (
+                ev_controller.solar_spill.phase if ev_controller is not None else "unavailable"
+            ),
+            "ev_solar_spill_current_a": (
+                ev_controller.solar_spill.current_a if ev_controller is not None else None
+            ),
+            "ev_pre_free_session_active": (
+                ev_controller.pre_free_session.active if ev_controller is not None else False
+            ),
+            "ev_pre_free_planned_energy_kwh": (
+                ev_controller.pre_free_plan.planned_energy_kwh
+                if ev_controller is not None and ev_controller.pre_free_plan is not None
+                else None
+            ),
+            "ev_pre_free_planned_start": (
+                ev_controller.pre_free_plan.planned_start
+                if ev_controller is not None and ev_controller.pre_free_plan is not None
+                else None
+            ),
+            "ev_pre_free_current_a": (
+                ev_controller.pre_free_current_a if ev_controller is not None else None
+            ),
+            "ev_outside_control_active": (
+                ev_controller.outside_control_active if ev_controller is not None else False
             ),
             "export_session_phase": (
                 active_controller.export_session.phase

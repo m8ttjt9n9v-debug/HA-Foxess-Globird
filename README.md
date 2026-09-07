@@ -53,6 +53,11 @@ generic Lovelace view for manual import.
   configured whole-site allowance as an outer ceiling. An unchanged target is
   limited to three feedback-confirmed command attempts. See the
   [EV charging policy](docs/ev-charging-policy.md).
+- Default-off Local-Modbus-only solar-spill and latest-start pre-free Tessie
+  stages. Solar spill follows measured surplus after the battery threshold;
+  pre-free backfill spends only protected post-export energy that the vehicle
+  can accept before the next free window. See the
+  [outside-window policy](docs/ev-solar-spill-and-pre-free-policy.md).
 - Preview-first, explicitly submitted FoxESS force-charge and force-discharge
   diagnostics. Tests require Local Modbus ownership, the FoxESS gate, complete
   actuator mapping, Safety Lock off, and confirmation. They are time-bounded
@@ -64,14 +69,15 @@ writes. Turning it OFF does not enable automation. Automatic export additionally
 requires Local Modbus ownership, the FoxESS automatic gate, and
 `switch.home_energy_automatic_export`.
 Direct-EVSE control instead requires `switch.home_energy_automatic_ev_control`,
-explicit EV commissioning, and complete mappings. It writes no FoxESS entity,
-so FoxCloud may remain the inverter owner; Safety Lock still blocks both paths.
+explicit EV commissioning, and complete mappings. Free-window EV control may
+run with FoxCloud as inverter owner because it writes no FoxESS entity. Solar
+spill and pre-free backfill require Local Modbus ownership and remain separately
+default-off. Safety Lock blocks every hardware write.
 
 ## Not currently implemented
 
 - Automatic FoxESS free-window charging or post-charge reconciliation.
-- Tessie smart-socket recovery, learned driving targets, pre-free backfill, and
-  solar-spill charging.
+- Tessie smart-socket runtime/recovery and learned driving targets.
 - Mixed FoxCloud schedule and local Modbus control.
 
 These are intentionally absent rather than represented by simplified rewrite

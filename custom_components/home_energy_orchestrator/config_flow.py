@@ -17,8 +17,10 @@ from .const import (
     CONF_BATTERY_CAPACITY,
     CONF_BATTERY_CAPACITY_ENTITY,
     CONF_BATTERY_CHARGE_EFFICIENCY,
+    CONF_BATTERY_CHARGE_POSITIVE,
     CONF_BATTERY_FLOOR,
     CONF_BATTERY_FREE_WINDOW_TARGET,
+    CONF_BATTERY_POWER,
     CONF_BATTERY_SOC,
     CONF_BONUS_WINDOW_END,
     CONF_BONUS_WINDOW_START,
@@ -49,13 +51,18 @@ from .const import (
     CONF_EV_MAX_CURRENT,
     CONF_EV_MIN_CURRENT,
     CONF_EV_PHASE_COUNT,
+    CONF_EV_PRE_FREE_ENABLED,
     CONF_EV_PROTECTED_BASELINE_A,
     CONF_EV_SMART_SOCKET,
     CONF_EV_SMART_SOCKET_CURRENT_LIMIT,
     CONF_EV_SMART_SOCKET_POWER_SWITCHING,
     CONF_EV_SMART_SOCKET_SETTLE_SECONDS,
     CONF_EV_SOC,
+    CONF_EV_SOLAR_SPILL_BATTERY_SOC,
+    CONF_EV_SOLAR_SPILL_ENABLED,
     CONF_EV_STORED_ENERGY,
+    CONF_EV_TELEMETRY_MAX_AGE_SECONDS,
+    CONF_EV_TELEMETRY_MAX_SKEW_SECONDS,
     CONF_EV_VOLTAGE,
     CONF_EXPORT_ALLOWANCE_KWH,
     CONF_EXPORT_DISCHARGE_POWER_KW,
@@ -93,6 +100,7 @@ from .const import (
     DEFAULT_AUTOMATIC_CONTROL_ENABLED,
     DEFAULT_AUTOMATIC_EXPORT_ENABLED,
     DEFAULT_BATTERY_CHARGE_EFFICIENCY,
+    DEFAULT_BATTERY_CHARGE_POSITIVE,
     DEFAULT_BATTERY_FLOOR,
     DEFAULT_BATTERY_FREE_WINDOW_TARGET,
     DEFAULT_BONUS_WINDOW_END,
@@ -115,10 +123,15 @@ from .const import (
     DEFAULT_EV_MAX_CURRENT,
     DEFAULT_EV_MIN_CURRENT,
     DEFAULT_EV_PHASE_COUNT,
+    DEFAULT_EV_PRE_FREE_ENABLED,
     DEFAULT_EV_PROTECTED_BASELINE_A,
     DEFAULT_EV_SMART_SOCKET_CURRENT_LIMIT,
     DEFAULT_EV_SMART_SOCKET_POWER_SWITCHING,
     DEFAULT_EV_SMART_SOCKET_SETTLE_SECONDS,
+    DEFAULT_EV_SOLAR_SPILL_BATTERY_SOC,
+    DEFAULT_EV_SOLAR_SPILL_ENABLED,
+    DEFAULT_EV_TELEMETRY_MAX_AGE_SECONDS,
+    DEFAULT_EV_TELEMETRY_MAX_SKEW_SECONDS,
     DEFAULT_EV_VOLTAGE,
     DEFAULT_EXPORT_ALLOWANCE_KWH,
     DEFAULT_EXPORT_DISCHARGE_POWER_KW,
@@ -150,6 +163,7 @@ from .const import (
     EV_CHARGE_PATHS,
     EV_FREE_WINDOW_PRIORITIES,
     EV_LOCATION_MODES,
+    FOXESS_CONTROL_OWNER_MODBUS,
     FOXESS_CONTROL_OWNERS,
 )
 
@@ -204,6 +218,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     def _schema(self, defaults: dict[str, object] | None = None) -> vol.Schema:
         """Keep setup and reconfigure field definitions identical."""
         defaults = defaults or {}
+
         def optional_entity(key: str):
             """Require entity roles to be mapped explicitly by the user."""
             value = defaults.get(key)
@@ -215,6 +230,14 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     CONF_NAME, default=defaults.get(CONF_NAME, "Home Energy")
                 ): selector.TextSelector(),
                 vol.Required(CONF_BATTERY_SOC, default=defaults.get(CONF_BATTERY_SOC)): ENTITY,
+                optional_entity(CONF_BATTERY_POWER): ENTITY,
+                vol.Required(
+                    CONF_BATTERY_CHARGE_POSITIVE,
+                    default=defaults.get(
+                        CONF_BATTERY_CHARGE_POSITIVE,
+                        DEFAULT_BATTERY_CHARGE_POSITIVE,
+                    ),
+                ): selector.BooleanSelector(),
                 optional_entity(CONF_BATTERY_CAPACITY_ENTITY): ENTITY,
                 vol.Required(
                     CONF_BATTERY_CAPACITY, default=defaults.get(CONF_BATTERY_CAPACITY, 10.0)
@@ -258,9 +281,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 ): vol.Coerce(float),
                 vol.Required(
                     CONF_OFFPEAK_BALANCE_RATE,
-                    default=defaults.get(
-                        CONF_OFFPEAK_BALANCE_RATE, DEFAULT_OFFPEAK_BALANCE_RATE
-                    ),
+                    default=defaults.get(CONF_OFFPEAK_BALANCE_RATE, DEFAULT_OFFPEAK_BALANCE_RATE),
                 ): vol.Coerce(float),
                 vol.Required(
                     CONF_SHOULDER_RATE,
@@ -412,9 +433,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 ): vol.Coerce(float),
                 vol.Required(
                     CONF_EV_CHARGE_EFFICIENCY,
-                    default=defaults.get(
-                        CONF_EV_CHARGE_EFFICIENCY, DEFAULT_EV_CHARGE_EFFICIENCY
-                    ),
+                    default=defaults.get(CONF_EV_CHARGE_EFFICIENCY, DEFAULT_EV_CHARGE_EFFICIENCY),
                 ): vol.Coerce(float),
                 vol.Required(
                     CONF_SITE_GRID_HEADROOM_CURRENT,
@@ -453,6 +472,37 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     ),
                 ): vol.Coerce(float),
                 vol.Required(
+                    CONF_EV_SOLAR_SPILL_ENABLED,
+                    default=defaults.get(
+                        CONF_EV_SOLAR_SPILL_ENABLED, DEFAULT_EV_SOLAR_SPILL_ENABLED
+                    ),
+                ): selector.BooleanSelector(),
+                vol.Required(
+                    CONF_EV_SOLAR_SPILL_BATTERY_SOC,
+                    default=defaults.get(
+                        CONF_EV_SOLAR_SPILL_BATTERY_SOC,
+                        DEFAULT_EV_SOLAR_SPILL_BATTERY_SOC,
+                    ),
+                ): vol.Coerce(float),
+                vol.Required(
+                    CONF_EV_PRE_FREE_ENABLED,
+                    default=defaults.get(CONF_EV_PRE_FREE_ENABLED, DEFAULT_EV_PRE_FREE_ENABLED),
+                ): selector.BooleanSelector(),
+                vol.Required(
+                    CONF_EV_TELEMETRY_MAX_AGE_SECONDS,
+                    default=defaults.get(
+                        CONF_EV_TELEMETRY_MAX_AGE_SECONDS,
+                        DEFAULT_EV_TELEMETRY_MAX_AGE_SECONDS,
+                    ),
+                ): vol.Coerce(float),
+                vol.Required(
+                    CONF_EV_TELEMETRY_MAX_SKEW_SECONDS,
+                    default=defaults.get(
+                        CONF_EV_TELEMETRY_MAX_SKEW_SECONDS,
+                        DEFAULT_EV_TELEMETRY_MAX_SKEW_SECONDS,
+                    ),
+                ): vol.Coerce(float),
+                vol.Required(
                     CONF_EV_CONTROL_COMMISSIONED,
                     default=defaults.get(
                         CONF_EV_CONTROL_COMMISSIONED, DEFAULT_EV_CONTROL_COMMISSIONED
@@ -474,9 +524,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 ): selector.TimeSelector(),
                 vol.Required(
                     CONF_EXPORT_ALLOWANCE_KWH,
-                    default=defaults.get(
-                        CONF_EXPORT_ALLOWANCE_KWH, DEFAULT_EXPORT_ALLOWANCE_KWH
-                    ),
+                    default=defaults.get(CONF_EXPORT_ALLOWANCE_KWH, DEFAULT_EXPORT_ALLOWANCE_KWH),
                 ): vol.Coerce(float),
                 vol.Required(
                     CONF_EXPORT_DISCHARGE_POWER_KW,
@@ -512,9 +560,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 ): vol.Coerce(float),
                 vol.Required(
                     CONF_FOXESS_CONTROL_OWNER,
-                    default=defaults.get(
-                        CONF_FOXESS_CONTROL_OWNER, DEFAULT_FOXESS_CONTROL_OWNER
-                    ),
+                    default=defaults.get(CONF_FOXESS_CONTROL_OWNER, DEFAULT_FOXESS_CONTROL_OWNER),
                 ): selector.SelectSelector(
                     selector.SelectSelectorConfig(options=list(FOXESS_CONTROL_OWNERS))
                 ),
@@ -562,6 +608,9 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return {
             **cleaned,
             CONF_FREE_CHARGE_START: data.get(CONF_FREE_CHARGE_START, DEFAULT_FREE_CHARGE_START),
+            CONF_BATTERY_CHARGE_POSITIVE: data.get(
+                CONF_BATTERY_CHARGE_POSITIVE, DEFAULT_BATTERY_CHARGE_POSITIVE
+            ),
             CONF_FREE_CHARGE_END: data.get(CONF_FREE_CHARGE_END, DEFAULT_FREE_CHARGE_END),
             CONF_SITE_PHASE_COUNT: data.get(CONF_SITE_PHASE_COUNT, DEFAULT_SITE_PHASE_COUNT),
             CONF_DAILY_FREE_ALLOWANCE_KWH: data.get(
@@ -577,9 +626,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             ),
             CONF_SHOULDER_RATE: data.get(CONF_SHOULDER_RATE, DEFAULT_SHOULDER_RATE),
             CONF_EXPORT_RATE: data.get(CONF_EXPORT_RATE, DEFAULT_EXPORT_RATE),
-            CONF_SUPER_EXPORT_RATE: data.get(
-                CONF_SUPER_EXPORT_RATE, DEFAULT_SUPER_EXPORT_RATE
-            ),
+            CONF_SUPER_EXPORT_RATE: data.get(CONF_SUPER_EXPORT_RATE, DEFAULT_SUPER_EXPORT_RATE),
             CONF_SERVICE_IMPORT_LIMIT_A: data.get(
                 CONF_SERVICE_IMPORT_LIMIT_A, DEFAULT_SERVICE_IMPORT_LIMIT_A
             ),
@@ -608,9 +655,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 CONF_EV_SMART_SOCKET_POWER_SWITCHING,
                 DEFAULT_EV_SMART_SOCKET_POWER_SWITCHING,
             ),
-            CONF_EV_LOCATION_MODE: data.get(
-                CONF_EV_LOCATION_MODE, DEFAULT_EV_LOCATION_MODE
-            ),
+            CONF_EV_LOCATION_MODE: data.get(CONF_EV_LOCATION_MODE, DEFAULT_EV_LOCATION_MODE),
             CONF_EV_FREE_WINDOW_PRIORITY: data.get(
                 CONF_EV_FREE_WINDOW_PRIORITY, DEFAULT_EV_FREE_WINDOW_PRIORITY
             ),
@@ -647,12 +692,28 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             CONF_EV_ALLOWANCE_SAFETY_MARGIN: data.get(
                 CONF_EV_ALLOWANCE_SAFETY_MARGIN, DEFAULT_EV_ALLOWANCE_SAFETY_MARGIN
             ),
+            CONF_EV_SOLAR_SPILL_ENABLED: data.get(
+                CONF_EV_SOLAR_SPILL_ENABLED, DEFAULT_EV_SOLAR_SPILL_ENABLED
+            ),
+            CONF_EV_SOLAR_SPILL_BATTERY_SOC: data.get(
+                CONF_EV_SOLAR_SPILL_BATTERY_SOC,
+                DEFAULT_EV_SOLAR_SPILL_BATTERY_SOC,
+            ),
+            CONF_EV_PRE_FREE_ENABLED: data.get(
+                CONF_EV_PRE_FREE_ENABLED, DEFAULT_EV_PRE_FREE_ENABLED
+            ),
+            CONF_EV_TELEMETRY_MAX_AGE_SECONDS: data.get(
+                CONF_EV_TELEMETRY_MAX_AGE_SECONDS,
+                DEFAULT_EV_TELEMETRY_MAX_AGE_SECONDS,
+            ),
+            CONF_EV_TELEMETRY_MAX_SKEW_SECONDS: data.get(
+                CONF_EV_TELEMETRY_MAX_SKEW_SECONDS,
+                DEFAULT_EV_TELEMETRY_MAX_SKEW_SECONDS,
+            ),
             CONF_EV_CONTROL_COMMISSIONED: data.get(
                 CONF_EV_CONTROL_COMMISSIONED, DEFAULT_EV_CONTROL_COMMISSIONED
             ),
-            CONF_BONUS_WINDOW_START: data.get(
-                CONF_BONUS_WINDOW_START, DEFAULT_BONUS_WINDOW_START
-            ),
+            CONF_BONUS_WINDOW_START: data.get(CONF_BONUS_WINDOW_START, DEFAULT_BONUS_WINDOW_START),
             CONF_BONUS_WINDOW_END: data.get(CONF_BONUS_WINDOW_END, DEFAULT_BONUS_WINDOW_END),
             CONF_FORCE_DISCHARGE_FINISH: data.get(
                 CONF_FORCE_DISCHARGE_FINISH, DEFAULT_FORCE_DISCHARGE_FINISH
@@ -702,6 +763,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         for key in (
             CONF_BATTERY_SOC,
             CONF_BATTERY_CAPACITY_ENTITY,
+            CONF_BATTERY_POWER,
             CONF_DAILY_IMPORT_ENTITY,
             CONF_GRID_POWER,
             CONF_HOUSE_LOAD,
@@ -745,6 +807,13 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
         if data.get(CONF_EV_CONTROL_COMMISSIONED) and not all(ev_mapping):
             return {"base": "incomplete_ev_mapping"}
+        if data.get(CONF_EV_SOLAR_SPILL_ENABLED) and not data.get(CONF_BATTERY_POWER):
+            return {"base": "solar_spill_battery_power_mapping_required"}
+        if (
+            data.get(CONF_EV_SOLAR_SPILL_ENABLED)
+            or data.get(CONF_EV_PRE_FREE_ENABLED)
+        ) and data.get(CONF_FOXESS_CONTROL_OWNER) != FOXESS_CONTROL_OWNER_MODBUS:
+            return {"base": "outside_ev_policy_requires_local_modbus"}
         if data.get(CONF_EV_LOCATION_MODE) not in EV_LOCATION_MODES:
             return {CONF_EV_LOCATION_MODE: "invalid_ev_location_mode"}
         if data.get(CONF_EV_FREE_WINDOW_PRIORITY) not in EV_FREE_WINDOW_PRIORITIES:
@@ -789,6 +858,9 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             battery_target = float(data[CONF_BATTERY_FREE_WINDOW_TARGET])
             battery_efficiency = float(data[CONF_BATTERY_CHARGE_EFFICIENCY])
             allowance_margin = float(data[CONF_EV_ALLOWANCE_SAFETY_MARGIN])
+            solar_spill_soc = float(data[CONF_EV_SOLAR_SPILL_BATTERY_SOC])
+            telemetry_max_age = float(data[CONF_EV_TELEMETRY_MAX_AGE_SECONDS])
+            telemetry_max_skew = float(data[CONF_EV_TELEMETRY_MAX_SKEW_SECONDS])
             fallback = float(data[CONF_HOUSE_LEARNING_FALLBACK])
         except (KeyError, TypeError, ValueError):
             return {"base": "invalid_site_limits"}
@@ -847,6 +919,9 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             battery_target,
             battery_efficiency,
             allowance_margin,
+            solar_spill_soc,
+            telemetry_max_age,
+            telemetry_max_skew,
         )
         if (
             not all(math.isfinite(value) for value in values)
@@ -886,10 +961,10 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             or not 0 <= battery_target <= 100
             or not 0 < battery_efficiency <= 100
             or allowance_margin < 0
-            or (
-                bool(data.get(CONF_EV_CONTROL_COMMISSIONED))
-                and service_import_limit <= 0
-            )
+            or not 0 <= solar_spill_soc <= 100
+            or telemetry_max_age <= 0
+            or telemetry_max_skew < 0
+            or (bool(data.get(CONF_EV_CONTROL_COMMISSIONED)) and service_import_limit <= 0)
         ):
             return {"base": "invalid_site_limits"}
         if (

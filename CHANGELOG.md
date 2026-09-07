@@ -2,6 +2,27 @@
 
 ## Unreleased
 
+- Port the Working Single Phase Pilot Site solar-spill EV controller behind a
+  separate default-off option. It reconstructs current surplus from coherent
+  signed grid, battery-flow, and Tessie telemetry, suppresses charging during
+  boosted export, floors to the Tessie current step, and restores the protected
+  direct baseline when spill disappears.
+- Port the restart-safe latest-start pre-free EV backfill. It caps energy by the
+  protected ZEROHERO export plan and vehicle room, schedules backwards from the
+  configured free boundary, freezes the active start, recalculates live safe
+  current directly, and cannot overlap an active export session.
+- Require Local Modbus ownership for both outside-window stages, while retaining
+  independent Tessie-only writes and the shared Safety Lock. Battery power,
+  sign, SoC threshold, and telemetry age/skew are explicitly commissioned;
+  phase count extends only the source power/current conversion.
+- Persist pre-free phase and outside-policy cleanup ownership so Home Assistant
+  restarts or vehicle reconnects cannot strand Tessie at a prior high current.
+- Restore the pilot rule that the commissioned connector rating—not Tessie's
+  transient writable maximum—is the planning ceiling. The live maximum bounds
+  only an immediate service call and a later range refresh catches up directly.
+- Expose solar-spill and pre-free decisions through the EV status sensor and
+  redacted diagnostics. The complete suite now includes reference single-phase,
+  configurable three-phase, ownership, telemetry, restart, and runtime tests.
 - Let a commissioned direct-EVSE path calculate read-only targets while Safety
   Lock is on. Rehearsal exposes ordered `would_*` actions but performs no retry
   transition and cannot pass the adapter's independent `ready` write guard.

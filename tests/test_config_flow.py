@@ -158,6 +158,39 @@ async def test_ev_commissioning_accepts_complete_explicit_mapping(hass):
     assert {key: result["data"][key] for key in mappings} == mappings
 
 
+async def test_outside_ev_policies_require_local_modbus_ownership(hass):
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": SOURCE_USER},
+        data={
+            "name": "Cloud-owned outside policy",
+            **ENTRY_DATA,
+            "ev_pre_free_backfill_enabled": True,
+        },
+    )
+
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"] == {"base": "outside_ev_policy_requires_local_modbus"}
+
+
+async def test_solar_spill_requires_signed_battery_power_mapping(hass):
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": SOURCE_USER},
+        data={
+            "name": "Incomplete solar spill",
+            **ENTRY_DATA,
+            "foxess_control_owner": "local_modbus",
+            "ev_solar_spill_enabled": True,
+        },
+    )
+
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"] == {
+        "base": "solar_spill_battery_power_mapping_required"
+    }
+
+
 async def test_smart_socket_commissioning_requires_switch_and_physical_limit(hass):
     mappings = {
         "ev_soc_entity": "sensor.car_soc",

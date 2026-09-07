@@ -14,7 +14,12 @@ from homeassistant.util import dt as dt_util
 
 from .const import (
     CONF_BATTERY_CHARGE_EFFICIENCY,
+    CONF_BATTERY_CHARGE_POSITIVE,
     CONF_BATTERY_FREE_WINDOW_TARGET,
+    CONF_BATTERY_POWER,
+    CONF_BATTERY_SOC,
+    CONF_BONUS_WINDOW_END,
+    CONF_BONUS_WINDOW_START,
     CONF_DAILY_FREE_ALLOWANCE_KWH,
     CONF_EV_ACTUAL_CURRENT,
     CONF_EV_ALLOWANCE_GUARD_ENABLED,
@@ -36,19 +41,31 @@ from .const import (
     CONF_EV_LOCATION_MODE,
     CONF_EV_MAX_CURRENT,
     CONF_EV_PHASE_COUNT,
+    CONF_EV_PRE_FREE_ENABLED,
     CONF_EV_PROTECTED_BASELINE_A,
     CONF_EV_SMART_SOCKET,
     CONF_EV_SOC,
+    CONF_EV_SOLAR_SPILL_BATTERY_SOC,
+    CONF_EV_SOLAR_SPILL_ENABLED,
     CONF_EV_STORED_ENERGY,
+    CONF_EV_TELEMETRY_MAX_AGE_SECONDS,
+    CONF_EV_TELEMETRY_MAX_SKEW_SECONDS,
     CONF_EV_VOLTAGE,
+    CONF_FORCE_DISCHARGE_FINISH,
+    CONF_FOXESS_CONTROL_OWNER,
     CONF_FREE_CHARGE_END,
     CONF_FREE_CHARGE_START,
+    CONF_GRID_IMPORT_POSITIVE,
+    CONF_GRID_POWER,
     CONF_SERVICE_IMPORT_LIMIT_A,
     CONF_SITE_GRID_CURRENT,
     CONF_SITE_GRID_HEADROOM_CURRENT,
     CONF_SITE_PHASE_COUNT,
     DEFAULT_BATTERY_CHARGE_EFFICIENCY,
+    DEFAULT_BATTERY_CHARGE_POSITIVE,
     DEFAULT_BATTERY_FREE_WINDOW_TARGET,
+    DEFAULT_BONUS_WINDOW_END,
+    DEFAULT_BONUS_WINDOW_START,
     DEFAULT_DAILY_FREE_ALLOWANCE_KWH,
     DEFAULT_EV_ALLOWANCE_GUARD_ENABLED,
     DEFAULT_EV_ALLOWANCE_SAFETY_MARGIN,
@@ -61,18 +78,26 @@ from .const import (
     DEFAULT_EV_FREE_WINDOW_SETTLE_MINUTES,
     DEFAULT_EV_LOCATION_MODE,
     DEFAULT_EV_PHASE_COUNT,
+    DEFAULT_EV_PRE_FREE_ENABLED,
     DEFAULT_EV_PROTECTED_BASELINE_A,
+    DEFAULT_EV_SOLAR_SPILL_BATTERY_SOC,
+    DEFAULT_EV_SOLAR_SPILL_ENABLED,
+    DEFAULT_EV_TELEMETRY_MAX_AGE_SECONDS,
+    DEFAULT_EV_TELEMETRY_MAX_SKEW_SECONDS,
     DEFAULT_EV_VOLTAGE,
+    DEFAULT_FORCE_DISCHARGE_FINISH,
+    DEFAULT_FOXESS_CONTROL_OWNER,
     DEFAULT_FREE_CHARGE_END,
     DEFAULT_FREE_CHARGE_START,
     DEFAULT_SERVICE_IMPORT_LIMIT_A,
     DEFAULT_SITE_GRID_HEADROOM_CURRENT,
     DEFAULT_SITE_PHASE_COUNT,
     EV_CHARGE_PATH_DIRECT,
+    FOXESS_CONTROL_OWNER_MODBUS,
 )
 from .coordinator import EnergyCoordinator
 from .ev_adapter import EvEntityMap, EvServiceAdapter, EvWriteBlocked, ev_control_gate_status
-from .normalise import current_to_a
+from .normalise import current_to_a, power_to_kw, signed_grid_power_to_import_kw
 from .planner.ev import (
     DIRECT_EVSE_MAX_ATTEMPTS,
     AllowanceCeilingInputs,
@@ -87,6 +112,19 @@ from .planner.ev import (
     plan_direct_evse_commands,
     plan_free_window_current,
     reconcile_direct_evse,
+)
+from .planner.ev_outside_window import (
+    PreFreeCurrentInputs,
+    PreFreePlan,
+    PreFreePlanInputs,
+    PreFreeSessionState,
+    SolarSpillDecision,
+    SolarSpillInputs,
+    advance_pre_free_session,
+    calculate_pre_free_plan,
+    plan_pre_free_current,
+    plan_solar_spill_current,
+    select_outside_window_current,
 )
 from .planner.timed_average import TimedAverageWindow
 
@@ -112,6 +150,12 @@ class ActiveEvController:
         self.grid_average = TimedAverageWindow(timedelta(minutes=3))
         self.ev_average = TimedAverageWindow(timedelta(minutes=3))
         self.reconciliation = DirectEvseReconciliationState()
+        self.pre_free_session = PreFreeSessionState()
+        self.pre_free_plan: PreFreePlan | None = None
+        self.solar_spill = SolarSpillDecision(0.0, 0.0, "disabled")
+        self.pre_free_current_a: float | None = None
+        self.outside_control_active = False
+        self.outside_target_active = False
         self.last_decision_at: datetime | None = None
         self._decision_fingerprint: tuple[object, ...] | None = None
         self.last_saved_at: datetime | None = None
@@ -179,30 +223,46 @@ class ActiveEvController:
                 self.last_reason = gate
                 return
             if (
-                self.coordinator.config.get(
-                    CONF_EV_CHARGE_PATH, DEFAULT_EV_CHARGE_PATH
-                )
+                self.coordinator.config.get(CONF_EV_CHARGE_PATH, DEFAULT_EV_CHARGE_PATH)
                 != EV_CHARGE_PATH_DIRECT
             ):
                 self.last_reason = "smart_socket_runtime_not_connected"
                 return
-            if (
-                self._float(CONF_SITE_PHASE_COUNT, DEFAULT_SITE_PHASE_COUNT) > 1
-                and not grid_valid
-            ):
+            if self._float(CONF_SITE_PHASE_COUNT, DEFAULT_SITE_PHASE_COUNT) > 1 and not grid_valid:
                 self.last_reason = "multiphase_current_feedback_unavailable"
                 return
             connected, connection_reason = self._connected_at_home()
             in_window, elapsed_minutes, remaining_hours = self._free_window(now)
             if not connected:
+                self.pre_free_session = PreFreeSessionState()
+                self.outside_control_active = False
+                self.outside_target_active = False
                 self.last_reason = connection_reason
-                return
-            if not in_window:
-                self.last_reason = "outside_free_window_no_direct_write"
                 return
             if observation is None:
                 self.last_reason = "ev_actuator_feedback_unavailable"
                 return
+
+            outside_enabled = bool(
+                self.coordinator.config.get(CONF_FOXESS_CONTROL_OWNER, DEFAULT_FOXESS_CONTROL_OWNER)
+                == FOXESS_CONTROL_OWNER_MODBUS
+                and (
+                    self.coordinator.config.get(
+                        CONF_EV_SOLAR_SPILL_ENABLED, DEFAULT_EV_SOLAR_SPILL_ENABLED
+                    )
+                    or self.coordinator.config.get(
+                        CONF_EV_PRE_FREE_ENABLED, DEFAULT_EV_PRE_FREE_ENABLED
+                    )
+                )
+            )
+            if not in_window and not outside_enabled and not self.outside_control_active:
+                self.last_reason = "outside_free_window_no_direct_write"
+                return
+            if not in_window and outside_enabled:
+                # An opted-in outside-window policy owns the direct current even
+                # when its discretionary target is zero. This preserves the
+                # pilot's protected baseline after reconnects and restarts.
+                self.outside_control_active = True
 
             vehicle_soc = self._entity_number(CONF_EV_SOC)
             decision_fingerprint = (
@@ -218,19 +278,27 @@ class ActiveEvController:
                 observation.limit_maximum_percent,
                 observation.limit_step_percent,
             )
-            should_decide = (
+            should_decide = not in_window or (
                 self.target_current_a is None
                 or self.last_decision_at is None
                 or now - self.last_decision_at >= timedelta(minutes=3)
                 or decision_fingerprint != self._decision_fingerprint
             )
+            if in_window and self.pre_free_session.active:
+                self.pre_free_session = PreFreeSessionState()
+                self.outside_control_active = False
+                self.outside_target_active = False
             if should_decide:
                 try:
-                    calculated = self._calculate_target(
-                        now,
-                        observation,
-                        elapsed_minutes=elapsed_minutes,
-                        remaining_hours=remaining_hours,
+                    calculated = (
+                        self._calculate_target(
+                            now,
+                            observation,
+                            elapsed_minutes=elapsed_minutes,
+                            remaining_hours=remaining_hours,
+                        )
+                        if in_window
+                        else self._calculate_outside_target(now, observation)
                     )
                 except ValueError:
                     self.last_reason = "ev_planning_inputs_invalid"
@@ -272,6 +340,15 @@ class ActiveEvController:
             self.last_reason = transition.plan.reason
             await self._async_save(now)
             if not transition.plan.commands:
+                if (
+                    not in_window
+                    and not outside_enabled
+                    and self.outside_control_active
+                    and not self.outside_target_active
+                    and transition.state.phase == "confirmed"
+                ):
+                    self.outside_control_active = False
+                    await self._async_save(now)
                 return
             try:
                 self.last_actions = await self._adapter.async_execute(transition.plan)  # type: ignore[union-attr]
@@ -316,10 +393,10 @@ class ActiveEvController:
         if current_minimum is None or current_step is None:
             self.last_reason = "ev_actuator_metadata_unavailable"
             return False
-        ceiling = min(
-            self._float(CONF_EV_MAX_CURRENT, 0.0),
-            observation.current_maximum_a or 0.0,
-        )
+        # The commissioned connector rating is the planning ceiling. Tessie's
+        # transient number maximum is only a transport bound in the command
+        # planner, matching the pilot's v1.4.19+ anti-ramp behavior.
+        ceiling = self._float(CONF_EV_MAX_CURRENT, 0.0)
         if ceiling <= 0:
             self.last_reason = "ev_physical_ceiling_uncommissioned"
             return False
@@ -523,6 +600,296 @@ class ActiveEvController:
         except ValueError:
             return None
 
+    def _calculate_outside_target(self, now: datetime, observation: DirectEvseObservation) -> bool:
+        """Port solar spill and latest-start backfill without touching FoxESS."""
+        snapshot = self.coordinator.snapshot
+        if snapshot is None or snapshot.battery_soc is None:
+            self.last_reason = "site_snapshot_unavailable"
+            return False
+        current_minimum = observation.current_minimum_a
+        current_step = observation.current_step_a
+        if current_minimum is None or current_step is None:
+            self.last_reason = "ev_actuator_metadata_unavailable"
+            return False
+        ceiling = self._float(CONF_EV_MAX_CURRENT, 0.0)
+        if ceiling <= 0:
+            self.last_reason = "ev_physical_ceiling_uncommissioned"
+            return False
+        baseline = min(
+            max(
+                self._float(CONF_EV_PROTECTED_BASELINE_A, DEFAULT_EV_PROTECTED_BASELINE_A),
+                current_minimum,
+                current_step,
+            ),
+            ceiling,
+        )
+        vehicle_soc = self._entity_number(CONF_EV_SOC)
+        if vehicle_soc is None:
+            self.last_reason = "ev_soc_unavailable"
+            return False
+        soft_limit = self._float(
+            CONF_EV_FREE_WINDOW_CHARGE_LIMIT, DEFAULT_EV_FREE_WINDOW_CHARGE_LIMIT
+        )
+
+        self.solar_spill = SolarSpillDecision(0.0, 0.0, "disabled")
+        if self.coordinator.config.get(CONF_EV_SOLAR_SPILL_ENABLED, DEFAULT_EV_SOLAR_SPILL_ENABLED):
+            self.solar_spill = self._solar_spill_decision(
+                now,
+                snapshot.battery_soc,
+                vehicle_soc,
+                soft_limit,
+                ceiling,
+                current_minimum,
+                current_step,
+            )
+
+        self.pre_free_plan = None
+        self.pre_free_current_a = baseline
+        if self.coordinator.config.get(CONF_EV_PRE_FREE_ENABLED, DEFAULT_EV_PRE_FREE_ENABLED):
+            free_start, in_pre_free, hours_until_free = self._pre_free_window(now)
+            active_controller = getattr(self.coordinator, "active_controller", None)
+            export_plan = getattr(active_controller, "export_plan", None)
+            stored_energy = self._entity_number(CONF_EV_STORED_ENERGY)
+            if export_plan is not None and stored_energy is not None:
+                vehicle_room = estimate_vehicle_energy_to_target_kwh(
+                    stored_energy_kwh=stored_energy,
+                    current_soc_percent=vehicle_soc,
+                    target_soc_percent=soft_limit,
+                    charge_efficiency_percent=self._float(
+                        CONF_EV_CHARGE_EFFICIENCY, DEFAULT_EV_CHARGE_EFFICIENCY
+                    ),
+                )
+                self.pre_free_plan = calculate_pre_free_plan(
+                    PreFreePlanInputs(
+                        discretionary_ac_kwh=(
+                            export_plan.planned_export_energy_kwh if in_pre_free else 0.0
+                        ),
+                        vehicle_wall_room_kwh=vehicle_room,
+                        baseline_a=baseline,
+                        current_ceiling_a=ceiling,
+                        voltage_v=self._float(CONF_EV_VOLTAGE, DEFAULT_EV_VOLTAGE),
+                        phase_count=int(self._float(CONF_EV_PHASE_COUNT, DEFAULT_EV_PHASE_COUNT)),
+                        free_window_start=free_start,
+                    )
+                )
+            planned_energy = (
+                self.pre_free_plan.planned_energy_kwh if self.pre_free_plan is not None else 0.0
+            )
+            planned_start = (
+                self.pre_free_plan.planned_start if self.pre_free_plan is not None else None
+            )
+            export_active = bool(
+                active_controller is not None and active_controller.export_session.phase != "idle"
+            )
+            transition = advance_pre_free_session(
+                self.pre_free_session,
+                now=now,
+                in_pre_free_window=in_pre_free,
+                connected=True,
+                export_session_active=export_active,
+                planned_energy_kwh=planned_energy,
+                vehicle_soc_percent=vehicle_soc,
+                vehicle_soft_limit_percent=soft_limit,
+                planned_start=planned_start,
+            )
+            self.pre_free_session = transition.state
+            if (
+                self.pre_free_session.active
+                and self.pre_free_session.frozen_start
+                and self.pre_free_plan is not None
+            ):
+                self.pre_free_plan = PreFreePlan(
+                    self.pre_free_plan.planned_energy_kwh,
+                    self.pre_free_plan.maximum_additional_power_kw,
+                    self.pre_free_plan.planned_duration_minutes,
+                    self.pre_free_session.frozen_start,
+                )
+            self.pre_free_current_a = plan_pre_free_current(
+                PreFreeCurrentInputs(
+                    session_active=self.pre_free_session.active,
+                    planned_energy_kwh=planned_energy,
+                    hours_until_free=hours_until_free,
+                    voltage_v=self._float(CONF_EV_VOLTAGE, DEFAULT_EV_VOLTAGE),
+                    phase_count=int(self._float(CONF_EV_PHASE_COUNT, DEFAULT_EV_PHASE_COUNT)),
+                    current_step_a=current_step,
+                    baseline_a=baseline,
+                    current_ceiling_a=ceiling,
+                    vehicle_soc_percent=vehicle_soc,
+                    vehicle_soft_limit_percent=soft_limit,
+                )
+            ).current_a
+        else:
+            self.pre_free_session = PreFreeSessionState()
+
+        selected = select_outside_window_current(
+            baseline_a=baseline,
+            current_ceiling_a=ceiling,
+            charger_minimum_a=current_minimum,
+            pre_free_active=self.pre_free_session.active,
+            pre_free_current_a=self.pre_free_current_a,
+            solar_spill_current_a=self.solar_spill.current_a,
+        )
+        self.outside_target_active = bool(
+            self.pre_free_session.active or self.solar_spill.current_a >= current_minimum
+        )
+        if self.outside_target_active:
+            self.outside_control_active = True
+        if not self.outside_target_active and not self.outside_control_active:
+            self.decision_phase = selected.phase
+            self.last_reason = "outside_window_no_active_policy"
+            return False
+        limit_min = observation.limit_minimum_percent
+        limit_max = observation.limit_maximum_percent
+        limit_step = observation.limit_step_percent
+        if limit_min is None or limit_max is None or limit_step is None:
+            self.last_reason = "ev_charge_limit_metadata_unavailable"
+            return False
+        self.target_current_a = selected.current_a
+        self.target_limit_percent = plan_charge_limit_target(
+            ChargeLimitInputs(
+                connected=True,
+                policy_limit_percent=soft_limit,
+                current_limit_percent=observation.charge_limit_percent,
+                vehicle_soc_percent=vehicle_soc,
+                protected_baseline_required=baseline > 0,
+                direct_limit_headroom_percent=self._float(
+                    CONF_EV_DIRECT_LIMIT_HEADROOM, DEFAULT_EV_DIRECT_LIMIT_HEADROOM
+                ),
+                minimum_percent=limit_min,
+                maximum_percent=limit_max,
+                step_percent=limit_step,
+            )
+        )
+        self.decision_phase = selected.phase
+        self.allowance_phase = "outside_free_window"
+        return True
+
+    def _solar_spill_decision(
+        self,
+        now: datetime,
+        battery_soc: float,
+        vehicle_soc: float,
+        soft_limit: float,
+        ceiling: float,
+        current_minimum: float,
+        current_step: float,
+    ) -> SolarSpillDecision:
+        grid = self._power_sample(CONF_GRID_POWER)
+        battery = self._power_sample(CONF_BATTERY_POWER)
+        actual_state = self.hass.states.get(
+            str(self.coordinator.config.get(CONF_EV_ACTUAL_CURRENT, ""))
+        )
+        soc_state = self.hass.states.get(str(self.coordinator.config.get(CONF_BATTERY_SOC, "")))
+        ev_current, ev_valid = self._actual_ev_current_a()
+        timestamps = [
+            state.last_updated
+            for state in (grid[1], battery[1], actual_state, soc_state)
+            if state is not None
+        ]
+        max_age = self._float(
+            CONF_EV_TELEMETRY_MAX_AGE_SECONDS,
+            DEFAULT_EV_TELEMETRY_MAX_AGE_SECONDS,
+        )
+        max_skew = self._float(
+            CONF_EV_TELEMETRY_MAX_SKEW_SECONDS,
+            DEFAULT_EV_TELEMETRY_MAX_SKEW_SECONDS,
+        )
+        coherent = (
+            grid[0] is not None
+            and battery[0] is not None
+            and ev_valid
+            and len(timestamps) == 4
+            and all(0 <= (now - timestamp).total_seconds() <= max_age for timestamp in timestamps)
+            and (max(timestamps) - min(timestamps)).total_seconds() <= max_skew
+        )
+        grid_import = (
+            signed_grid_power_to_import_kw(
+                grid[0], bool(self.coordinator.config.get(CONF_GRID_IMPORT_POSITIVE, True))
+            )
+            if grid[0] is not None
+            else 0.0
+        )
+        battery_charge = (
+            (
+                battery[0]
+                if self.coordinator.config.get(
+                    CONF_BATTERY_CHARGE_POSITIVE, DEFAULT_BATTERY_CHARGE_POSITIVE
+                )
+                else -battery[0]
+            )
+            if battery[0] is not None
+            else 0.0
+        )
+        voltage = self._float(CONF_EV_VOLTAGE, DEFAULT_EV_VOLTAGE)
+        phases = int(self._float(CONF_EV_PHASE_COUNT, DEFAULT_EV_PHASE_COUNT))
+        return plan_solar_spill_current(
+            SolarSpillInputs(
+                telemetry_valid=coherent,
+                battery_soc_percent=battery_soc,
+                battery_full_threshold_percent=self._float(
+                    CONF_EV_SOLAR_SPILL_BATTERY_SOC,
+                    DEFAULT_EV_SOLAR_SPILL_BATTERY_SOC,
+                ),
+                connected=True,
+                vehicle_soc_percent=vehicle_soc,
+                vehicle_soft_limit_percent=soft_limit,
+                in_boosted_export_window=self._boosted_window_active(now),
+                ev_power_kw=ev_current * voltage * phases / 1000,
+                grid_export_kw=max(-grid_import, 0.0),
+                battery_charge_kw=battery_charge,
+                voltage_v=voltage,
+                phase_count=phases,
+                current_step_a=current_step,
+                charger_minimum_a=current_minimum,
+                current_ceiling_a=ceiling,
+            )
+        )
+
+    def _power_sample(self, key: str):
+        entity = self.coordinator.config.get(key)
+        state = self.hass.states.get(str(entity)) if entity else None
+        if state is None or state.state in _UNKNOWN_STATES:
+            return None, state
+        try:
+            value = power_to_kw(float(state.state), state.attributes.get("unit_of_measurement"))
+        except (TypeError, ValueError):
+            return None, state
+        return (value if isfinite(value) else None), state
+
+    def _pre_free_window(self, now: datetime) -> tuple[datetime, bool, float]:
+        free_time = self.coordinator._configured_time(  # noqa: SLF001
+            CONF_FREE_CHARGE_START, DEFAULT_FREE_CHARGE_START
+        )
+        finish_time = self.coordinator._configured_time(  # noqa: SLF001
+            CONF_FORCE_DISCHARGE_FINISH, DEFAULT_FORCE_DISCHARGE_FINISH
+        )
+        free_start = datetime.combine(now.date(), free_time, tzinfo=now.tzinfo)
+        if free_start <= now:
+            free_start += timedelta(days=1)
+        finish = datetime.combine(free_start.date(), finish_time, tzinfo=now.tzinfo)
+        if finish_time >= free_time:
+            finish -= timedelta(days=1)
+        return (
+            free_start,
+            finish <= now < free_start,
+            max((free_start - now).total_seconds() / 3600, 0.0),
+        )
+
+    def _boosted_window_active(self, now: datetime) -> bool:
+        start = self.coordinator._configured_time(  # noqa: SLF001
+            CONF_BONUS_WINDOW_START, DEFAULT_BONUS_WINDOW_START
+        )
+        end = self.coordinator._configured_time(  # noqa: SLF001
+            CONF_BONUS_WINDOW_END, DEFAULT_BONUS_WINDOW_END
+        )
+        start_at = datetime.combine(now.date(), start, tzinfo=now.tzinfo)
+        end_at = datetime.combine(now.date(), end, tzinfo=now.tzinfo)
+        if end > start:
+            return start_at <= now < end_at
+        if end < start:
+            return now >= start_at or now < end_at
+        return False
+
     def _connected_at_home(self) -> tuple[bool, str]:
         mode = str(self.coordinator.config.get(CONF_EV_LOCATION_MODE, DEFAULT_EV_LOCATION_MODE))
         if mode == "away":
@@ -566,9 +933,7 @@ class ActiveEvController:
         state = self.hass.states.get(str(entity)) if entity else None
         try:
             value = (
-                current_to_a(
-                    float(state.state), state.attributes.get("unit_of_measurement")
-                )
+                current_to_a(float(state.state), state.attributes.get("unit_of_measurement"))
                 if state is not None
                 else None
             )
@@ -640,9 +1005,7 @@ class ActiveEvController:
             EvEntityMap(
                 *(str(value) for value in mapping),
                 smart_socket_entity=(
-                    str(config[CONF_EV_SMART_SOCKET])
-                    if config.get(CONF_EV_SMART_SOCKET)
-                    else None
+                    str(config[CONF_EV_SMART_SOCKET]) if config.get(CONF_EV_SMART_SOCKET) else None
                 ),
             ),
             allow_writes=True,
@@ -729,8 +1092,25 @@ class ActiveEvController:
             )
             self.target_current_a = self.reconciliation.target_current_a
             self.target_limit_percent = self.reconciliation.target_limit_percent
+            pre_free = payload.get("pre_free_session", {})
+            if not isinstance(pre_free, dict):
+                raise ValueError
+            frozen_raw = pre_free.get("frozen_start")
+            frozen_start = datetime.fromisoformat(str(frozen_raw)) if frozen_raw else None
+            pre_free_active = bool(pre_free.get("active", False))
+            if frozen_start is not None and (frozen_start.tzinfo is None or frozen_start > now):
+                raise ValueError
+            if pre_free_active != (frozen_start is not None):
+                raise ValueError
+            self.pre_free_session = PreFreeSessionState(
+                active=pre_free_active,
+                frozen_start=frozen_start,
+            )
+            self.outside_control_active = bool(payload.get("outside_control_active", False))
         except (KeyError, TypeError, ValueError):
             self.reconciliation = DirectEvseReconciliationState()
+            self.pre_free_session = PreFreeSessionState()
+            self.outside_control_active = False
 
     async def _async_save(self, now: datetime | None = None) -> None:
         state = self.reconciliation
@@ -749,6 +1129,15 @@ class ActiveEvController:
                     ),
                     "phase": state.phase,
                 },
+                "pre_free_session": {
+                    "active": self.pre_free_session.active,
+                    "frozen_start": (
+                        self.pre_free_session.frozen_start.isoformat()
+                        if self.pre_free_session.frozen_start is not None
+                        else None
+                    ),
+                },
+                "outside_control_active": self.outside_control_active,
             }
         )
         self.last_saved_at = now or dt_util.now()

@@ -18,6 +18,7 @@ from custom_components.home_energy_orchestrator.planner.learning import DemandCy
 
 ENTRY_DATA = {
     "battery_soc_entity": "sensor.test_battery_soc",
+    "battery_charge_positive": True,
     "battery_capacity_kwh": 20.0,
     "battery_floor_percent": 10.0,
     "reserve_kwh": 2.0,
@@ -57,6 +58,11 @@ ENTRY_DATA = {
     "battery_charge_efficiency_percent": 95.0,
     "ev_allowance_guard_enabled": True,
     "ev_allowance_safety_margin_kwh": 0.0,
+    "ev_solar_spill_enabled": False,
+    "ev_solar_spill_battery_soc_percent": 100.0,
+    "ev_pre_free_backfill_enabled": False,
+    "ev_telemetry_max_age_seconds": 90.0,
+    "ev_telemetry_max_skew_seconds": 30.0,
     "ev_control_commissioned": False,
     "ev_charge_path": "direct_evse",
     "ev_smart_socket_current_limit_a": 0.0,
@@ -257,9 +263,7 @@ async def test_zerohero_hourly_accumulator_is_exposed(hass):
 
 async def test_potential_capacity_is_multiplied_by_soc(hass):
     hass.states.async_set("sensor.test_battery_soc", "45", {"unit_of_measurement": "%"})
-    hass.states.async_set(
-        "sensor.test_battery_capacity", "40.32", {"unit_of_measurement": "kWh"}
-    )
+    hass.states.async_set("sensor.test_battery_capacity", "40.32", {"unit_of_measurement": "kWh"})
     hass.states.async_set("sensor.test_grid_power", "0", {"unit_of_measurement": "kW"})
     entry = MockConfigEntry(
         domain=DOMAIN,
@@ -281,9 +285,7 @@ async def test_potential_capacity_is_multiplied_by_soc(hass):
 async def test_tariff_allowance_uses_a_mapped_cumulative_meter_when_available(hass):
     hass.states.async_set("sensor.test_battery_soc", "60", {"unit_of_measurement": "%"})
     hass.states.async_set("sensor.test_grid_power", "0", {"unit_of_measurement": "kW"})
-    hass.states.async_set(
-        "sensor.test_daily_import", "47.5", {"unit_of_measurement": "kWh"}
-    )
+    hass.states.async_set("sensor.test_daily_import", "47.5", {"unit_of_measurement": "kWh"})
     entry = MockConfigEntry(
         domain=DOMAIN,
         title="Tariff Site",

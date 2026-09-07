@@ -42,10 +42,16 @@ template/helper built from phase sensors. Aggregate power is not a substitute
 because the controller must protect each phase's configured service limit.
 If that mapped multiphase current is unavailable, EV actuation is blocked.
 
-The direct path never issues a stop or pause outside the free window. The
-smart-socket policy and recovery are characterized and explicitly configurable,
-but have no connected runtime; driving-demand, pre-free, and solar-spill stages
-remain future ports.
+The direct path never issues a stop or pause. Solar-spill control additionally
+requires an explicitly mapped signed battery-power sensor, its charge-positive
+sign convention, battery SoC threshold, and coherent grid/battery/Tessie
+timestamps. Latest-start pre-free backfill additionally requires the Local
+Modbus ZEROHERO export ledger. Both outside-window stages are independently
+default-off and are rejected unless Local Modbus is selected as FoxESS owner.
+
+The smart-socket policy and recovery are characterized and explicitly
+configurable but have no connected runtime. Learned driving demand remains a
+future, last-priority port pending review of Tessie's native capabilities.
 
 The Working Single Phase Pilot Site uses Tessie entities for these roles. Portable code must map roles,
 not embed that vehicle's `jns_x` entity IDs.
