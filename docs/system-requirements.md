@@ -14,7 +14,7 @@ dashboard, commission electrical limits, or migrate personal entity mappings.
   site phase count, service import limit, export limit, tariff windows/rates,
   free-energy allowance, and ZEROHERO export settings.
 - A trustworthy mapped protected-house load sensor for learned house-energy
-  protection. At Mangerton this is the non-heater base-house power; another
+  protection. At the Working Single Phase Pilot Site this is the non-heater base-house power; another
   site may map whole-house load only when that is the intended protected demand.
 - Home Assistant history/storage plus its built-in template, statistics, and
   integration-style behavior used by the source model and HEO persistence.
@@ -42,19 +42,20 @@ template/helper built from phase sensors. Aggregate power is not a substitute
 because the controller must protect each phase's configured service limit.
 If that mapped multiphase current is unavailable, EV actuation is blocked.
 
-The direct path never issues a stop or pause outside the free window. The smart
-socket, driving-demand, pre-free, and solar-spill stages remain future ports.
+The direct path never issues a stop or pause outside the free window. The
+smart-socket policy is characterized but has no connected outlet adapter;
+driving-demand, pre-free, and solar-spill stages remain future ports.
 
-Mangerton uses Tessie entities for these roles. Portable code must map roles,
+The Working Single Phase Pilot Site uses Tessie entities for these roles. Portable code must map roles,
 not embed that vehicle's `jns_x` entity IDs.
 
 ## Optional equipment and integrations
 
-- Mangerton supports a switchable 10 A smart-socket charging path in addition
+- The Working Single Phase Pilot Site supports a switchable 10 A smart-socket charging path in addition
   to direct EVSE charging. Its current switch is provided by eWeLink, but a
   future port must depend on the explicitly mapped switch capability, not the
   vendor name.
-- Weather forecast data supports Mangerton's weather-conditioned heater-energy
+- Weather forecast data supports the Working Single Phase Pilot Site's weather-conditioned heater-energy
   model. It is optional unless that policy is ported.
 - FoxESS cloud telemetry may be used as read-only corroboration. FoxCloud Mode
   Scheduler is an alternative inverter owner, not a fallback transport to mix
@@ -78,5 +79,5 @@ freshness, units, signs, presence, connection, or ownership cannot be proven.
 
 Import `examples/dashboard.yaml` manually or build a site-specific dashboard
 from the generated entities. HACS does not install Lovelace views. Personal
-backgrounds, room devices, heaters, and unrelated Mangerton dashboard cards
+backgrounds, room devices, heaters, and unrelated pilot-site dashboard cards
 are intentionally outside the portable integration.

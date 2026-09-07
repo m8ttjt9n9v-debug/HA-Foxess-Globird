@@ -10,7 +10,9 @@ from custom_components.home_energy_orchestrator.planner.ev import (
     ChargeLimitInputs,
     DirectEvseObservation,
     DirectEvseReconciliationState,
+    EvCommand,
     FreeWindowCurrentInputs,
+    SmartSocketObservation,
     apply_daily_allowance_ceiling,
     direct_evse_response_matches,
     estimate_other_free_window_import_kwh,
@@ -18,6 +20,7 @@ from custom_components.home_energy_orchestrator.planner.ev import (
     plan_charge_limit_target,
     plan_direct_evse_commands,
     plan_free_window_current,
+    plan_smart_socket_commands,
     reconcile_direct_evse,
 )
 
@@ -62,7 +65,7 @@ BASE = FreeWindowCurrentInputs(
         ({}, 22, "house_battery_priority"),
     ],
 )
-def test_mangerton_free_window_branch_order(changes, expected, phase):
+def test_pilot_site_free_window_branch_order(changes, expected, phase):
     decision = plan_free_window_current(replace(BASE, **changes))
     assert decision.current_a == expected
     assert decision.phase == phase
@@ -77,7 +80,7 @@ def test_service_overrun_can_reduce_to_protected_baseline():
 
 
 def test_arbitrary_phase_site_does_not_change_base_current_policy():
-    """Topology belongs to the extension, not the Mangerton current branches."""
+    """Topology belongs to the extension, not the pilot-site current branches."""
     assert plan_free_window_current(replace(BASE, ceiling_a=16)).current_a == 16
 
 
@@ -130,7 +133,7 @@ def test_normal_small_session_is_not_evenly_spread_or_throttled():
     assert decision.phase == "allowance_not_constraining"
 
 
-def test_mangerton_service_envelope_cannot_reach_configured_allowance():
+def test_pilot_site_service_envelope_cannot_reach_configured_allowance():
     decision = apply_daily_allowance_ceiling(
         replace(
             ALLOWANCE,
@@ -247,6 +250,123 @@ DIRECT = DirectEvseObservation(
     limit_maximum_percent=100,
     limit_step_percent=1,
 )
+
+
+SMART = SmartSocketObservation(
+    requested_current_a=12,
+    charge_switch_on=False,
+    socket_on=False,
+    socket_on_seconds=0,
+    current_maximum_a=24,
+    current_step_a=1,
+)
+
+
+def test_smart_socket_stages_configured_physical_cap_before_power():
+    plan = plan_smart_socket_commands(
+        SMART,
+        target_current_a=14,
+        physical_minimum_a=1,
+        physical_ceiling_a=10,
+        settle_seconds=15,
+        charge_allowed=True,
+        in_free_window=True,
+        connected_for_planning=True,
+        power_switching_enabled=False,
+    )
+    assert [(command.action, command.value) for command in plan.commands] == [
+        ("set_charge_current", 10)
+    ]
+    assert plan.reason == "smart_socket_stage_current_before_power"
+
+
+def test_smart_socket_energises_only_after_staged_current_feedback():
+    plan = plan_smart_socket_commands(
+        replace(SMART, requested_current_a=10),
+        target_current_a=14,
+        physical_minimum_a=1,
+        physical_ceiling_a=10,
+        settle_seconds=15,
+        charge_allowed=True,
+        in_free_window=True,
+        connected_for_planning=True,
+        power_switching_enabled=False,
+    )
+    assert [command.action for command in plan.commands] == ["turn_on_smart_socket"]
+
+
+def test_smart_socket_waits_for_configured_settle_period():
+    plan = plan_smart_socket_commands(
+        replace(SMART, requested_current_a=10, socket_on=True, socket_on_seconds=14),
+        target_current_a=10,
+        physical_minimum_a=1,
+        physical_ceiling_a=10,
+        settle_seconds=15,
+        charge_allowed=True,
+        in_free_window=True,
+        connected_for_planning=True,
+        power_switching_enabled=False,
+    )
+    assert plan.commands == ()
+    assert plan.reason == "smart_socket_settling"
+
+
+def test_smart_socket_starts_after_settle_without_exceeding_physical_cap():
+    plan = plan_smart_socket_commands(
+        replace(SMART, requested_current_a=6, socket_on=True, socket_on_seconds=15),
+        target_current_a=14,
+        physical_minimum_a=1,
+        physical_ceiling_a=10,
+        settle_seconds=15,
+        charge_allowed=True,
+        in_free_window=True,
+        connected_for_planning=True,
+        power_switching_enabled=False,
+    )
+    assert [(command.action, command.value) for command in plan.commands] == [
+        ("set_charge_current", 10),
+        ("start_charging", None),
+    ]
+
+
+def test_smart_socket_zero_demand_power_policy_is_outside_window_only():
+    common = dict(
+        target_current_a=0,
+        physical_minimum_a=1,
+        physical_ceiling_a=10,
+        settle_seconds=15,
+        charge_allowed=False,
+        connected_for_planning=True,
+        power_switching_enabled=True,
+    )
+    powered = replace(SMART, socket_on=True, socket_on_seconds=60)
+    assert plan_smart_socket_commands(
+        powered, in_free_window=True, **common
+    ).commands == ()
+    outside = plan_smart_socket_commands(
+        powered, in_free_window=False, **common
+    )
+    assert [command.action for command in outside.commands] == [
+        "turn_off_smart_socket"
+    ]
+
+
+def test_smart_socket_rating_is_configuration_not_a_literal():
+    plan = plan_smart_socket_commands(
+        SMART,
+        target_current_a=20,
+        physical_minimum_a=2,
+        physical_ceiling_a=16,
+        settle_seconds=12,
+        charge_allowed=True,
+        in_free_window=True,
+        connected_for_planning=True,
+        power_switching_enabled=False,
+    )
+    assert plan.commands == (
+        EvCommand("set_charge_current", 16),
+        EvCommand("turn_on_smart_socket"),
+    )
 
 
 def test_direct_path_orders_limit_current_then_start():

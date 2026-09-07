@@ -11,12 +11,12 @@ Status here describes behavioral parity, not merely the presence of code.
 - [x] Explicit FoxESS ownership: Observer, Local Modbus, or FoxCloud Scheduler.
 - [x] Safety Lock, rehearsal behavior, redacted diagnostics, and bounded manual
   FoxESS tests with Self Use restoration.
-- [x] Faithful Mangerton ZEROHERO export core: protected-energy calculation,
+- [x] Faithful Working Single Phase Pilot Site ZEROHERO export core: protected-energy calculation,
   fixed-power plan, latest start, persistent session latch, allowance counter,
   retry bounds, and deliberate Self Use finish.
 - [x] Restart-persistent house-demand sampling with conservative P80 selection,
   sample retention, fallback, and over-gap rejection.
-- [x] Pure Mangerton free-window EV current planner with golden branch-order
+- [x] Pure Working Single Phase Pilot Site free-window EV current planner with golden branch-order
   tests, separate charge-policy/anti-pause limit planning, and a topology-aware
   daily-allowance ceiling that is inert for ordinary sessions that fit.
 - [x] Fail-closed direct-EVSE command boundary and Tessie service adapter.
@@ -26,12 +26,15 @@ Status here describes behavioral parity, not merely the presence of code.
   allowance projection, ordered Tessie commands, feedback confirmation,
   restart-persistent state, and a three-attempt anti-flapping latch.
 - [x] Auto/Home/Away EV location policy with cable and charge-state evidence.
+- [x] Pure smart-socket command planner preserving staged current, explicit
+  physical ceiling, outlet settling, zero-demand power policy, and ordered
+  charge start. The outlet adapter and recovery runtime remain disconnected.
 
 ## Removed pending a faithful port
 
 These behaviors existed in earlier HEO releases as simplified or newly written
 controllers. They were removed because passing tests did not demonstrate
-Mangerton parity.
+Working Single Phase Pilot Site parity.
 
 - [ ] Automatic FoxESS free-window charging and completion reconciliation.
 - [x] Active Tessie automatic current/session adapter for the direct-EVSE
@@ -42,12 +45,14 @@ Mangerton parity.
   feedback-hold policy.
 - [x] Connect the matched three-minute grid/current primitive and settling
   behavior to runtime state sampling and the direct-path planner.
-- [ ] Learned Tesla driving demand, arrival reserve, and charge-target policy.
 - [ ] Solar-spill EV charging after the battery is full.
 - [ ] Latest-start, reserve-aware pre-free EV backfill.
-- [ ] Explicit smart-socket/direct-EVSE selection and smart-socket recovery.
+- [ ] Connect explicit smart-socket/direct-EVSE selection to the commissioned
+  adapter and port the restart-persistent one-attempt `no_power` recovery.
 - [x] Tesla location Auto/Home/Away overrides. Occupancy remains pending for
   the learned demand and pre-free policies that consume it.
+- [ ] Last priority: learned Tesla driving demand, arrival reserve, and
+  charge-target policy. Confirm Tessie's native capability before porting.
 
 ## Required extensions and investigation
 
@@ -71,8 +76,8 @@ Mangerton parity.
 An item cannot be checked off until it has:
 
 1. A provenance table mapping every input, decision branch, output, and
-   persistent latch to the Mangerton source.
-2. Golden characterization tests for Mangerton behavior before extension.
+   persistent latch to the Working Single Phase Pilot Site source.
+2. Golden characterization tests for Working Single Phase Pilot Site behavior before extension.
 3. Separate tests for the reference single-phase and configurable multi-phase
    sites.
 4. No literal site limits, times, entity IDs, or tariff assumptions in logic.

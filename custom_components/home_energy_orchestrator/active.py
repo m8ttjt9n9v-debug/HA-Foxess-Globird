@@ -1,4 +1,4 @@
-"""Explicitly opt-in Mangerton ZEROHERO export controller.
+"""Explicitly opt-in Working Single Phase Pilot Site ZEROHERO export controller.
 
 The observer remains the default. This controller only starts when the config
 entry selects Local Modbus ownership, enables automatic control and export,
@@ -185,7 +185,7 @@ class ActiveFoxessController:
         mapping: tuple[object, object, object],
         now: datetime,
     ) -> bool:
-        """Run the ported Mangerton ZEROHERO session, when it owns this tick."""
+        """Run the ported pilot-site ZEROHERO session, when it owns this tick."""
         enabled = bool(
             self.coordinator.config.get(
                 CONF_AUTOMATIC_EXPORT_ENABLED, DEFAULT_AUTOMATIC_EXPORT_ENABLED
@@ -362,7 +362,7 @@ class ActiveFoxessController:
         return max((target - now).total_seconds() / 3600, 0.0)
 
     def _protected_keepalive_energy_kwh(self, hours_until_free: float) -> float | None:
-        """Port Mangerton's mandatory connected-EV keepalive reservation.
+        """Port the pilot site's mandatory connected-EV keepalive reservation.
 
         Presence and cable state are explicitly mapped. Missing evidence blocks
         a new export whenever a non-zero baseline is commissioned.

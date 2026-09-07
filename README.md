@@ -2,10 +2,10 @@
 
 A Home Assistant custom integration for a site-configured energy ledger,
 conservative demand learning, bounded FoxESS diagnostics, the verified
-Mangerton ZEROHERO export policy, and a faithful direct-EVSE free-window port.
+Working Single Phase Pilot Site ZEROHERO export policy, and a faithful direct-EVSE free-window port.
 
 Version 0.4.0 deliberately removes the automatic battery and Tessie controllers
-that were not faithful ports of the proven Mangerton system. Automatic FoxESS
+that were not faithful ports of the proven Working Single Phase Pilot Site. Automatic FoxESS
 free charging remains absent. A separately gated direct-EVSE free-window Tessie
 path has now returned through port-first characterization and bounded feedback
 reconciliation. Remaining behaviors are tracked in the [roadmap](ROADMAP.md).
@@ -40,13 +40,13 @@ generic Lovelace view for manual import.
   rejected instead of fabricating demand.
 - Explicit FoxESS ownership: Observer only, Local Modbus, or FoxCloud Mode
   Scheduler. Cloud ownership blocks every HEO Modbus write for the entire day.
-- The proven Mangerton ZEROHERO export policy behind independent default-off
+- The proven Working Single Phase Pilot Site ZEROHERO export policy behind independent default-off
   gates. It protects learned house energy and a configured mandatory connected-
   EV baseline, computes the latest fixed-power start, persists its session,
   bounds retries, observes the export cap, and deliberately restores Self Use
   at the configured finish. See the
   [export policy](docs/zerohero-export-policy.md).
-- The Mangerton direct-EVSE free-window current policy behind its own
+- The Working Single Phase Pilot Site direct-EVSE free-window current policy behind its own
   default-off intent, explicit commissioning, complete Tessie mappings, and the
   shared Safety Lock. It preserves matched three-minute service feedback,
   charge-limit/current/start ordering, the separate anti-pause limit, and the

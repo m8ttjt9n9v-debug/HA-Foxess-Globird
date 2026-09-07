@@ -1,4 +1,4 @@
-"""Tests for the ported Mangerton ZEROHERO controller."""
+"""Tests for the ported Working Single Phase Pilot Site ZEROHERO controller."""
 
 from __future__ import annotations
 
@@ -138,7 +138,7 @@ async def test_master_gate_alone_cannot_write_at_midnight(hass, monkeypatch):
     assert calls == []
 
 
-async def test_mangerton_export_starts_at_latest_start_and_latches(hass, monkeypatch):
+async def test_pilot_site_export_starts_at_latest_start_and_latches(hass, monkeypatch):
     calls = []
     hass.bus.async_listen(EVENT_CALL_SERVICE, calls.append)
 

@@ -1,10 +1,21 @@
 # Changelog
 
+## Unreleased
+
+- Characterize the Working Single Phase Pilot Site smart-socket command path:
+  configured physical rating, pre-power current staging, service-valid
+  feedback, configurable settling, post-settle rebounding, current-before-start
+  ordering, and the outside-window zero-demand power policy. The outlet adapter
+  and one-shot recovery remain deliberately disconnected.
+- Rename all current public repository references to the source installation as
+  “Working Single Phase Pilot Site”; learned driving targets are explicitly the
+  last-priority compatibility stage pending a Tessie-native capability review.
+
 ## 0.4.0 — port-first reset and durable project truth
 
 - Remove the rewritten automatic FoxESS free-charge/reconciliation controller
   and simplified Tessie current/session controller. Neither had demonstrated
-  parity with the proven Mangerton behavior.
+  parity with the proven Working Single Phase Pilot Site behavior.
 - Retain automatic ZEROHERO export as the only verified automatic write path;
   retain separately submitted, bounded FoxESS diagnostics.
 - Remove obsolete sensors, configuration fields, dashboard claims, and tests
@@ -15,11 +26,11 @@
   calculations; missing evidence fails closed instead of being auto-discovered.
 - Add a repository instruction hook, source-of-truth record, port-first guide,
   system requirements, and parity-based roadmap for future work.
-- Add a pure, branch-for-branch Mangerton free-window EV current planner and
+- Add a pure, branch-for-branch Working Single Phase Pilot Site free-window EV current planner and
   separate Tessie anti-pause charge-limit target with golden tests.
 - Add the higher-capacity-site allowance only as an outer, topology-aware
   ceiling: ordinary sessions that fit the configured whole-site kWh allowance
-  retain the Mangerton target instead of being evenly spread across the window.
+  retain the pilot-site target instead of being evenly spread across the window.
 - Restore the independent, default-off Automatic EV Control intent switch.
   Until the Tessie adapter is completed it explicitly reports blocked and no
   EV service call can be made, even if the switch is turned on.
@@ -33,7 +44,7 @@
   The plan preserves charge-limit/current/start ordering, treats the physical
   connector rating separately from Tessie's live transport maximum, requires
   writable metadata, and never invents a direct-path stop command.
-- Add explicit EV commissioning mappings and configurable Mangerton policy
+- Add explicit EV commissioning mappings and configurable pilot-site policy
   inputs for location, priority, charge target, guaranteed current, settling,
   limit headroom, efficiencies, battery target, service headroom, and allowance
   margin. Legacy enabled state cannot bypass the separate commissioning flag.
@@ -50,9 +61,9 @@
 - Expose the EV decision phase, allowance phase, target current/limit, averages,
   retry state, last actions, and write count for dashboard and diagnostics use.
 
-## 0.3.8 — Mangerton ZEROHERO selling automation
+## 0.3.8 — Working Single Phase Pilot Site ZEROHERO selling automation
 
-- Port the proven Mangerton surplus-energy ledger, calculated latest start,
+- Port the proven Working Single Phase Pilot Site surplus-energy ledger, calculated latest start,
   fixed-power session latch, deliberate 21:01 finish, and Self Use recovery.
 - Require Local Modbus ownership, the FoxESS automatic gate, an independent
   automatic-export toggle, and an unlocked Safety Lock before any export write.
@@ -82,7 +93,7 @@
 
 ## 0.3.6 — portable whole-site EV allowance control
 
-- Port the Mangerton EV-priority current controller behind the independent
+- Port the Working Single Phase Pilot Site EV-priority current controller behind the independent
   Tessie gate and bound it with a whole-site free-window energy envelope.
 - Derive an EV energy budget from remaining kWh after reserving the live
   FoxESS capacity gap and forecast house demand, then spread that budget over

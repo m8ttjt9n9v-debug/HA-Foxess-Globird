@@ -28,7 +28,7 @@ What the available evidence says:
 
 HEO does not currently automate FoxESS free-window charging. A future local
 controller could dynamically coordinate the allowance, but only after the
-Mangerton policy is faithfully ported and the H3 transition fault is traced.
+Working Single Phase Pilot Site policy is faithfully ported and the H3 transition fault is traced.
 
 If FoxCloud/Mode Scheduler owns the window, a Modbus change made by Home
 Assistant may be overwritten or may cancel the remainder of the cloud period.

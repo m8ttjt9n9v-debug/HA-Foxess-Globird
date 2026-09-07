@@ -177,7 +177,7 @@ views:
           - type: markdown
             content: >-
               The direct-EVSE free-window path is a faithful, independently
-              gated Mangerton port. It remains off until explicitly mapped,
+              gated Working Single Phase Pilot Site port. It remains off until explicitly mapped,
               commissioned, unlocked, and enabled. Add the vehicle's own
               Tessie cards here if desired; entity names vary by vehicle and
               are deliberately not hard-coded in this template.

@@ -55,7 +55,7 @@ def calculate_export_plan(
 def calculate_export_start(
     window_start: datetime, finish: datetime, planned_duration_h: float
 ) -> datetime | None:
-    """Return Mangerton's latest bounded start, or no start after the finish."""
+    """Return the pilot site's latest bounded start, or no start after the finish."""
     if window_start.tzinfo is None or finish.tzinfo is None:
         raise ValueError("export boundaries must be timezone-aware")
     if finish <= window_start:

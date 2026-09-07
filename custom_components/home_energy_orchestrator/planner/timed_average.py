@@ -18,7 +18,7 @@ class TimedSample:
 
 @dataclass(frozen=True, slots=True)
 class TimedAverageResult:
-    """Average-step value plus evidence used by the Mangerton policy."""
+    """Average-step value plus evidence used by the pilot-site policy."""
 
     value: float | None
     age_coverage_ratio: float

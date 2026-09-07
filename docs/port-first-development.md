@@ -9,7 +9,7 @@ to replace it with a simpler or more elaborate new algorithm.
 1. **Recover context.** Read `AGENTS.md`, `docs/source-of-truth.md`,
    `ROADMAP.md`, this guide, relevant policy documents, recent Git history, and
    the current diff. Never rely on conversation memory alone.
-2. **Inventory the source.** Identify the Mangerton entities, helpers,
+2. **Inventory the source.** Identify the Working Single Phase Pilot Site entities, helpers,
    automations, triggers, timing, persistent latches, failure behavior, and
    service calls involved in the requested feature.
 3. **Write a provenance table.** Map each source input, calculation, branch,
@@ -50,17 +50,16 @@ to replace it with a simpler or more elaborate new algorithm.
 
 Every control pull request or commit description must answer:
 
-- Which Mangerton source lines and observed behavior are being ported?
+- Which Working Single Phase Pilot Site source lines and observed behavior are being ported?
 - Where is the provenance table?
 - Which changes are parity work and which are site extensions?
 - What values became configuration rather than literals?
 - How are inputs timestamped and checked for coherent freshness?
 - What survives restart, and what happens after an outage exceeding the gap?
 - How is exclusive ownership enforced and independently observed?
-- Which tests cover original Mangerton behavior and each target topology?
+- Which tests cover original Working Single Phase Pilot Site behavior and each target topology?
 - What disables the feature and restores a known-safe state?
 - Which documents and roadmap boxes changed?
 
 If those answers cannot be produced, keep the feature observer-only or leave it
 on the roadmap.
-

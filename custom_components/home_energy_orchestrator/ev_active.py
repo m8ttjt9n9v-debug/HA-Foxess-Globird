@@ -1,4 +1,4 @@
-"""Commissioned direct-EVSE runtime for the ported Mangerton free-window policy."""
+"""Commissioned direct-EVSE runtime for the ported pilot-site free-window policy."""
 
 from __future__ import annotations
 

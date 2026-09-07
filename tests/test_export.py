@@ -43,7 +43,7 @@ def test_export_energy_is_bounded_by_session_window_capacity() -> None:
     assert plan.planned_duration_h == 1.25
 
 
-def test_mangerton_latest_start_is_bounded_by_window_start() -> None:
+def test_pilot_site_latest_start_is_bounded_by_window_start() -> None:
     start = datetime(2026, 9, 5, 18, 0, tzinfo=UTC)
     finish = datetime(2026, 9, 5, 21, 1, tzinfo=UTC)
     assert calculate_export_start(start, finish, 1.5) == datetime(

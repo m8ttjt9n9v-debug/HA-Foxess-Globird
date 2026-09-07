@@ -1,20 +1,21 @@
 # EV charging policy provenance
 
 This document records the canonical source and extension boundary for the EV
-controller. Mangerton is both the proven reference and a required future HACS
+controller. The Working Single Phase Pilot Site is both the proven reference and a required future HACS
 deployment target.
 
 ## Scope and status
 
-The free-window planning, direct-EVSE command, matched sampling, and bounded
-runtime reconciliation layers are ported and characterized. The independent
+The free-window planning, direct-EVSE command, matched sampling, bounded
+runtime reconciliation, and pure smart-socket command layers are ported and
+characterized. The independent
 EV intent, commissioning flag, Safety Lock, and complete explicit mapping set
 are separate gates. The integration remains non-writing by default and has not
 been commissioned on a live site.
 
 ## Canonical mapping
 
-| Portable decision | Mangerton source | Port rule |
+| Portable decision | Working Single Phase Pilot Site source | Port rule |
 |---|---|---|
 | Three-minute grid/current feedback | `grid_signed_current_avg_3m`, `tesla_actual_charging_current_avg_3m` | Preserve source-validity and grid coverage semantics. |
 | Physical current ceiling | `tesla_charge_path_maximum_current`, `tesla_effective_charge_current_ceiling` | Explicit commissioned rating is authoritative; live Tessie maximum only bounds an immediate API write. |
@@ -24,7 +25,7 @@ been commissioned on a live site.
 | Tessie limit target | `tesla_charge_limit_target` | Retain the existing limit away; when a powered baseline is required, round live SoC plus configured headroom upward. |
 | Current command | `tesla_charge_current_target`, `tesla_charge_current_command` | Free-window result is bounded by connector and entity constraints; outside-window behaviours are separate later stages. |
 | Direct-path actuation | `tesla_automatic_connector_controller_v3` | Set a changed current within the live writable range, then start charging if required; never operate a smart socket. |
-| Smart-socket actuation and recovery | `tesla_automatic_connector_controller_v3`, `tesla_10a_socket_fault_recovery_v2` | Required for Mangerton compatibility, but not part of the first direct-path commissioning stage. |
+| Smart-socket actuation and recovery | `tesla_automatic_connector_controller_v3`, `tesla_10a_socket_fault_recovery_v2` | Required for Working Single Phase Pilot Site compatibility, but not part of the first direct-path commissioning stage. |
 
 The canonical private deployment file and revision are recorded in the
 maintainer source-of-truth document. Public code contains no personal entity
@@ -69,7 +70,7 @@ configured projections for remaining non-EV import and EV energy need.
 - First calculate the physical site envelope from configured per-phase service
   current, site voltage, phase count, and remaining window duration. If even
   sustained service-limit import cannot reach the remaining allowance, the
-  allowance controller is provably unnecessary and leaves Mangerton unchanged.
+  allowance controller is provably unnecessary and leaves the pilot-site behavior unchanged.
 - If imported energy plus projected house, battery, EV, and safety margin fits
   under the configured kWh allowance, the base current passes through unchanged.
 - Only a projected overrun activates pacing. The remaining EV budget is
@@ -102,7 +103,7 @@ phase count, connector rating, efficiency, time, or entity ID.
   explicit sensor in amperes representing the signed current on the most-loaded
   service phase, positive for import. Aggregate three-phase power is not assumed
   to be balanced and cannot satisfy this safety mapping. Missing live feedback
-  from that mapping blocks multiphase actuation before the Mangerton priority
+  from that mapping blocks multiphase actuation before the pilot-site priority
   branches are evaluated.
 - Auto location requires mapped at-home evidence to report `home` or `on`. The
   cable must report `on`, and an unavailable or explicitly disconnected
@@ -122,12 +123,34 @@ phase count, connector rating, efficiency, time, or entity ID.
   actions, and write count are exposed through portable sensors, status
   attributes, and redacted diagnostics.
 - The mapped house-load source used for allowance projection must exclude EV
-  charging, matching Mangerton's `non_tesla_house_load` role.
+  charging, matching the pilot site's `non_tesla_house_load` role.
+
+## Smart-socket extraction boundary
+
+The pure planner now preserves the source controller's observable command
+decisions without embedding its 10 A installation value. The physical minimum,
+physical ceiling, and outlet settle duration are explicit inputs. When the
+outlet is off, current is bounded by both the selected physical ceiling and the
+temporarily writable Tessie maximum, with the physical ceiling used when that
+maximum disappears while unpowered. Current staging precedes outlet power. The
+source's existing wait accepts any already service-valid current no greater
+than the staged command; tests retain that exact behavior. Once powered, the
+planner waits the configured settle duration, re-bounds the latest target, and
+orders current before charge start. Zero-demand outlet removal remains limited
+to outside the free window when explicit power switching is enabled or the EV
+is no longer connected for planning.
+
+This milestone is policy-only. No smart-socket entity is mapped and no outlet
+service call is connected. The one-attempt `no_power` recovery latch, delayed
+power cycle, restart reconciliation, and healthy-state rearm remain the next
+separate port.
 
 ## Remaining implementation stages
 
 1. Commission the higher-capacity direct path in observer/rehearsal mode before
    enabling writes.
-2. Port the smart-socket sequence and one-attempt fault recovery for Mangerton.
-3. Port learned driving demand, pre-free backfill, and solar spill as separate
-   provenance-tested behaviours.
+2. Connect the characterized smart-socket sequence, then port its one-attempt
+   fault recovery as a separately persisted state machine.
+3. Port pre-free backfill and solar spill as separate provenance-tested behaviours.
+4. Last priority: assess Tessie's native driving-demand capability, then port
+   the pilot site's learned target only if it is still required.

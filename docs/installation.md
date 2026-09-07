@@ -70,7 +70,7 @@ remain disabled.
 - Confirm the grid sensor's sign convention using a known load. The setup form asks whether positive means import.
 - Record usable battery capacity, battery floor, and any reserve required for the site.
 - If you select a protected house-load sensor, set the free-charge window and
-  explicit learning fallback. At Mangerton this source excludes separately
+  explicit learning fallback. At the Working Single Phase Pilot Site this source excludes separately
   forecast heaters. The observer records non-free-window cycles locally; the
   learner itself does not control the inverter.
 

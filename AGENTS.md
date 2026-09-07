@@ -13,7 +13,7 @@ or incident evidence into this public repository.
 
 These instructions are mandatory for AI-assisted work in this repository.
 
-- The proven Mangerton configuration is the algorithmic source. Port existing
+- The proven Working Single Phase Pilot Site configuration is the algorithmic source. Port existing
   behavior first; do not invent a replacement controller because the target
   site has different electrical limits.
 - Site differences belong in a configurable extension layer after parity has

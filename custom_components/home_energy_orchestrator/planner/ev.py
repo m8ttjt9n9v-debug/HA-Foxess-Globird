@@ -1,6 +1,6 @@
 """Faithful, adapter-neutral Tesla charging policy.
 
-The base current planner is a direct port of the Mangerton three-minute
+The base current planner is a direct port of the Working Single Phase Pilot Site three-minute
 supervisory allocation.  Site-specific extensions, including the daily free
 energy ceiling, are deliberately applied after that decision so they cannot
 silently replace its branch order.
@@ -18,7 +18,7 @@ DIRECT_EVSE_RETRY_INTERVAL = timedelta(seconds=30)
 
 @dataclass(frozen=True, slots=True)
 class FreeWindowCurrentInputs:
-    """Inputs used by the canonical Mangerton free-window current policy."""
+    """Inputs used by the canonical pilot-site free-window current policy."""
 
     in_free_window: bool
     connected: bool
@@ -98,6 +98,115 @@ class DirectEvseObservation:
     limit_step_percent: float | None
 
 
+@dataclass(frozen=True, slots=True)
+class SmartSocketObservation:
+    """Live state needed by the explicitly selected switchable supply."""
+
+    requested_current_a: float | None
+    charge_switch_on: bool | None
+    socket_on: bool
+    socket_on_seconds: float
+    current_maximum_a: float | None
+    current_step_a: float | None
+
+
+def plan_smart_socket_commands(
+    observation: SmartSocketObservation,
+    *,
+    target_current_a: float,
+    physical_minimum_a: float,
+    physical_ceiling_a: float,
+    settle_seconds: float,
+    charge_allowed: bool,
+    in_free_window: bool,
+    connected_for_planning: bool,
+    power_switching_enabled: bool,
+) -> EvCommandPlan:
+    """Port the pilot site's staged smart-socket sequence one tick at a time.
+
+    The explicitly configured physical rating remains authoritative when an
+    unpowered connector reports a misleading or missing writable maximum.
+    """
+    numeric = (
+        target_current_a,
+        physical_minimum_a,
+        physical_ceiling_a,
+        settle_seconds,
+        observation.socket_on_seconds,
+    )
+    if not all(isfinite(value) for value in numeric):
+        raise ValueError("smart-socket inputs must be finite")
+    if (
+        target_current_a < 0
+        or physical_minimum_a <= 0
+        or physical_ceiling_a < physical_minimum_a
+        or settle_seconds < 0
+        or observation.socket_on_seconds < 0
+    ):
+        raise ValueError("smart-socket physical limits are invalid")
+    step = observation.current_step_a
+    if step is None or not isfinite(step) or step <= 0:
+        return EvCommandPlan((), "smart_socket_current_step_unavailable")
+    requested = observation.requested_current_a
+    if requested is not None and not isfinite(requested):
+        return EvCommandPlan((), "smart_socket_current_feedback_invalid")
+
+    command_permitted = charge_allowed and target_current_a >= physical_minimum_a
+    if not command_permitted:
+        remove_power = (
+            observation.socket_on
+            and not in_free_window
+            and (power_switching_enabled or not connected_for_planning)
+        )
+        commands = (EvCommand("turn_off_smart_socket"),) if remove_power else ()
+        return EvCommandPlan(commands, "smart_socket_no_charge_command")
+
+    writable_max = observation.current_maximum_a
+    transport_cap = (
+        writable_max
+        if writable_max is not None and isfinite(writable_max) and writable_max > 0
+        else physical_ceiling_a
+    )
+    transport_cap = min(transport_cap, physical_ceiling_a)
+    bounded = min(target_current_a, transport_cap)
+
+    if not observation.socket_on:
+        if bounded < physical_minimum_a:
+            return EvCommandPlan((), "smart_socket_staging_below_minimum")
+        commands: list[EvCommand] = []
+        if requested is None or abs(requested - bounded) >= step:
+            commands.append(EvCommand("set_charge_current", round(bounded, 3)))
+        # The source wait accepts equal or lower existing feedback after the
+        # ordered set request, provided it is service-valid and within the
+        # configured physical ceiling.
+        if requested is not None and physical_minimum_a <= requested <= bounded:
+            commands.append(EvCommand("turn_on_smart_socket"))
+            return EvCommandPlan(
+                tuple(commands), "smart_socket_staged_current_confirmed"
+            )
+        if commands:
+            return EvCommandPlan(
+                tuple(commands), "smart_socket_stage_current_before_power"
+            )
+        return EvCommandPlan((), "smart_socket_staged_current_unconfirmed")
+
+    if observation.socket_on_seconds < settle_seconds:
+        return EvCommandPlan((), "smart_socket_settling")
+    if bounded < physical_minimum_a:
+        return EvCommandPlan(
+            (EvCommand("turn_off_smart_socket"),),
+            "smart_socket_command_invalid_after_settle",
+        )
+    commands: list[EvCommand] = []
+    if requested is None or abs(requested - bounded) >= step:
+        commands.append(EvCommand("set_charge_current", round(bounded, 3)))
+    if observation.charge_switch_on is False:
+        commands.append(EvCommand("start_charging"))
+    if observation.charge_switch_on is None:
+        return EvCommandPlan((), "smart_socket_charge_switch_unavailable")
+    return EvCommandPlan(tuple(commands), "smart_socket_ready")
+
+
 def plan_direct_evse_commands(
     observation: DirectEvseObservation,
     *,
@@ -107,7 +216,7 @@ def plan_direct_evse_commands(
     start_allowed: bool,
     rehearsal: bool = False,
 ) -> EvCommandPlan:
-    """Port Mangerton's direct path without adding stop/pause behavior."""
+    """Port the pilot site's direct path without adding stop/pause behavior."""
     _validate_direct_observation(
         observation, target_current_a, target_limit_percent, physical_ceiling_a
     )
@@ -272,7 +381,7 @@ def reconcile_direct_evse(
 
 
 def plan_free_window_current(inputs: FreeWindowCurrentInputs) -> EvCurrentDecision:
-    """Port the canonical Mangerton branch order without topology assumptions."""
+    """Port the canonical pilot-site branch order without topology assumptions."""
     _validate_free_window_inputs(inputs)
     ceiling = inputs.ceiling_a
     baseline = min(inputs.protected_baseline_a, ceiling)
@@ -423,7 +532,7 @@ def estimate_vehicle_energy_to_target_kwh(
     target_soc_percent: float,
     charge_efficiency_percent: float,
 ) -> float:
-    """Port Mangerton's live-capacity model and estimate wall energy to target."""
+    """Port the pilot site's live-capacity model and estimate wall energy to target."""
     _validate_energy_projection(
         stored_energy_kwh,
         current_soc_percent,

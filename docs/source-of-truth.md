@@ -8,12 +8,12 @@ and private operational evidence belong only in the local private record.
 ## Authority order
 
 1. Direct inverter registers and measured electrical behavior.
-2. The proven Mangerton v1.4.24 implementation and observed behavior.
+2. The proven Working Single Phase Pilot Site v1.4.24 implementation and observed behavior.
 3. Home Assistant recorder and service-call evidence.
 4. HEO characterization tests and implementation.
 5. UI labels and cloud-app displays, which may be stale.
 
-The reference implementation is Mangerton v1.4.24 at source commit
+The reference implementation is Working Single Phase Pilot Site v1.4.24 at source commit
 `5806b4a5313331fbc421108e9e0c98e661ca20fe`. Public contributors may not have
 that private source snapshot, so every port must capture its behavior in a
 provenance table and golden characterization tests before implementation.
@@ -25,7 +25,7 @@ layers around the proven algorithm, not replacement algorithms.
 ## Current software truth
 
 - HEO is observer-by-default.
-- The verified Mangerton ZEROHERO export port is behind Local Modbus ownership,
+- The verified Working Single Phase Pilot Site ZEROHERO export port is behind Local Modbus ownership,
   the FoxESS automatic gate, the independent export toggle, and the Safety
   Lock.
 - A faithful direct-EVSE free-window Tessie path is present behind its own
@@ -37,6 +37,10 @@ layers around the proven algorithm, not replacement algorithms.
 - Direct-EVSE free-window Tessie current, charge-limit, and charge-start control
   is implemented. It never stops or pauses direct charging outside the window,
   and one unchanged target is bounded to three feedback-confirmed attempts.
+- The smart-socket command policy is characterized but not connected to an
+  outlet adapter. It preserves the source ordering: bound/stage current before
+  power, accept service-valid staged feedback, settle the configured interval,
+  then bound current again and start charging. It cannot write an outlet yet.
 - Protected-house demand learning integrates the explicitly mapped source
   outside the free window, persists an in-progress cycle across ordinary
   restarts, rejects an over-gap cycle, and derives a conservative P80 model
@@ -51,7 +55,7 @@ layers around the proven algorithm, not replacement algorithms.
   most-loaded service phase. Aggregate power is not treated as proof that phase
   loading is balanced.
 
-## Mangerton behaviors that remain the port target
+## Working Single Phase Pilot Site behaviors that remain the port target
 
 The reference EV policy includes explicit occupancy/location overrides, cable
 and charge-state evidence, two charging supplies, configurable current ceilings,
@@ -83,7 +87,7 @@ hypotheses. Never change a Home Assistant clock to test a time boundary.
 For every future control change, record in this file or a linked policy:
 
 - evidence and its source;
-- Mangerton source sections and preserved decisions;
+- Working Single Phase Pilot Site source sections and preserved decisions;
 - configurable site extensions, separately identified;
 - rejected alternatives and why;
 - tests proving parity, restart behavior, stale-data handling, and ownership;

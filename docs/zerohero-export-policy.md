@@ -1,15 +1,15 @@
 # ZEROHERO surplus export policy
 
 This is the durable specification for the selling automation ported from the
-successful Mangerton Home Assistant configuration. HEO does not reinterpret
+successful Working Single Phase Pilot Site Home Assistant configuration. HEO does not reinterpret
 the policy as a continuously modulated export controller.
 
 ## Provenance map
 
-The canonical source is Mangerton `configuration_v1.4.24.yaml` at commit
+The canonical source is the Working Single Phase Pilot Site `configuration_v1.4.24.yaml` at commit
 `5806b4a5313331fbc421108e9e0c98e661ca20fe`.
 
-| Mangerton source | Preserved HEO behavior |
+| Working Single Phase Pilot Site source | Preserved HEO behavior |
 | --- | --- |
 | Lines 1008–1079 | enable/latch, allowance, fixed power, efficiency, export window, and finish inputs |
 | Lines 3654–3705 | protected house-energy forecast until the next free window |
@@ -37,7 +37,7 @@ work-mode selector must advertise both `Force Discharge` and `Self Use`, and
 the mapped power entities must have valid local feedback. Cloud telemetry never
 authorizes this controller.
 
-## Mangerton-equivalent energy plan
+## Pilot-site-equivalent energy plan
 
 The calculation is:
 
