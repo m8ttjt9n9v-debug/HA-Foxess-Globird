@@ -4,6 +4,7 @@ from dataclasses import replace
 from datetime import UTC, datetime, time, timedelta
 from types import SimpleNamespace
 
+import pytest
 from homeassistant.const import EVENT_CALL_SERVICE
 from homeassistant.core import HomeAssistant
 
@@ -228,6 +229,7 @@ async def test_cloud_owner_blocks_opted_in_outside_window_stages(
     assert calls == []
 
 
+@pytest.mark.freeze_time("2026-09-07 00:01:00+00:00")
 async def test_solar_spill_runtime_ports_measured_surplus_to_tessie(
     hass: HomeAssistant,
 ) -> None:
@@ -271,6 +273,7 @@ async def test_solar_spill_runtime_ports_measured_surplus_to_tessie(
     assert {event.data["domain"] for event in calls} == {"number", "switch"}
 
 
+@pytest.mark.freeze_time("2026-09-07 00:01:00+00:00")
 async def test_opted_in_outside_policy_restores_baseline_after_reconnect(
     hass: HomeAssistant,
 ) -> None:
