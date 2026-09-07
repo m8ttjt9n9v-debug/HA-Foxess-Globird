@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.4.0 — port-first reset and direct-EVSE parity
 
 - Restore the proven dashboard's seven operational views—Overview, Tesla,
   House, Solar & Weather, Configuration, Advanced, and Manual—in the portable
@@ -49,8 +49,6 @@
   machine with coherent-evidence gates, confirmed current and outlet phases,
   configurable dwell/timeout durations, post-power rebounding, latched failure,
   and sustained-health/path-change rearm. It remains disconnected from runtime.
-
-## 0.4.0 — port-first reset and durable project truth
 
 - Remove the rewritten automatic FoxESS free-charge/reconciliation controller
   and simplified Tessie current/session controller. Neither had demonstrated
