@@ -122,6 +122,10 @@ phase count, connector rating, efficiency, time, or entity ID.
   limits, policy phase, allowance phase, feedback coverage, attempts, last
   actions, and write count are exposed through portable sensors, status
   attributes, and redacted diagnostics.
+- With Safety Lock on, a fully commissioned direct path continues through
+  sampling and planning, exposes ordered `would_*` actions, and performs no
+  reconciliation attempts or service calls. The adapter independently requires
+  a `ready` gate, so rehearsal visibility cannot authorize a write.
 - The mapped house-load source used for allowance projection must exclude EV
   charging, matching the pilot site's `non_tesla_house_load` role.
 

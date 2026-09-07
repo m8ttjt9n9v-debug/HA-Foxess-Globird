@@ -25,6 +25,8 @@ Status here describes behavioral parity, not merely the presence of code.
 - [x] Independent, default-off direct-EVSE runtime with matched sampling,
   allowance projection, ordered Tessie commands, feedback confirmation,
   restart-persistent state, and a three-attempt anti-flapping latch.
+- [x] Safety-Lock rehearsal planning with visible ordered `would_*` actions,
+  zero retry-state mutation, and an independently closed service adapter.
 - [x] Auto/Home/Away EV location policy with cable and charge-state evidence.
 - [x] Pure smart-socket command planner preserving staged current, explicit
   physical ceiling, outlet settling, zero-demand power policy, and ordered

@@ -120,6 +120,32 @@ async def test_ev_runtime_writes_tessie_but_not_foxess_when_cloud_owns_inverter(
     assert {event.data["domain"] for event in calls} == {"number", "switch"}
 
 
+async def test_safety_lock_calculates_rehearsal_plan_without_writing(
+    hass: HomeAssistant,
+) -> None:
+    _set_ev_states(hass)
+    calls = []
+    hass.bus.async_listen(EVENT_CALL_SERVICE, calls.append)
+    controller = ActiveEvController(
+        hass, _coordinator(_controller_config(rehearsal_mode=True))
+    )
+
+    await controller.async_reconcile(datetime(2026, 9, 7, 12, 1, tzinfo=UTC))
+
+    assert controller.gate_status == "safety_locked"
+    assert controller.target_current_a == 16
+    assert controller.target_limit_percent == 90
+    assert controller.last_actions == (
+        "would_set_charge_limit",
+        "would_set_charge_current",
+        "would_start_charging",
+    )
+    assert controller.last_reason == "rehearsal_direct_path_ready"
+    assert controller.reconciliation.attempts == 0
+    assert controller.writes_performed == 0
+    assert calls == []
+
+
 async def test_ev_runtime_never_stops_or_changes_direct_path_outside_free_window(
     hass: HomeAssistant,
 ) -> None:

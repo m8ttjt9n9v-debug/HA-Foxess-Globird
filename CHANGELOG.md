@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Let a commissioned direct-EVSE path calculate read-only targets while Safety
+  Lock is on. Rehearsal exposes ordered `would_*` actions but performs no retry
+  transition and cannot pass the adapter's independent `ready` write guard.
+
 - Characterize the Working Single Phase Pilot Site smart-socket command path:
   configured physical rating, pre-power current staging, service-valid
   feedback, configurable settling, post-settle rebounding, current-before-start

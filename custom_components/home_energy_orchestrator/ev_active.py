@@ -84,6 +84,7 @@ from .planner.ev import (
     estimate_other_free_window_import_kwh,
     estimate_vehicle_energy_to_target_kwh,
     plan_charge_limit_target,
+    plan_direct_evse_commands,
     plan_free_window_current,
     reconcile_direct_evse,
 )
@@ -174,7 +175,7 @@ class ActiveEvController:
                 await self._async_save(now)
 
             gate = self.gate_status
-            if gate != "ready":
+            if gate not in {"ready", "safety_locked"}:
                 self.last_reason = gate
                 return
             if (
@@ -241,6 +242,23 @@ class ActiveEvController:
 
             if self.target_current_a is None or self.target_limit_percent is None:
                 self.last_reason = "ev_target_unavailable"
+                return
+            if gate == "safety_locked":
+                rehearsal_plan = plan_direct_evse_commands(
+                    observation,
+                    target_current_a=self.target_current_a,
+                    target_limit_percent=self.target_limit_percent,
+                    physical_ceiling_a=self._float(CONF_EV_MAX_CURRENT, 0.0),
+                    start_allowed=True,
+                )
+                self.last_actions = tuple(
+                    f"would_{command.action}" for command in rehearsal_plan.commands
+                )
+                self.last_reason = (
+                    "rehearsal_feedback_confirmed"
+                    if not rehearsal_plan.commands
+                    else f"rehearsal_{rehearsal_plan.reason}"
+                )
                 return
             transition = reconcile_direct_evse(
                 self.reconciliation,
