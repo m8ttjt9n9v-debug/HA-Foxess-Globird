@@ -69,6 +69,7 @@ ENTRY_DATA = {
     "ev_telemetry_max_age_seconds": 90.0,
     "ev_telemetry_max_skew_seconds": 30.0,
     "ev_control_commissioned": False,
+    "ev_charge_to_full_enabled": False,
     "ev_charge_path": "direct_evse",
     "ev_smart_socket_current_limit_a": 0.0,
     "ev_smart_socket_settle_seconds": 15.0,
@@ -207,6 +208,61 @@ async def test_automatic_ev_switch_is_independent_but_cannot_write_yet(hass):
     assert status.attributes["ev_control_gate"] == "safety_locked"
     assert status.attributes["ev_writes_enabled"] is False
     assert [event for event in service_calls if event.data["domain"] != "switch"] == []
+
+
+async def test_charge_to_full_switch_is_created_persisted_and_safety_locked(hass):
+    hass.states.async_set("sensor.test_battery_soc", "60", {"unit_of_measurement": "%"})
+    hass.states.async_set("sensor.test_grid_power", "0", {"unit_of_measurement": "kW"})
+    entry = MockConfigEntry(domain=DOMAIN, title="Charge-to-full site", data=ENTRY_DATA)
+    entry.add_to_hass(hass)
+    service_calls = []
+    hass.bus.async_listen(EVENT_CALL_SERVICE, service_calls.append)
+
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    assert hass.states.get("switch.home_energy_ev_charge_to_full").state == "off"
+
+    await hass.services.async_call(
+        "switch",
+        "turn_on",
+        {"entity_id": "switch.home_energy_ev_charge_to_full"},
+        blocking=True,
+    )
+    assert hass.states.get("switch.home_energy_ev_charge_to_full").state == "on"
+    assert entry.data["ev_charge_to_full_enabled"] is True
+    assert entry.runtime_data.ev_controller._charge_to_full_requested() is True
+    assert [event for event in service_calls if event.data["domain"] != "switch"] == []
+
+
+async def test_legacy_charge_to_full_helper_remains_until_owned_switch_is_used(hass):
+    hass.states.async_set("sensor.test_battery_soc", "60", {"unit_of_measurement": "%"})
+    hass.states.async_set("sensor.test_grid_power", "0", {"unit_of_measurement": "kW"})
+    hass.states.async_set("input_boolean.old_charge_to_full", "on")
+    data = {
+        key: value
+        for key, value in ENTRY_DATA.items()
+        if key != "ev_charge_to_full_enabled"
+    }
+    data["ev_charge_to_full_entity"] = "input_boolean.old_charge_to_full"
+    entry = MockConfigEntry(domain=DOMAIN, title="Legacy override site", data=data)
+    entry.add_to_hass(hass)
+
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    assert "ev_charge_to_full_enabled" not in entry.data
+    assert entry.data["ev_charge_to_full_entity"] == "input_boolean.old_charge_to_full"
+    assert hass.states.get("switch.home_energy_ev_charge_to_full").state == "on"
+    assert entry.runtime_data.ev_controller._charge_to_full_requested() is True
+
+    await hass.services.async_call(
+        "switch",
+        "turn_off",
+        {"entity_id": "switch.home_energy_ev_charge_to_full"},
+        blocking=True,
+    )
+    assert entry.data["ev_charge_to_full_enabled"] is False
+    assert "ev_charge_to_full_entity" not in entry.data
+    assert entry.runtime_data.ev_controller._charge_to_full_requested() is False
 
 
 async def test_source_change_recalculates_without_a_restart(hass):

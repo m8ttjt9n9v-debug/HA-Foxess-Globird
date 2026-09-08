@@ -14,7 +14,10 @@ from . import EnergyConfigEntry
 from .const import (
     CONF_AUTOMATIC_EXPORT_ENABLED,
     CONF_EV_AUTOMATIC_CONTROL_ENABLED,
+    CONF_EV_CHARGE_TO_FULL,
+    CONF_EV_CHARGE_TO_FULL_ENABLED,
     CONF_REHEARSAL_MODE,
+    DEFAULT_EV_CHARGE_TO_FULL_ENABLED,
     DOMAIN,
 )
 from .coordinator import EnergyCoordinator
@@ -37,6 +40,12 @@ EV_DESCRIPTION = SwitchEntityDescription(
     icon="mdi:ev-station",
     entity_category=EntityCategory.CONFIG,
 )
+CHARGE_TO_FULL_DESCRIPTION = SwitchEntityDescription(
+    key="ev_charge_to_full",
+    name="EV Charge to Full",
+    icon="mdi:battery-arrow-up",
+    entity_category=EntityCategory.CONFIG,
+)
 
 
 async def async_setup_entry(
@@ -44,7 +53,12 @@ async def async_setup_entry(
 ) -> None:
     """Expose the config-backed safety lock as an unambiguous switch."""
     registry = er.async_get(hass)
-    for description in (SAFETY_DESCRIPTION, EXPORT_DESCRIPTION, EV_DESCRIPTION):
+    for description in (
+        SAFETY_DESCRIPTION,
+        EXPORT_DESCRIPTION,
+        EV_DESCRIPTION,
+        CHARGE_TO_FULL_DESCRIPTION,
+    ):
         unique_id = f"{entry.entry_id}_{description.key}"
         current_entity_id = registry.async_get_entity_id("switch", DOMAIN, unique_id)
         stable_entity_id = f"switch.home_energy_{description.key}"
@@ -56,6 +70,11 @@ async def async_setup_entry(
             SafetyLockSwitch(entry.runtime_data, entry, SAFETY_DESCRIPTION),
             AutomaticExportSwitch(entry.runtime_data, entry, EXPORT_DESCRIPTION),
             AutomaticEvControlSwitch(entry.runtime_data, entry, EV_DESCRIPTION),
+            EvChargeToFullSwitch(
+                entry.runtime_data,
+                entry,
+                CHARGE_TO_FULL_DESCRIPTION,
+            ),
         )
     )
 
@@ -175,6 +194,64 @@ class AutomaticEvControlSwitch(CoordinatorEntity[EnergyCoordinator], SwitchEntit
         }
         self.hass.config_entries.async_update_entry(self._entry, data=config)
         self.coordinator.config[CONF_EV_AUTOMATIC_CONTROL_ENABLED] = enabled
+        self.async_write_ha_state()
+        controller = self.coordinator.ev_controller
+        if controller is not None:
+            await controller.async_reconcile()
+        self.coordinator.async_update_listeners()
+
+
+class EvChargeToFullSwitch(CoordinatorEntity[EnergyCoordinator], SwitchEntity):
+    """Persistent user intent that temporarily overrides EV charge targets."""
+
+    entity_description: SwitchEntityDescription
+
+    def __init__(
+        self,
+        coordinator: EnergyCoordinator,
+        entry: ConfigEntry,
+        description: SwitchEntityDescription,
+    ) -> None:
+        super().__init__(coordinator)
+        self.entity_description = description
+        self._entry = entry
+        self._attr_unique_id = f"{entry.entry_id}_{description.key}"
+        self.entity_id = "switch.home_energy_ev_charge_to_full"
+        self._attr_has_entity_name = True
+
+    @property
+    def is_on(self) -> bool:
+        """Return the explicit HEO-owned override state."""
+        if CONF_EV_CHARGE_TO_FULL_ENABLED not in self.coordinator.config:
+            legacy_entity = self.coordinator.config.get(CONF_EV_CHARGE_TO_FULL)
+            return isinstance(legacy_entity, str) and self.hass.states.is_state(
+                legacy_entity, "on"
+            )
+        return bool(
+            self.coordinator.config.get(
+                CONF_EV_CHARGE_TO_FULL_ENABLED,
+                DEFAULT_EV_CHARGE_TO_FULL_ENABLED,
+            )
+        )
+
+    async def async_turn_on(self, **kwargs: object) -> None:
+        """Request charge-to-full policy without bypassing any safety gate."""
+        await self._set_enabled(True)
+
+    async def async_turn_off(self, **kwargs: object) -> None:
+        """Resume normal learned/free-window charge targets."""
+        await self._set_enabled(False)
+
+    async def _set_enabled(self, enabled: bool) -> None:
+        config = {
+            key: value
+            for key, value in self._entry.data.items()
+            if key != CONF_EV_CHARGE_TO_FULL
+        }
+        config[CONF_EV_CHARGE_TO_FULL_ENABLED] = enabled
+        self.hass.config_entries.async_update_entry(self._entry, data=config)
+        self.coordinator.config.pop(CONF_EV_CHARGE_TO_FULL, None)
+        self.coordinator.config[CONF_EV_CHARGE_TO_FULL_ENABLED] = enabled
         self.async_write_ha_state()
         controller = self.coordinator.ev_controller
         if controller is not None:

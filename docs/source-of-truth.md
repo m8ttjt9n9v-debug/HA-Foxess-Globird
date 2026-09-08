@@ -41,6 +41,12 @@ layers around the proven algorithm, not replacement algorithms.
   is implemented. Default-off solar-spill and latest-start pre-free stages are
   also implemented for Local Modbus ownership. All three use the same bounded
   feedback reconciliation; no direct path issues a stop or pause command.
+- Charge-to-full operator intent is an integration-owned, persistent switch;
+  it is not a site entity mapping. Existing installations retain the effective
+  state of the pilot-style external helper until the HEO switch is first used.
+  The switch then becomes the sole persistent owner. It preserves the
+  source policy ordering and cannot bypass commissioning, ownership, telemetry,
+  service-current, allowance, or Safety Lock gates.
 - Solar spill reconstructs only measured surplus from EV power, grid export,
   and signed battery flow. Pre-free backfill consumes no more than the local
   protected export plan and the vehicle's wall-energy room, starts as late as

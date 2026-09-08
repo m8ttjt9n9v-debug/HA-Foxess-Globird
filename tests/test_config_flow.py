@@ -73,6 +73,7 @@ async def test_user_form_prefills_unambiguous_foxess_and_tessie_entities(hass):
         for marker in result["data_schema"].schema
         if hasattr(marker, "schema")
     }
+    assert "ev_charge_to_full_entity" not in markers
     assert markers["battery_soc_entity"].default() == "sensor.battery_soc"
     assert markers["grid_power_entity"].default() == "sensor.grid_ct"
     assert markers["ev_soc_entity"].default() == "sensor.jns_x_battery_level"
@@ -448,6 +449,34 @@ async def test_reconfigure_updates_and_reloads_an_entry(hass):
     await hass.async_block_till_done()
     assert entry.title == "Updated Site"
     assert entry.data == updated_data
+    assert await hass.config_entries.async_unload(entry.entry_id)
+
+
+async def test_reconfigure_preserves_hidden_legacy_charge_to_full_mapping(hass):
+    legacy_data = {
+        key: value
+        for key, value in ENTRY_DATA.items()
+        if key != "ev_charge_to_full_enabled"
+    }
+    legacy_data["ev_charge_to_full_entity"] = "input_boolean.old_charge_to_full"
+    entry = MockConfigEntry(domain=DOMAIN, title="Legacy Site", data=legacy_data)
+    entry.add_to_hass(hass)
+
+    submitted_data = {
+        key: value
+        for key, value in legacy_data.items()
+        if key != "ev_charge_to_full_entity"
+    }
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": SOURCE_RECONFIGURE, "entry_id": entry.entry_id},
+        data={"name": "Legacy Site", **submitted_data},
+    )
+
+    assert result["type"] is FlowResultType.ABORT
+    await hass.async_block_till_done()
+    assert entry.data["ev_charge_to_full_entity"] == "input_boolean.old_charge_to_full"
+    assert "ev_charge_to_full_enabled" not in entry.data
     assert await hass.config_entries.async_unload(entry.entry_id)
 
 

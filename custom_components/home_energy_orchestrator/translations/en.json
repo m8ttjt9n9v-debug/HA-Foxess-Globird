@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Set up FoxESS Globird Energy Observer",
-        "description": "Compatible entities from one unambiguous FoxESS Modbus device and one Tessie vehicle are pre-filled when detected. Verify every suggestion and sign convention. Choose exactly one FoxESS owner: observer, local Modbus, or FoxCloud Mode Scheduler. Only the ported ZEROHERO export policy may write automatically. The Safety Lock is ON by default.",
+        "description": "Compatible entities from one unambiguous FoxESS Modbus device and one Tessie vehicle are pre-filled when detected. Verify every suggestion and sign convention. Choose exactly one FoxESS owner: observer, local Modbus, or FoxCloud Mode Scheduler. HEO creates its own Charge to Full and house-occupancy controls after setup; do not create helpers for them. Only the ported ZEROHERO export policy may write automatically. The Safety Lock is ON by default.",
         "data": {
           "name": "Site name",
           "battery_soc_entity": "Battery state of charge sensor",
@@ -67,7 +67,6 @@
           "ev_smart_recovery_charging_confirm_seconds": "Recovery charging confirmation timeout (seconds)",
           "ev_smart_recovery_rearm_seconds": "Healthy charging duration before recovery rearm (seconds)",
           "ev_smart_recovery_idle_current_a": "Maximum actual current treated as no charging during recovery (A)",
-          "ev_charge_to_full_entity": "Optional charge-to-full override entity",
           "ev_location_mode": "EV location policy",
           "ev_free_window_priority": "Free-window charging priority",
           "ev_free_window_charge_limit_percent": "Free-window EV charge target (%)",
@@ -111,7 +110,7 @@
       },
       "reconfigure": {
         "title": "Reconfigure FoxESS Globird Energy Observer",
-        "description": "Detected entities fill missing mappings and replace only stale mappings that no longer exist; nothing changes until you submit this form. Verify every suggestion. Update site limits and the exclusive FoxESS owner as required. Safety Lock ON blocks all hardware writes.",
+        "description": "Detected entities fill missing mappings and replace only stale mappings that no longer exist; nothing changes until you submit this form. Verify every suggestion. Charge to Full and house occupancy are HEO-owned controls, not helper mappings. Update site limits and the exclusive FoxESS owner as required. Safety Lock ON blocks all hardware writes.",
         "data": {
           "name": "Site name",
           "battery_soc_entity": "Battery state of charge sensor",
@@ -175,7 +174,6 @@
           "ev_smart_recovery_charging_confirm_seconds": "Recovery charging confirmation timeout (seconds)",
           "ev_smart_recovery_rearm_seconds": "Healthy charging duration before recovery rearm (seconds)",
           "ev_smart_recovery_idle_current_a": "Maximum actual current treated as no charging during recovery (A)",
-          "ev_charge_to_full_entity": "Optional charge-to-full override entity",
           "ev_location_mode": "EV location policy",
           "ev_free_window_priority": "Free-window charging priority",
           "ev_free_window_charge_limit_percent": "Free-window EV charge target (%)",
