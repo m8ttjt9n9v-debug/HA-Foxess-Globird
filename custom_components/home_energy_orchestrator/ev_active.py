@@ -33,6 +33,7 @@ from .const import (
     CONF_EV_CHARGE_PATH,
     CONF_EV_CHARGE_SWITCH,
     CONF_EV_CHARGE_TO_FULL,
+    CONF_EV_CHARGE_TO_FULL_ENABLED,
     CONF_EV_CHARGING_STATE,
     CONF_EV_CURRENT_LIMIT,
     CONF_EV_DIRECT_LIMIT_HEADROOM,
@@ -88,6 +89,7 @@ from .const import (
     DEFAULT_EV_ARRIVAL_RESERVE_SOC,
     DEFAULT_EV_CHARGE_EFFICIENCY,
     DEFAULT_EV_CHARGE_PATH,
+    DEFAULT_EV_CHARGE_TO_FULL_ENABLED,
     DEFAULT_EV_DIRECT_LIMIT_HEADROOM,
     DEFAULT_EV_FREE_WINDOW_CHARGE_LIMIT,
     DEFAULT_EV_FREE_WINDOW_MINIMUM_CURRENT,
@@ -392,7 +394,7 @@ class ActiveEvController:
 
             decision_fingerprint = (
                 vehicle_soc,
-                self._is_on(CONF_EV_CHARGE_TO_FULL),
+                self._charge_to_full_requested(),
                 self.coordinator.config.get(
                     CONF_EV_FREE_WINDOW_PRIORITY, DEFAULT_EV_FREE_WINDOW_PRIORITY
                 ),
@@ -531,7 +533,7 @@ class ActiveEvController:
         if minimum is None or maximum is None or step is None:
             self.last_reason = "ev_charge_limit_metadata_unavailable"
             return
-        policy = maximum if self._is_on(CONF_EV_CHARGE_TO_FULL) else learned.limit_percent
+        policy = maximum if self._charge_to_full_requested() else learned.limit_percent
         target = plan_charge_limit_target(
             ChargeLimitInputs(
                 connected=True,
@@ -969,7 +971,7 @@ class ActiveEvController:
             ),
             ceiling,
         )
-        charge_to_full = self._is_on(CONF_EV_CHARGE_TO_FULL)
+        charge_to_full = self._charge_to_full_requested()
         policy_limit = (
             100.0
             if charge_to_full
@@ -1683,6 +1685,17 @@ class ActiveEvController:
 
     def _is_on(self, key: str) -> bool:
         return self._entity_state(key) == "on"
+
+    def _charge_to_full_requested(self) -> bool:
+        """Use HEO's switch, with the old mapped helper as upgrade fallback."""
+        if CONF_EV_CHARGE_TO_FULL_ENABLED in self.coordinator.config:
+            return bool(
+                self.coordinator.config.get(
+                    CONF_EV_CHARGE_TO_FULL_ENABLED,
+                    DEFAULT_EV_CHARGE_TO_FULL_ENABLED,
+                )
+            )
+        return self._is_on(CONF_EV_CHARGE_TO_FULL)
 
     def _float(self, key: str, default: float) -> float:
         try:

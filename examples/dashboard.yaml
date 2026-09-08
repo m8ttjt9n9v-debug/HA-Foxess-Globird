@@ -109,6 +109,9 @@ views:
             entity: sensor.home_energy_ev_control_status
             name: EV controller
           - type: tile
+            entity: switch.home_energy_ev_charge_to_full
+            name: Charge to full
+          - type: tile
             entity: sensor.home_energy_ev_current_target
             name: Current target
           - type: tile
@@ -134,7 +137,8 @@ views:
               HEO exposes the portable charging decision chain. Add the
               vehicle's own Tessie status, access, climate, and health cards in
               a site overlay; Tessie entity names are deliberately not embedded
-              in the shared dashboard.
+              in the shared dashboard. Charge to full raises the target but
+              does not bypass the displayed safety and electrical limits.
       - type: grid
         column_span: 2
         cards:
@@ -383,6 +387,8 @@ views:
                 name: Automatic ZEROHERO export
               - entity: switch.home_energy_automatic_ev_control
                 name: Automatic EV control
+              - entity: switch.home_energy_ev_charge_to_full
+                name: EV charge to full
               - entity: select.home_energy_house_occupancy_mode
                 name: House-energy occupancy policy
               - entity: sensor.home_energy_test_status

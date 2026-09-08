@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.8.1 — integration-owned charge-to-full control
+
+- Replace the confusing external helper mapping with the automatically created
+  `switch.home_energy_ev_charge_to_full`.
+- Preserve the pilot behavior: ON temporarily uses Tessie's advertised maximum
+  charge limit and, in the managed free window, prioritizes the commissioned
+  connector ceiling before service and allowance guards. OFF resumes normal
+  learned/free-window targets.
+- Preserve the effective state of an existing mapped
+  `input_boolean.charge_to_full` during upgrade. The first use of the new HEO
+  switch persists its state and removes that legacy mapping. No charging
+  algorithm or safety gate is changed.
+
 ## 0.8.0 — faithful occupancy-aware house learning
 
 - Port the Working Single Phase Pilot Site's persistent Auto/Home/Away house-

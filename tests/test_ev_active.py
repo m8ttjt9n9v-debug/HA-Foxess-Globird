@@ -327,6 +327,7 @@ async def test_opted_in_outside_policy_restores_baseline_after_reconnect(
     assert battery_state is not None
 
     await controller.async_reconcile(battery_state.last_updated)
+    await hass.async_block_till_done()
 
     assert controller.solar_spill.phase == "battery_not_full"
     assert controller.target_current_a == 1

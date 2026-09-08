@@ -18,7 +18,7 @@ HACS installation requires a public GitHub repository. This project publishes
 versioned GitHub releases for the custom-repository channel; inclusion in
 HACS's default catalogue is a separate review process.
 
-Version 0.8.0 is observer-by-default. Automatic FoxESS free charging is not
+Version 0.8.1 is observer-by-default. Automatic FoxESS free charging is not
 present; the earlier simplified controller remains removed. The verified
 ZEROHERO export path and the faithful direct-EVSE/smart-socket Tessie paths are
 separately gated. Bounded FoxESS Diagnostics remain explicitly submitted actions.
@@ -97,3 +97,16 @@ remain disabled.
   inverter by itself.
 
 If a sensor is unavailable or has an unsupported unit, the integration displays unavailable calculations rather than guessing.
+
+### Charge to full
+
+HEO automatically creates `switch.home_energy_ev_charge_to_full`; no separate
+Home Assistant helper or setup mapping is required. Turning it on temporarily
+uses the mapped Tessie charge-limit entity's advertised maximum instead of the
+learned general or configured free-window charge target. During the managed
+free window it also requests the commissioned connector ceiling before the
+service-current and daily-allowance guards apply. Outside the free window the
+switch does not by itself start charging or take ownership of charging current.
+It does not bypass Safety Lock, commissioning, connection, telemetry,
+connector-current, service-current, or daily free-energy protections. Turning
+it off resumes the normal policy.

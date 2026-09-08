@@ -2,7 +2,7 @@
 
 Home Assistant is supervisory software; it is not a substitute for compliant electrical design, equipment protections, breaker ratings, EVSE protections, or installer verification.
 
-Version 0.8.0 is observer-by-default. ZEROHERO selling requires Local Modbus
+Version 0.8.1 is observer-by-default. ZEROHERO selling requires Local Modbus
 ownership, the FoxESS automatic setting, the separate automatic-export toggle,
 Safety Lock being OFF, complete FoxESS actuator mapping, valid telemetry, and
 commissioned limits. The independent direct-EVSE/smart-socket free-window path

@@ -49,6 +49,9 @@ Status here describes behavioral parity, not merely the presence of code.
   cumulative-meter deltas, restart-persistent 28-sample/35-day history, P85
   selection, configured arrival reserve, full-window fallback, actuator-step
   rounding, and the original general/free/override charge-limit policy.
+- [x] Integration-owned persistent charge-to-full operator switch, with
+  state-preserving migration from the pilot-style external helper on first use
+  and no setup mapping or weakened safety gate.
 - [x] Conservative setup discovery for FoxESS Modbus and Tessie roles:
   integration/domain-aware matching, single-device cohort selection,
   ambiguity rejection, disabled-entity filtering, and stale-only reconfigure

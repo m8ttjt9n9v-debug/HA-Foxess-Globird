@@ -41,6 +41,7 @@ from .const import (
     CONF_EV_CHARGE_PATH,
     CONF_EV_CHARGE_SWITCH,
     CONF_EV_CHARGE_TO_FULL,
+    CONF_EV_CHARGE_TO_FULL_ENABLED,
     CONF_EV_CHARGING_STATE,
     CONF_EV_CONTROL_COMMISSIONED,
     CONF_EV_CURRENT_LIMIT,
@@ -131,6 +132,7 @@ from .const import (
     DEFAULT_EV_AUTOMATIC_CONTROL_ENABLED,
     DEFAULT_EV_CHARGE_EFFICIENCY,
     DEFAULT_EV_CHARGE_PATH,
+    DEFAULT_EV_CHARGE_TO_FULL_ENABLED,
     DEFAULT_EV_CONTROL_COMMISSIONED,
     DEFAULT_EV_DIRECT_LIMIT_HEADROOM,
     DEFAULT_EV_FREE_WINDOW_CHARGE_LIMIT,
@@ -232,6 +234,12 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """Update mappings and commissioned limits without reinstalling."""
         entry = self._get_reconfigure_entry()
         if user_input is not None:
+            if CONF_EV_CHARGE_TO_FULL_ENABLED in entry.data:
+                user_input[CONF_EV_CHARGE_TO_FULL_ENABLED] = entry.data[
+                    CONF_EV_CHARGE_TO_FULL_ENABLED
+                ]
+            elif CONF_EV_CHARGE_TO_FULL in entry.data:
+                user_input[CONF_EV_CHARGE_TO_FULL] = entry.data[CONF_EV_CHARGE_TO_FULL]
             user_input = self._apply_defaults(user_input)
             errors = self._validate_input(user_input)
             if not errors:
@@ -549,7 +557,6 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         DEFAULT_EV_SMART_RECOVERY_IDLE_CURRENT_A,
                     ),
                 ): vol.Coerce(float),
-                optional_entity(CONF_EV_CHARGE_TO_FULL): selector.EntitySelector(),
                 vol.Required(
                     CONF_EV_LOCATION_MODE,
                     default=defaults.get(CONF_EV_LOCATION_MODE, DEFAULT_EV_LOCATION_MODE),
@@ -940,6 +947,15 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             CONF_EV_CONTROL_COMMISSIONED: data.get(
                 CONF_EV_CONTROL_COMMISSIONED, DEFAULT_EV_CONTROL_COMMISSIONED
             ),
+            **(
+                {CONF_EV_CHARGE_TO_FULL_ENABLED: data[CONF_EV_CHARGE_TO_FULL_ENABLED]}
+                if CONF_EV_CHARGE_TO_FULL_ENABLED in data
+                else {CONF_EV_CHARGE_TO_FULL: data[CONF_EV_CHARGE_TO_FULL]}
+                if CONF_EV_CHARGE_TO_FULL in data
+                else {
+                    CONF_EV_CHARGE_TO_FULL_ENABLED: DEFAULT_EV_CHARGE_TO_FULL_ENABLED
+                }
+            ),
             CONF_BONUS_WINDOW_START: data.get(CONF_BONUS_WINDOW_START, DEFAULT_BONUS_WINDOW_START),
             CONF_BONUS_WINDOW_END: data.get(CONF_BONUS_WINDOW_END, DEFAULT_BONUS_WINDOW_END),
             CONF_FORCE_DISCHARGE_FINISH: data.get(
@@ -1009,7 +1025,6 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             CONF_EV_CHARGE_LIMIT,
             CONF_EV_CHARGE_SWITCH,
             CONF_EV_SMART_SOCKET,
-            CONF_EV_CHARGE_TO_FULL,
             CONF_SITE_GRID_CURRENT,
             CONF_FOXESS_WORK_MODE,
             CONF_FOXESS_FORCE_CHARGE_POWER,

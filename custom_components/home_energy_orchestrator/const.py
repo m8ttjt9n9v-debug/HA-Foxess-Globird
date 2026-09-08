@@ -100,7 +100,9 @@ CONF_EV_SMART_RECOVERY_CHARGING_CONFIRM_SECONDS = (
 )
 CONF_EV_SMART_RECOVERY_REARM_SECONDS = "ev_smart_recovery_rearm_seconds"
 CONF_EV_SMART_RECOVERY_IDLE_CURRENT_A = "ev_smart_recovery_idle_current_a"
+# Legacy YAML-helper mapping retained only as a compatibility fallback.
 CONF_EV_CHARGE_TO_FULL = "ev_charge_to_full_entity"
+CONF_EV_CHARGE_TO_FULL_ENABLED = "ev_charge_to_full_enabled"
 CONF_EV_LOCATION_MODE = "ev_location_mode"
 CONF_EV_FREE_WINDOW_PRIORITY = "ev_free_window_priority"
 CONF_EV_FREE_WINDOW_CHARGE_LIMIT = "ev_free_window_charge_limit_percent"
@@ -195,6 +197,7 @@ DEFAULT_EV_PRE_FREE_ENABLED = False
 DEFAULT_EV_TELEMETRY_MAX_AGE_SECONDS = 90.0
 DEFAULT_EV_TELEMETRY_MAX_SKEW_SECONDS = 30.0
 DEFAULT_EV_CONTROL_COMMISSIONED = False
+DEFAULT_EV_CHARGE_TO_FULL_ENABLED = False
 EV_CHARGE_PATH_DIRECT = "direct_evse"
 EV_CHARGE_PATH_SMART_SOCKET = "smart_socket"
 EV_CHARGE_PATHS = (EV_CHARGE_PATH_DIRECT, EV_CHARGE_PATH_SMART_SOCKET)

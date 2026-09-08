@@ -4,7 +4,7 @@ A Home Assistant custom integration for a site-configured energy ledger,
 conservative demand learning, bounded FoxESS diagnostics, the verified
 Working Single Phase Pilot Site ZEROHERO export policy, and a faithful direct-EVSE free-window port.
 
-Version 0.8.0 deliberately excludes the rewritten automatic battery controller
+Version 0.8.1 deliberately excludes the rewritten automatic battery controller
 that was not a faithful port of the proven Working Single Phase Pilot Site.
 Automatic FoxESS free charging remains absent. Separately gated direct-EVSE and
 smart-socket Tessie paths have returned through port-first characterization and
@@ -96,6 +96,12 @@ explicit EV commissioning, and complete mappings. Free-window EV control may
 run with FoxCloud as inverter owner because it writes no FoxESS entity. Solar
 spill and pre-free backfill require Local Modbus ownership and remain separately
 default-off. Safety Lock blocks every hardware write.
+
+HEO creates `switch.home_energy_ev_charge_to_full` automatically. It replaces
+the pilot YAML's external Toggle helper: ON temporarily selects Tessie's maximum
+charge limit and prioritizes the commissioned connector ceiling in the managed
+free window, while every normal safety, service-current, and free-allowance
+guard remains active. It does not start an outside-window session by itself.
 
 ## Not currently implemented
 
