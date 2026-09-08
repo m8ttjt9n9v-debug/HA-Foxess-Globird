@@ -9,6 +9,7 @@ import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.const import CONF_NAME
 from homeassistant.core import callback, valid_entity_id
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import selector
 
 from .const import (
@@ -189,6 +190,7 @@ from .const import (
     FOXESS_CONTROL_OWNER_MODBUS,
     FOXESS_CONTROL_OWNERS,
 )
+from .discovery import DiscoveryEntity, discover_entity_defaults
 
 ENTITY = selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor"))
 SELECT_ENTITY = selector.EntitySelector(selector.EntitySelectorConfig(domain="select"))
@@ -214,7 +216,9 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             await self.async_set_unique_id(title.strip().casefold())
             self._abort_if_unique_id_configured()
             return self.async_create_entry(title=title, data=user_input)
-        return self.async_show_form(step_id="user", data_schema=self._schema())
+        return self.async_show_form(
+            step_id="user", data_schema=self._schema(self._discovery_defaults())
+        )
 
     async def async_step_reconfigure(self, user_input: dict[str, object] | None = None):
         """Update mappings and commissioned limits without reinstalling."""
@@ -234,8 +238,45 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 step_id="reconfigure", data_schema=self._schema(entry.data), errors=errors
             )
         return self.async_show_form(
-            step_id="reconfigure", data_schema=self._schema({CONF_NAME: entry.title, **entry.data})
+            step_id="reconfigure",
+            data_schema=self._schema(self._reconfigure_defaults(entry)),
         )
+
+    @callback
+    def _discovery_defaults(self) -> dict[str, object]:
+        """Suggest unambiguous entities without changing any control setting."""
+        registry = er.async_get(self.hass)
+        return discover_entity_defaults(
+            [
+                DiscoveryEntity(
+                    entity_id=entry.entity_id,
+                    platform=entry.platform,
+                    config_entry_id=entry.config_entry_id,
+                    original_name=entry.original_name,
+                    disabled=entry.disabled_by is not None,
+                )
+                for entry in registry.entities.values()
+                if entry.platform in {"foxess_modbus", "tessie"}
+            ]
+        )
+
+    @callback
+    def _reconfigure_defaults(
+        self, entry: config_entries.ConfigEntry
+    ) -> dict[str, object]:
+        """Preserve valid mappings and propose replacements for stale ones."""
+        defaults: dict[str, object] = {CONF_NAME: entry.title, **entry.data}
+        registry = er.async_get(self.hass)
+        for key, suggestion in self._discovery_defaults().items():
+            current = defaults.get(key)
+            if not current or (
+                isinstance(current, str)
+                and valid_entity_id(current)
+                and registry.async_get(current) is None
+                and self.hass.states.get(current) is None
+            ):
+                defaults[key] = suggestion
+        return defaults
 
     @callback
     def _schema(self, defaults: dict[str, object] | None = None) -> vol.Schema:

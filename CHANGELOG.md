@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.7.0 — assisted FoxESS and Tessie discovery
+
+- Inspect Home Assistant's entity registry during setup and reconfiguration and
+  pre-fill high-confidence FoxESS Modbus and Tessie role mappings.
+- Match by integration-owned entity identity, expected entity domain, and one
+  unambiguous config-entry cohort. Disabled entities and loose near-name
+  matches are excluded.
+- Refuse automatic selection when two devices are equally plausible, preventing
+  roles from being silently mixed across inverters or vehicles.
+- Preserve every registered existing mapping. During reconfiguration, propose a
+  detected replacement only for a missing role or a stale entity ID that no
+  longer exists; no proposal is saved until the user reviews and submits.
+- Keep sign conventions, battery semantics, electrical ratings, topology,
+  ownership, commissioning, and all write gates explicitly user-confirmed.
+- Add discovery fixtures based on the clean FoxESS/Tessie entity inventory and
+  tests for ambiguity, disabled entities, stale mappings, and custom mappings.
+
 ## 0.6.0 — faithful Tessie daily-driving learning
 
 - Port the exact free-window-boundary cumulative-energy snapshot. A sample is

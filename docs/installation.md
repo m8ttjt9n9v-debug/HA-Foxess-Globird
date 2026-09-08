@@ -18,7 +18,7 @@ HACS installation requires a public GitHub repository. This project publishes
 versioned GitHub releases for the custom-repository channel; inclusion in
 HACS's default catalogue is a separate review process.
 
-Version 0.6.0 is observer-by-default. Automatic FoxESS free charging is not
+Version 0.7.0 is observer-by-default. Automatic FoxESS free charging is not
 present; the earlier simplified controller remains removed. The verified
 ZEROHERO export path and the faithful direct-EVSE/smart-socket Tessie paths are
 separately gated. Bounded FoxESS Diagnostics remain explicitly submitted actions.
@@ -36,6 +36,14 @@ ported behavior is recorded in the
 Import [`examples/dashboard.yaml`](../examples/dashboard.yaml) as a Lovelace
 starter view; HACS does not install dashboards automatically. Generated
 entities use stable `sensor.home_energy_*` IDs where the stable ID is unused.
+
+When FoxESS Modbus or Tessie is already installed, setup ranks entities from
+one unambiguous device of each integration and pre-fills recognized roles.
+Reconfiguration preserves registered mappings and suggests replacements only
+for missing or stale entity IDs. Multiple equally plausible devices are left
+blank. Always verify the proposed entities: discovery does not determine power
+signs, battery-capacity meaning, physical current limits, phase topology,
+control ownership, or commissioning.
 
 EV control requires every Tessie telemetry and actuator mapping, a
 commissioned physical current ceiling, a positive service limit, the independent

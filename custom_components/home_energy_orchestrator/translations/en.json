@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Set up FoxESS Globird Energy Observer",
-        "description": "Choose exactly one FoxESS owner: observer, local Modbus, or FoxCloud Mode Scheduler. Only the ported ZEROHERO export policy may write automatically. The Safety Lock is ON by default.",
+        "description": "Compatible entities from one unambiguous FoxESS Modbus device and one Tessie vehicle are pre-filled when detected. Verify every suggestion and sign convention. Choose exactly one FoxESS owner: observer, local Modbus, or FoxCloud Mode Scheduler. Only the ported ZEROHERO export policy may write automatically. The Safety Lock is ON by default.",
         "data": {
           "name": "Site name",
           "battery_soc_entity": "Battery state of charge sensor",
@@ -107,7 +107,7 @@
       },
       "reconfigure": {
         "title": "Reconfigure FoxESS Globird Energy Observer",
-        "description": "Update site mappings, limits, the exclusive FoxESS owner, or the ported ZEROHERO export gate. Safety Lock ON blocks all hardware writes.",
+        "description": "Detected entities fill missing mappings and replace only stale mappings that no longer exist; nothing changes until you submit this form. Verify every suggestion. Update site limits and the exclusive FoxESS owner as required. Safety Lock ON blocks all hardware writes.",
         "data": {
           "name": "Site name",
           "battery_soc_entity": "Battery state of charge sensor",

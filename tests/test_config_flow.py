@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from homeassistant.config_entries import SOURCE_RECONFIGURE, SOURCE_USER
 from homeassistant.data_entry_flow import FlowResultType
+from homeassistant.helpers import entity_registry as er
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.home_energy_orchestrator.const import (
@@ -25,6 +26,60 @@ async def test_user_flow_creates_a_config_entry(hass):
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["title"] == "Test Site"
     assert result["data"] == ENTRY_DATA
+
+
+async def test_user_form_prefills_unambiguous_foxess_and_tessie_entities(hass):
+    foxess = MockConfigEntry(domain="foxess_modbus")
+    foxess.add_to_hass(hass)
+    tessie = MockConfigEntry(domain="tessie")
+    tessie.add_to_hass(hass)
+    registry = er.async_get(hass)
+    registry.async_get_or_create(
+        "sensor",
+        "foxess_modbus",
+        "battery_soc",
+        suggested_object_id="battery_soc",
+        config_entry=foxess,
+    )
+    registry.async_get_or_create(
+        "sensor",
+        "foxess_modbus",
+        "grid_ct",
+        suggested_object_id="grid_ct",
+        config_entry=foxess,
+    )
+    registry.async_get_or_create(
+        "sensor",
+        "tessie",
+        "car_battery_level",
+        suggested_object_id="jns_x_battery_level",
+        config_entry=tessie,
+    )
+    registry.async_get_or_create(
+        "number",
+        "tessie",
+        "car_charge_current",
+        suggested_object_id="jns_x_charge_current",
+        config_entry=tessie,
+    )
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": SOURCE_USER}
+    )
+
+    assert result["type"] is FlowResultType.FORM
+    markers = {
+        marker.schema: marker
+        for marker in result["data_schema"].schema
+        if hasattr(marker, "schema")
+    }
+    assert markers["battery_soc_entity"].default() == "sensor.battery_soc"
+    assert markers["grid_power_entity"].default() == "sensor.grid_ct"
+    assert markers["ev_soc_entity"].default() == "sensor.jns_x_battery_level"
+    assert (
+        markers["ev_current_limit_entity"].default()
+        == "number.jns_x_charge_current"
+    )
 
 
 async def test_user_flow_defaults_existing_single_phase_ev_configuration(hass):
@@ -394,3 +449,70 @@ async def test_reconfigure_updates_and_reloads_an_entry(hass):
     assert entry.title == "Updated Site"
     assert entry.data == updated_data
     assert await hass.config_entries.async_unload(entry.entry_id)
+
+
+async def test_reconfigure_suggests_replacement_for_stale_mapping(hass):
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Old Test Site",
+        data={**ENTRY_DATA, "battery_soc_entity": "sensor.removed_test_battery"},
+    )
+    entry.add_to_hass(hass)
+    foxess = MockConfigEntry(domain="foxess_modbus")
+    foxess.add_to_hass(hass)
+    er.async_get(hass).async_get_or_create(
+        "sensor",
+        "foxess_modbus",
+        "battery_soc",
+        suggested_object_id="battery_soc",
+        config_entry=foxess,
+    )
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": SOURCE_RECONFIGURE, "entry_id": entry.entry_id},
+    )
+
+    markers = {
+        marker.schema: marker
+        for marker in result["data_schema"].schema
+        if hasattr(marker, "schema")
+    }
+    assert markers["battery_soc_entity"].default() == "sensor.battery_soc"
+
+
+async def test_reconfigure_never_replaces_registered_existing_mapping(hass):
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Existing Site",
+        data={**ENTRY_DATA, "battery_soc_entity": "sensor.custom_battery_soc"},
+    )
+    entry.add_to_hass(hass)
+    registry = er.async_get(hass)
+    registry.async_get_or_create(
+        "sensor",
+        "template",
+        "custom_battery_soc",
+        suggested_object_id="custom_battery_soc",
+    )
+    foxess = MockConfigEntry(domain="foxess_modbus")
+    foxess.add_to_hass(hass)
+    registry.async_get_or_create(
+        "sensor",
+        "foxess_modbus",
+        "battery_soc",
+        suggested_object_id="battery_soc",
+        config_entry=foxess,
+    )
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": SOURCE_RECONFIGURE, "entry_id": entry.entry_id},
+    )
+
+    markers = {
+        marker.schema: marker
+        for marker in result["data_schema"].schema
+        if hasattr(marker, "schema")
+    }
+    assert markers["battery_soc_entity"].default() == "sensor.custom_battery_soc"
