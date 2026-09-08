@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+- Remove the misleading entities-card aggregate toggle from the dashboard and
+  separate the global Safety Lock from independent automation requests. Display
+  the effective FoxESS and EV gates instead of presenting the status sensor's
+  raw state as an operating mode.
+- Record the observed EW11 single-client constraint: concurrent Modbus polling
+  can lock the bridge even when only one Home Assistant instance is intended to
+  write.
+
 ## 0.8.1 — integration-owned charge-to-full control
 
 - Replace the confusing external helper mapping with the automatically created

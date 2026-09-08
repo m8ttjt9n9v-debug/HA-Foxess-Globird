@@ -27,6 +27,17 @@ dashboard, commission electrical limits, or migrate personal entity mappings.
 The FoxESS work-mode and force-power entities must be explicitly mapped. Entity
 availability alone does not prove safe hardware compatibility.
 
+### Modbus TCP connection ownership
+
+Use one Modbus TCP client for an inverter bridge unless that exact bridge and
+firmware have been independently proven to support concurrent clients. During
+commissioning, an EW11 bridge was observed to lock up and become unresponsive
+when two Home Assistant instances polled it at the same time. HEO therefore
+treats the EW11 as a single-client transport: enable FoxESS Modbus on only one
+Home Assistant instance at a time. This transport constraint is separate from
+HEO's write ownership gates; read-only polling from a second instance can still
+break the connection.
+
 ## Required for Tessie EV automation
 
 Tessie is optional when EV control is not commissioned. The ported EV
@@ -97,3 +108,8 @@ from the generated entities. HACS does not install Lovelace views. The example
 preserves the seven-view operational structure while using only HEO-owned
 entity IDs. Personal backgrounds, vehicle-native Tessie cards, weather, room
 devices, heaters, and unrelated site cards are intentionally local overlays.
+The example deliberately disables Home Assistant's entities-card header toggle:
+it is not an HEO master control and is unsafe to present beside the opposite-
+polarity Safety Lock. Safety Lock ON blocks all HEO hardware commands; the
+automatic export and EV switches express independent intent and do not bypass
+that lock or their respective readiness gates.

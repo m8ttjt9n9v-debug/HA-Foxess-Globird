@@ -377,22 +377,44 @@ views:
             heading_style: title
             icon: mdi:toggle-switch-outline
           - type: entities
-            title: Controls and Safety
+            title: Safety and Current State
+            show_header_toggle: false
             entities:
-              - entity: sensor.home_energy_status
-                name: Integration status
+              - type: attribute
+                entity: sensor.home_energy_status
+                attribute: mode
+                name: Current operating mode
+              - type: attribute
+                entity: sensor.home_energy_status
+                attribute: control_gate
+                name: FoxESS control gate
+              - type: attribute
+                entity: sensor.home_energy_status
+                attribute: ev_control_gate
+                name: EV control gate
               - entity: switch.home_energy_safety_lock
-                name: Safety Lock (ON = locked)
+                name: Block all hardware commands
+          - type: entities
+            title: Automation Requests
+            show_header_toggle: false
+            entities:
               - entity: switch.home_energy_automatic_export
                 name: Automatic ZEROHERO export
               - entity: switch.home_energy_automatic_ev_control
                 name: Automatic EV control
               - entity: switch.home_energy_ev_charge_to_full
-                name: EV charge to full
+                name: Temporarily charge EV to full
               - entity: select.home_energy_house_occupancy_mode
                 name: House-energy occupancy policy
               - entity: sensor.home_energy_test_status
                 name: Diagnostic status
+          - type: markdown
+            content: >-
+              **Safety Lock:** ON means HEO is locked and cannot send any
+              hardware command. OFF only removes that final interlock; it does
+              not enable an automation. Each automation request remains
+              independent and also requires its displayed control gate to be
+              ready. There is no hidden card-level master switch.
           - type: markdown
             content: >-
               Use Settings → Devices & services → FoxESS Globird Energy

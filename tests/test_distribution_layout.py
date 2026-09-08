@@ -75,6 +75,28 @@ def test_example_dashboard_uses_the_integration_entity_ids() -> None:
         "advanced",
         "manual",
     ]
+    configuration = next(
+        view for view in dashboard["views"] if view["path"] == "configuration"
+    )
+    entities_cards = [
+        card
+        for section in configuration["sections"]
+        for card in section.get("cards", [])
+        if card.get("type") == "entities"
+    ]
+    safety_card = next(
+        card for card in entities_cards if card.get("title") == "Safety and Current State"
+    )
+    automation_card = next(
+        card for card in entities_cards if card.get("title") == "Automation Requests"
+    )
+    assert safety_card["show_header_toggle"] is False
+    assert automation_card["show_header_toggle"] is False
+    assert any(
+        row.get("attribute") == "mode"
+        for row in safety_card["entities"]
+        if isinstance(row, dict)
+    )
     entity_ids = []
     for view in dashboard["views"]:
         for section in view.get("sections", []):

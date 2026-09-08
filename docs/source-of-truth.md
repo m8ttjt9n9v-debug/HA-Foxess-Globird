@@ -85,6 +85,14 @@ layers around the proven algorithm, not replacement algorithms.
   Overview, Tesla, House, Solar & Weather, Configuration, Advanced, and Manual.
   Shared views use only HEO-owned entity IDs; vehicle-native, weather, room, and
   other site-specific cards are local overlays rather than shared assumptions.
+- The dashboard must not expose Home Assistant's entities-card aggregate toggle
+  as though it were an HEO master switch. Safety Lock is the global no-write
+  interlock (ON means no HEO hardware commands); export and EV switches are
+  independent behavior requests whose gates remain separately visible.
+- Treat an EW11 Modbus TCP bridge as single-client unless its exact hardware and
+  firmware are independently proven otherwise. Concurrent polling alone can
+  make the observed bridge unresponsive, regardless of which client owns write
+  control.
 
 ## Working Single Phase Pilot Site behaviors that remain the port target
 
