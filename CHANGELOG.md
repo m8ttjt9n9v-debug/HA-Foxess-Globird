@@ -9,6 +9,8 @@
 - Record the observed EW11 single-client constraint: concurrent Modbus polling
   can lock the bridge even when only one Home Assistant instance is intended to
   write.
+- Record roadmap requirements for upgrade-safe generated/reusable Lovelace
+  surfaces and capability-driven, reconciliation-safe manual inverter recovery.
 
 ## 0.8.1 — integration-owned charge-to-full control
 

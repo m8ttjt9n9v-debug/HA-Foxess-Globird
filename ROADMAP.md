@@ -100,6 +100,22 @@ Working Single Phase Pilot Site parity.
 - [ ] Only if explicitly requested as new functionality, design a default-off
   local-Modbus battery free-charge extension after writer tracing and schedule
   interaction are proven. This is not required for canonical source parity.
+- [ ] Replace manual dashboard copying with an upgrade-safe, integration-owned
+  dashboard delivery mechanism. Evaluate a generated Lovelace dashboard and
+  reusable strategy/cards; preserve user overlays and custom cards, carry an
+  explicit dashboard schema version, preview migrations, and never silently
+  overwrite a user's dashboard. HACS upgrades must be able to deliver compatible
+  dashboard changes without raw-YAML copy and paste.
+- [ ] Add an explicit manual inverter-mode recovery surface for Local Modbus
+  ownership. Self Use, Force Charge, and Force Discharge require confirmed
+  profile support and mapped feedback; Backup is shown only when the
+  commissioned inverter advertises or has independently proven that capability.
+  A manual selection must suspend automatic reconciliation for a visible,
+  persistent hold so HEO cannot immediately undo the operator's command. Force
+  modes must require explicit power and duration, remain bounded, show direct
+  feedback, and restore or hand control back deliberately. Define Safety Lock,
+  ownership, confirmation, timeout, restart, and cloud-scheduler interactions
+  before exposing buttons.
 - [x] Package the proven seven-view dashboard information architecture using
   HEO-owned entities, with site-specific Tessie, weather, room, and equipment
   cards explicitly retained as local overlays.

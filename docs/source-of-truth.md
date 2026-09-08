@@ -89,6 +89,15 @@ layers around the proven algorithm, not replacement algorithms.
   as though it were an HEO master switch. Safety Lock is the global no-write
   interlock (ON means no HEO hardware commands); export and EV switches are
   independent behavior requests whose gates remain separately visible.
+- Dashboard delivery remains manual in the current release. A future generated
+  dashboard or Lovelace strategy/card layer must be upgrade-safe, versioned, and
+  preserve local overlays rather than overwriting user customisation.
+- Future manual inverter-mode recovery is a distinct operator-control feature,
+  not an automation bypass. It must establish a persistent visible hold that
+  suspends HEO reconciliation, retain exclusive Local Modbus ownership, verify
+  command feedback, and bound every force-power request by explicit power and
+  duration. Mode choices are capability-driven; Backup must not appear merely
+  because one supported H3 profile provides it.
 - Treat an EW11 Modbus TCP bridge as single-client unless its exact hardware and
   firmware are independently proven otherwise. Concurrent polling alone can
   make the observed bridge unresponsive, regardless of which client owns write
