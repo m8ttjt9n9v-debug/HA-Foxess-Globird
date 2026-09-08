@@ -31,6 +31,42 @@ class DemandCycleSample:
     energy_kwh: float
 
 
+@dataclass(frozen=True, slots=True)
+class OccupancyPerson:
+    """One Home Assistant person's state used by the energy policy."""
+
+    state: str
+    last_changed: datetime
+
+
+@dataclass(frozen=True, slots=True)
+class OccupancyResult:
+    """Conservative occupancy classification and its evidence."""
+
+    state: str
+    selected_mode: str
+    person_count: int
+    people_home: int
+    all_people_away_for_hours: float
+    reason: str
+
+
+@dataclass(frozen=True, slots=True)
+class HouseBudgetResult:
+    """The one protected-house cycle budget selected by canonical policy."""
+
+    cycle_budget_kwh: float
+    base_sample_count: int
+    heater_sample_count: int
+    model: str
+    occupancy: str
+
+    @property
+    def sample_count(self) -> int:
+        """Retain the original base-learning diagnostic name."""
+        return self.base_sample_count
+
+
 @dataclass(slots=True)
 class DemandHistory:
     """Persistable rolling history for completed protected-demand cycles."""
@@ -263,6 +299,126 @@ class DemandCycleSampler:
         return False
 
 
+@dataclass(slots=True)
+class DailyDemandCycleSampler:
+    """Integrate a power source between successive local-time boundaries."""
+
+    boundary: time
+    max_gap: timedelta = timedelta(minutes=10)
+    _last_at: datetime | None = None
+    _last_power_kw: float | None = None
+    _cycle_started: bool = False
+    _cycle_energy_kwh: float = 0.0
+
+    def __post_init__(self) -> None:
+        if self.max_gap <= timedelta(0):
+            raise ValueError("max_gap must be positive")
+
+    def observe(self, observed_at: datetime, power_kw: float) -> DemandCycleSample | None:
+        """Accept one reading and return the completed daily cycle, if any."""
+        if observed_at.tzinfo is None:
+            raise ValueError("observed_at must be timezone-aware")
+        if not isfinite(power_kw) or power_kw < 0:
+            self._reset(observed_at, None)
+            return None
+        if self._last_at is None or self._last_power_kw is None:
+            self._last_at = observed_at
+            self._last_power_kw = power_kw
+            if observed_at.timetz().replace(tzinfo=None) == self.boundary:
+                self._cycle_started = True
+            return None
+        if observed_at <= self._last_at or observed_at - self._last_at > self.max_gap:
+            self._reset(observed_at, power_kw)
+            return None
+
+        boundaries = self._boundaries_between(self._last_at, observed_at)
+        result: DemandCycleSample | None = None
+        cuts = sorted({self._last_at, observed_at, *boundaries})
+        for begin, finish in zip(cuts, cuts[1:]):
+            if self._cycle_started:
+                self._cycle_energy_kwh += self._trapezoid_energy(
+                    begin, finish, observed_at, power_kw
+                )
+            if finish in boundaries:
+                if self._cycle_started:
+                    result = DemandCycleSample(finish, self._cycle_energy_kwh)
+                self._cycle_started = True
+                self._cycle_energy_kwh = 0.0
+
+        self._last_at = observed_at
+        self._last_power_kw = power_kw
+        return result
+
+    def restore(self, payload: Any, now: datetime) -> None:
+        """Restore one in-progress daily cycle after a short restart."""
+        if not isinstance(payload, dict) or now.tzinfo is None:
+            return
+        try:
+            last_at = datetime.fromisoformat(str(payload["last_at"]))
+            last_power_kw = float(payload["last_power_kw"])
+            cycle_energy_kwh = float(payload["cycle_energy_kwh"])
+            cycle_started = bool(payload["cycle_started"])
+        except (KeyError, TypeError, ValueError):
+            return
+        if (
+            last_at.tzinfo is None
+            or last_at > now
+            or now - last_at > self.max_gap
+            or not isfinite(last_power_kw)
+            or last_power_kw < 0
+            or not isfinite(cycle_energy_kwh)
+            or cycle_energy_kwh < 0
+        ):
+            return
+        self._last_at = last_at
+        self._last_power_kw = last_power_kw
+        self._cycle_started = cycle_started
+        self._cycle_energy_kwh = cycle_energy_kwh
+
+    def to_payload(self) -> dict[str, str | float | bool] | None:
+        """Encode the in-progress daily cycle for restart-safe persistence."""
+        if self._last_at is None or self._last_power_kw is None:
+            return None
+        return {
+            "last_at": self._last_at.isoformat(),
+            "last_power_kw": self._last_power_kw,
+            "cycle_started": self._cycle_started,
+            "cycle_energy_kwh": self._cycle_energy_kwh,
+        }
+
+    def _reset(self, observed_at: datetime, power_kw: float | None) -> None:
+        self._last_at = observed_at
+        self._last_power_kw = power_kw
+        self._cycle_started = False
+        self._cycle_energy_kwh = 0.0
+
+    def _boundaries_between(self, begin: datetime, finish: datetime) -> set[datetime]:
+        boundaries: set[datetime] = set()
+        day = begin.date()
+        while day <= finish.date():
+            candidate = datetime.combine(day, self.boundary, tzinfo=begin.tzinfo)
+            if begin < candidate <= finish:
+                boundaries.add(candidate)
+            day += timedelta(days=1)
+        return boundaries
+
+    def _trapezoid_energy(
+        self, begin: datetime, finish: datetime, observed_at: datetime, observed_power_kw: float
+    ) -> float:
+        assert self._last_at is not None
+        assert self._last_power_kw is not None
+        total_seconds = (observed_at - self._last_at).total_seconds()
+        begin_fraction = (begin - self._last_at).total_seconds() / total_seconds
+        finish_fraction = (finish - self._last_at).total_seconds() / total_seconds
+        begin_power = self._last_power_kw + (
+            observed_power_kw - self._last_power_kw
+        ) * begin_fraction
+        finish_power = self._last_power_kw + (
+            observed_power_kw - self._last_power_kw
+        ) * finish_fraction
+        return (begin_power + finish_power) / 2 * (finish - begin).total_seconds() / 3600
+
+
 def retain_demand_samples(
     samples: Iterable[DemandCycleSample],
     now: datetime,
@@ -327,6 +483,129 @@ def select_protected_cycle_budget(
         round(_percentile(sorted(valid), percentile), 3),
         len(valid),
         f"p{percentile:g}",
+    )
+
+
+def classify_energy_occupancy(
+    mode: str,
+    people: Iterable[OccupancyPerson],
+    now: datetime,
+    away_confirmation_hours: float,
+) -> OccupancyResult:
+    """Mirror the pilot's conservative Auto/Home/Away occupancy policy."""
+    if now.tzinfo is None:
+        raise ValueError("now must be timezone-aware")
+    selected_mode = str(mode).lower()
+    if selected_mode not in {"auto", "home", "away"}:
+        raise ValueError("mode must be auto, home, or away")
+    if not isfinite(away_confirmation_hours) or away_confirmation_hours < 0:
+        raise ValueError("away confirmation must be finite and non-negative")
+
+    occupants = list(people)
+    home_count = sum(person.state == "home" for person in occupants)
+    uncertain = any(person.state in {"unknown", "unavailable"} for person in occupants)
+    timestamps_valid = all(
+        person.last_changed.tzinfo is not None and person.last_changed <= now
+        for person in occupants
+    )
+    latest_change = (
+        max((person.last_changed for person in occupants), default=now)
+        if timestamps_valid
+        else now
+    )
+    away_hours = (
+        max((now - latest_change).total_seconds() / 3600, 0.0)
+        if occupants and not home_count and not uncertain and timestamps_valid
+        else 0.0
+    )
+
+    if selected_mode == "home":
+        state, reason = "home", "manual_home"
+    elif selected_mode == "away":
+        state, reason = "away", "manual_away"
+    elif not occupants:
+        state, reason = "home", "no_person_entities_assume_home"
+    elif home_count:
+        state, reason = "home", "person_home"
+    elif uncertain or not timestamps_valid:
+        state, reason = "home", "presence_uncertain_assume_home"
+    elif away_hours >= away_confirmation_hours:
+        state, reason = "away", "all_people_away_confirmed"
+    else:
+        state, reason = "home", "away_confirmation_pending"
+
+    return OccupancyResult(
+        state=state,
+        selected_mode=selected_mode,
+        person_count=len(occupants),
+        people_home=home_count,
+        all_people_away_for_hours=round(away_hours, 3),
+        reason=reason,
+    )
+
+
+def select_house_cycle_budget(
+    base_samples_kwh: Iterable[float],
+    heater_samples_kwh: Iterable[float] | None,
+    occupied_fallback_kwh: float,
+    away_fallback_kwh: float,
+    occupancy: str,
+    *,
+    minimum_samples: int = 7,
+    sample_limit: int = 28,
+) -> HouseBudgetResult:
+    """Select exactly one canonical occupied/away protected-house budget.
+
+    When a separately metered heater is configured, both measured P80 streams
+    must be mature before replacing the occupied fallback. Without that
+    optional mapping, the mapped house source is treated as the complete
+    protected load and its mature P80 can replace the fallback alone.
+    """
+    if occupancy not in {"home", "away"}:
+        raise ValueError("occupancy must be home or away")
+    if not isfinite(away_fallback_kwh) or away_fallback_kwh < 0:
+        raise ValueError("away fallback must be finite and non-negative")
+    base = select_protected_cycle_budget(
+        base_samples_kwh,
+        occupied_fallback_kwh,
+        minimum_samples=minimum_samples,
+        sample_limit=sample_limit,
+        percentile=80,
+    )
+    heater = (
+        None
+        if heater_samples_kwh is None
+        else select_protected_cycle_budget(
+            heater_samples_kwh,
+            0.0,
+            minimum_samples=minimum_samples,
+            sample_limit=sample_limit,
+            percentile=80,
+        )
+    )
+    heater_count = 0 if heater is None else heater.sample_count
+    if occupancy == "away":
+        return HouseBudgetResult(
+            away_fallback_kwh,
+            base.sample_count,
+            heater_count,
+            "away_fallback",
+            occupancy,
+        )
+    if base.model == "p80" and (heater is None or heater.model == "p80"):
+        return HouseBudgetResult(
+            round(base.cycle_budget_kwh + (heater.cycle_budget_kwh if heater else 0.0), 3),
+            base.sample_count,
+            heater_count,
+            "measured_occupied_p80",
+            occupancy,
+        )
+    return HouseBudgetResult(
+        occupied_fallback_kwh,
+        base.sample_count,
+        heater_count,
+        "occupied_fallback",
+        occupancy,
     )
 
 

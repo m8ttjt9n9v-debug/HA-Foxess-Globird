@@ -13,11 +13,16 @@ dashboard, commission electrical limits, or migrate personal entity mappings.
 - Commissioned battery capacity/floor/reserve, inverter charge/discharge limits,
   site phase count, service import limit, export limit, tariff windows/rates,
   free-energy allowance, and ZEROHERO export settings.
-- A trustworthy mapped protected-house load sensor for learned house-energy
-  protection. At the Working Single Phase Pilot Site this is the non-heater base-house power; another
-  site may map whole-house load only when that is the intended protected demand.
+- A trustworthy mapped protected-house load sensor. Map whole-house power when
+  that is the intended complete protected demand. At the Working Single Phase
+  Pilot Site the mapped source is non-heater base-house power and the heater is
+  supplied through the optional separate power mapping, preventing double
+  counting.
 - Home Assistant history/storage plus its built-in template, statistics, and
   integration-style behavior used by the source model and HEO persistence.
+- Home Assistant `person` entities are optional. Auto occupancy conservatively
+  assumes Home when none exist or any presence state is uncertain. Home and
+  Away can also be selected explicitly on the dashboard.
 
 The FoxESS work-mode and force-power entities must be explicitly mapped. Entity
 availability alone does not prove safe hardware compatibility.
@@ -64,8 +69,9 @@ Portable code maps roles and never embeds that vehicle's entity IDs. See the
 - The Working Single Phase Pilot Site uses an eWeLink-provided switch for its
   smart-socket charging path, but HEO depends only on the explicitly mapped
   on/off switch capability, not the vendor name.
-- Weather forecast data supports the Working Single Phase Pilot Site's weather-conditioned heater-energy
-  model. It is optional unless that policy is ported.
+- Weather forecast data may support local diagnostics, but it is not an HEO
+  house-protection input. The proven control ledger uses measured heater P80,
+  not a second weather-derived energy budget.
 - FoxESS cloud telemetry may be used as read-only corroboration. FoxCloud Mode
   Scheduler is an alternative inverter owner, not a fallback transport to mix
   with automatic Modbus writes.

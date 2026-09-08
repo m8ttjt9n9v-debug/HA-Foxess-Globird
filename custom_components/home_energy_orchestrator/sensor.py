@@ -338,7 +338,21 @@ DESCRIPTIONS = (
     SensorEntityDescription(key="zerohero_export_status", name="ZEROHERO Export Status"),
     SensorEntityDescription(
         key="learned_house_energy",
-        name="Learned House Energy Budget",
+        name="Protected House Energy Budget",
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        device_class="energy",
+        suggested_display_precision=2,
+    ),
+    SensorEntityDescription(
+        key="learned_base_house_energy",
+        name="Learned Base House Energy P80",
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        device_class="energy",
+        suggested_display_precision=2,
+    ),
+    SensorEntityDescription(
+        key="learned_heater_energy",
+        name="Learned Heater Energy P80",
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
         device_class="energy",
         suggested_display_precision=2,
@@ -356,6 +370,16 @@ DESCRIPTIONS = (
         state_class="measurement",
     ),
     SensorEntityDescription(key="learning_status", name="House Learning Status"),
+    SensorEntityDescription(
+        key="heater_learning_samples",
+        name="Heater Learning Samples",
+        state_class="measurement",
+    ),
+    SensorEntityDescription(
+        key="house_occupancy_state",
+        name="House Energy Occupancy State",
+        icon="mdi:home-account",
+    ),
     SensorEntityDescription(
         key="test_charge_estimated_cost",
         name="Test Charge Estimated Cost",
@@ -437,6 +461,9 @@ class EnergySensor(CoordinatorEntity[EnergyCoordinator], SensorEntity):
     def native_value(self):
         ledger = self.coordinator.data
         learning = self.coordinator.learning_result
+        base_learning = self.coordinator.base_learning_result
+        heater_learning = self.coordinator.heater_learning_result
+        occupancy = self.coordinator.occupancy_result
         snapshot = self.coordinator.snapshot
         ev_controller = self.coordinator.ev_controller
         now = dt_util.now()
@@ -597,9 +624,15 @@ class EnergySensor(CoordinatorEntity[EnergyCoordinator], SensorEntity):
                 else self.coordinator.active_controller.export_session.phase
             ),
             "learned_house_energy": learning.cycle_budget_kwh,
+            "learned_base_house_energy": base_learning.cycle_budget_kwh,
+            "learned_heater_energy": (
+                None if heater_learning is None else heater_learning.cycle_budget_kwh
+            ),
             "remaining_house_energy": self.coordinator.learning_remaining_kwh,
             "learning_samples": learning.sample_count,
             "learning_status": learning.model,
+            "heater_learning_samples": learning.heater_sample_count,
+            "house_occupancy_state": occupancy.state,
             "test_charge_estimated_cost": self.coordinator.manual_test.preview_charge().amount,
             "test_charge_import_rate": self.coordinator.manual_test.current_import_rate(),
             "test_discharge_estimated_earning": (
@@ -698,6 +731,15 @@ class EnergySensor(CoordinatorEntity[EnergyCoordinator], SensorEntity):
                     if controller.learned_charge_limit is not None
                     else None
                 ),
+            }
+        if self.entity_description.key == "house_occupancy_state":
+            occupancy = self.coordinator.occupancy_result
+            return {
+                "selected_mode": occupancy.selected_mode,
+                "person_entities_found": occupancy.person_count,
+                "people_home": occupancy.people_home,
+                "all_people_away_for_hours": occupancy.all_people_away_for_hours,
+                "reason": occupancy.reason,
             }
         if self.entity_description.key != "status":
             return None
@@ -819,6 +861,9 @@ class EnergySensor(CoordinatorEntity[EnergyCoordinator], SensorEntity):
             "integration": DOMAIN,
             "learning_model": learning.model,
             "learning_samples": learning.sample_count,
+            "heater_learning_samples": learning.heater_sample_count,
+            "house_occupancy": learning.occupancy,
+            "house_occupancy_reason": self.coordinator.occupancy_result.reason,
             "learning_max_age_days": self.coordinator.demand_history.max_age_days,
             "learning_sample_limit": self.coordinator.demand_history.sample_limit,
             "learning_sampler_enabled": self.coordinator.demand_sampler is not None,

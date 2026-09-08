@@ -32,10 +32,14 @@
           "inverter_charge_limit_kw": "Inverter charge limit (kW; 0 if not commissioned)",
           "inverter_discharge_limit_kw": "Inverter discharge limit (kW; 0 if not commissioned)",
           "house_load_entity": "Protected house-load sensor (optional; non-heater base load at the Working Single Phase Pilot Site)",
+          "heater_power_entity": "Separately metered heater power sensor (optional)",
           "solar_power_entity": "AC-coupled solar power sensor (optional)",
           "free_charge_window_start": "Free-charge window start",
           "free_charge_window_end": "Free-charge window end",
-          "house_learning_fallback_kwh": "House-energy learning fallback (kWh)",
+          "house_learning_fallback_kwh": "Occupied protected-cycle fallback (kWh)",
+          "house_away_fallback_kwh": "Away protected-cycle fallback (kWh)",
+          "house_away_confirmation_hours": "All-person away confirmation (hours)",
+          "house_occupancy_mode": "House-energy occupancy policy",
           "ev_soc_entity": "EV state of charge sensor (optional)",
           "foxess_work_mode_entity": "FoxESS work-mode selector (required for ZEROHERO export or diagnostics)",
           "foxess_force_charge_power_entity": "FoxESS force-charge power number (required for diagnostics)",
@@ -136,10 +140,14 @@
           "inverter_charge_limit_kw": "Inverter charge limit (kW; 0 if not commissioned)",
           "inverter_discharge_limit_kw": "Inverter discharge limit (kW; 0 if not commissioned)",
           "house_load_entity": "Protected house-load sensor (optional; non-heater base load at the Working Single Phase Pilot Site)",
+          "heater_power_entity": "Separately metered heater power sensor (optional)",
           "solar_power_entity": "AC-coupled solar power sensor (optional)",
           "free_charge_window_start": "Free-charge window start",
           "free_charge_window_end": "Free-charge window end",
-          "house_learning_fallback_kwh": "House-energy learning fallback (kWh)",
+          "house_learning_fallback_kwh": "Occupied protected-cycle fallback (kWh)",
+          "house_away_fallback_kwh": "Away protected-cycle fallback (kWh)",
+          "house_away_confirmation_hours": "All-person away confirmation (hours)",
+          "house_occupancy_mode": "House-energy occupancy policy",
           "ev_soc_entity": "EV state of charge sensor (optional)",
           "foxess_work_mode_entity": "FoxESS work-mode selector (required for ZEROHERO export or diagnostics)",
           "foxess_force_charge_power_entity": "FoxESS force-charge power number (required for diagnostics)",
@@ -219,6 +227,7 @@
       "outside_ev_policy_requires_local_modbus": "Solar-spill and pre-free EV charging require Local Modbus to be selected as the FoxESS control owner.",
       "multiphase_current_mapping_required": "Commissioned multiphase EV control requires a signed most-loaded phase grid-current sensor.",
       "invalid_ev_location_mode": "Choose Auto, Home, or Away EV location policy.",
+      "invalid_house_occupancy_mode": "Choose Auto, Home, or Away house-energy occupancy policy.",
       "invalid_ev_priority": "Choose house-battery or EV free-window priority.",
       "invalid_ev_charge_path": "Choose direct EVSE or smart socket.",
       "incomplete_smart_socket_mapping": "Commissioned smart-socket control requires its switch mapping and a current limit at least as high as the commissioned EV minimum.",
@@ -238,6 +247,13 @@
     "ev_location_mode": {
       "options": {
         "auto": "Auto (mapped location must be home)",
+        "home": "Home override",
+        "away": "Away override"
+      }
+    },
+    "house_occupancy_mode": {
+      "options": {
+        "auto": "Auto (conservative person-state classification)",
         "home": "Home override",
         "away": "Away override"
       }

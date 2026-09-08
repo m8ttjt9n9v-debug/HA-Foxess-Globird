@@ -28,6 +28,8 @@ async def async_get_config_entry_diagnostics(
     coordinator = entry.runtime_data
     ledger = coordinator.data
     learning = coordinator.learning_result
+    occupancy = coordinator.occupancy_result
+    heater_learning = coordinator.heater_learning_result
     actuator_keys = (
         CONF_FOXESS_WORK_MODE,
         CONF_FOXESS_FORCE_CHARGE_POWER,
@@ -159,5 +161,16 @@ async def async_get_config_entry_diagnostics(
             "cycle_budget_kwh": learning.cycle_budget_kwh,
             "sample_count": learning.sample_count,
             "retained_sample_count": len(coordinator.demand_history.samples),
+            "heater_sample_count": learning.heater_sample_count,
+            "heater_retained_sample_count": len(coordinator.heater_history.samples),
+            "heater_model": (
+                heater_learning.model if heater_learning is not None else "not_mapped"
+            ),
+            "occupancy": occupancy.state,
+            "occupancy_mode": occupancy.selected_mode,
+            "occupancy_reason": occupancy.reason,
+            "person_entities_found": occupancy.person_count,
+            "people_home": occupancy.people_home,
+            "all_people_away_for_hours": occupancy.all_people_away_for_hours,
         },
     }

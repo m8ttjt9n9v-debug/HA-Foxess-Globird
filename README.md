@@ -4,7 +4,7 @@ A Home Assistant custom integration for a site-configured energy ledger,
 conservative demand learning, bounded FoxESS diagnostics, the verified
 Working Single Phase Pilot Site ZEROHERO export policy, and a faithful direct-EVSE free-window port.
 
-Version 0.7.0 deliberately excludes the rewritten automatic battery controller
+Version 0.8.0 deliberately excludes the rewritten automatic battery controller
 that was not a faithful port of the proven Working Single Phase Pilot Site.
 Automatic FoxESS free charging remains absent. Separately gated direct-EVSE and
 smart-socket Tessie paths have returned through port-first characterization and
@@ -45,9 +45,14 @@ rooms, and other site-specific cards belong in a local overlay.
 - Configurable tariff estimates, electrical limits, tariff windows, allowance,
   battery reserve, and export policy; control logic contains no personal entity
   IDs.
-- Mapped protected-house demand learning outside the free window. In-progress cycles and
-  retained samples survive Home Assistant restarts; an over-gap cycle is
-  rejected instead of fabricating demand.
+- Occupancy-aware protected-house learning ported from the Working Single Phase
+  Pilot Site. Auto conservatively classifies all Home Assistant people, with
+  persistent Home/Away overrides and a configurable away-confirmation period.
+  Base/whole-house P80 learning runs outside the free window; an optional
+  separately metered heater receives its own daily P80 stream. The controller
+  selects one away fallback, occupied fallback, or mature measured budget and
+  never adds a weather forecast as a second hidden demand term. See the
+  [house-learning provenance](docs/house-learning-port.md).
 - Explicit FoxESS ownership: Observer only, Local Modbus, or FoxCloud Mode
   Scheduler. Cloud ownership blocks every HEO Modbus write for the entire day.
 - The proven Working Single Phase Pilot Site ZEROHERO export policy behind independent default-off

@@ -14,8 +14,10 @@ Status here describes behavioral parity, not merely the presence of code.
 - [x] Faithful Working Single Phase Pilot Site ZEROHERO export core: protected-energy calculation,
   fixed-power plan, latest start, persistent session latch, allowance counter,
   retry bounds, and deliberate Self Use finish.
-- [x] Restart-persistent house-demand sampling with conservative P80 selection,
-  sample retention, fallback, and over-gap rejection.
+- [x] Faithful occupancy-aware house-demand learning: persistent Auto/Home/Away
+  policy, conservative all-person away confirmation, distinct occupied/away
+  fallbacks, restart-persistent base and optional heater histories, paired P80
+  maturity, one selected protection budget, and over-gap rejection.
 - [x] Pure Working Single Phase Pilot Site free-window EV current planner with golden branch-order
   tests, separate charge-policy/anti-pause limit planning, and a topology-aware
   daily-allowance ceiling that is inert for ordinary sessions that fit.

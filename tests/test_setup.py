@@ -43,6 +43,9 @@ ENTRY_DATA = {
     "free_charge_window_start": "12:01:00",
     "free_charge_window_end": "14:59:00",
     "house_learning_fallback_kwh": 17.5,
+    "house_away_fallback_kwh": 6.5,
+    "house_away_confirmation_hours": 6.0,
+    "house_occupancy_mode": "auto",
     "automatic_control_enabled": False,
     "automatic_export_enabled": False,
     "ev_automatic_control_enabled": False,
@@ -356,13 +359,81 @@ async def test_learning_history_is_persisted_and_exposed(hass):
     status = _entity_id(hass, entry, "status")
     assert hass.states.get(budget).state == "5.8"
     assert hass.states.get(samples).state == "7"
-    assert hass.states.get(status).attributes["learning_model"] == "p80"
+    assert hass.states.get(status).attributes["learning_model"] == "measured_occupied_p80"
 
     assert await hass.config_entries.async_unload(entry.entry_id)
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
     assert hass.states.get(budget).state == "5.8"
     assert hass.states.get(samples).state == "7"
+
+
+async def test_separate_heater_history_is_persisted_and_combined_only_when_mature(hass):
+    hass.states.async_set("sensor.test_battery_soc", "60", {"unit_of_measurement": "%"})
+    hass.states.async_set("sensor.test_grid_power", "0", {"unit_of_measurement": "kW"})
+    hass.states.async_set("sensor.test_house_load", "1", {"unit_of_measurement": "kW"})
+    hass.states.async_set("sensor.test_heater", "2", {"unit_of_measurement": "kW"})
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Heater learning site",
+        data={**ENTRY_DATA, "heater_power_entity": "sensor.test_heater"},
+    )
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    first_cycle = datetime(2026, 8, 27, tzinfo=UTC)
+    for offset in range(7):
+        entry.runtime_data.demand_history.add(
+            first_cycle + timedelta(days=offset), offset + 1
+        )
+    for offset in range(6):
+        entry.runtime_data.heater_history.add(
+            first_cycle + timedelta(days=offset), offset + 1
+        )
+    await entry.runtime_data._async_save_demand_state()
+    assert entry.runtime_data.learning_result.cycle_budget_kwh == 17.5
+    assert entry.runtime_data.learning_result.model == "occupied_fallback"
+
+    entry.runtime_data.heater_history.add(first_cycle + timedelta(days=6), 7)
+    await entry.runtime_data._async_save_demand_state()
+    entry.runtime_data.async_update_listeners()
+    await hass.async_block_till_done()
+    assert entry.runtime_data.learning_result.cycle_budget_kwh == 11.6
+    assert hass.states.get("sensor.home_energy_heater_learning_samples").state == "7"
+
+    assert await hass.config_entries.async_unload(entry.entry_id)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    assert len(entry.runtime_data.heater_history.samples) == 7
+    assert entry.runtime_data.learning_result.cycle_budget_kwh == 11.6
+
+
+async def test_house_occupancy_select_persists_manual_away_budget(hass):
+    hass.states.async_set("sensor.test_battery_soc", "60", {"unit_of_measurement": "%"})
+    hass.states.async_set("sensor.test_grid_power", "0", {"unit_of_measurement": "kW"})
+    entry = MockConfigEntry(domain=DOMAIN, title="Occupancy site", data=ENTRY_DATA)
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert hass.states.get("select.home_energy_house_occupancy_mode").state == "Auto"
+    assert hass.states.get("sensor.home_energy_house_occupancy_state").state == "home"
+    await hass.services.async_call(
+        "select",
+        "select_option",
+        {
+            "entity_id": "select.home_energy_house_occupancy_mode",
+            "option": "Away",
+        },
+        blocking=True,
+    )
+    await hass.async_block_till_done()
+
+    assert entry.data["house_occupancy_mode"] == "away"
+    assert hass.states.get("sensor.home_energy_house_occupancy_state").state == "away"
+    assert hass.states.get("sensor.home_energy_learned_house_energy").state == "6.5"
+    assert entry.runtime_data.learning_result.model == "away_fallback"
 
 
 async def test_unload_removes_entities_and_state_listeners(hass):

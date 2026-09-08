@@ -54,10 +54,16 @@ layers around the proven algorithm, not replacement algorithms.
   state machine with a pre-action latch, current and outlet confirmation,
   configurable dwell/timeout periods, delayed permission rechecks, one physical
   cycle per fault episode, visible status, and sustained-health/path rearming.
-- Protected-house demand learning integrates the explicitly mapped source
-  outside the free window, persists an in-progress cycle across ordinary
-  restarts, rejects an over-gap cycle, and derives a conservative P80 model
-  from up to 28 valid samples over 35 days.
+- Protected-house demand learning integrates the explicitly mapped base or
+  whole-house source outside the free window. When a separate heater-power
+  source is mapped, it records an independent daily stream and requires seven
+  valid samples in both streams before their P80 values replace the occupied
+  fallback. Auto occupancy assumes Home unless every Home Assistant person is
+  validly away for the configured confirmation period; persistent Home and
+  Away overrides reproduce the source controls. Away always selects its own
+  fallback. Exactly one resulting budget enters the ledger, and weather
+  forecasts remain diagnostic rather than an additive control term. Histories
+  and in-progress samples survive ordinary restarts and reject over-gap cycles.
 - FoxCloud ownership blocks all HEO Modbus writes for the entire day. HEO does
   not mix cloud scheduling and local Modbus automation.
 - FoxCloud inverter ownership does not block free-window Tessie control,
@@ -84,6 +90,9 @@ solar-spill charging, latest-start pre-free backfill, learned driving demand and
 charge targets, and smart-socket recovery. These behaviors are now retained
 ports, with the learned policy's detailed mapping in
 `docs/ev-driving-learning-port.md`.
+
+The house-demand policy and its source mapping are retained in
+`docs/house-learning-port.md`.
 
 The P85 daily-driving model contributes to the general charge limit outside the
 free window; it is not part of active free-window current calculation. HEO

@@ -7,11 +7,15 @@ from datetime import UTC, datetime, time, timedelta
 import pytest
 
 from custom_components.home_energy_orchestrator.planner.learning import (
+    DailyDemandCycleSampler,
     DemandCycleSample,
     DemandCycleSampler,
     DemandHistory,
+    OccupancyPerson,
+    classify_energy_occupancy,
     remaining_protected_cycle_budget_kwh,
     retain_demand_samples,
+    select_house_cycle_budget,
     select_protected_cycle_budget,
 )
 
@@ -127,6 +131,109 @@ def test_cycle_sampler_rejects_stale_in_progress_state() -> None:
     restored.restore(sampler.to_payload(), start + timedelta(minutes=11))
 
     assert restored.to_payload() is None
+
+
+def test_daily_sampler_records_a_full_boundary_to_boundary_heater_cycle() -> None:
+    sampler = DailyDemandCycleSampler(time(12, 1), max_gap=timedelta(days=2))
+    assert sampler.observe(datetime(2026, 9, 1, 12, 1, tzinfo=UTC), 2) is None
+    sample = sampler.observe(datetime(2026, 9, 2, 12, 1, tzinfo=UTC), 2)
+    assert sample is not None
+    assert sample.observed_at == datetime(2026, 9, 2, 12, 1, tzinfo=UTC)
+    assert sample.energy_kwh == 48
+
+
+def test_daily_sampler_splits_a_reading_across_the_boundary() -> None:
+    sampler = DailyDemandCycleSampler(time(12), max_gap=timedelta(days=2))
+    sampler.observe(datetime(2026, 9, 1, 12, tzinfo=UTC), 1)
+    sample = sampler.observe(datetime(2026, 9, 2, 13, tzinfo=UTC), 3)
+    assert sample is not None
+    # Linear interpolation reaches 2.92 kW at 12:00, averaging 1.96 kW
+    # across the completed 24-hour cycle.
+    assert sample.energy_kwh == pytest.approx(47.04)
+    assert sampler.to_payload()["cycle_energy_kwh"] == pytest.approx(2.96)
+
+
+def test_auto_occupancy_assumes_home_without_person_entities() -> None:
+    now = datetime(2026, 9, 2, 18, tzinfo=UTC)
+    result = classify_energy_occupancy("auto", [], now, 6)
+    assert result.state == "home"
+    assert result.reason == "no_person_entities_assume_home"
+
+
+def test_auto_occupancy_requires_everyone_away_for_confirmation_period() -> None:
+    now = datetime(2026, 9, 2, 18, tzinfo=UTC)
+    pending = classify_energy_occupancy(
+        "auto", [OccupancyPerson("not_home", now - timedelta(hours=5))], now, 6
+    )
+    confirmed = classify_energy_occupancy(
+        "auto", [OccupancyPerson("not_home", now - timedelta(hours=6))], now, 6
+    )
+    assert (pending.state, pending.reason) == ("home", "away_confirmation_pending")
+    assert (confirmed.state, confirmed.reason) == ("away", "all_people_away_confirmed")
+
+
+def test_auto_occupancy_treats_unknown_presence_as_home() -> None:
+    now = datetime(2026, 9, 2, 18, tzinfo=UTC)
+    result = classify_energy_occupancy(
+        "auto", [OccupancyPerson("unavailable", now - timedelta(hours=12))], now, 6
+    )
+    assert result.state == "home"
+    assert result.reason == "presence_uncertain_assume_home"
+
+
+def test_auto_occupancy_treats_invalid_person_timestamp_as_home() -> None:
+    now = datetime(2026, 9, 2, 18, tzinfo=UTC)
+    result = classify_energy_occupancy(
+        "auto", [OccupancyPerson("not_home", now.replace(tzinfo=None))], now, 6
+    )
+    assert result.state == "home"
+    assert result.reason == "presence_uncertain_assume_home"
+
+
+def test_manual_away_bypasses_confirmation_like_the_pilot() -> None:
+    now = datetime(2026, 9, 2, 18, tzinfo=UTC)
+    result = classify_energy_occupancy(
+        "away", [OccupancyPerson("home", now)], now, 6
+    )
+    assert result.state == "away"
+    assert result.reason == "manual_away"
+
+
+def test_occupied_budget_requires_both_base_and_heater_p80_when_mapped() -> None:
+    warming = select_house_cycle_budget(
+        [1, 2, 3, 4, 5, 6, 7],
+        [1, 2, 3, 4, 5, 6],
+        17.5,
+        6.5,
+        "home",
+    )
+    learned = select_house_cycle_budget(
+        [1, 2, 3, 4, 5, 6, 7],
+        [0, 1, 2, 3, 4, 5, 6],
+        17.5,
+        6.5,
+        "home",
+    )
+    assert (warming.cycle_budget_kwh, warming.model) == (17.5, "occupied_fallback")
+    assert (learned.cycle_budget_kwh, learned.model) == (10.6, "measured_occupied_p80")
+
+
+def test_away_budget_never_uses_occupied_learning() -> None:
+    result = select_house_cycle_budget(
+        [20] * 7,
+        [5] * 7,
+        17.5,
+        6.5,
+        "away",
+    )
+    assert result.cycle_budget_kwh == 6.5
+    assert result.model == "away_fallback"
+
+
+def test_complete_house_source_can_learn_without_optional_heater_mapping() -> None:
+    result = select_house_cycle_budget([1, 2, 3, 4, 5, 6, 7], None, 17.5, 6.5, "home")
+    assert result.cycle_budget_kwh == 5.8
+    assert result.model == "measured_occupied_p80"
 
 
 def test_remaining_budget_scales_to_next_free_window() -> None:

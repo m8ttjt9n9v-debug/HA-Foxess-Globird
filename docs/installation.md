@@ -18,7 +18,7 @@ HACS installation requires a public GitHub repository. This project publishes
 versioned GitHub releases for the custom-repository channel; inclusion in
 HACS's default catalogue is a separate review process.
 
-Version 0.7.0 is observer-by-default. Automatic FoxESS free charging is not
+Version 0.8.0 is observer-by-default. Automatic FoxESS free charging is not
 present; the earlier simplified controller remains removed. The verified
 ZEROHERO export path and the faithful direct-EVSE/smart-socket Tessie paths are
 separately gated. Bounded FoxESS Diagnostics remain explicitly submitted actions.
@@ -88,8 +88,12 @@ remain disabled.
 - Confirm the grid sensor's sign convention using a known load. The setup form asks whether positive means import.
 - Record usable battery capacity, battery floor, and any reserve required for the site.
 - If you select a protected house-load sensor, set the free-charge window and
-  explicit learning fallback. At the Working Single Phase Pilot Site this source excludes separately
-  forecast heaters. The observer records non-free-window cycles locally; the
-  learner itself does not control the inverter.
+  explicit occupied and away fallbacks. Map a whole-house source when it is the
+  complete protected demand. If a heater is separately metered, instead map
+  the non-heater base load plus the optional heater-power sensor so each P80 is
+  learned once. Auto occupancy assumes Home unless all Home Assistant people
+  are validly away for the configured confirmation period. Use the persistent
+  Home/Away selector only as an explicit override. Learning never controls the
+  inverter by itself.
 
 If a sensor is unavailable or has an unsupported unit, the integration displays unavailable calculations rather than guessing.

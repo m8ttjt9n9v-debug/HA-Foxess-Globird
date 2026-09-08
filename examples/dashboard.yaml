@@ -239,8 +239,20 @@ views:
             entity: sensor.home_energy_house_load
             name: House load
           - type: tile
+            entity: select.home_energy_house_occupancy_mode
+            name: Occupancy policy
+          - type: tile
+            entity: sensor.home_energy_house_occupancy_state
+            name: Occupancy state
+          - type: tile
             entity: sensor.home_energy_learned_house_energy
-            name: Learned house budget
+            name: Protected house budget
+          - type: tile
+            entity: sensor.home_energy_learned_base_house_energy
+            name: Base / whole-house P80
+          - type: tile
+            entity: sensor.home_energy_learned_heater_energy
+            name: Separate heater P80
           - type: tile
             entity: sensor.home_energy_remaining_house_energy
             name: Remaining house budget
@@ -249,7 +261,10 @@ views:
             name: Learning status
           - type: tile
             entity: sensor.home_energy_learning_samples
-            name: Learning samples
+            name: Base learning samples
+          - type: tile
+            entity: sensor.home_energy_heater_learning_samples
+            name: Heater learning samples
       - type: grid
         column_span: 2
         cards:
@@ -368,6 +383,8 @@ views:
                 name: Automatic ZEROHERO export
               - entity: switch.home_energy_automatic_ev_control
                 name: Automatic EV control
+              - entity: select.home_energy_house_occupancy_mode
+                name: House-energy occupancy policy
               - entity: sensor.home_energy_test_status
                 name: Diagnostic status
           - type: markdown
@@ -484,9 +501,17 @@ views:
               - entity: sensor.home_energy_learning_status
                 name: Learning status
               - entity: sensor.home_energy_learning_samples
-                name: Retained samples
+                name: Base retained samples
+              - entity: sensor.home_energy_heater_learning_samples
+                name: Heater retained samples
+              - entity: sensor.home_energy_house_occupancy_state
+                name: Occupancy state
               - entity: sensor.home_energy_learned_house_energy
-                name: Learned demand
+                name: Selected protected demand
+              - entity: sensor.home_energy_learned_base_house_energy
+                name: Base / whole-house P80
+              - entity: sensor.home_energy_learned_heater_energy
+                name: Separate heater P80
               - entity: sensor.home_energy_remaining_house_energy
                 name: Remaining protected demand
       - type: grid

@@ -33,8 +33,12 @@ from .const import (
     CONF_FREE_CHARGE_START,
     CONF_GRID_IMPORT_POSITIVE,
     CONF_GRID_POWER,
+    CONF_HEATER_POWER,
+    CONF_HOUSE_AWAY_CONFIRMATION_HOURS,
+    CONF_HOUSE_AWAY_FALLBACK,
     CONF_HOUSE_LEARNING_FALLBACK,
     CONF_HOUSE_LOAD,
+    CONF_HOUSE_OCCUPANCY_MODE,
     CONF_INVERTER_CHARGE_LIMIT_KW,
     CONF_INVERTER_DISCHARGE_LIMIT_KW,
     CONF_OFFPEAK_BALANCE_RATE,
@@ -57,7 +61,10 @@ from .const import (
     DEFAULT_EXPORT_LIMIT_KW,
     DEFAULT_FREE_CHARGE_END,
     DEFAULT_FREE_CHARGE_START,
+    DEFAULT_HOUSE_AWAY_CONFIRMATION_HOURS,
+    DEFAULT_HOUSE_AWAY_FALLBACK_KWH,
     DEFAULT_HOUSE_LEARNING_FALLBACK_KWH,
+    DEFAULT_HOUSE_OCCUPANCY_MODE,
     DEFAULT_INVERTER_CHARGE_LIMIT_KW,
     DEFAULT_INVERTER_DISCHARGE_LIMIT_KW,
     DEFAULT_OFFPEAK_BALANCE_RATE,
@@ -81,10 +88,16 @@ from .planner.daily_meter import (
     WindowImportAccumulator,
 )
 from .planner.learning import (
+    DailyDemandCycleSampler,
     DemandCycleSampler,
     DemandHistory,
     DemandLearningResult,
+    HouseBudgetResult,
+    OccupancyPerson,
+    OccupancyResult,
+    classify_energy_occupancy,
     remaining_protected_cycle_budget_kwh,
+    select_house_cycle_budget,
 )
 from .planner.ledger import calculate_ledger
 from .planner.tariff import calculate_daily_energy_cost, calculate_tariff_guard
@@ -104,6 +117,8 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
         self.snapshot: SiteSnapshot | None = None
         self.demand_history = DemandHistory([])
         self.demand_sampler = self._create_demand_sampler(config)
+        self.heater_history = DemandHistory([])
+        self.heater_sampler = self._create_heater_sampler(config)
         self._zero_import_since: datetime | None = None
         self.daily_import = DailyImportAccumulator()
         self.free_window_import = WindowImportAccumulator(
@@ -156,6 +171,7 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
                     CONF_GRID_POWER,
                     CONF_DAILY_IMPORT_ENTITY,
                     CONF_HOUSE_LOAD,
+                    CONF_HEATER_POWER,
                     CONF_SOLAR_POWER,
                     CONF_EV_SOC,
                 )
@@ -168,8 +184,16 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
         """Load and validate the rolling learner history from HA storage."""
         payload = await self._demand_store.async_load()
         self.demand_history = DemandHistory.from_payload(payload, dt_util.utcnow())
-        if self.demand_sampler is not None and isinstance(payload, dict):
-            self.demand_sampler.restore(payload.get("in_progress_cycle"), dt_util.now())
+        if isinstance(payload, dict):
+            self.heater_history = DemandHistory.from_payload(
+                payload.get("heater_history"), dt_util.utcnow()
+            )
+            if self.demand_sampler is not None:
+                self.demand_sampler.restore(payload.get("in_progress_cycle"), dt_util.now())
+            if self.heater_sampler is not None:
+                self.heater_sampler.restore(
+                    payload.get("heater_in_progress_cycle"), dt_util.now()
+                )
 
     async def async_load_daily_import(self) -> None:
         """Load the persisted same-day import accumulator."""
@@ -206,6 +230,22 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
         except (KeyError, TypeError, ValueError):
             return None
 
+    @staticmethod
+    def _create_heater_sampler(config: dict[str, object]) -> DailyDemandCycleSampler | None:
+        """Create the separate daily heater sampler only when explicitly mapped."""
+        if not config.get(CONF_HEATER_POWER):
+            return None
+        try:
+            start_value = config[CONF_FREE_CHARGE_START]
+            start = (
+                start_value
+                if isinstance(start_value, time)
+                else time.fromisoformat(str(start_value))
+            )
+            return DailyDemandCycleSampler(start)
+        except (KeyError, TypeError, ValueError):
+            return None
+
     def _configured_time(self, key: str, default: str) -> time:
         """Parse a local-time setting, falling back only for legacy entries."""
         try:
@@ -214,8 +254,36 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
             return time.fromisoformat(default)
 
     @property
-    def learning_result(self) -> DemandLearningResult:
-        """Return the learned budget and warm-up evidence."""
+    def occupancy_result(self) -> OccupancyResult:
+        """Return the canonical conservative occupancy classification."""
+        people = [
+            OccupancyPerson(state.state, state.last_changed)
+            for state in self.hass.states.async_all("person")
+        ]
+        try:
+            confirmation = float(
+                self.config.get(
+                    CONF_HOUSE_AWAY_CONFIRMATION_HOURS,
+                    DEFAULT_HOUSE_AWAY_CONFIRMATION_HOURS,
+                )
+            )
+            return classify_energy_occupancy(
+                str(
+                    self.config.get(
+                        CONF_HOUSE_OCCUPANCY_MODE,
+                        DEFAULT_HOUSE_OCCUPANCY_MODE,
+                    )
+                ),
+                people,
+                dt_util.now(),
+                confirmation,
+            )
+        except (TypeError, ValueError):
+            return classify_energy_occupancy("home", people, dt_util.now(), 0)
+
+    @property
+    def base_learning_result(self) -> DemandLearningResult:
+        """Return the independent mapped base/whole-house P80 stream."""
         try:
             fallback = float(
                 self.config.get(
@@ -228,6 +296,48 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
         if not isfinite(fallback) or fallback < 0:
             fallback = DEFAULT_HOUSE_LEARNING_FALLBACK_KWH
         return self.demand_history.select(fallback)
+
+    @property
+    def heater_learning_result(self) -> DemandLearningResult | None:
+        """Return the optional separate heater P80 stream."""
+        if self.heater_sampler is None:
+            return None
+        return self.heater_history.select(0.0)
+
+    @property
+    def learning_result(self) -> HouseBudgetResult:
+        """Return the one occupancy-aware protected-house budget."""
+        try:
+            occupied_fallback = float(
+                self.config.get(
+                    CONF_HOUSE_LEARNING_FALLBACK,
+                    DEFAULT_HOUSE_LEARNING_FALLBACK_KWH,
+                )
+            )
+            away_fallback = float(
+                self.config.get(
+                    CONF_HOUSE_AWAY_FALLBACK,
+                    DEFAULT_HOUSE_AWAY_FALLBACK_KWH,
+                )
+            )
+        except (TypeError, ValueError):
+            occupied_fallback = DEFAULT_HOUSE_LEARNING_FALLBACK_KWH
+            away_fallback = DEFAULT_HOUSE_AWAY_FALLBACK_KWH
+        if not isfinite(occupied_fallback) or occupied_fallback < 0:
+            occupied_fallback = DEFAULT_HOUSE_LEARNING_FALLBACK_KWH
+        if not isfinite(away_fallback) or away_fallback < 0:
+            away_fallback = DEFAULT_HOUSE_AWAY_FALLBACK_KWH
+        return select_house_cycle_budget(
+            [sample.energy_kwh for sample in self.demand_history.samples],
+            (
+                [sample.energy_kwh for sample in self.heater_history.samples]
+                if self.heater_sampler is not None
+                else None
+            ),
+            occupied_fallback,
+            away_fallback,
+            self.occupancy_result.state,
+        )
 
     @property
     def learning_remaining_kwh(self) -> float | None:
@@ -575,16 +685,23 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
         house_load_kw = self.snapshot.house_load_kw
         if house_load_kw is None:
             return
-        # Window boundaries are configured as local site time (for this
-        # project, Australia).  Using UTC here would shift a 12:01–14:59
-        # window by ten or eleven hours and silently learn the wrong period.
-        sample = self.demand_sampler.observe(dt_util.now(), house_load_kw)
+        # Window boundaries are configured in Home Assistant's local site time.
+        # Using UTC would silently learn a different interval at most sites.
         now = dt_util.now()
+        sample = self.demand_sampler.observe(now, house_load_kw)
+        heater_sample = None
+        if self.heater_sampler is not None:
+            heater_power_kw = self._power(self.config.get(CONF_HEATER_POWER))
+            if heater_power_kw is not None:
+                heater_sample = self.heater_sampler.observe(now, heater_power_kw)
         if sample is not None:
             self.demand_history.add(sample.observed_at, sample.energy_kwh)
+        if heater_sample is not None:
+            self.heater_history.add(heater_sample.observed_at, heater_sample.energy_kwh)
         save_interval = self.demand_sampler.max_gap / 2
         if (
             sample is not None
+            or heater_sample is not None
             or self._demand_sampler_last_saved_at is None
             or now - self._demand_sampler_last_saved_at >= save_interval
         ):
@@ -594,6 +711,9 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
     async def _async_save_demand_state(self) -> None:
         """Persist completed history and the current partial cycle together."""
         payload: dict[str, object] = self.demand_history.to_payload()
+        payload["heater_history"] = self.heater_history.to_payload()
         if self.demand_sampler is not None:
             payload["in_progress_cycle"] = self.demand_sampler.to_payload()
+        if self.heater_sampler is not None:
+            payload["heater_in_progress_cycle"] = self.heater_sampler.to_payload()
         await self._demand_store.async_save(payload)

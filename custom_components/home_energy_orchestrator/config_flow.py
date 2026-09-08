@@ -90,8 +90,12 @@ from .const import (
     CONF_FREE_CHARGE_START,
     CONF_GRID_IMPORT_POSITIVE,
     CONF_GRID_POWER,
+    CONF_HEATER_POWER,
+    CONF_HOUSE_AWAY_CONFIRMATION_HOURS,
+    CONF_HOUSE_AWAY_FALLBACK,
     CONF_HOUSE_LEARNING_FALLBACK,
     CONF_HOUSE_LOAD,
+    CONF_HOUSE_OCCUPANCY_MODE,
     CONF_INVERTER_CHARGE_LIMIT_KW,
     CONF_INVERTER_DISCHARGE_LIMIT_KW,
     CONF_OFFPEAK_BALANCE_RATE,
@@ -165,7 +169,10 @@ from .const import (
     DEFAULT_FOXESS_CONTROL_OWNER,
     DEFAULT_FREE_CHARGE_END,
     DEFAULT_FREE_CHARGE_START,
+    DEFAULT_HOUSE_AWAY_CONFIRMATION_HOURS,
+    DEFAULT_HOUSE_AWAY_FALLBACK_KWH,
     DEFAULT_HOUSE_LEARNING_FALLBACK_KWH,
+    DEFAULT_HOUSE_OCCUPANCY_MODE,
     DEFAULT_INVERTER_CHARGE_LIMIT_KW,
     DEFAULT_INVERTER_DISCHARGE_LIMIT_KW,
     DEFAULT_OFFPEAK_BALANCE_RATE,
@@ -189,6 +196,7 @@ from .const import (
     EV_LOCATION_MODES,
     FOXESS_CONTROL_OWNER_MODBUS,
     FOXESS_CONTROL_OWNERS,
+    HOUSE_OCCUPANCY_MODES,
 )
 from .discovery import DiscoveryEntity, discover_entity_defaults
 
@@ -386,6 +394,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     ),
                 ): vol.Coerce(float),
                 optional_entity(CONF_HOUSE_LOAD): ENTITY,
+                optional_entity(CONF_HEATER_POWER): ENTITY,
                 optional_entity(CONF_SOLAR_POWER): ENTITY,
                 vol.Required(
                     CONF_FREE_CHARGE_START,
@@ -401,6 +410,29 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         CONF_HOUSE_LEARNING_FALLBACK, DEFAULT_HOUSE_LEARNING_FALLBACK_KWH
                     ),
                 ): vol.Coerce(float),
+                vol.Required(
+                    CONF_HOUSE_AWAY_FALLBACK,
+                    default=defaults.get(
+                        CONF_HOUSE_AWAY_FALLBACK,
+                        DEFAULT_HOUSE_AWAY_FALLBACK_KWH,
+                    ),
+                ): vol.Coerce(float),
+                vol.Required(
+                    CONF_HOUSE_AWAY_CONFIRMATION_HOURS,
+                    default=defaults.get(
+                        CONF_HOUSE_AWAY_CONFIRMATION_HOURS,
+                        DEFAULT_HOUSE_AWAY_CONFIRMATION_HOURS,
+                    ),
+                ): vol.Coerce(float),
+                vol.Required(
+                    CONF_HOUSE_OCCUPANCY_MODE,
+                    default=defaults.get(
+                        CONF_HOUSE_OCCUPANCY_MODE,
+                        DEFAULT_HOUSE_OCCUPANCY_MODE,
+                    ),
+                ): selector.SelectSelector(
+                    selector.SelectSelectorConfig(options=list(HOUSE_OCCUPANCY_MODES))
+                ),
                 optional_entity(CONF_EV_SOC): ENTITY,
                 vol.Required(
                     CONF_EV_VOLTAGE, default=defaults.get(CONF_EV_VOLTAGE, DEFAULT_EV_VOLTAGE)
@@ -782,6 +814,16 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             CONF_HOUSE_LEARNING_FALLBACK: data.get(
                 CONF_HOUSE_LEARNING_FALLBACK, DEFAULT_HOUSE_LEARNING_FALLBACK_KWH
             ),
+            CONF_HOUSE_AWAY_FALLBACK: data.get(
+                CONF_HOUSE_AWAY_FALLBACK, DEFAULT_HOUSE_AWAY_FALLBACK_KWH
+            ),
+            CONF_HOUSE_AWAY_CONFIRMATION_HOURS: data.get(
+                CONF_HOUSE_AWAY_CONFIRMATION_HOURS,
+                DEFAULT_HOUSE_AWAY_CONFIRMATION_HOURS,
+            ),
+            CONF_HOUSE_OCCUPANCY_MODE: data.get(
+                CONF_HOUSE_OCCUPANCY_MODE, DEFAULT_HOUSE_OCCUPANCY_MODE
+            ),
             CONF_EV_PHASE_COUNT: data.get(CONF_EV_PHASE_COUNT, DEFAULT_EV_PHASE_COUNT),
             CONF_EV_MAX_CURRENT: data.get(CONF_EV_MAX_CURRENT, DEFAULT_EV_MAX_CURRENT),
             CONF_EV_CHARGE_PATH: data.get(CONF_EV_CHARGE_PATH, DEFAULT_EV_CHARGE_PATH),
@@ -954,6 +996,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             CONF_BATTERY_POWER,
             CONF_DAILY_IMPORT_ENTITY,
             CONF_GRID_POWER,
+            CONF_HEATER_POWER,
             CONF_HOUSE_LOAD,
             CONF_SOLAR_POWER,
             CONF_EV_SOC,
@@ -1004,6 +1047,8 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             return {"base": "outside_ev_policy_requires_local_modbus"}
         if data.get(CONF_EV_LOCATION_MODE) not in EV_LOCATION_MODES:
             return {CONF_EV_LOCATION_MODE: "invalid_ev_location_mode"}
+        if data.get(CONF_HOUSE_OCCUPANCY_MODE) not in HOUSE_OCCUPANCY_MODES:
+            return {CONF_HOUSE_OCCUPANCY_MODE: "invalid_house_occupancy_mode"}
         if data.get(CONF_EV_FREE_WINDOW_PRIORITY) not in EV_FREE_WINDOW_PRIORITIES:
             return {CONF_EV_FREE_WINDOW_PRIORITY: "invalid_ev_priority"}
         if data.get(CONF_EV_CHARGE_PATH) not in EV_CHARGE_PATHS:
@@ -1065,6 +1110,8 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             telemetry_max_age = float(data[CONF_EV_TELEMETRY_MAX_AGE_SECONDS])
             telemetry_max_skew = float(data[CONF_EV_TELEMETRY_MAX_SKEW_SECONDS])
             fallback = float(data[CONF_HOUSE_LEARNING_FALLBACK])
+            away_fallback = float(data[CONF_HOUSE_AWAY_FALLBACK])
+            away_confirmation = float(data[CONF_HOUSE_AWAY_CONFIRMATION_HOURS])
         except (KeyError, TypeError, ValueError):
             return {"base": "invalid_site_limits"}
         try:
@@ -1130,6 +1177,9 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             solar_spill_soc,
             telemetry_max_age,
             telemetry_max_skew,
+            fallback,
+            away_fallback,
+            away_confirmation,
         )
         if (
             not all(math.isfinite(value) for value in values)
@@ -1178,6 +1228,9 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             or not 0 <= solar_spill_soc <= 100
             or telemetry_max_age <= 0
             or telemetry_max_skew < 0
+            or fallback < 0
+            or away_fallback < 0
+            or away_confirmation < 0
             or (bool(data.get(CONF_EV_CONTROL_COMMISSIONED)) and service_import_limit <= 0)
         ):
             return {"base": "invalid_site_limits"}

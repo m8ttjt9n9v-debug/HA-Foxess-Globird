@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.8.0 — faithful occupancy-aware house learning
+
+- Port the Working Single Phase Pilot Site's persistent Auto/Home/Away house-
+  energy policy. Auto assumes Home with no people, uncertain presence, or an
+  incomplete away-confirmation interval; manual Away bypasses the delay.
+- Preserve the existing restart-persistent base/whole-house P80 history and add
+  an optional independent full-day heater P80 history at the configured free-
+  window boundary. Both retain 28 samples for at most 35 days.
+- When a heater is mapped, require seven valid samples in both streams before
+  replacing the occupied fallback with base P80 plus heater P80. Away always
+  uses its configured fallback. Without a heater mapping, the mapped house
+  source remains the complete protected demand and can mature independently.
+- Feed exactly one selected protected-house budget into export and reserve
+  planning. Weather remains diagnostic and is not added as hidden demand.
+- Add a persistent occupancy selector, transparent occupancy/base/heater
+  sensors, redacted diagnostics, dashboard cards, and source-provenance tests.
+
 ## 0.7.0 — assisted FoxESS and Tessie discovery
 
 - Inspect Home Assistant's entity registry during setup and reconfiguration and

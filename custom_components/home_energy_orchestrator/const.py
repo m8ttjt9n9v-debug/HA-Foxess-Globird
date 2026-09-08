@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 DOMAIN = "home_energy_orchestrator"
-PLATFORMS = ["sensor", "number", "button", "switch"]
+PLATFORMS = ["sensor", "number", "button", "switch", "select"]
 
 CONF_BATTERY_SOC = "battery_soc_entity"
 CONF_BATTERY_POWER = "battery_power_entity"
@@ -30,6 +30,7 @@ CONF_EXPORT_LIMIT_KW = "export_limit_kw"
 CONF_INVERTER_CHARGE_LIMIT_KW = "inverter_charge_limit_kw"
 CONF_INVERTER_DISCHARGE_LIMIT_KW = "inverter_discharge_limit_kw"
 CONF_HOUSE_LOAD = "house_load_entity"
+CONF_HEATER_POWER = "heater_power_entity"
 CONF_SOLAR_POWER = "solar_power_entity"
 CONF_RESERVE = "reserve_kwh"
 CONF_EV_SOC = "ev_soc_entity"
@@ -44,6 +45,9 @@ CONF_ZERO_IMPORT_CONFIRM_MINUTES = "zero_import_confirm_minutes"
 CONF_FREE_CHARGE_START = "free_charge_window_start"
 CONF_FREE_CHARGE_END = "free_charge_window_end"
 CONF_HOUSE_LEARNING_FALLBACK = "house_learning_fallback_kwh"
+CONF_HOUSE_AWAY_FALLBACK = "house_away_fallback_kwh"
+CONF_HOUSE_AWAY_CONFIRMATION_HOURS = "house_away_confirmation_hours"
+CONF_HOUSE_OCCUPANCY_MODE = "house_occupancy_mode"
 CONF_AUTOMATIC_CONTROL_ENABLED = "automatic_control_enabled"
 CONF_AUTOMATIC_EXPORT_ENABLED = "automatic_export_enabled"
 CONF_EV_AUTOMATIC_CONTROL_ENABLED = "ev_automatic_control_enabled"
@@ -156,6 +160,10 @@ DEFAULT_EV_MAX_CURRENT = 0.0
 DEFAULT_FREE_CHARGE_START = "12:01:00"
 DEFAULT_FREE_CHARGE_END = "14:59:00"
 DEFAULT_HOUSE_LEARNING_FALLBACK_KWH = 17.5
+DEFAULT_HOUSE_AWAY_FALLBACK_KWH = 6.5
+DEFAULT_HOUSE_AWAY_CONFIRMATION_HOURS = 6.0
+DEFAULT_HOUSE_OCCUPANCY_MODE = "auto"
+HOUSE_OCCUPANCY_MODES = ("auto", "home", "away")
 DEFAULT_AUTOMATIC_CONTROL_ENABLED = False
 DEFAULT_AUTOMATIC_EXPORT_ENABLED = False
 DEFAULT_EV_AUTOMATIC_CONTROL_ENABLED = False
