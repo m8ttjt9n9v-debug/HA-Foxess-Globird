@@ -4,7 +4,7 @@ A Home Assistant custom integration for a site-configured energy ledger,
 conservative demand learning, bounded FoxESS diagnostics, the verified
 Working Single Phase Pilot Site ZEROHERO export policy, and a faithful direct-EVSE free-window port.
 
-Version 0.5.0 deliberately excludes the rewritten automatic battery controller
+Version 0.6.0 deliberately excludes the rewritten automatic battery controller
 that was not a faithful port of the proven Working Single Phase Pilot Site.
 Automatic FoxESS free charging remains absent. Separately gated direct-EVSE and
 smart-socket Tessie paths have returned through port-first characterization and
@@ -67,6 +67,10 @@ rooms, and other site-specific cards belong in a local overlay.
   before outlet power, waits the configured connector-settle period, then
   re-bounds current and starts charging. A sustained `no_power` fault receives
   at most one restart-safe, current-first outlet recovery cycle before latching.
+- Tessie daily-driving learning from a mapped cumulative energy meter. It keeps
+  the source's 28-cycle P85, configured arrival reserve, complete-window
+  fallback, actuator-step rounding, and away/disconnected hold behavior. See
+  the [learning provenance](docs/ev-driving-learning-port.md).
 - Preview-first, explicitly submitted FoxESS force-charge and force-discharge
   diagnostics. Tests require Local Modbus ownership, the FoxESS gate, complete
   actuator mapping, Safety Lock off, and confirmation. They are time-bounded
@@ -86,8 +90,12 @@ default-off. Safety Lock blocks every hardware write.
 ## Not currently implemented
 
 - Automatic FoxESS free-window charging or post-charge reconciliation.
-- Learned Tessie driving targets.
 - Mixed FoxCloud schedule and local Modbus control.
+
+The canonical pilot source has no local automatic battery `Force Charge`
+writer. See the [battery ownership boundary](docs/free-window-battery-ownership.md):
+a future local free-charge controller would be a separately commissioned new
+extension, not code that can be claimed as a direct port.
 
 These are intentionally absent rather than represented by simplified rewrite
 code. The [project source of truth](docs/source-of-truth.md) records the public

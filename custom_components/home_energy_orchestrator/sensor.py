@@ -210,6 +210,48 @@ DESCRIPTIONS = (
         suggested_display_precision=1,
     ),
     SensorEntityDescription(
+        key="ev_daily_driving_energy",
+        name="EV Daily Driving Energy",
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        device_class="energy",
+        suggested_display_precision=2,
+    ),
+    SensorEntityDescription(
+        key="ev_driving_p85",
+        name="EV Driving P85",
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        device_class="energy",
+        suggested_display_precision=2,
+    ),
+    SensorEntityDescription(
+        key="ev_driving_learning_samples",
+        name="EV Driving Learning Samples",
+        state_class="measurement",
+    ),
+    SensorEntityDescription(
+        key="ev_usable_capacity",
+        name="EV Estimated Usable Capacity",
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        device_class="energy",
+        suggested_display_precision=2,
+    ),
+    SensorEntityDescription(
+        key="ev_free_window_soc_gain",
+        name="EV Free Window State of Charge Gain",
+        native_unit_of_measurement="%",
+        suggested_display_precision=1,
+    ),
+    SensorEntityDescription(
+        key="ev_learned_charge_limit",
+        name="EV Learned General Charge Limit",
+        native_unit_of_measurement="%",
+        suggested_display_precision=0,
+    ),
+    SensorEntityDescription(
+        key="ev_driving_learning_status",
+        name="EV Driving Learning Status",
+    ),
+    SensorEntityDescription(
         key="free_energy_remaining",
         name="Free Energy Remaining Today",
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
@@ -404,6 +446,9 @@ class EnergySensor(CoordinatorEntity[EnergyCoordinator], SensorEntity):
         ev_current_average = (
             ev_controller.ev_average.result(now) if ev_controller is not None else None
         )
+        ev_learning = (
+            ev_controller.learned_charge_limit if ev_controller is not None else None
+        )
         values = {
             "status": ledger.reason,
             "battery_soc": None if snapshot is None else snapshot.battery_soc,
@@ -474,6 +519,33 @@ class EnergySensor(CoordinatorEntity[EnergyCoordinator], SensorEntity):
             ),
             "ev_pre_free_current_target": (
                 ev_controller.pre_free_current_a if ev_controller is not None else None
+            ),
+            "ev_daily_driving_energy": (
+                ev_controller.daily_driving_energy_kwh
+                if ev_controller is not None
+                else None
+            ),
+            "ev_driving_p85": (
+                ev_learning.p85_daily_energy_kwh if ev_learning is not None else None
+            ),
+            "ev_driving_learning_samples": (
+                len(ev_controller.driving_history.samples)
+                if ev_controller is not None
+                else 0
+            ),
+            "ev_usable_capacity": (
+                ev_learning.usable_capacity_kwh if ev_learning is not None else None
+            ),
+            "ev_free_window_soc_gain": (
+                ev_learning.free_window_soc_gain_percent
+                if ev_learning is not None
+                else None
+            ),
+            "ev_learned_charge_limit": (
+                ev_learning.limit_percent if ev_learning is not None else None
+            ),
+            "ev_driving_learning_status": (
+                ev_learning.mode if ev_learning is not None else "unavailable"
             ),
             "free_energy_remaining": ledger.free_energy_remaining_kwh,
             "daily_import": ledger.daily_import_kwh,
@@ -610,6 +682,22 @@ class EnergySensor(CoordinatorEntity[EnergyCoordinator], SensorEntity):
                 ),
                 "pre_free_current_a": controller.pre_free_current_a,
                 "outside_control_active": controller.outside_control_active,
+                "driving_learning_mode": (
+                    controller.learned_charge_limit.mode
+                    if controller.learned_charge_limit is not None
+                    else "unavailable"
+                ),
+                "driving_learning_samples": len(controller.driving_history.samples),
+                "driving_p85_kwh": (
+                    controller.learned_charge_limit.p85_daily_energy_kwh
+                    if controller.learned_charge_limit is not None
+                    else None
+                ),
+                "learned_general_limit_percent": (
+                    controller.learned_charge_limit.limit_percent
+                    if controller.learned_charge_limit is not None
+                    else None
+                ),
             }
         if self.entity_description.key != "status":
             return None
@@ -694,6 +782,23 @@ class EnergySensor(CoordinatorEntity[EnergyCoordinator], SensorEntity):
             ),
             "ev_last_write_at": (
                 ev_controller.last_write_at if ev_controller is not None else None
+            ),
+            "ev_driving_learning_mode": (
+                ev_controller.learned_charge_limit.mode
+                if ev_controller is not None
+                and ev_controller.learned_charge_limit is not None
+                else "unavailable"
+            ),
+            "ev_driving_learning_samples": (
+                len(ev_controller.driving_history.samples)
+                if ev_controller is not None
+                else 0
+            ),
+            "ev_learned_general_limit_percent": (
+                ev_controller.learned_charge_limit.limit_percent
+                if ev_controller is not None
+                and ev_controller.learned_charge_limit is not None
+                else None
             ),
             "export_session_phase": (
                 self.coordinator.active_controller.export_session.phase

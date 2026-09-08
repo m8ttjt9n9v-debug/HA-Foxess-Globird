@@ -28,6 +28,8 @@ Tessie is optional when EV control is not commissioned. The ported EV
 free-window policy requires explicitly mapped capabilities equivalent to:
 
 - vehicle SoC and stored energy;
+- cumulative lifetime energy for daily-driving learning (optional; without it,
+  the conservative full-window fallback remains active);
 - location/at-home state and user override;
 - cable connection, charging state, and actual current;
 - writable charge current and its min/max/step metadata;
@@ -53,12 +55,9 @@ timestamps. Latest-start pre-free backfill additionally requires the Local
 Modbus ZEROHERO export ledger. Both outside-window stages are independently
 default-off and are rejected unless Local Modbus is selected as FoxESS owner.
 
-Learned driving demand remains a future, last-priority port pending review of
-Tessie's native capabilities. Lifetime driving-energy data is therefore not a
-current installation requirement.
-
-The Working Single Phase Pilot Site uses Tessie entities for these roles. Portable code must map roles,
-not embed that vehicle's `jns_x` entity IDs.
+The Working Single Phase Pilot Site uses Tessie entities for these roles.
+Portable code maps roles and never embeds that vehicle's entity IDs. See the
+[daily-driving learning provenance](ev-driving-learning-port.md).
 
 ## Optional equipment and integrations
 

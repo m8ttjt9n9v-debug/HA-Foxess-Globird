@@ -196,18 +196,27 @@ async def test_safety_lock_calculates_rehearsal_plan_without_writing(
     assert calls == []
 
 
-async def test_ev_runtime_never_stops_or_changes_direct_path_outside_free_window(
+async def test_ev_runtime_only_applies_general_limit_outside_free_window(
     hass: HomeAssistant,
 ) -> None:
     _set_ev_states(hass)
     calls = []
     hass.bus.async_listen(EVENT_CALL_SERVICE, calls.append)
+
+    async def accept(_call):
+        return None
+
+    hass.services.async_register("number", "set_value", accept)
     controller = ActiveEvController(hass, _coordinator(_controller_config()))
 
-    await controller.async_reconcile(datetime(2026, 9, 7, 0, 1, tzinfo=UTC))
+    start = datetime(2026, 9, 7, 0, 1, tzinfo=UTC)
+    await controller.async_reconcile(start)
+    await controller.async_reconcile(start + timedelta(seconds=30))
 
-    assert controller.last_reason == "outside_free_window_no_direct_write"
-    assert calls == []
+    assert controller.last_reason == "outside_window_general_limit_awaiting_feedback"
+    assert controller.last_actions == ()
+    assert len(calls) == 1
+    assert calls[0].data["service_data"]["entity_id"] == "number.car_limit"
 
 
 async def test_cloud_owner_blocks_opted_in_outside_window_stages(
@@ -216,6 +225,11 @@ async def test_cloud_owner_blocks_opted_in_outside_window_stages(
     _set_ev_states(hass)
     calls = []
     hass.bus.async_listen(EVENT_CALL_SERVICE, calls.append)
+
+    async def accept(_call):
+        return None
+
+    hass.services.async_register("number", "set_value", accept)
     controller = ActiveEvController(
         hass,
         _coordinator(
@@ -228,8 +242,9 @@ async def test_cloud_owner_blocks_opted_in_outside_window_stages(
 
     await controller.async_reconcile(datetime(2026, 9, 7, 0, 1, tzinfo=UTC))
 
-    assert controller.last_reason == "outside_free_window_no_direct_write"
-    assert calls == []
+    assert controller.last_reason == "general_limit"
+    assert controller.last_actions == ("set_charge_limit",)
+    assert len(calls) == 1
 
 
 @pytest.mark.freeze_time("2026-09-07 00:01:00+00:00")
@@ -704,3 +719,68 @@ async def test_runtime_fails_closed_when_vehicle_soc_is_unavailable(
 
     assert controller.last_reason == "ev_soc_unavailable"
     assert calls == []
+
+
+async def test_daily_driving_snapshot_survives_restart_and_ignores_missed_days(
+    hass: HomeAssistant,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config = _controller_config(ev_lifetime_energy_entity="sensor.car_lifetime")
+    coordinator = _coordinator(config)
+    first = ActiveEvController(hass, coordinator)
+    hass.states.async_set(
+        "sensor.car_lifetime", "1000", {"unit_of_measurement": "kWh"}
+    )
+    first_at = datetime(2026, 9, 7, 12, 1, tzinfo=UTC)
+    await first._async_snapshot_driving(first_at)  # noqa: SLF001
+
+    hass.states.async_set(
+        "sensor.car_lifetime", "1018.5", {"unit_of_measurement": "kWh"}
+    )
+    second_at = first_at + timedelta(days=1)
+    await first._async_snapshot_driving(second_at)  # noqa: SLF001
+    assert first.daily_driving_energy_kwh == 18.5
+    assert [sample.energy_kwh for sample in first.driving_history.samples] == [18.5]
+
+    monkeypatch.setattr(
+        "custom_components.home_energy_orchestrator.ev_active.dt_util.now",
+        lambda: second_at,
+    )
+    restored = ActiveEvController(hass, coordinator)
+    await restored._async_restore()  # noqa: SLF001
+    assert restored.driving_snapshot == first.driving_snapshot
+    assert [sample.energy_kwh for sample in restored.driving_history.samples] == [18.5]
+
+    hass.states.async_set(
+        "sensor.car_lifetime", "1050", {"unit_of_measurement": "kWh"}
+    )
+    await restored._async_snapshot_driving(second_at + timedelta(days=2))  # noqa: SLF001
+    assert restored.daily_driving_energy_kwh is None
+    assert [sample.energy_kwh for sample in restored.driving_history.samples] == [18.5]
+
+
+async def test_outside_cleanup_uses_pilot_general_limit_fallback(
+    hass: HomeAssistant,
+) -> None:
+    _set_ev_states(hass)
+
+    async def accept(_call):
+        return None
+
+    hass.services.async_register("number", "set_value", accept)
+    coordinator = _coordinator(
+        _controller_config(
+            foxess_control_owner="local_modbus",
+            ev_solar_spill_enabled=True,
+            ev_protected_baseline_a=1,
+        )
+    )
+    controller = ActiveEvController(hass, coordinator)
+    controller.outside_control_active = True
+
+    await controller.async_reconcile(datetime(2026, 9, 7, 0, 1, tzinfo=UTC))
+
+    assert controller.learned_charge_limit is not None
+    assert controller.learned_charge_limit.mode == "learning_full_window_fallback"
+    assert controller.learned_charge_limit.limit_percent == 76
+    assert controller.target_limit_percent == 76

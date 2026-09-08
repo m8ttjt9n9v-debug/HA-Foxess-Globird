@@ -53,6 +53,8 @@ ENTRY_DATA = {
     "ev_free_window_settle_minutes": 5.0,
     "ev_direct_limit_headroom_percent": 2.0,
     "ev_charge_efficiency_percent": 90.0,
+    "ev_arrival_reserve_soc_percent": 20.0,
+    "ev_learning_minimum_samples": 14,
     "site_grid_headroom_current_a": 1.0,
     "battery_free_window_target_percent": 100.0,
     "battery_charge_efficiency_percent": 95.0,

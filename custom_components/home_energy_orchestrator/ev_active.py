@@ -9,7 +9,7 @@ from math import isfinite
 
 from homeassistant.components import persistent_notification
 from homeassistant.core import CALLBACK_TYPE, HomeAssistant
-from homeassistant.helpers.event import async_track_time_interval
+from homeassistant.helpers.event import async_track_time_change, async_track_time_interval
 from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
@@ -25,6 +25,7 @@ from .const import (
     CONF_EV_ACTUAL_CURRENT,
     CONF_EV_ALLOWANCE_GUARD_ENABLED,
     CONF_EV_ALLOWANCE_SAFETY_MARGIN,
+    CONF_EV_ARRIVAL_RESERVE_SOC,
     CONF_EV_AT_HOME,
     CONF_EV_CABLE_CONNECTED,
     CONF_EV_CHARGE_EFFICIENCY,
@@ -39,6 +40,8 @@ from .const import (
     CONF_EV_FREE_WINDOW_MINIMUM_CURRENT,
     CONF_EV_FREE_WINDOW_PRIORITY,
     CONF_EV_FREE_WINDOW_SETTLE_MINUTES,
+    CONF_EV_LEARNING_MINIMUM_SAMPLES,
+    CONF_EV_LIFETIME_ENERGY,
     CONF_EV_LOCATION_MODE,
     CONF_EV_MAX_CURRENT,
     CONF_EV_PHASE_COUNT,
@@ -82,6 +85,7 @@ from .const import (
     DEFAULT_DAILY_FREE_ALLOWANCE_KWH,
     DEFAULT_EV_ALLOWANCE_GUARD_ENABLED,
     DEFAULT_EV_ALLOWANCE_SAFETY_MARGIN,
+    DEFAULT_EV_ARRIVAL_RESERVE_SOC,
     DEFAULT_EV_CHARGE_EFFICIENCY,
     DEFAULT_EV_CHARGE_PATH,
     DEFAULT_EV_DIRECT_LIMIT_HEADROOM,
@@ -89,6 +93,7 @@ from .const import (
     DEFAULT_EV_FREE_WINDOW_MINIMUM_CURRENT,
     DEFAULT_EV_FREE_WINDOW_PRIORITY,
     DEFAULT_EV_FREE_WINDOW_SETTLE_MINUTES,
+    DEFAULT_EV_LEARNING_MINIMUM_SAMPLES,
     DEFAULT_EV_LOCATION_MODE,
     DEFAULT_EV_PHASE_COUNT,
     DEFAULT_EV_PRE_FREE_ENABLED,
@@ -122,13 +127,19 @@ from .const import (
 )
 from .coordinator import EnergyCoordinator
 from .ev_adapter import EvEntityMap, EvServiceAdapter, EvWriteBlocked, ev_control_gate_status
-from .normalise import current_to_a, power_to_kw, signed_grid_power_to_import_kw
+from .normalise import (
+    current_to_a,
+    energy_to_kwh,
+    power_to_kw,
+    signed_grid_power_to_import_kw,
+)
 from .planner.ev import (
     DIRECT_EVSE_MAX_ATTEMPTS,
     AllowanceCeilingInputs,
     ChargeLimitInputs,
     DirectEvseObservation,
     DirectEvseReconciliationState,
+    EvCommand,
     EvCommandPlan,
     FreeWindowCurrentInputs,
     SmartSocketObservation,
@@ -144,6 +155,14 @@ from .planner.ev import (
     reconcile_direct_evse,
     reconcile_smart_socket_recovery,
 )
+from .planner.ev_learning import (
+    DrivingSnapshotState,
+    LearnedChargeLimitDecision,
+    estimate_free_window_soc_gain_percent,
+    estimate_usable_ev_capacity_kwh,
+    plan_learned_general_charge_limit,
+    snapshot_daily_driving_energy,
+)
 from .planner.ev_outside_window import (
     PreFreeCurrentInputs,
     PreFreePlan,
@@ -157,6 +176,7 @@ from .planner.ev_outside_window import (
     plan_solar_spill_current,
     select_outside_window_current,
 )
+from .planner.learning import DemandHistory
 from .planner.timed_average import TimedAverageWindow
 
 _LOGGER = logging.getLogger(__name__)
@@ -170,6 +190,7 @@ class ActiveEvController:
         self.hass = hass
         self.coordinator = coordinator
         self._unsub_interval: CALLBACK_TYPE | None = None
+        self._unsub_driving_snapshot: CALLBACK_TYPE | None = None
         self._lock = asyncio.Lock()
         self._adapter: EvServiceAdapter | None = self._create_adapter()
         self._store: Store[dict[str, object]] = Store(
@@ -188,11 +209,16 @@ class ActiveEvController:
         self.pre_free_plan: PreFreePlan | None = None
         self.pre_free_phase = "disabled"
         self.solar_spill = SolarSpillDecision(0.0, 0.0, "disabled")
+        self.driving_history = DemandHistory([])
+        self.driving_snapshot = DrivingSnapshotState()
+        self.daily_driving_energy_kwh: float | None = None
+        self.learned_charge_limit: LearnedChargeLimitDecision | None = None
         self.pre_free_current_a: float | None = None
         self.outside_control_active = False
         self.outside_target_active = False
         self.last_decision_at: datetime | None = None
         self._decision_fingerprint: tuple[object, ...] | None = None
+        self._general_limit_write_fingerprint: tuple[float, float] | None = None
         self.last_saved_at: datetime | None = None
         self.target_current_a: float | None = None
         self.target_limit_percent: float | None = None
@@ -219,17 +245,52 @@ class ActiveEvController:
             self._unsub_interval = async_track_time_interval(
                 self.hass, self._async_tick, timedelta(seconds=30)
             )
+        if self._unsub_driving_snapshot is None:
+            start = self.coordinator._configured_time(  # noqa: SLF001
+                CONF_FREE_CHARGE_START, DEFAULT_FREE_CHARGE_START
+            )
+            self._unsub_driving_snapshot = async_track_time_change(
+                self.hass,
+                self._async_driving_boundary,
+                hour=start.hour,
+                minute=start.minute,
+                second=start.second,
+            )
         await self.async_reconcile()
 
     async def async_stop(self) -> None:
         if self._unsub_interval is not None:
             self._unsub_interval()
             self._unsub_interval = None
+        if self._unsub_driving_snapshot is not None:
+            self._unsub_driving_snapshot()
+            self._unsub_driving_snapshot = None
         await self._async_save()
 
     async def _async_tick(self, _now) -> None:
         await self.async_reconcile()
         self.coordinator.async_update_listeners()
+
+    async def _async_driving_boundary(self, now: datetime) -> None:
+        """Take the pilot's cumulative Tessie snapshot at the free-window start."""
+        async with self._lock:
+            await self._async_snapshot_driving(now)
+        self.coordinator.async_update_listeners()
+
+    async def _async_snapshot_driving(self, now: datetime) -> None:
+        lifetime = self._entity_energy(CONF_EV_LIFETIME_ENERGY)
+        if lifetime is None or self.driving_snapshot.snapshot_date == now.date():
+            return
+        transition = snapshot_daily_driving_energy(
+            self.driving_snapshot,
+            now=now,
+            lifetime_energy_kwh=lifetime,
+        )
+        self.driving_snapshot = transition.state
+        self.daily_driving_energy_kwh = transition.sample_kwh
+        if transition.sample_kwh is not None:
+            self.driving_history.add(now, transition.sample_kwh)
+        await self._async_save(now)
 
     async def async_reconcile(self, now: datetime | None = None) -> None:
         """Sample feedback, make a three-minute decision, then reconcile safely."""
@@ -299,6 +360,9 @@ class ActiveEvController:
             if observation is None:
                 self.last_reason = "ev_actuator_feedback_unavailable"
                 return
+            vehicle_soc = self._entity_number(CONF_EV_SOC)
+            if vehicle_soc is not None:
+                self._learned_general_limit(observation, vehicle_soc=vehicle_soc)
 
             outside_enabled = bool(
                 self.coordinator.config.get(CONF_FOXESS_CONTROL_OWNER, DEFAULT_FOXESS_CONTROL_OWNER)
@@ -313,7 +377,12 @@ class ActiveEvController:
                 )
             )
             if not in_window and not outside_enabled and not self.outside_control_active:
-                self.last_reason = "outside_free_window_no_direct_write"
+                await self._async_reconcile_general_limit_only(
+                    now,
+                    observation,
+                    vehicle_soc=vehicle_soc,
+                    gate=gate,
+                )
                 return
             if not in_window and outside_enabled:
                 # An opted-in outside-window policy owns the direct current even
@@ -321,7 +390,6 @@ class ActiveEvController:
                 # pilot's protected baseline after reconnects and restarts.
                 self.outside_control_active = True
 
-            vehicle_soc = self._entity_number(CONF_EV_SOC)
             decision_fingerprint = (
                 vehicle_soc,
                 self._is_on(CONF_EV_CHARGE_TO_FULL),
@@ -405,6 +473,7 @@ class ActiveEvController:
             self.reconciliation = transition.state
             self.last_reason = transition.plan.reason
             await self._async_save(now)
+
             if not transition.plan.commands:
                 if (
                     not in_window
@@ -439,6 +508,65 @@ class ActiveEvController:
             self.last_write_at = now
             self.last_reason = "ev_commands_sent_awaiting_feedback"
             await self._async_save(now)
+
+    async def _async_reconcile_general_limit_only(
+        self,
+        now: datetime,
+        observation: DirectEvseObservation,
+        *,
+        vehicle_soc: float | None,
+        gate: str,
+    ) -> None:
+        """Apply the canonical connected general limit without owning current."""
+        if vehicle_soc is None:
+            self.last_reason = "ev_soc_unavailable"
+            return
+        learned = self._learned_general_limit(observation, vehicle_soc=vehicle_soc)
+        if learned is None:
+            self.last_reason = "ev_learned_limit_unavailable"
+            return
+        minimum = observation.limit_minimum_percent
+        maximum = observation.limit_maximum_percent
+        step = observation.limit_step_percent
+        if minimum is None or maximum is None or step is None:
+            self.last_reason = "ev_charge_limit_metadata_unavailable"
+            return
+        policy = maximum if self._is_on(CONF_EV_CHARGE_TO_FULL) else learned.limit_percent
+        target = plan_charge_limit_target(
+            ChargeLimitInputs(
+                connected=True,
+                policy_limit_percent=policy,
+                current_limit_percent=observation.charge_limit_percent,
+                vehicle_soc_percent=vehicle_soc,
+                protected_baseline_required=self._float(
+                    CONF_EV_PROTECTED_BASELINE_A, DEFAULT_EV_PROTECTED_BASELINE_A
+                )
+                > 0,
+                direct_limit_headroom_percent=self._float(
+                    CONF_EV_DIRECT_LIMIT_HEADROOM, DEFAULT_EV_DIRECT_LIMIT_HEADROOM
+                ),
+                minimum_percent=minimum,
+                maximum_percent=maximum,
+                step_percent=step,
+            )
+        )
+        self.target_current_a = None
+        self.target_limit_percent = target
+        if abs(target - observation.charge_limit_percent) < step:
+            self._general_limit_write_fingerprint = None
+            self.last_reason = "outside_window_general_limit_confirmed"
+            return
+        fingerprint = (target, observation.charge_limit_percent)
+        if fingerprint == self._general_limit_write_fingerprint:
+            self.last_reason = "outside_window_general_limit_awaiting_feedback"
+            return
+        plan = EvCommandPlan((EvCommand("set_charge_limit", target),), "general_limit")
+        if gate == "safety_locked":
+            self.last_actions = ("would_set_charge_limit",)
+            self.last_reason = "rehearsal_general_limit"
+            return
+        self._general_limit_write_fingerprint = fingerprint
+        await self._async_execute_ev_plan(plan, now)
 
     async def _async_reconcile_disconnected_smart_socket(
         self,
@@ -955,7 +1083,7 @@ class ActiveEvController:
         remaining_hours: float,
         snapshot,
     ):
-        stored = self._entity_number(CONF_EV_STORED_ENERGY)
+        stored = self._entity_energy(CONF_EV_STORED_ENERGY)
         imported = (
             self.coordinator.free_window_import.imported_kwh
             if self.coordinator.free_window_import.last_at is not None
@@ -1072,7 +1200,7 @@ class ActiveEvController:
             free_start, in_pre_free, hours_until_free = self._pre_free_window(now)
             active_controller = getattr(self.coordinator, "active_controller", None)
             export_plan = getattr(active_controller, "export_plan", None)
-            stored_energy = self._entity_number(CONF_EV_STORED_ENERGY)
+            stored_energy = self._entity_energy(CONF_EV_STORED_ENERGY)
             if export_plan is not None and stored_energy is not None:
                 vehicle_room = estimate_vehicle_energy_to_target_kwh(
                     stored_energy_kwh=stored_energy,
@@ -1169,11 +1297,20 @@ class ActiveEvController:
         if limit_min is None or limit_max is None or limit_step is None:
             self.last_reason = "ev_charge_limit_metadata_unavailable"
             return False
+        learned_limit = self._learned_general_limit(
+            observation,
+            vehicle_soc=vehicle_soc,
+        )
+        policy_limit = (
+            soft_limit
+            if self.outside_target_active or learned_limit is None
+            else learned_limit.limit_percent
+        )
         self.target_current_a = selected.current_a
         self.target_limit_percent = plan_charge_limit_target(
             ChargeLimitInputs(
                 connected=True,
-                policy_limit_percent=soft_limit,
+                policy_limit_percent=policy_limit,
                 current_limit_percent=observation.charge_limit_percent,
                 vehicle_soc_percent=vehicle_soc,
                 protected_baseline_required=baseline > 0,
@@ -1188,6 +1325,77 @@ class ActiveEvController:
         self.decision_phase = selected.phase
         self.allowance_phase = "outside_free_window"
         return True
+
+    def _learned_general_limit(
+        self,
+        observation: DirectEvseObservation,
+        *,
+        vehicle_soc: float,
+    ) -> LearnedChargeLimitDecision | None:
+        """Evaluate the source's P85/fallback general Tesla limit."""
+        stored = self._entity_energy(CONF_EV_STORED_ENERGY)
+        minimum = observation.limit_minimum_percent
+        maximum = observation.limit_maximum_percent
+        step = observation.limit_step_percent
+        if stored is None or minimum is None or maximum is None or step is None:
+            self.learned_charge_limit = None
+            return None
+        try:
+            usable = estimate_usable_ev_capacity_kwh(
+                stored_energy_kwh=stored,
+                soc_percent=vehicle_soc,
+            )
+            gain = estimate_free_window_soc_gain_percent(
+                maximum_current_a=self._path_ceiling_a(),
+                voltage_v=self._float(CONF_EV_VOLTAGE, DEFAULT_EV_VOLTAGE),
+                phase_count=int(
+                    self._float(CONF_EV_PHASE_COUNT, DEFAULT_EV_PHASE_COUNT)
+                ),
+                window_hours=self._free_window_duration_hours(),
+                charge_efficiency_percent=self._float(
+                    CONF_EV_CHARGE_EFFICIENCY, DEFAULT_EV_CHARGE_EFFICIENCY
+                ),
+                usable_capacity_kwh=usable,
+            )
+            self.learned_charge_limit = plan_learned_general_charge_limit(
+                [sample.energy_kwh for sample in self.driving_history.samples],
+                minimum_samples=int(
+                    self._float(
+                        CONF_EV_LEARNING_MINIMUM_SAMPLES,
+                        DEFAULT_EV_LEARNING_MINIMUM_SAMPLES,
+                    )
+                ),
+                arrival_reserve_percent=self._float(
+                    CONF_EV_ARRIVAL_RESERVE_SOC,
+                    DEFAULT_EV_ARRIVAL_RESERVE_SOC,
+                ),
+                free_window_limit_percent=self._float(
+                    CONF_EV_FREE_WINDOW_CHARGE_LIMIT,
+                    DEFAULT_EV_FREE_WINDOW_CHARGE_LIMIT,
+                ),
+                free_window_soc_gain_percent=gain,
+                usable_capacity_kwh=usable,
+                actuator_minimum_percent=minimum,
+                actuator_maximum_percent=maximum,
+                actuator_step_percent=step,
+            )
+        except ValueError:
+            self.learned_charge_limit = None
+        return self.learned_charge_limit
+
+    def _free_window_duration_hours(self) -> float:
+        start = self.coordinator._configured_time(  # noqa: SLF001
+            CONF_FREE_CHARGE_START, DEFAULT_FREE_CHARGE_START
+        )
+        end = self.coordinator._configured_time(  # noqa: SLF001
+            CONF_FREE_CHARGE_END, DEFAULT_FREE_CHARGE_END
+        )
+        anchor = dt_util.now().date()
+        start_at = datetime.combine(anchor, start)
+        end_at = datetime.combine(anchor, end)
+        if end_at <= start_at:
+            end_at += timedelta(days=1)
+        return (end_at - start_at).total_seconds() / 3600
 
     def _solar_spill_decision(
         self,
@@ -1460,6 +1668,19 @@ class ActiveEvController:
             return None
         return value if value is not None and isfinite(value) else None
 
+    def _entity_energy(self, key: str) -> float | None:
+        entity = self.coordinator.config.get(key)
+        state = self.hass.states.get(str(entity)) if entity else None
+        if state is None:
+            return None
+        try:
+            value = energy_to_kwh(
+                float(state.state), state.attributes.get("unit_of_measurement")
+            )
+        except (TypeError, ValueError):
+            return None
+        return value if isfinite(value) and value >= 0 else None
+
     def _is_on(self, key: str) -> bool:
         return self._entity_state(key) == "on"
 
@@ -1488,6 +1709,36 @@ class ActiveEvController:
         now = dt_util.now()
         self.grid_average.restore(payload.get("grid_average"), now)
         self.ev_average.restore(payload.get("ev_average"), now)
+        self.driving_history = DemandHistory.from_payload(
+            payload.get("driving_history"), now
+        )
+        driving_snapshot = payload.get("driving_snapshot")
+        if isinstance(driving_snapshot, dict):
+            try:
+                snapshot_date_raw = driving_snapshot.get("snapshot_date")
+                snapshot_date = (
+                    datetime.fromisoformat(str(snapshot_date_raw)).date()
+                    if snapshot_date_raw
+                    else None
+                )
+                lifetime_raw = driving_snapshot.get("lifetime_energy_kwh")
+                lifetime = float(lifetime_raw) if lifetime_raw is not None else None
+                if (
+                    snapshot_date is not None
+                    and snapshot_date > now.date()
+                    or lifetime is not None
+                    and (not isfinite(lifetime) or lifetime < 0)
+                ):
+                    raise ValueError
+                self.driving_snapshot = DrivingSnapshotState(snapshot_date, lifetime)
+                daily_raw = payload.get("daily_driving_energy_kwh")
+                daily = float(daily_raw) if daily_raw is not None else None
+                if daily is not None and (not isfinite(daily) or daily < 0):
+                    raise ValueError
+                self.daily_driving_energy_kwh = daily
+            except (TypeError, ValueError):
+                self.driving_snapshot = DrivingSnapshotState()
+                self.daily_driving_energy_kwh = None
         try:
             state = payload.get("reconciliation", {})
             if not isinstance(state, dict):
@@ -1607,6 +1858,16 @@ class ActiveEvController:
             {
                 "grid_average": self.grid_average.to_payload(),
                 "ev_average": self.ev_average.to_payload(),
+                "driving_history": self.driving_history.to_payload(),
+                "driving_snapshot": {
+                    "snapshot_date": (
+                        self.driving_snapshot.snapshot_date.isoformat()
+                        if self.driving_snapshot.snapshot_date is not None
+                        else None
+                    ),
+                    "lifetime_energy_kwh": self.driving_snapshot.lifetime_energy_kwh,
+                },
+                "daily_driving_energy_kwh": self.daily_driving_energy_kwh,
                 "reconciliation": {
                     "target_current_a": state.target_current_a,
                     "target_limit_percent": state.target_limit_percent,

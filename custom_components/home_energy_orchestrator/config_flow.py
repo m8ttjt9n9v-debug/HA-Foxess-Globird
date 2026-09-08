@@ -31,6 +31,7 @@ from .const import (
     CONF_EV_ACTUAL_CURRENT,
     CONF_EV_ALLOWANCE_GUARD_ENABLED,
     CONF_EV_ALLOWANCE_SAFETY_MARGIN,
+    CONF_EV_ARRIVAL_RESERVE_SOC,
     CONF_EV_AT_HOME,
     CONF_EV_AUTOMATIC_CONTROL_ENABLED,
     CONF_EV_CABLE_CONNECTED,
@@ -47,6 +48,8 @@ from .const import (
     CONF_EV_FREE_WINDOW_MINIMUM_CURRENT,
     CONF_EV_FREE_WINDOW_PRIORITY,
     CONF_EV_FREE_WINDOW_SETTLE_MINUTES,
+    CONF_EV_LEARNING_MINIMUM_SAMPLES,
+    CONF_EV_LIFETIME_ENERGY,
     CONF_EV_LOCATION_MODE,
     CONF_EV_MAX_CURRENT,
     CONF_EV_MIN_CURRENT,
@@ -119,6 +122,7 @@ from .const import (
     DEFAULT_DISCHARGE_EFFICIENCY_PERCENT,
     DEFAULT_EV_ALLOWANCE_GUARD_ENABLED,
     DEFAULT_EV_ALLOWANCE_SAFETY_MARGIN,
+    DEFAULT_EV_ARRIVAL_RESERVE_SOC,
     DEFAULT_EV_AUTOMATIC_CONTROL_ENABLED,
     DEFAULT_EV_CHARGE_EFFICIENCY,
     DEFAULT_EV_CHARGE_PATH,
@@ -128,6 +132,7 @@ from .const import (
     DEFAULT_EV_FREE_WINDOW_MINIMUM_CURRENT,
     DEFAULT_EV_FREE_WINDOW_PRIORITY,
     DEFAULT_EV_FREE_WINDOW_SETTLE_MINUTES,
+    DEFAULT_EV_LEARNING_MINIMUM_SAMPLES,
     DEFAULT_EV_LOCATION_MODE,
     DEFAULT_EV_MAX_CURRENT,
     DEFAULT_EV_MIN_CURRENT,
@@ -376,6 +381,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 optional_entity(CONF_EV_CHARGING_STATE): ENTITY,
                 optional_entity(CONF_EV_ACTUAL_CURRENT): ENTITY,
                 optional_entity(CONF_EV_STORED_ENERGY): ENTITY,
+                optional_entity(CONF_EV_LIFETIME_ENERGY): ENTITY,
                 optional_entity(CONF_EV_CURRENT_LIMIT): NUMBER_ENTITY,
                 optional_entity(CONF_EV_CHARGE_LIMIT): NUMBER_ENTITY,
                 optional_entity(CONF_EV_CHARGE_SWITCH): SWITCH_ENTITY,
@@ -516,6 +522,20 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     CONF_EV_CHARGE_EFFICIENCY,
                     default=defaults.get(CONF_EV_CHARGE_EFFICIENCY, DEFAULT_EV_CHARGE_EFFICIENCY),
                 ): vol.Coerce(float),
+                vol.Required(
+                    CONF_EV_ARRIVAL_RESERVE_SOC,
+                    default=defaults.get(
+                        CONF_EV_ARRIVAL_RESERVE_SOC,
+                        DEFAULT_EV_ARRIVAL_RESERVE_SOC,
+                    ),
+                ): vol.Coerce(float),
+                vol.Required(
+                    CONF_EV_LEARNING_MINIMUM_SAMPLES,
+                    default=defaults.get(
+                        CONF_EV_LEARNING_MINIMUM_SAMPLES,
+                        DEFAULT_EV_LEARNING_MINIMUM_SAMPLES,
+                    ),
+                ): vol.Coerce(int),
                 vol.Required(
                     CONF_SITE_GRID_HEADROOM_CURRENT,
                     default=defaults.get(
@@ -686,7 +706,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             "free_charge_full_battery_import_threshold_kwh",
         }
         cleaned = {key: value for key, value in data.items() if key not in removed}
-        return {
+        result = {
             **cleaned,
             CONF_FREE_CHARGE_START: data.get(CONF_FREE_CHARGE_START, DEFAULT_FREE_CHARGE_START),
             CONF_BATTERY_CHARGE_POSITIVE: data.get(
@@ -794,6 +814,13 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             CONF_EV_CHARGE_EFFICIENCY: data.get(
                 CONF_EV_CHARGE_EFFICIENCY, DEFAULT_EV_CHARGE_EFFICIENCY
             ),
+            CONF_EV_ARRIVAL_RESERVE_SOC: data.get(
+                CONF_EV_ARRIVAL_RESERVE_SOC, DEFAULT_EV_ARRIVAL_RESERVE_SOC
+            ),
+            CONF_EV_LEARNING_MINIMUM_SAMPLES: data.get(
+                CONF_EV_LEARNING_MINIMUM_SAMPLES,
+                DEFAULT_EV_LEARNING_MINIMUM_SAMPLES,
+            ),
             CONF_SITE_GRID_HEADROOM_CURRENT: data.get(
                 CONF_SITE_GRID_HEADROOM_CURRENT, DEFAULT_SITE_GRID_HEADROOM_CURRENT
             ),
@@ -869,6 +896,9 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             ),
             CONF_REHEARSAL_MODE: data.get(CONF_REHEARSAL_MODE, DEFAULT_REHEARSAL_MODE),
         }
+        if CONF_EV_LIFETIME_ENERGY in data:
+            result[CONF_EV_LIFETIME_ENERGY] = data[CONF_EV_LIFETIME_ENERGY]
+        return result
 
     @staticmethod
     def _validate_input(data: dict[str, object]) -> dict[str, str]:
@@ -984,6 +1014,8 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             ev_settle_minutes = float(data[CONF_EV_FREE_WINDOW_SETTLE_MINUTES])
             ev_limit_headroom = float(data[CONF_EV_DIRECT_LIMIT_HEADROOM])
             ev_charge_efficiency = float(data[CONF_EV_CHARGE_EFFICIENCY])
+            ev_arrival_reserve = float(data[CONF_EV_ARRIVAL_RESERVE_SOC])
+            ev_learning_minimum = float(data[CONF_EV_LEARNING_MINIMUM_SAMPLES])
             site_headroom = float(data[CONF_SITE_GRID_HEADROOM_CURRENT])
             battery_target = float(data[CONF_BATTERY_FREE_WINDOW_TARGET])
             battery_efficiency = float(data[CONF_BATTERY_CHARGE_EFFICIENCY])
@@ -1048,6 +1080,8 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             ev_settle_minutes,
             ev_limit_headroom,
             ev_charge_efficiency,
+            ev_arrival_reserve,
+            ev_learning_minimum,
             site_headroom,
             battery_target,
             battery_efficiency,
@@ -1092,6 +1126,9 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             or ev_settle_minutes < 0
             or ev_limit_headroom < 0
             or not 0 < ev_charge_efficiency <= 100
+            or not 0 <= ev_arrival_reserve <= 100
+            or not 1 <= ev_learning_minimum <= 28
+            or not ev_learning_minimum.is_integer()
             or site_headroom < 0
             or (service_import_limit > 0 and site_headroom > service_import_limit)
             or not 0 <= battery_target <= 100

@@ -18,7 +18,7 @@ HACS installation requires a public GitHub repository. This project publishes
 versioned GitHub releases for the custom-repository channel; inclusion in
 HACS's default catalogue is a separate review process.
 
-Version 0.5.0 is observer-by-default. Automatic FoxESS free charging is not
+Version 0.6.0 is observer-by-default. Automatic FoxESS free charging is not
 present; the earlier simplified controller remains removed. The verified
 ZEROHERO export path and the faithful direct-EVSE/smart-socket Tessie paths are
 separately gated. Bounded FoxESS Diagnostics remain explicitly submitted actions.
@@ -39,8 +39,11 @@ entities use stable `sensor.home_energy_*` IDs where the stable ID is unused.
 
 EV control requires every Tessie telemetry and actuator mapping, a
 commissioned physical current ceiling, a positive service limit, the independent
-**Automatic EV Control** switch, and Safety Lock OFF. It operates only during
-the configured free window and never writes FoxESS. A multiphase site must also
+**Automatic EV Control** switch, and Safety Lock OFF. Current/session control
+operates in the free window or separately enabled outside stages; the general
+charge-limit policy may update while connected outside those stages. It never
+writes FoxESS. Map cumulative lifetime energy to enable daily-driving samples;
+otherwise the conservative full-window limit fallback remains. A multiphase site must also
 map a signed amperage sensor for the most-loaded service phase, positive for
 import; HEO deliberately refuses to infer per-phase safety from aggregate
 three-phase power. Commission first with the EV intent off, verify all portable

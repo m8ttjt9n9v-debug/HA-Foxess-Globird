@@ -166,6 +166,34 @@ views:
       - type: grid
         column_span: 2
         cards:
+          - type: heading
+            heading: Daily Driving and Charge-Limit Learning
+            heading_style: title
+            icon: mdi:chart-bell-curve-cumulative
+          - type: tile
+            entity: sensor.home_energy_ev_driving_learning_status
+            name: Learning mode
+          - type: tile
+            entity: sensor.home_energy_ev_driving_learning_samples
+            name: Valid daily samples
+          - type: tile
+            entity: sensor.home_energy_ev_daily_driving_energy
+            name: Latest daily driving
+          - type: tile
+            entity: sensor.home_energy_ev_driving_p85
+            name: P85 daily driving
+          - type: tile
+            entity: sensor.home_energy_ev_usable_capacity
+            name: Estimated usable capacity
+          - type: tile
+            entity: sensor.home_energy_ev_free_window_soc_gain
+            name: Full-window SOC gain
+          - type: tile
+            entity: sensor.home_energy_ev_learned_charge_limit
+            name: Learned general limit
+      - type: grid
+        column_span: 2
+        cards:
           - type: history-graph
             title: Tesla Battery and Charging — 24 Hours
             hours_to_show: 24

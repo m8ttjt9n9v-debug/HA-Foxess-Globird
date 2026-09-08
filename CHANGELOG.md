@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.6.0 — faithful Tessie daily-driving learning
+
+- Port the exact free-window-boundary cumulative-energy snapshot. A sample is
+  accepted only from the immediately preceding day and only when the lifetime
+  meter has not decreased; missed days reset the baseline without fabricating
+  a multi-day driving sample.
+- Persist and retain the latest 28 valid samples for at most 35 days, then use
+  the configured sample threshold and P85 daily energy exactly as the source.
+- Port usable-capacity estimation, complete-free-window SoC gain, learning
+  fallback, configured arrival reserve, actuator-step floor/ceiling rules, and
+  general/free/charge-to-full limit selection.
+- Retain the current Tessie limit while away or disconnected. While connected
+  outside the free window, apply only the general charge limit and do not take
+  ownership of charging current unless a separately enabled outside policy is
+  active. Suppress repeated writes while identical feedback is pending.
+- Extend only the source electrical conversion through configured EV phase
+  count, with separate one-phase and three-phase characterization tests.
+- Add seven learning/diagnostic sensors, Tesla-dashboard cards, installation
+  requirements, and a source-to-runtime provenance table.
+- Document that the canonical pilot used FoxESS internal/cloud free-window
+  charging and contains no local automatic Force Charge writer. Such a writer
+  is not a missing port and remains absent.
+
 ## 0.5.0 — faithful smart-socket runtime and recovery
 
 - Connect the characterized Working Single Phase Pilot Site smart-socket path

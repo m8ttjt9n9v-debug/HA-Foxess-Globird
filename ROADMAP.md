@@ -43,6 +43,10 @@ Status here describes behavioral parity, not merely the presence of code.
   budget, vehicle wall-energy room, additional-power calculation, backwards
   scheduling, restart-persistent phase/start, live current reduction, and
   export-session exclusion.
+- [x] Faithful Tessie daily-driving learning: exact free-window-boundary
+  cumulative-meter deltas, restart-persistent 28-sample/35-day history, P85
+  selection, configured arrival reserve, full-window fallback, actuator-step
+  rounding, and the original general/free/override charge-limit policy.
 
 ## Removed pending a faithful port
 
@@ -50,7 +54,8 @@ These behaviors existed in earlier HEO releases as simplified or newly written
 controllers. They were removed because passing tests did not demonstrate
 Working Single Phase Pilot Site parity.
 
-- [ ] Automatic FoxESS free-window charging and completion reconciliation.
+- [x] Remove automatic FoxESS free-window charging/reconciliation that had no
+  canonical pilot-site source. It is not represented as a port.
 - [x] Active Tessie automatic current/session adapter for the direct-EVSE
   free-window path. It remains uncommissioned and default-off.
 - [x] Connect the tested whole-site daily-free-energy ceiling to explicit,
@@ -65,8 +70,9 @@ Working Single Phase Pilot Site parity.
   to runtime with restart storage and delayed gate rechecks verified.
 - [x] Tesla location Auto/Home/Away overrides, including the presence gates
   consumed by solar-spill and pre-free control.
-- [ ] Last priority: learned Tesla driving demand, arrival reserve, and
-  charge-target policy. Confirm Tessie's native capability before porting.
+- [x] Learned Tesla driving demand, arrival reserve, and charge-target policy.
+  The mapped cumulative Tessie lifetime-energy sensor supplies the source data;
+  no trip or departure-time inference was added.
 
 ## Required extensions and investigation
 
@@ -82,6 +88,9 @@ Working Single Phase Pilot Site parity.
   them, and distinguish firmware capability from assumptions.
 - [ ] Design a cloud-schedule adapter only after the full schedule/remaining-mode
   semantics are proven. Never substitute mixed local Modbus commands.
+- [ ] Only if explicitly requested as new functionality, design a default-off
+  local-Modbus battery free-charge extension after writer tracing and schedule
+  interaction are proven. This is not required for canonical source parity.
 - [x] Package the proven seven-view dashboard information architecture using
   HEO-owned entities, with site-specific Tessie, weather, room, and equipment
   cards explicitly retained as local overlays.

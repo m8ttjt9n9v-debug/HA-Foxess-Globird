@@ -34,6 +34,9 @@ layers around the proven algorithm, not replacement algorithms.
 - Bounded, explicitly submitted FoxESS diagnostics remain available behind
   their guards. They are not schedules.
 - Automatic FoxESS free-window charging is not implemented.
+- The canonical pilot source contains no local automatic `Force Charge` writer;
+  its EV controller assumes battery charging is externally established. A new
+  local battery controller is therefore an extension, not missing port code.
 - Direct-EVSE free-window Tessie current, charge-limit, and charge-start control
   is implemented. Default-off solar-spill and latest-start pre-free stages are
   also implemented for Local Modbus ownership. All three use the same bounded
@@ -78,14 +81,16 @@ and charge-state evidence, two charging supplies, configurable current ceilings,
 priority, guaranteed free-window current, a free-window SoC target, matched
 three-minute grid/current feedback, a settling phase, restart-safe latches,
 solar-spill charging, latest-start pre-free backfill, learned driving demand and
-charge targets, and smart-socket recovery. Solar spill, pre-free backfill, and
-smart-socket runtime are now retained ports; learned driving targets remain.
+charge targets, and smart-socket recovery. These behaviors are now retained
+ports, with the learned policy's detailed mapping in
+`docs/ev-driving-learning-port.md`.
 
-The source file contains a P85 daily-driving model that contributes to its
-general charge limit outside the free window. It is not part of the active
-free-window current calculation. HACS does not currently implement it, and it
-is the last-priority EV compatibility item pending review of Tessie's native
-capabilities.
+The P85 daily-driving model contributes to the general charge limit outside the
+free window; it is not part of active free-window current calculation. HEO
+collects the same consecutive-day cumulative-meter deltas, persists the same
+28-sample/35-day evidence window, and preserves the source fallback and
+actuator-step rounding. Configured phase count extends only the electrical
+energy conversion.
 
 Its export policy protects learned house demand and mandatory connected-EV
 energy, computes sellable energy and latest start, latches a fixed-power
@@ -118,3 +123,6 @@ For every future control change, record in this file or a linked policy:
 
 Update the private local operational record separately when site-specific
 evidence changes. Confirmed facts and hypotheses must remain visibly separate.
+
+The free-window ownership evidence and extension boundary are recorded in
+[`free-window-battery-ownership.md`](free-window-battery-ownership.md).
