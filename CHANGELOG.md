@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.11.0 — opt-in EV-before-export gate
+
+- Add the deliberately small first stage of EV-before-export arbitration. When
+  explicitly enabled, EV SoC below the adjustable target withholds new
+  automatic ZEROHERO export and deliberately ends an HEO-owned active export.
+- Keep the saved Automatic ZEROHERO Export request unchanged, so normal export
+  eligibility returns automatically when EV SoC reaches the inclusive target.
+- Fail closed when the policy is enabled but EV SoC or its target is invalid or
+  unavailable. With the policy disabled, existing export behavior is unchanged.
+- Create an integration-owned priority switch, SoC-target number, status sensor,
+  diagnostics, and dashboard controls. No external helper is required.
+- This first stage does not start EV charging, choose an energy source, or allow
+  paid-grid charging; those broader arbitration options remain roadmap work.
+
 ## 0.10.1 — deterministic Home Assistant service-call tests
 
 - Wait for Home Assistant's event loop before asserting service-call events in

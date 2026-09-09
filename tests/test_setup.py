@@ -53,6 +53,8 @@ ENTRY_DATA = {
     "house_occupancy_mode": "auto",
     "automatic_control_enabled": False,
     "automatic_export_enabled": False,
+    "ev_before_export_enabled": False,
+    "ev_before_export_soc_target_percent": 40.0,
     "ev_automatic_control_enabled": False,
     "ev_location_mode": "auto",
     "ev_free_window_priority": "ev",
@@ -283,6 +285,38 @@ async def test_automatic_export_switch_is_independent_and_persists(hass):
     assert entry.data["automatic_export_enabled"] is True
     assert entry.data["automatic_control_enabled"] is False
     assert entry.data["rehearsal_mode"] is True
+
+
+async def test_ev_before_export_controls_are_integration_owned_and_persist(hass):
+    hass.states.async_set("sensor.test_battery_soc", "60", {"unit_of_measurement": "%"})
+    hass.states.async_set("sensor.test_grid_power", "0", {"unit_of_measurement": "kW"})
+    entry = MockConfigEntry(domain=DOMAIN, title="Priority site", data=ENTRY_DATA)
+    entry.add_to_hass(hass)
+
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    assert hass.states.get("switch.home_energy_ev_before_export").state == "off"
+    assert hass.states.get("number.home_energy_ev_before_export_soc_target").state == "40.0"
+
+    await hass.services.async_call(
+        "number",
+        "set_value",
+        {
+            "entity_id": "number.home_energy_ev_before_export_soc_target",
+            "value": 55,
+        },
+        blocking=True,
+    )
+    await hass.services.async_call(
+        "switch",
+        "turn_on",
+        {"entity_id": "switch.home_energy_ev_before_export"},
+        blocking=True,
+    )
+
+    assert entry.data["ev_before_export_soc_target_percent"] == 55.0
+    assert entry.data["ev_before_export_enabled"] is True
+    assert entry.data["automatic_export_enabled"] is False
 
 
 async def test_automatic_ev_switch_is_independent_but_cannot_write_yet(hass):

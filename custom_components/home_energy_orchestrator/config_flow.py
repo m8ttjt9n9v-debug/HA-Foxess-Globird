@@ -41,6 +41,8 @@ from .const import (
     CONF_EV_AT_HOME,
     CONF_EV_AUTOMATIC_CONTROL_ENABLED,
     CONF_EV_BACKFILL_BUFFER_MINUTES,
+    CONF_EV_BEFORE_EXPORT_ENABLED,
+    CONF_EV_BEFORE_EXPORT_SOC_TARGET,
     CONF_EV_CABLE_CONNECTED,
     CONF_EV_CHARGE_EFFICIENCY,
     CONF_EV_CHARGE_LIMIT,
@@ -147,6 +149,8 @@ from .const import (
     DEFAULT_EV_ARRIVAL_RESERVE_SOC,
     DEFAULT_EV_AUTOMATIC_CONTROL_ENABLED,
     DEFAULT_EV_BACKFILL_BUFFER_MINUTES,
+    DEFAULT_EV_BEFORE_EXPORT_ENABLED,
+    DEFAULT_EV_BEFORE_EXPORT_SOC_TARGET,
     DEFAULT_EV_CHARGE_EFFICIENCY,
     DEFAULT_EV_CHARGE_PATH,
     DEFAULT_EV_CHARGE_TO_FULL_ENABLED,
@@ -883,6 +887,20 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     ),
                 ): selector.BooleanSelector(),
                 vol.Required(
+                    CONF_EV_BEFORE_EXPORT_ENABLED,
+                    default=defaults.get(
+                        CONF_EV_BEFORE_EXPORT_ENABLED,
+                        DEFAULT_EV_BEFORE_EXPORT_ENABLED,
+                    ),
+                ): selector.BooleanSelector(),
+                vol.Required(
+                    CONF_EV_BEFORE_EXPORT_SOC_TARGET,
+                    default=defaults.get(
+                        CONF_EV_BEFORE_EXPORT_SOC_TARGET,
+                        DEFAULT_EV_BEFORE_EXPORT_SOC_TARGET,
+                    ),
+                ): vol.Coerce(float),
+                vol.Required(
                     CONF_EV_AUTOMATIC_CONTROL_ENABLED,
                     default=defaults.get(
                         CONF_EV_AUTOMATIC_CONTROL_ENABLED,
@@ -1164,6 +1182,14 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             CONF_AUTOMATIC_EXPORT_ENABLED: data.get(
                 CONF_AUTOMATIC_EXPORT_ENABLED, DEFAULT_AUTOMATIC_EXPORT_ENABLED
             ),
+            CONF_EV_BEFORE_EXPORT_ENABLED: data.get(
+                CONF_EV_BEFORE_EXPORT_ENABLED,
+                DEFAULT_EV_BEFORE_EXPORT_ENABLED,
+            ),
+            CONF_EV_BEFORE_EXPORT_SOC_TARGET: data.get(
+                CONF_EV_BEFORE_EXPORT_SOC_TARGET,
+                DEFAULT_EV_BEFORE_EXPORT_SOC_TARGET,
+            ),
             CONF_EV_AUTOMATIC_CONTROL_ENABLED: data.get(
                 CONF_EV_AUTOMATIC_CONTROL_ENABLED,
                 DEFAULT_EV_AUTOMATIC_CONTROL_ENABLED,
@@ -1316,6 +1342,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             charge_to_full_max_hours = float(data[CONF_EV_CHARGE_TO_FULL_MAX_HOURS])
             ev_charge_efficiency = float(data[CONF_EV_CHARGE_EFFICIENCY])
             ev_arrival_reserve = float(data[CONF_EV_ARRIVAL_RESERVE_SOC])
+            ev_before_export_target = float(data[CONF_EV_BEFORE_EXPORT_SOC_TARGET])
             ev_learning_minimum = float(data[CONF_EV_LEARNING_MINIMUM_SAMPLES])
             site_headroom = float(data[CONF_SITE_GRID_HEADROOM_CURRENT])
             battery_target = float(data[CONF_BATTERY_FREE_WINDOW_TARGET])
@@ -1390,6 +1417,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             charge_to_full_max_hours,
             ev_charge_efficiency,
             ev_arrival_reserve,
+            ev_before_export_target,
             ev_learning_minimum,
             site_headroom,
             battery_target,
@@ -1443,6 +1471,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             or charge_to_full_max_hours <= 0
             or not 0 < ev_charge_efficiency <= 100
             or not 0 <= ev_arrival_reserve <= 100
+            or not 0 <= ev_before_export_target <= 100
             or not 1 <= ev_learning_minimum <= 28
             or not ev_learning_minimum.is_integer()
             or site_headroom < 0

@@ -11,12 +11,16 @@ from .const import (
     CONF_AUTOMATIC_CONTROL_ENABLED,
     CONF_AUTOMATIC_EXPORT_ENABLED,
     CONF_EV_AUTOMATIC_CONTROL_ENABLED,
+    CONF_EV_BEFORE_EXPORT_ENABLED,
+    CONF_EV_BEFORE_EXPORT_SOC_TARGET,
     CONF_FOXESS_CONTROL_OWNER,
     CONF_FOXESS_FORCE_CHARGE_POWER,
     CONF_FOXESS_FORCE_DISCHARGE_POWER,
     CONF_FOXESS_WORK_MODE,
     CONF_REHEARSAL_MODE,
     CONF_SIGN_CONVENTIONS_VERIFIED,
+    DEFAULT_EV_BEFORE_EXPORT_ENABLED,
+    DEFAULT_EV_BEFORE_EXPORT_SOC_TARGET,
     DEFAULT_FOXESS_CONTROL_OWNER,
     DEFAULT_SIGN_CONVENTIONS_VERIFIED,
 )
@@ -62,6 +66,28 @@ async def async_get_config_entry_diagnostics(
                 entry.data.get(CONF_AUTOMATIC_CONTROL_ENABLED, False)
             ),
             "automatic_export_enabled": bool(entry.data.get(CONF_AUTOMATIC_EXPORT_ENABLED, False)),
+            "automatic_export_effective": (
+                active_controller.export_effective_enabled
+                if active_controller is not None
+                else False
+            ),
+            "ev_before_export_enabled": bool(
+                entry.data.get(
+                    CONF_EV_BEFORE_EXPORT_ENABLED,
+                    DEFAULT_EV_BEFORE_EXPORT_ENABLED,
+                )
+            ),
+            "ev_before_export_soc_target_percent": float(
+                entry.data.get(
+                    CONF_EV_BEFORE_EXPORT_SOC_TARGET,
+                    DEFAULT_EV_BEFORE_EXPORT_SOC_TARGET,
+                )
+            ),
+            "ev_before_export_status": (
+                active_controller.ev_before_export_decision.reason
+                if active_controller is not None
+                else "unavailable"
+            ),
             "ev_automatic_control_enabled": bool(
                 entry.data.get(CONF_EV_AUTOMATIC_CONTROL_ENABLED, False)
             ),

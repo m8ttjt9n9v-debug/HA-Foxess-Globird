@@ -4,7 +4,7 @@ A Home Assistant custom integration for a site-configured energy ledger,
 conservative demand learning, bounded FoxESS diagnostics, the verified
 Working Single Phase Pilot Site ZEROHERO export policy, and a faithful direct-EVSE free-window port.
 
-Version 0.10.1 deliberately excludes the rewritten automatic battery controller
+Version 0.11.0 deliberately excludes the rewritten automatic battery controller
 that was not a faithful port of the proven Working Single Phase Pilot Site.
 Automatic FoxESS free charging remains absent. Separately gated direct-EVSE and
 smart-socket Tessie paths have returned through port-first characterization and
@@ -65,6 +65,11 @@ rooms, and other site-specific cards belong in a local overlay.
   bounds retries, observes the export cap, and deliberately restores Self Use
   at the configured finish. See the
   [export policy](docs/zerohero-export-policy.md).
+- A default-off EV-before-export threshold can temporarily withhold that
+  automatic export while mapped EV SoC is below an integration-owned,
+  user-adjustable target. It preserves the saved export request and sends no EV
+  charging command; target attainment simply returns eligibility to the normal
+  ZEROHERO policy.
 - The Working Single Phase Pilot Site direct-EVSE free-window current policy behind its own
   default-off intent, explicit commissioning, complete Tessie mappings, and the
   shared Safety Lock. It preserves matched three-minute service feedback,
@@ -101,6 +106,8 @@ The integration exposes `switch.home_energy_safety_lock`: ON means no hardware
 writes. Turning it OFF does not enable automation. Automatic export additionally
 requires Local Modbus ownership, the FoxESS automatic gate, and
 `switch.home_energy_automatic_export`.
+`switch.home_energy_ev_before_export` is a further opt-in arbitration gate;
+set its threshold with `number.home_energy_ev_before_export_soc_target`.
 Direct-EVSE control instead requires `switch.home_energy_automatic_ev_control`,
 explicit EV commissioning, and complete mappings. Free-window EV control may
 run with FoxCloud as inverter owner because it writes no FoxESS entity. Solar

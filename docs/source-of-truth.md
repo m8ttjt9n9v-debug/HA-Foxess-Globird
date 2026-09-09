@@ -142,6 +142,13 @@ session, observes the export allowance, and deliberately restores Self Use at
 the configured finish. The retained HEO ZEROHERO path represents this policy;
 its detailed mapping is in `docs/zerohero-export-policy.md`.
 
+The default-off EV-before-export threshold is a separately identified
+extension, not pilot parity. Its first stage changes only effective export
+permission: EV SoC below the adjustable target prevents or ends HEO automatic
+export while preserving the user's saved export request. It neither starts EV
+charging nor selects an energy source. Invalid or unavailable EV SoC withholds
+export only while the opt-in is enabled.
+
 ## Inverter evidence rules
 
 For supported H3 remote control, work mode register `49203` uses `1` Self Use,

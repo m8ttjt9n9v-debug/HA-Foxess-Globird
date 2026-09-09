@@ -406,6 +406,11 @@ DESCRIPTIONS = (
     ),
     SensorEntityDescription(key="zerohero_export_status", name="ZEROHERO Export Status"),
     SensorEntityDescription(
+        key="ev_before_export_status",
+        name="EV Before Export Status",
+        icon="mdi:car-arrow-right",
+    ),
+    SensorEntityDescription(
         key="learned_house_energy",
         name="Protected House Energy Budget",
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
@@ -737,6 +742,11 @@ class EnergySensor(CoordinatorEntity[EnergyCoordinator], SensorEntity):
                 if self.coordinator.active_controller is None
                 else self.coordinator.active_controller.export_session.phase
             ),
+            "ev_before_export_status": (
+                "unavailable"
+                if self.coordinator.active_controller is None
+                else self.coordinator.active_controller.ev_before_export_decision.reason
+            ),
             "learned_house_energy": learning.cycle_budget_kwh,
             "learned_base_house_energy": base_learning.cycle_budget_kwh,
             "learned_heater_energy": (
@@ -955,6 +965,16 @@ class EnergySensor(CoordinatorEntity[EnergyCoordinator], SensorEntity):
             "foxess_modbus_control_effective": foxess_enabled,
             "foxess_control_owner": foxess_owner,
             "automatic_export_enabled": export_enabled,
+            "automatic_export_effective": (
+                self.coordinator.active_controller.export_effective_enabled
+                if self.coordinator.active_controller
+                else False
+            ),
+            "ev_before_export_status": (
+                self.coordinator.active_controller.ev_before_export_decision.reason
+                if self.coordinator.active_controller
+                else "unavailable"
+            ),
             "ev_automatic_control_enabled": ev_requested,
             "ev_control_gate": ev_gate,
             "ev_writes_enabled": ev_gate == "ready",

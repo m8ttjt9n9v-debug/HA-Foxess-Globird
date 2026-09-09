@@ -14,6 +14,8 @@ from custom_components.home_energy_orchestrator.const import (
     CONF_BONUS_WINDOW_START,
     CONF_DISCHARGE_EFFICIENCY_PERCENT,
     CONF_EV_AT_HOME,
+    CONF_EV_BEFORE_EXPORT_ENABLED,
+    CONF_EV_BEFORE_EXPORT_SOC_TARGET,
     CONF_EV_CABLE_CONNECTED,
     CONF_EV_PHASE_COUNT,
     CONF_EV_PROTECTED_BASELINE_A,
@@ -228,6 +230,103 @@ async def test_pilot_site_export_starts_at_latest_start_and_latches(hass, monkey
     await controller.async_reconcile()
     assert controller.export_session.phase == "active"
     assert len(calls) == 2
+
+
+async def test_ev_before_export_prevents_new_session_below_target(hass, monkeypatch):
+    calls = []
+    hass.bus.async_listen(EVENT_CALL_SERVICE, calls.append)
+    hass.states.async_set(
+        "select.foxess_mode",
+        "Self Use",
+        {"options": ["Self Use", "Force Discharge", "Force Charge"]},
+    )
+    hass.states.async_set("number.foxess_charge", "0", {"unit_of_measurement": "kW"})
+    hass.states.async_set(
+        "number.foxess_discharge", "0", {"unit_of_measurement": "kW", "max": 15}
+    )
+    now = datetime(2026, 9, 5, 19, 31, tzinfo=UTC)
+    monkeypatch.setattr(
+        "custom_components.home_energy_orchestrator.active.dt_util.now", lambda: now
+    )
+    coordinator = _coordinator(
+        **{
+            CONF_AUTOMATIC_CONTROL_ENABLED: True,
+            CONF_AUTOMATIC_EXPORT_ENABLED: True,
+            CONF_EV_BEFORE_EXPORT_ENABLED: True,
+            CONF_EV_BEFORE_EXPORT_SOC_TARGET: 40.0,
+            CONF_REHEARSAL_MODE: False,
+            CONF_INVERTER_DISCHARGE_LIMIT_KW: 15.0,
+            CONF_EXPORT_DISCHARGE_POWER_KW: 10.0,
+            CONF_EXPORT_ALLOWANCE_KWH: 15.0,
+            CONF_DISCHARGE_EFFICIENCY_PERCENT: 95.0,
+            CONF_BONUS_WINDOW_START: "18:00:00",
+            CONF_FORCE_DISCHARGE_FINISH: "21:01:00",
+        }
+    )
+    coordinator.snapshot.ev_soc = 25.0
+    coordinator.data.available_after_reserve_kwh = 30.0
+    controller = ActiveFoxessController(hass, coordinator)
+
+    await controller.async_reconcile()
+
+    assert controller.export_session.phase == "idle"
+    assert controller.export_effective_enabled is False
+    assert controller.ev_before_export_decision.reason == "ev_below_target"
+    assert calls == []
+
+
+async def test_ev_before_export_stops_active_heo_export_below_target(hass, monkeypatch):
+    calls = []
+    hass.bus.async_listen(EVENT_CALL_SERVICE, calls.append)
+
+    async def noop(_call):
+        return None
+
+    async def no_wait(_seconds):
+        return None
+
+    hass.services.async_register("number", "set_value", noop)
+    hass.services.async_register("select", "select_option", noop)
+    hass.states.async_set(
+        "select.foxess_mode",
+        "Force Discharge",
+        {"options": ["Self Use", "Force Discharge", "Force Charge"]},
+    )
+    hass.states.async_set("number.foxess_charge", "0", {"unit_of_measurement": "kW"})
+    hass.states.async_set(
+        "number.foxess_discharge", "10", {"unit_of_measurement": "kW", "max": 15}
+    )
+    monkeypatch.setattr(
+        "custom_components.home_energy_orchestrator.active.dt_util.now",
+        lambda: datetime(2026, 9, 5, 19, 31, tzinfo=UTC),
+    )
+    monkeypatch.setattr(
+        "custom_components.home_energy_orchestrator.foxess_adapter.asyncio.sleep", no_wait
+    )
+    coordinator = _coordinator(
+        **{
+            CONF_AUTOMATIC_CONTROL_ENABLED: True,
+            CONF_AUTOMATIC_EXPORT_ENABLED: True,
+            CONF_EV_BEFORE_EXPORT_ENABLED: True,
+            CONF_EV_BEFORE_EXPORT_SOC_TARGET: 40.0,
+            CONF_REHEARSAL_MODE: False,
+            CONF_INVERTER_DISCHARGE_LIMIT_KW: 15.0,
+            CONF_EXPORT_DISCHARGE_POWER_KW: 10.0,
+        }
+    )
+    coordinator.snapshot.ev_soc = 25.0
+    controller = ActiveFoxessController(hass, coordinator)
+    controller.export_session = ExportSessionState("active", 10.0, 0)
+
+    await controller.async_reconcile()
+    await hass.async_block_till_done()
+
+    assert controller.export_session.phase == "stopping"
+    assert controller.ev_before_export_decision.reason == "ev_below_target"
+    assert [(event.data["domain"], event.data["service"]) for event in calls] == [
+        ("select", "select_option"),
+        ("number", "set_value"),
+    ]
 
 
 async def test_export_session_latch_round_trips_through_ha_storage(hass):

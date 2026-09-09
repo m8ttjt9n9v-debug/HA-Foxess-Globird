@@ -14,9 +14,11 @@ from . import EnergyConfigEntry
 from .const import (
     CONF_AUTOMATIC_EXPORT_ENABLED,
     CONF_EV_AUTOMATIC_CONTROL_ENABLED,
+    CONF_EV_BEFORE_EXPORT_ENABLED,
     CONF_EV_CHARGE_TO_FULL,
     CONF_EV_CHARGE_TO_FULL_ENABLED,
     CONF_REHEARSAL_MODE,
+    DEFAULT_EV_BEFORE_EXPORT_ENABLED,
     DEFAULT_EV_CHARGE_TO_FULL_ENABLED,
     DOMAIN,
 )
@@ -40,6 +42,12 @@ EV_DESCRIPTION = SwitchEntityDescription(
     icon="mdi:ev-station",
     entity_category=EntityCategory.CONFIG,
 )
+EV_BEFORE_EXPORT_DESCRIPTION = SwitchEntityDescription(
+    key="ev_before_export",
+    name="Prioritise EV Before Export",
+    icon="mdi:car-electric-outline",
+    entity_category=EntityCategory.CONFIG,
+)
 CHARGE_TO_FULL_DESCRIPTION = SwitchEntityDescription(
     key="ev_charge_to_full",
     name="EV Charge to Full",
@@ -57,6 +65,7 @@ async def async_setup_entry(
         SAFETY_DESCRIPTION,
         EXPORT_DESCRIPTION,
         EV_DESCRIPTION,
+        EV_BEFORE_EXPORT_DESCRIPTION,
         CHARGE_TO_FULL_DESCRIPTION,
     ):
         unique_id = f"{entry.entry_id}_{description.key}"
@@ -70,6 +79,11 @@ async def async_setup_entry(
             SafetyLockSwitch(entry.runtime_data, entry, SAFETY_DESCRIPTION),
             AutomaticExportSwitch(entry.runtime_data, entry, EXPORT_DESCRIPTION),
             AutomaticEvControlSwitch(entry.runtime_data, entry, EV_DESCRIPTION),
+            EvBeforeExportSwitch(
+                entry.runtime_data,
+                entry,
+                EV_BEFORE_EXPORT_DESCRIPTION,
+            ),
             EvChargeToFullSwitch(
                 entry.runtime_data,
                 entry,
@@ -196,6 +210,50 @@ class AutomaticEvControlSwitch(CoordinatorEntity[EnergyCoordinator], SwitchEntit
         self.coordinator.config[CONF_EV_AUTOMATIC_CONTROL_ENABLED] = enabled
         self.async_write_ha_state()
         controller = self.coordinator.ev_controller
+        if controller is not None:
+            await controller.async_reconcile()
+        self.coordinator.async_update_listeners()
+
+
+class EvBeforeExportSwitch(CoordinatorEntity[EnergyCoordinator], SwitchEntity):
+    """Temporarily withhold automatic export while EV SoC is below target."""
+
+    entity_description: SwitchEntityDescription
+
+    def __init__(
+        self,
+        coordinator: EnergyCoordinator,
+        entry: ConfigEntry,
+        description: SwitchEntityDescription,
+    ) -> None:
+        super().__init__(coordinator)
+        self.entity_description = description
+        self._entry = entry
+        self._attr_unique_id = f"{entry.entry_id}_{description.key}"
+        self.entity_id = "switch.home_energy_ev_before_export"
+        self._attr_has_entity_name = True
+
+    @property
+    def is_on(self) -> bool:
+        return bool(
+            self.coordinator.config.get(
+                CONF_EV_BEFORE_EXPORT_ENABLED,
+                DEFAULT_EV_BEFORE_EXPORT_ENABLED,
+            )
+        )
+
+    async def async_turn_on(self, **kwargs: object) -> None:
+        await self._set_enabled(True)
+
+    async def async_turn_off(self, **kwargs: object) -> None:
+        await self._set_enabled(False)
+
+    async def _set_enabled(self, enabled: bool) -> None:
+        config = {**self._entry.data, CONF_EV_BEFORE_EXPORT_ENABLED: enabled}
+        self.hass.config_entries.async_update_entry(self._entry, data=config)
+        self.coordinator.config[CONF_EV_BEFORE_EXPORT_ENABLED] = enabled
+        self.async_write_ha_state()
+        controller = self.coordinator.active_controller
         if controller is not None:
             await controller.async_reconcile()
         self.coordinator.async_update_listeners()

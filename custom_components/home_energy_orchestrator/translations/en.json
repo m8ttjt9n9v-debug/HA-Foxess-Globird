@@ -115,6 +115,8 @@
           "foxess_control_owner": "FoxESS control owner (never mix cloud scheduler and Modbus)",
           "automatic_control_enabled": "Enable HEO Local Modbus master gate (ZEROHERO export only)",
           "automatic_export_enabled": "Enable automatic ZEROHERO export (Local Modbus owner only)",
+          "ev_before_export_enabled": "Prioritise EV before automatic export",
+          "ev_before_export_soc_target_percent": "Withhold export while EV SoC is below (%)",
           "ev_automatic_control_enabled": "Request automatic EV control (independent of FoxESS ownership)",
           "rehearsal_mode": "Safety Lock (ON = no hardware writes)"
         }
@@ -233,6 +235,8 @@
           "foxess_control_owner": "FoxESS control owner (never mix cloud scheduler and Modbus)",
           "automatic_control_enabled": "Enable HEO Local Modbus master gate (ZEROHERO export only)",
           "automatic_export_enabled": "Enable automatic ZEROHERO export (Local Modbus owner only)",
+          "ev_before_export_enabled": "Prioritise EV before automatic export",
+          "ev_before_export_soc_target_percent": "Withhold export while EV SoC is below (%)",
           "ev_automatic_control_enabled": "Request automatic EV control (independent of FoxESS ownership)",
           "rehearsal_mode": "Safety Lock (ON = no hardware writes)"
         }

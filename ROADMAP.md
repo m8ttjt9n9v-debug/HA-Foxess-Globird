@@ -109,17 +109,16 @@ Working Single Phase Pilot Site parity.
 - [ ] Only if explicitly requested as new functionality, design a default-off
   local-Modbus battery free-charge extension after writer tracing and schedule
   interaction are proven. This is not required for canonical source parity.
-- [ ] Add an opt-in **EV-before-export** arbitration policy. When the vehicle is
-  confirmed home and connected and its SoC is below a user-configured threshold,
-  allocate otherwise-exportable energy to EV charging before starting or
-  continuing an automatic grid-export session. Reaching the threshold returns
-  priority to the normal export policy. Define separately whether eligible
-  energy may come from live solar surplus, protected battery energy, or paid
-  grid import; the first implementation must not silently import paid energy or
-  discharge the home battery into the EV. Preserve the configured service,
-  connector, reserve, daily-allowance, tariff, ownership, Safety Lock, telemetry,
-  and anti-flapping gates. Expose the active priority and withheld/exported
-  energy in diagnostics and the dashboard.
+- [x] Add the deliberately narrow first stage of opt-in **EV-before-export**
+  arbitration: below a user-adjustable EV SoC target, prevent a new automatic
+  ZEROHERO export or stop an HEO-owned active one without changing the saved
+  export request. Fail closed on invalid EV SoC, expose integration-owned
+  controls/status, and leave existing behavior untouched when disabled.
+- [ ] Extend EV-before-export only after separately specifying home/connected
+  qualification, EV charge activation, eligible energy sources, protected and
+  paid-grid boundaries, hysteresis, withheld-energy accounting, and interaction
+  with the daily-ready allocation. The simple gate must not silently grow into
+  an unreviewed energy-transfer controller.
 - [ ] Add an opt-in weekly **EV ready-by target** policy with three user-facing
   modes: **Off**, **Learned with overrides**, and **User schedule**. Each weekday
   has an optional ready time and desired SoC; an unset day means no departure

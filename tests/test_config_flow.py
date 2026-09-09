@@ -8,7 +8,11 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 from custom_components.home_energy_orchestrator.const import (
     CONF_AUTOMATIC_EXPORT_ENABLED,
     CONF_EV_AUTOMATIC_CONTROL_ENABLED,
+    CONF_EV_BEFORE_EXPORT_ENABLED,
+    CONF_EV_BEFORE_EXPORT_SOC_TARGET,
     CONF_FOXESS_CONTROL_OWNER,
+    DEFAULT_EV_BEFORE_EXPORT_ENABLED,
+    DEFAULT_EV_BEFORE_EXPORT_SOC_TARGET,
     DEFAULT_FOXESS_CONTROL_OWNER,
     DOMAIN,
 )
@@ -126,6 +130,27 @@ async def test_user_flow_defaults_legacy_automatic_export_to_disabled(hass):
 
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["data"][CONF_AUTOMATIC_EXPORT_ENABLED] is False
+
+
+async def test_user_flow_defaults_legacy_ev_before_export_to_disabled(hass):
+    legacy_data = {
+        key: value
+        for key, value in ENTRY_DATA.items()
+        if key not in {CONF_EV_BEFORE_EXPORT_ENABLED, CONF_EV_BEFORE_EXPORT_SOC_TARGET}
+    }
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": SOURCE_USER},
+        data={"name": "Legacy priority site", **legacy_data},
+    )
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["data"][CONF_EV_BEFORE_EXPORT_ENABLED] is DEFAULT_EV_BEFORE_EXPORT_ENABLED
+    assert (
+        result["data"][CONF_EV_BEFORE_EXPORT_SOC_TARGET]
+        == DEFAULT_EV_BEFORE_EXPORT_SOC_TARGET
+    )
 
 
 async def test_daily_backfill_is_allowed_with_foxcloud_when_fully_configured(hass):

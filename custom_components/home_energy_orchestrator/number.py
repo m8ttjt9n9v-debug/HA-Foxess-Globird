@@ -4,15 +4,17 @@ from __future__ import annotations
 
 from homeassistant.components.number import NumberEntity, NumberEntityDescription
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import UnitOfPower
+from homeassistant.const import PERCENTAGE, EntityCategory, UnitOfPower
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from . import EnergyConfigEntry
 from .const import (
+    CONF_EV_BEFORE_EXPORT_SOC_TARGET,
     CONF_INVERTER_CHARGE_LIMIT_KW,
     CONF_INVERTER_DISCHARGE_LIMIT_KW,
+    DEFAULT_EV_BEFORE_EXPORT_SOC_TARGET,
     DEFAULT_INVERTER_CHARGE_LIMIT_KW,
     DEFAULT_INVERTER_DISCHARGE_LIMIT_KW,
 )
@@ -48,14 +50,74 @@ DESCRIPTIONS = (
     ),
 )
 
+EV_BEFORE_EXPORT_TARGET_DESCRIPTION = NumberEntityDescription(
+    key="ev_before_export_soc_target",
+    name="EV Before Export SoC Target",
+    icon="mdi:battery-charging-40",
+    native_unit_of_measurement=PERCENTAGE,
+    native_min_value=0.0,
+    native_max_value=100.0,
+    native_step=1.0,
+    entity_category=EntityCategory.CONFIG,
+)
+
 
 async def async_setup_entry(
     hass: HomeAssistant, entry: EnergyConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
     """Add the three local-only diagnostic inputs."""
     async_add_entities(
-        TestNumber(entry.runtime_data, entry, description) for description in DESCRIPTIONS
+        (
+            *(TestNumber(entry.runtime_data, entry, description) for description in DESCRIPTIONS),
+            EvBeforeExportTargetNumber(
+                entry.runtime_data,
+                entry,
+                EV_BEFORE_EXPORT_TARGET_DESCRIPTION,
+            ),
+        )
     )
+
+
+class EvBeforeExportTargetNumber(CoordinatorEntity[EnergyCoordinator], NumberEntity):
+    """Persist the user-adjustable EV threshold without an external helper."""
+
+    entity_description: NumberEntityDescription
+
+    def __init__(
+        self,
+        coordinator: EnergyCoordinator,
+        entry: ConfigEntry,
+        description: NumberEntityDescription,
+    ) -> None:
+        super().__init__(coordinator)
+        self.entity_description = description
+        self._entry = entry
+        self._attr_unique_id = f"{entry.entry_id}_{description.key}"
+        self.entity_id = "number.home_energy_ev_before_export_soc_target"
+        self._attr_has_entity_name = True
+
+    @property
+    def native_value(self) -> float:
+        try:
+            return float(
+                self.coordinator.config.get(
+                    CONF_EV_BEFORE_EXPORT_SOC_TARGET,
+                    DEFAULT_EV_BEFORE_EXPORT_SOC_TARGET,
+                )
+            )
+        except (TypeError, ValueError):
+            return DEFAULT_EV_BEFORE_EXPORT_SOC_TARGET
+
+    async def async_set_native_value(self, value: float) -> None:
+        target = min(max(float(value), 0.0), 100.0)
+        config = {**self._entry.data, CONF_EV_BEFORE_EXPORT_SOC_TARGET: target}
+        self.hass.config_entries.async_update_entry(self._entry, data=config)
+        self.coordinator.config[CONF_EV_BEFORE_EXPORT_SOC_TARGET] = target
+        self.async_write_ha_state()
+        controller = self.coordinator.active_controller
+        if controller is not None:
+            await controller.async_reconcile()
+        self.coordinator.async_update_listeners()
 
 
 class TestNumber(CoordinatorEntity[EnergyCoordinator], NumberEntity):

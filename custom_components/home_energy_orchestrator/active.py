@@ -21,6 +21,8 @@ from .const import (
     CONF_BONUS_WINDOW_START,
     CONF_DISCHARGE_EFFICIENCY_PERCENT,
     CONF_EV_AT_HOME,
+    CONF_EV_BEFORE_EXPORT_ENABLED,
+    CONF_EV_BEFORE_EXPORT_SOC_TARGET,
     CONF_EV_CABLE_CONNECTED,
     CONF_EV_PHASE_COUNT,
     CONF_EV_PROTECTED_BASELINE_A,
@@ -39,6 +41,8 @@ from .const import (
     DEFAULT_AUTOMATIC_EXPORT_ENABLED,
     DEFAULT_BONUS_WINDOW_START,
     DEFAULT_DISCHARGE_EFFICIENCY_PERCENT,
+    DEFAULT_EV_BEFORE_EXPORT_ENABLED,
+    DEFAULT_EV_BEFORE_EXPORT_SOC_TARGET,
     DEFAULT_EV_PHASE_COUNT,
     DEFAULT_EV_PROTECTED_BASELINE_A,
     DEFAULT_EV_VOLTAGE,
@@ -55,6 +59,10 @@ from .const import (
 from .coordinator import EnergyCoordinator
 from .foxess_adapter import FoxessEntityMap, FoxessServiceAdapter
 from .normalise import power_to_kw
+from .planner.ev_before_export import (
+    EvBeforeExportDecision,
+    decide_ev_before_export,
+)
 from .planner.export import ExportPlan, calculate_export_plan, calculate_export_start
 from .planner.export_session import ExportSessionState, advance_export_session
 from .planner.foxess import (
@@ -82,6 +90,8 @@ class ActiveFoxessController:
         self.export_planned_start: datetime | None = None
         self.export_allowance_remaining_kwh: float | None = None
         self.export_protected_ev_kwh: float | None = None
+        self.ev_before_export_decision = EvBeforeExportDecision(True, "disabled")
+        self.export_effective_enabled = False
         self._export_store: Store[dict[str, object]] = Store(
             hass,
             1,
@@ -204,6 +214,22 @@ class ActiveFoxessController:
                 CONF_AUTOMATIC_EXPORT_ENABLED, DEFAULT_AUTOMATIC_EXPORT_ENABLED
             )
         )
+        self.ev_before_export_decision = decide_ev_before_export(
+            enabled=bool(
+                self.coordinator.config.get(
+                    CONF_EV_BEFORE_EXPORT_ENABLED,
+                    DEFAULT_EV_BEFORE_EXPORT_ENABLED,
+                )
+            ),
+            ev_soc_percent=getattr(self.coordinator.snapshot, "ev_soc", None),
+            target_soc_percent=self._configured(
+                CONF_EV_BEFORE_EXPORT_SOC_TARGET,
+                DEFAULT_EV_BEFORE_EXPORT_SOC_TARGET,
+            ),
+        )
+        self.export_effective_enabled = (
+            enabled and self.ev_before_export_decision.export_allowed
+        )
         start_at, finish_at = self._export_bounds(now)
         within_session_window = start_at <= now < finish_at
         source_available = self._export_source_available(str(mapping[0]))
@@ -276,7 +302,7 @@ class ActiveFoxessController:
             self.export_plan = None
 
         latched = self.export_session.phase != "idle"
-        if not latched and not (enabled and eligible):
+        if not latched and not (self.export_effective_enabled and eligible):
             return False
         previous_state = self.export_session
         transition = advance_export_session(
@@ -284,11 +310,11 @@ class ActiveFoxessController:
             observation,
             now=now,
             source_available=source_available,
-            window_active=enabled and within_session_window,
+            window_active=self.export_effective_enabled and within_session_window,
             eligible=eligible,
             requested_discharge_power_kw=requested,
             discharge_power_max_kw=discharge_max,
-            finish_requested=not enabled or now >= finish_at,
+            finish_requested=not self.export_effective_enabled or now >= finish_at,
         )
         self.export_session = transition.state
         if self.export_session != previous_state:

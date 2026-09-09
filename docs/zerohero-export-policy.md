@@ -37,6 +37,14 @@ work-mode selector must advertise both `Force Discharge` and `Self Use`, and
 the mapped power entities must have valid local feedback. Cloud telemetry never
 authorizes this controller.
 
+An independent, default-off **Prioritise EV Before Export** gate may further
+withhold that permission. It does not change the saved automatic-export switch.
+When enabled, EV SoC below the configured target prevents a new export and is
+an explicit finish request for a latched HEO-owned export; reaching the target
+returns control to the unchanged export policy. Missing or invalid EV SoC
+fails closed. This is a separately identified extension, not canonical pilot
+parity.
+
 ## Pilot-site-equivalent energy plan
 
 The calculation is:
@@ -68,11 +76,12 @@ The start remains fluid until it becomes due. HEO then persists a latch and:
 2. waits five seconds;
 3. selects `Force Discharge` if local ownership and feedback remain valid.
 
-Ordinary SoC, reserve, forecast, or allowance changes do not cancel or resize a
-latched session. At disable or finish, HEO selects `Self Use`, waits five
-seconds, and clears the discharge target. If Modbus disappears, the latch is
-retained and restoration or continuation is reconciled only after local
-feedback returns.
+Ordinary battery SoC, reserve, forecast, or allowance changes do not cancel or
+resize a latched session. The opt-in EV-before-export gate is the sole added
+telemetry-driven finish condition. At disable, EV-priority withholding, or
+finish, HEO selects `Self Use`, waits five seconds, and clears the discharge
+target. If Modbus disappears, the latch is retained and restoration or
+continuation is reconciled only after local feedback returns.
 
 Command retries are finite. After three failed attempts the controller holds
 without further writes, preventing a second writer from producing indefinite
@@ -82,3 +91,23 @@ loss/return re-enters the persisted recovery path.
 The daily boosted-window export accumulator and session latch are stored in
 Home Assistant storage. A restart therefore cannot erase used allowance or a
 pending Self Use restoration.
+
+## EV-before-export first-stage provenance
+
+This requested policy does not exist in the canonical configuration and is
+therefore recorded as an extension around, rather than a rewrite of, ZEROHERO.
+
+| Input or decision | HEO equivalent |
+| --- | --- |
+| Operator opt-in | `switch.home_energy_ev_before_export` |
+| User target | `number.home_energy_ev_before_export_soc_target` |
+| Current mapped EV SoC | canonical `sensor.home_energy_ev_soc` snapshot |
+| `EV SoC < target` | pure `planner/ev_before_export.py` decision |
+| New export | effective enable is false; the session remains idle |
+| Active HEO export | existing bounded stop path restores Self Use |
+| Target reached | original export eligibility and session policy resume |
+| Missing/invalid SoC | export is withheld while the opt-in remains enabled |
+
+The gate sends no Tessie command and allocates no energy itself. More advanced
+home/connected qualification, charging activation, source selection, energy
+accounting, and hysteresis remain separate future work.
