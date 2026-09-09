@@ -228,6 +228,9 @@ views:
             entity: sensor.home_energy_battery_energy
             name: Battery energy
           - type: tile
+            entity: sensor.home_energy_battery_power
+            name: Battery power (+ charging)
+          - type: tile
             entity: sensor.home_energy_battery_potential_capacity
             name: Potential capacity
           - type: tile
@@ -394,6 +397,8 @@ views:
                 name: EV control gate
               - entity: switch.home_energy_safety_lock
                 name: Block all hardware commands
+              - entity: binary_sensor.home_energy_sign_conventions_verified
+                name: Electrical directions verified
           - type: entities
             title: Automation Requests
             show_header_toggle: false
@@ -433,12 +438,6 @@ views:
           - type: tile
             entity: sensor.home_energy_free_charge_allowed
             name: Free charge allowed
-          - type: tile
-            entity: sensor.home_energy_free_charge_completion
-            name: Completion estimate
-          - type: tile
-            entity: sensor.home_energy_free_charge_power_target
-            name: Battery power target
           - type: tile
             entity: sensor.home_energy_free_energy_remaining
             name: Daily allowance remaining
@@ -496,6 +495,26 @@ views:
                 name: Reconciliation attempts
               - entity: sensor.home_energy_ev_smart_socket_recovery_status
                 name: Smart-socket recovery
+      - type: grid
+        cards:
+          - type: heading
+            heading: Normalized Site Telemetry
+            heading_style: title
+            icon: mdi:swap-horizontal-bold
+          - type: entities
+            entities:
+              - entity: sensor.home_energy_grid_power
+                name: Grid power (+ importing)
+              - entity: sensor.home_energy_battery_power
+                name: Battery power (+ charging)
+              - entity: sensor.home_energy_solar_power
+                name: Solar generation (+ generating)
+              - entity: sensor.home_energy_house_load
+                name: House load (+ consuming)
+              - entity: sensor.home_energy_site_grid_current
+                name: Service current (+ importing)
+              - entity: binary_sensor.home_energy_sign_conventions_verified
+                name: Electrical directions verified
       - type: grid
         cards:
           - type: heading

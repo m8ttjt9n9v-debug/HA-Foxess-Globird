@@ -8,6 +8,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
+from custom_components.home_energy_orchestrator import async_migrate_entry
 from custom_components.home_energy_orchestrator.const import DOMAIN
 from custom_components.home_energy_orchestrator.coordinator import EnergyCoordinator
 from custom_components.home_energy_orchestrator.diagnostics import (
@@ -18,12 +19,16 @@ from custom_components.home_energy_orchestrator.planner.learning import DemandCy
 
 ENTRY_DATA = {
     "battery_soc_entity": "sensor.test_battery_soc",
-    "battery_charge_positive": True,
+    "battery_power_positive_direction": "positive_charge",
     "battery_capacity_kwh": 20.0,
     "battery_floor_percent": 10.0,
     "reserve_kwh": 2.0,
     "grid_power_entity": "sensor.test_grid_power",
-    "grid_import_positive": True,
+    "grid_power_positive_direction": "positive_import",
+    "solar_power_generation_direction": "generation_positive",
+    "site_grid_current_positive_direction": "positive_import",
+    "sign_conventions_verified": False,
+    "telemetry_max_age_seconds": 90.0,
     "daily_free_allowance_kwh": 50.0,
     "daily_charge": 2.035,
     "peak_window_start": "16:00:00",
@@ -137,6 +142,98 @@ async def test_setup_observes_normalised_values_and_never_calls_services(hass):
     assert diagnostics["actuators"]["foxess_control_owner"] == "observer_only"
     assert diagnostics["actuators"]["writes_enabled"] is False
     assert service_calls == []
+
+
+async def test_reversed_foxess_signs_expose_one_canonical_surface(hass):
+    hass.states.async_set("sensor.test_battery_soc", "60", {"unit_of_measurement": "%"})
+    hass.states.async_set("sensor.test_grid_power", "4.495", {"unit_of_measurement": "kW"})
+    hass.states.async_set("sensor.test_battery_power", "5.237", {"unit_of_measurement": "kW"})
+    hass.states.async_set("sensor.test_solar", "-0.8", {"unit_of_measurement": "kW"})
+    hass.states.async_set("sensor.test_house_load", "0.683", {"unit_of_measurement": "kW"})
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Reversed CT site",
+        version=2,
+        data={
+            **ENTRY_DATA,
+            "battery_power_entity": "sensor.test_battery_power",
+            "battery_power_positive_direction": "positive_discharge",
+            "grid_power_positive_direction": "positive_export",
+            "solar_power_entity": "sensor.test_solar",
+            "solar_power_generation_direction": "generation_negative",
+            "sign_conventions_verified": True,
+        },
+    )
+    entry.add_to_hass(hass)
+
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert hass.states.get("sensor.home_energy_grid_power").state == "-4.495"
+    assert hass.states.get("sensor.home_energy_grid_export").state == "4.495"
+    assert hass.states.get("sensor.home_energy_battery_power").state == "-5.237"
+    assert hass.states.get("sensor.home_energy_solar_power").state == "0.8"
+    assert float(hass.states.get("sensor.home_energy_site_grid_current").state) < 0
+    solar_attributes = hass.states.get("sensor.home_energy_solar_power").attributes
+    assert solar_attributes["positive_direction"] == "generation_positive"
+    assert solar_attributes["sources"][0]["raw_value"] == "-0.8"
+    assert solar_attributes["valid"] is True
+    assert hass.states.get("binary_sensor.home_energy_sign_conventions_verified").state == "on"
+
+
+async def test_split_battery_sources_preserve_pilot_charge_minus_discharge(hass):
+    hass.states.async_set("sensor.test_battery_soc", "60", {"unit_of_measurement": "%"})
+    hass.states.async_set("sensor.test_grid_power", "0", {"unit_of_measurement": "kW"})
+    hass.states.async_set("sensor.test_house_load", "1", {"unit_of_measurement": "kW"})
+    hass.states.async_set("sensor.test_charge", "0.2", {"unit_of_measurement": "kW"})
+    hass.states.async_set("sensor.test_discharge", "5.2", {"unit_of_measurement": "kW"})
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Pilot split battery",
+        version=2,
+        data={
+            **ENTRY_DATA,
+            "battery_charge_power_entity": "sensor.test_charge",
+            "battery_discharge_power_entity": "sensor.test_discharge",
+        },
+    )
+    entry.add_to_hass(hass)
+
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    state = hass.states.get("sensor.home_energy_battery_power")
+    assert state is not None
+    assert state.state == "-5.0"
+    assert len(state.attributes["sources"]) == 2
+
+
+async def test_version_one_sign_booleans_migrate_locked(hass):
+    legacy = {
+        **ENTRY_DATA,
+        "grid_import_positive": False,
+        "battery_charge_positive": False,
+    }
+    for key in (
+        "grid_power_positive_direction",
+        "battery_power_positive_direction",
+        "solar_power_generation_direction",
+        "site_grid_current_positive_direction",
+        "sign_conventions_verified",
+        "telemetry_max_age_seconds",
+    ):
+        legacy.pop(key, None)
+    entry = MockConfigEntry(domain=DOMAIN, title="Legacy signs", version=1, data=legacy)
+    entry.add_to_hass(hass)
+
+    assert await async_migrate_entry(hass, entry)
+
+    assert entry.version == 2
+    assert entry.data["grid_power_positive_direction"] == "positive_export"
+    assert entry.data["battery_power_positive_direction"] == "positive_discharge"
+    assert entry.data["sign_conventions_verified"] is False
+    assert "grid_import_positive" not in entry.data
+    assert "battery_charge_positive" not in entry.data
 
 
 async def test_safety_lock_switch_is_on_by_default_and_persists_unlock(hass):

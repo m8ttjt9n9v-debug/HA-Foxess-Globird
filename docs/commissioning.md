@@ -11,6 +11,12 @@ Confirm these values over at least seven complete tariff cycles before consideri
 - configured EV maximum power, if an EV current ceiling has been supplied; and
 - diagnostics that show expected availability without personal entity IDs.
 
+Before enabling any automatic path, exercise or observe known import/export,
+battery charge/discharge, and daylight generation states. Set each explicit
+direction, confirm the canonical signed sensors, and only then select **I have
+verified these sign conventions**. A source or direction change clears the
+confirmation automatically. See [telemetry normalization](telemetry-normalization.md).
+
 Before commissioning FoxESS actuation, choose one owner for the entire day.
 Local Modbus requires FoxCloud Mode Scheduler and all legacy inverter writers
 to be disabled. Validate mapped mode and power feedback, then use only the

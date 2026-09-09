@@ -29,6 +29,7 @@ from custom_components.home_energy_orchestrator.const import (
     CONF_INVERTER_CHARGE_LIMIT_KW,
     CONF_INVERTER_DISCHARGE_LIMIT_KW,
     CONF_REHEARSAL_MODE,
+    CONF_SIGN_CONVENTIONS_VERIFIED,
     FOXESS_CONTROL_OWNER_CLOUD,
     FOXESS_CONTROL_OWNER_MODBUS,
 )
@@ -42,6 +43,7 @@ def _coordinator(**config):
         CONF_AUTOMATIC_CONTROL_ENABLED: False,
         CONF_FOXESS_CONTROL_OWNER: FOXESS_CONTROL_OWNER_MODBUS,
         CONF_REHEARSAL_MODE: True,
+        CONF_SIGN_CONVENTIONS_VERIFIED: True,
         CONF_FOXESS_WORK_MODE: "select.foxess_mode",
         CONF_FOXESS_FORCE_CHARGE_POWER: "number.foxess_charge",
         CONF_FOXESS_FORCE_DISCHARGE_POWER: "number.foxess_discharge",
@@ -100,6 +102,25 @@ async def test_rehearsal_mode_is_an_absolute_no_write_gate(hass):
     await controller.async_reconcile()
 
     assert calls == []
+
+
+async def test_unverified_signs_block_modbus_automation(hass):
+    controller = ActiveFoxessController(
+        hass,
+        _coordinator(
+            **{
+                CONF_AUTOMATIC_CONTROL_ENABLED: True,
+                CONF_REHEARSAL_MODE: False,
+                CONF_SIGN_CONVENTIONS_VERIFIED: False,
+            }
+        ),
+    )
+
+    await controller.async_reconcile()
+
+    assert controller.gate_status == "sign_conventions_unverified"
+    assert controller.last_reason == "sign_conventions_unverified"
+    assert controller.writes_performed == 0
 
 
 async def test_master_gate_alone_cannot_write_at_midnight(hass, monkeypatch):

@@ -7,8 +7,10 @@
         "data": {
           "name": "Site name",
           "battery_soc_entity": "Battery state of charge sensor",
-          "battery_power_entity": "Signed battery power sensor (required for solar spill)",
-          "battery_charge_positive": "Battery power sensor is positive when charging",
+          "battery_power_entity": "Signed battery power sensor (fallback when separate charge/discharge sensors are unavailable)",
+          "battery_charge_power_entity": "Battery charging-power magnitude sensor (optional; map with discharge)",
+          "battery_discharge_power_entity": "Battery discharging-power magnitude sensor (optional; map with charge)",
+          "battery_power_positive_direction": "Signed battery sensor positive direction",
           "battery_capacity_entity": "Battery potential capacity sensor (optional)",
           "battery_capacity_kwh": "Usable battery capacity (kWh)",
           "battery_floor_percent": "Minimum battery state of charge (%)",
@@ -25,7 +27,7 @@
           "shoulder_rate_per_kwh": "Shoulder import rate ($/kWh)",
           "export_rate_per_kwh": "Standard export rate ($/kWh)",
           "super_export_rate_per_kwh": "ZEROHERO export rate during bonus window ($/kWh)",
-          "grid_import_positive": "Grid sensor is positive when importing",
+          "grid_power_positive_direction": "Grid power sensor positive direction",
           "site_phase_count": "Site supply phase count",
           "service_import_limit_a": "Service import limit per phase (A; 0 if not commissioned)",
           "export_limit_kw": "Regulated export limit (kW; 0 if not commissioned)",
@@ -34,6 +36,7 @@
           "house_load_entity": "Protected house-load sensor (optional; non-heater base load at the Working Single Phase Pilot Site)",
           "heater_power_entity": "Separately metered heater power sensor (optional)",
           "solar_power_entity": "AC-coupled solar power sensor (optional)",
+          "solar_power_generation_direction": "Solar sensor generation direction",
           "free_charge_window_start": "Free-charge window start",
           "free_charge_window_end": "Free-charge window end",
           "house_learning_fallback_kwh": "Occupied protected-cycle fallback (kWh)",
@@ -78,6 +81,9 @@
           "ev_learning_minimum_samples": "EV driving samples required for P85 learning",
           "site_grid_headroom_current_a": "Service-current safety headroom per phase (A)",
           "site_grid_current_entity": "Most-loaded phase signed grid current (A; required for multiphase EV control)",
+          "site_grid_current_positive_direction": "Site grid-current sensor positive direction",
+          "telemetry_max_age_seconds": "Maximum age for normalized site telemetry (seconds)",
+          "sign_conventions_verified": "I verified grid, battery, solar and service-current directions against known physical operation",
           "battery_free_window_target_percent": "Expected free-window home-battery target (%)",
           "battery_charge_efficiency_percent": "Home-battery charging efficiency (%)",
           "ev_allowance_guard_enabled": "Protect the configured whole-site free-energy allowance",
@@ -114,8 +120,10 @@
         "data": {
           "name": "Site name",
           "battery_soc_entity": "Battery state of charge sensor",
-          "battery_power_entity": "Signed battery power sensor (required for solar spill)",
-          "battery_charge_positive": "Battery power sensor is positive when charging",
+          "battery_power_entity": "Signed battery power sensor (fallback when separate charge/discharge sensors are unavailable)",
+          "battery_charge_power_entity": "Battery charging-power magnitude sensor (optional; map with discharge)",
+          "battery_discharge_power_entity": "Battery discharging-power magnitude sensor (optional; map with charge)",
+          "battery_power_positive_direction": "Signed battery sensor positive direction",
           "battery_capacity_entity": "Battery potential capacity sensor (optional)",
           "battery_capacity_kwh": "Usable battery capacity (kWh)",
           "battery_floor_percent": "Minimum battery state of charge (%)",
@@ -132,7 +140,7 @@
           "shoulder_rate_per_kwh": "Shoulder import rate ($/kWh)",
           "export_rate_per_kwh": "Standard export rate ($/kWh)",
           "super_export_rate_per_kwh": "ZEROHERO export rate during bonus window ($/kWh)",
-          "grid_import_positive": "Grid sensor is positive when importing",
+          "grid_power_positive_direction": "Grid power sensor positive direction",
           "site_phase_count": "Site supply phase count",
           "service_import_limit_a": "Service import limit per phase (A; 0 if not commissioned)",
           "export_limit_kw": "Regulated export limit (kW; 0 if not commissioned)",
@@ -141,6 +149,7 @@
           "house_load_entity": "Protected house-load sensor (optional; non-heater base load at the Working Single Phase Pilot Site)",
           "heater_power_entity": "Separately metered heater power sensor (optional)",
           "solar_power_entity": "AC-coupled solar power sensor (optional)",
+          "solar_power_generation_direction": "Solar sensor generation direction",
           "free_charge_window_start": "Free-charge window start",
           "free_charge_window_end": "Free-charge window end",
           "house_learning_fallback_kwh": "Occupied protected-cycle fallback (kWh)",
@@ -185,6 +194,9 @@
           "ev_learning_minimum_samples": "EV driving samples required for P85 learning",
           "site_grid_headroom_current_a": "Service-current safety headroom per phase (A)",
           "site_grid_current_entity": "Most-loaded phase signed grid current (A; required for multiphase EV control)",
+          "site_grid_current_positive_direction": "Site grid-current sensor positive direction",
+          "telemetry_max_age_seconds": "Maximum age for normalized site telemetry (seconds)",
+          "sign_conventions_verified": "I verified grid, battery, solar and service-current directions against known physical operation",
           "battery_free_window_target_percent": "Expected free-window home-battery target (%)",
           "battery_charge_efficiency_percent": "Home-battery charging efficiency (%)",
           "ev_allowance_guard_enabled": "Protect the configured whole-site free-energy allowance",
@@ -232,9 +244,35 @@
       "invalid_site_limits": "Check capacity, floor, reserve, charger, inverter, current, and voltage limits.",
       "invalid_schedule": "Choose different free-charge times and a non-negative fallback.",
       "invalid_foxess_control_owner": "Choose observer only, local Modbus, or FoxCloud Mode Scheduler."
+      ,"invalid_power_direction": "Choose the direction represented by a positive sensor value."
+      ,"incomplete_split_battery_mapping": "Map both battery charge and discharge magnitude sensors, or leave both blank."
     }
   },
   "selector": {
+    "grid_power_positive_direction": {
+      "options": {
+        "positive_import": "Positive means importing; negative means exporting",
+        "positive_export": "Positive means exporting; negative means importing"
+      }
+    },
+    "site_grid_current_positive_direction": {
+      "options": {
+        "positive_import": "Positive means importing; negative means exporting",
+        "positive_export": "Positive means exporting; negative means importing"
+      }
+    },
+    "battery_power_positive_direction": {
+      "options": {
+        "positive_charge": "Positive means charging; negative means discharging",
+        "positive_discharge": "Positive means discharging; negative means charging"
+      }
+    },
+    "solar_power_generation_direction": {
+      "options": {
+        "generation_positive": "Generation is positive",
+        "generation_negative": "Generation is negative (for example a reversed CT2 convention)"
+      }
+    },
     "foxess_control_owner": {
       "options": {
         "observer_only": "Observer only (no FoxESS writes)",

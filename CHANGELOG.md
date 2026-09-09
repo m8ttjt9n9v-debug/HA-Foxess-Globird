@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- Replace scattered raw signed-power handling with one timestamp-aware
+  canonical telemetry boundary. HEO now publishes import-positive grid/current,
+  charge-positive battery, and generation-positive solar sensors with local
+  source provenance and explicit freshness reasons.
+- Add explicit direction selectors for grid, battery, solar, and optional
+  service current, plus support for the Working Single Phase Pilot Site's
+  separate non-negative charge/discharge battery sensors.
+- Add a sign-commissioning confirmation that is cleared by v1 migration or any
+  normalized source/direction change. Automatic FoxESS and EV writes fail
+  closed until the operator verifies known physical states; diagnostics remain
+  bounded by their existing independent guards.
+- Add golden sign/unit/freshness tests for the pilot source shape and reversed
+  FoxESS grid, inverter-battery, and CT2 readings.
 - Remove the misleading entities-card aggregate toggle from the dashboard and
   separate the global Safety Lock from independent automation requests. Display
   the effective FoxESS and EV gates instead of presenting the status sensor's

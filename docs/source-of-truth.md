@@ -78,6 +78,12 @@ layers around the proven algorithm, not replacement algorithms.
   Safety Lock blocks every write path.
 - Entity roles and physical topology are explicitly configured. HEO does not
   guess actuator mappings or infer electrical limits from transient readings.
+- All runtime consumers use one timestamp-aware canonical telemetry boundary:
+  grid and service current are import-positive, battery power is charge-positive,
+  and solar is generation-positive. Signed battery input or the pilot's paired
+  charge-minus-discharge magnitudes are supported. Source/direction changes and
+  v1 migration clear an independent sign-verification gate, closing automatic
+  FoxESS and EV writes until locally recommissioned.
 - A multiphase EV controller must receive explicit signed current for the
   most-loaded service phase. Aggregate power is not treated as proof that phase
   loading is balanced.

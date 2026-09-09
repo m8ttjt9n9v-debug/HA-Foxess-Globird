@@ -16,7 +16,9 @@ from .const import (
     CONF_FOXESS_FORCE_DISCHARGE_POWER,
     CONF_FOXESS_WORK_MODE,
     CONF_REHEARSAL_MODE,
+    CONF_SIGN_CONVENTIONS_VERIFIED,
     DEFAULT_FOXESS_CONTROL_OWNER,
+    DEFAULT_SIGN_CONVENTIONS_VERIFIED,
 )
 from .ev_adapter import ev_control_gate_status
 
@@ -44,11 +46,18 @@ async def async_get_config_entry_diagnostics(
         if ev_controller is not None
         else ev_control_gate_status(coordinator.config)
     )
+    telemetry = coordinator.telemetry
     return {
         "entry": {"version": entry.version, "options": {"mode": "observe"}},
         "actuators": {
             "mapped_count": sum(bool(entry.data.get(key)) for key in actuator_keys),
             "safety_lock_engaged": safety_locked,
+            "sign_conventions_verified": bool(
+                entry.data.get(
+                    CONF_SIGN_CONVENTIONS_VERIFIED,
+                    DEFAULT_SIGN_CONVENTIONS_VERIFIED,
+                )
+            ),
             "foxess_automatic_control_enabled": bool(
                 entry.data.get(CONF_AUTOMATIC_CONTROL_ENABLED, False)
             ),
@@ -148,6 +157,28 @@ async def async_get_config_entry_diagnostics(
             "foxess_control_gate": foxess_gate,
             "foxess_writes_enabled": foxess_gate == "ready",
             "writes_enabled": foxess_gate == "ready",
+        },
+        "normalized_telemetry": {
+            name: {
+                "value": sample.value,
+                "unit": sample.unit,
+                "positive_direction": sample.positive_direction,
+                "valid": sample.valid,
+                "fresh": sample.fresh,
+                "reason": sample.reason,
+                "source_count": len(sample.sources),
+            }
+            for name, sample in (
+                (
+                    ("grid_power", telemetry.grid_power),
+                    ("battery_power", telemetry.battery_power),
+                    ("solar_power", telemetry.solar_power),
+                    ("house_load", telemetry.house_load),
+                    ("site_grid_current", telemetry.site_grid_current),
+                )
+                if telemetry is not None
+                else ()
+            )
         },
         "ledger": {
             "reason": ledger.reason,

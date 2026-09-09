@@ -14,9 +14,16 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.util import dt as dt_util
 
 from .const import (
+    BATTERY_POSITIVE_CHARGE,
+    BATTERY_POSITIVE_DISCHARGE,
     CONF_BATTERY_CAPACITY,
     CONF_BATTERY_CAPACITY_ENTITY,
+    CONF_BATTERY_CHARGE_POSITIVE,
+    CONF_BATTERY_CHARGE_POWER,
+    CONF_BATTERY_DISCHARGE_POWER,
     CONF_BATTERY_FLOOR,
+    CONF_BATTERY_POWER,
+    CONF_BATTERY_POWER_DIRECTION,
     CONF_BATTERY_SOC,
     CONF_BONUS_WINDOW_END,
     CONF_BONUS_WINDOW_START,
@@ -31,8 +38,8 @@ from .const import (
     CONF_EXPORT_LIMIT_KW,
     CONF_FREE_CHARGE_END,
     CONF_FREE_CHARGE_START,
-    CONF_GRID_IMPORT_POSITIVE,
     CONF_GRID_POWER,
+    CONF_GRID_POWER_DIRECTION,
     CONF_HEATER_POWER,
     CONF_HOUSE_AWAY_CONFIRMATION_HOURS,
     CONF_HOUSE_AWAY_FALLBACK,
@@ -49,10 +56,15 @@ from .const import (
     CONF_RESERVE,
     CONF_SERVICE_IMPORT_LIMIT_A,
     CONF_SHOULDER_RATE,
+    CONF_SITE_GRID_CURRENT,
+    CONF_SITE_GRID_CURRENT_DIRECTION,
     CONF_SITE_PHASE_COUNT,
     CONF_SOLAR_POWER,
+    CONF_SOLAR_POWER_DIRECTION,
+    CONF_TELEMETRY_MAX_AGE_SECONDS,
     CONF_ZERO_IMPORT_CONFIRM_MINUTES,
     CONF_ZERO_IMPORT_THRESHOLD_KW,
+    DEFAULT_BATTERY_CHARGE_POSITIVE,
     DEFAULT_BONUS_WINDOW_END,
     DEFAULT_BONUS_WINDOW_START,
     DEFAULT_DAILY_CHARGE,
@@ -74,14 +86,20 @@ from .const import (
     DEFAULT_PEAK_WINDOW_START,
     DEFAULT_SERVICE_IMPORT_LIMIT_A,
     DEFAULT_SHOULDER_RATE,
+    DEFAULT_SITE_GRID_CURRENT_DIRECTION,
     DEFAULT_SITE_PHASE_COUNT,
+    DEFAULT_SOLAR_POWER_DIRECTION,
+    DEFAULT_TELEMETRY_MAX_AGE_SECONDS,
     DEFAULT_ZERO_IMPORT_CONFIRM_MINUTES,
     DEFAULT_ZERO_IMPORT_THRESHOLD_KW,
     DOMAIN,
+    GRID_POSITIVE_EXPORT,
+    GRID_POSITIVE_IMPORT,
     REASON_INVALID_CONFIGURATION,
+    SOLAR_GENERATION_POSITIVE,
 )
 from .models import EnergyLedger, SiteSnapshot
-from .normalise import energy_to_kwh, percent, power_to_kw, signed_grid_power_to_import_kw
+from .normalise import energy_to_kwh, percent, power_to_kw
 from .planner.daily_meter import (
     DailyImportAccumulator,
     HourlyWindowImportAccumulator,
@@ -101,6 +119,15 @@ from .planner.learning import (
 )
 from .planner.ledger import calculate_ledger
 from .planner.tariff import calculate_daily_energy_cost, calculate_tariff_guard
+from .telemetry import (
+    NormalizedSample,
+    NormalizedTelemetry,
+    TelemetrySource,
+    combine_battery_magnitudes,
+    normalize_current_sample,
+    normalize_power_sample,
+    unavailable_sample,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -115,6 +142,7 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
         self.active_controller = None
         self.ev_controller = None
         self.snapshot: SiteSnapshot | None = None
+        self.telemetry: NormalizedTelemetry | None = None
         self.demand_history = DemandHistory([])
         self.demand_sampler = self._create_demand_sampler(config)
         self.heater_history = DemandHistory([])
@@ -168,11 +196,15 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
                 for key in (
                     CONF_BATTERY_SOC,
                     CONF_BATTERY_CAPACITY_ENTITY,
+                    CONF_BATTERY_POWER,
+                    CONF_BATTERY_CHARGE_POWER,
+                    CONF_BATTERY_DISCHARGE_POWER,
                     CONF_GRID_POWER,
                     CONF_DAILY_IMPORT_ENTITY,
                     CONF_HOUSE_LOAD,
                     CONF_HEATER_POWER,
                     CONF_SOLAR_POWER,
+                    CONF_SITE_GRID_CURRENT,
                     CONF_EV_SOC,
                 )
                 if (entity_id := config.get(key))
@@ -555,6 +587,184 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
         except ValueError:
             return None
 
+    def _source(self, entity_id: object) -> TelemetrySource | None:
+        """Capture raw state and timestamp without interpreting sign or unit."""
+        if not isinstance(entity_id, str) or not entity_id:
+            return None
+        state = self.hass.states.get(entity_id)
+        if state is None:
+            return TelemetrySource(entity_id, None, None, None)
+        return TelemetrySource(
+            entity_id=entity_id,
+            raw_value=state.state,
+            raw_unit=state.attributes.get("unit_of_measurement"),
+            updated_at=state.last_updated,
+        )
+
+    def _max_telemetry_age(self) -> float:
+        try:
+            value = float(
+                self.config.get(
+                    CONF_TELEMETRY_MAX_AGE_SECONDS,
+                    DEFAULT_TELEMETRY_MAX_AGE_SECONDS,
+                )
+            )
+        except (TypeError, ValueError):
+            return DEFAULT_TELEMETRY_MAX_AGE_SECONDS
+        return value if isfinite(value) and value > 0 else DEFAULT_TELEMETRY_MAX_AGE_SECONDS
+
+    def _direction(self, key: str, default: str) -> str:
+        value = self.config.get(key, default)
+        return str(value) if value else default
+
+    def _power_sample(
+        self,
+        entity_key: str,
+        *,
+        now: datetime,
+        direction: str,
+        positive_direction: str,
+    ) -> NormalizedSample:
+        source = self._source(self.config.get(entity_key))
+        if source is None:
+            return unavailable_sample(
+                unit="kW",
+                positive_direction=positive_direction,
+                reason="not_configured",
+            )
+        return normalize_power_sample(
+            source,
+            now=now,
+            max_age_seconds=self._max_telemetry_age(),
+            multiplier=1.0 if direction == positive_direction else -1.0,
+            positive_direction=positive_direction,
+        )
+
+    def _normalized_telemetry(self, now: datetime) -> NormalizedTelemetry:
+        """Build the single canonical signed telemetry surface."""
+        grid_direction = self._direction(
+            CONF_GRID_POWER_DIRECTION,
+            (
+                GRID_POSITIVE_IMPORT
+                if bool(self.config.get("grid_import_positive", True))
+                else GRID_POSITIVE_EXPORT
+            ),
+        )
+        grid = self._power_sample(
+            CONF_GRID_POWER,
+            now=now,
+            direction=grid_direction,
+            positive_direction=GRID_POSITIVE_IMPORT,
+        )
+
+        charge_source = self._source(self.config.get(CONF_BATTERY_CHARGE_POWER))
+        discharge_source = self._source(self.config.get(CONF_BATTERY_DISCHARGE_POWER))
+        if charge_source is not None or discharge_source is not None:
+            charge = (
+                normalize_power_sample(
+                    charge_source,
+                    now=now,
+                    max_age_seconds=self._max_telemetry_age(),
+                    multiplier=1.0,
+                    positive_direction="positive_magnitude",
+                )
+                if charge_source is not None
+                else unavailable_sample(
+                    unit="kW", positive_direction="positive_magnitude", reason="not_configured"
+                )
+            )
+            discharge = (
+                normalize_power_sample(
+                    discharge_source,
+                    now=now,
+                    max_age_seconds=self._max_telemetry_age(),
+                    multiplier=1.0,
+                    positive_direction="positive_magnitude",
+                )
+                if discharge_source is not None
+                else unavailable_sample(
+                    unit="kW", positive_direction="positive_magnitude", reason="not_configured"
+                )
+            )
+            battery = combine_battery_magnitudes(charge, discharge)
+        else:
+            battery_direction = self._direction(
+                CONF_BATTERY_POWER_DIRECTION,
+                (
+                    BATTERY_POSITIVE_CHARGE
+                    if bool(
+                        self.config.get(
+                            CONF_BATTERY_CHARGE_POSITIVE,
+                            DEFAULT_BATTERY_CHARGE_POSITIVE,
+                        )
+                    )
+                    else BATTERY_POSITIVE_DISCHARGE
+                ),
+            )
+            battery = self._power_sample(
+                CONF_BATTERY_POWER,
+                now=now,
+                direction=battery_direction,
+                positive_direction=BATTERY_POSITIVE_CHARGE,
+            )
+
+        solar_direction = self._direction(
+            CONF_SOLAR_POWER_DIRECTION, DEFAULT_SOLAR_POWER_DIRECTION
+        )
+        solar = self._power_sample(
+            CONF_SOLAR_POWER,
+            now=now,
+            direction=solar_direction,
+            positive_direction=SOLAR_GENERATION_POSITIVE,
+        )
+        house = self._power_sample(
+            CONF_HOUSE_LOAD,
+            now=now,
+            direction="positive_consumption",
+            positive_direction="positive_consumption",
+        )
+
+        current_source = self._source(self.config.get(CONF_SITE_GRID_CURRENT))
+        if current_source is not None:
+            current_direction = self._direction(
+                CONF_SITE_GRID_CURRENT_DIRECTION,
+                DEFAULT_SITE_GRID_CURRENT_DIRECTION,
+            )
+            current = normalize_current_sample(
+                current_source,
+                now=now,
+                max_age_seconds=self._max_telemetry_age(),
+                multiplier=1.0 if current_direction == GRID_POSITIVE_IMPORT else -1.0,
+                positive_direction=GRID_POSITIVE_IMPORT,
+            )
+        elif self._configured_site_phase_count() == 1 and grid.value is not None:
+            voltage = self._configured_float(CONF_EV_VOLTAGE)
+            current = (
+                NormalizedSample(
+                    value=grid.value * 1000 / voltage,
+                    unit="A",
+                    sources=grid.sources,
+                    positive_direction=GRID_POSITIVE_IMPORT,
+                    valid=grid.valid,
+                    fresh=grid.fresh,
+                    reason="derived_from_grid_power",
+                )
+                if voltage > 0
+                else unavailable_sample(
+                    unit="A",
+                    positive_direction=GRID_POSITIVE_IMPORT,
+                    reason="invalid_voltage",
+                    sources=grid.sources,
+                )
+            )
+        else:
+            current = unavailable_sample(
+                unit="A",
+                positive_direction=GRID_POSITIVE_IMPORT,
+                reason="multiphase_mapping_required",
+            )
+        return NormalizedTelemetry(grid, battery, solar, house, current)
+
     def _energy(self, entity_id: str | None) -> float | None:
         value = self._number(entity_id)
         if value is None or not entity_id:
@@ -573,13 +783,9 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
                 battery_soc = percent(battery_soc)
             except ValueError:
                 battery_soc = None
-        raw_grid = self._power(self.config.get(CONF_GRID_POWER))
-        grid = (
-            signed_grid_power_to_import_kw(raw_grid, bool(self.config[CONF_GRID_IMPORT_POSITIVE]))
-            if raw_grid is not None
-            else None
-        )
         now = dt_util.now()
+        self.telemetry = self._normalized_telemetry(now)
+        grid = self.telemetry.grid_power.value
         if self.daily_import.observe(grid, now):
             # Persist at useful increments rather than writing HA storage on
             # every 30-second coordinator refresh.
@@ -641,7 +847,7 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
                 battery_floor_percent=self._configured_float(CONF_BATTERY_FLOOR),
                 reserve_kwh=self._configured_float(CONF_RESERVE),
                 grid_power_kw=grid,
-                house_load_kw=self._power(self.config.get(CONF_HOUSE_LOAD)),
+                house_load_kw=self.telemetry.house_load.value,
                 ev_soc=self._number(self.config.get(CONF_EV_SOC)),
                 ev_min_current_a=self._configured_float(CONF_EV_MIN_CURRENT),
                 ev_max_current_a=self._configured_float(CONF_EV_MAX_CURRENT),

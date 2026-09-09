@@ -6,6 +6,10 @@ Status here describes behavioral parity, not merely the presence of code.
 
 - [x] Observer ledger with unit/sign normalization and persisted daily,
   free-window, and ZEROHERO interval meters.
+- [x] Bounded canonical telemetry layer with explicit grid, battery, solar, and
+  service-current directions; W/kW/MW conversion; timestamp freshness and
+  provenance; pilot paired battery magnitudes; migration lock; shared automatic
+  write gate; canonical entities; and single-/three-phase golden tests.
 - [x] Configurable tariff, battery reserve, phase, service, inverter, EV, export,
   and timing inputs without site entity IDs in control code.
 - [x] Explicit FoxESS ownership: Observer, Local Modbus, or FoxCloud Scheduler.

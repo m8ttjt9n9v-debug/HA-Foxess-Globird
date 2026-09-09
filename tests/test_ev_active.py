@@ -20,6 +20,12 @@ from custom_components.home_energy_orchestrator.planner.export import ExportPlan
 from custom_components.home_energy_orchestrator.planner.export_session import (
     ExportSessionState,
 )
+from custom_components.home_energy_orchestrator.telemetry import (
+    NormalizedSample,
+    NormalizedTelemetry,
+    TelemetrySource,
+    unavailable_sample,
+)
 
 
 def _controller_config(**changes):
@@ -30,6 +36,7 @@ def _controller_config(**changes):
         "ev_automatic_control_enabled": True,
         "ev_control_commissioned": True,
         "rehearsal_mode": False,
+        "sign_conventions_verified": True,
         "ev_soc_entity": "sensor.car_soc",
         "ev_at_home_entity": "device_tracker.car",
         "ev_cable_connected_entity": "binary_sensor.car_cable",
@@ -62,6 +69,11 @@ def _controller_config(**changes):
 
 
 def _coordinator(config):
+    observed_at = datetime(2026, 9, 7, 12, 1, tzinfo=UTC)
+    grid_source = TelemetrySource("sensor.site_grid", 10, "kW", observed_at)
+    grid = NormalizedSample(
+        10, "kW", (grid_source,), "positive_import", True, True, "ok"
+    )
     return SimpleNamespace(
         config=config,
         entry_id="ev-runtime-test",
@@ -75,9 +87,69 @@ def _coordinator(config):
             site_phase_count=int(config["site_phase_count"]),
             service_import_limit_a=63,
         ),
+        telemetry=NormalizedTelemetry(
+            grid_power=grid,
+            battery_power=unavailable_sample(
+                unit="kW", positive_direction="positive_charge", reason="not_configured"
+            ),
+            solar_power=unavailable_sample(
+                unit="kW", positive_direction="generation_positive", reason="not_configured"
+            ),
+            house_load=unavailable_sample(
+                unit="kW", positive_direction="positive_consumption", reason="not_configured"
+            ),
+            site_grid_current=(
+                NormalizedSample(
+                    10 * 1000 / 230,
+                    "A",
+                    (grid_source,),
+                    "positive_import",
+                    True,
+                    True,
+                    "derived_from_grid_power",
+                )
+                if int(config["site_phase_count"]) == 1
+                else unavailable_sample(
+                    unit="A",
+                    positive_direction="positive_import",
+                    reason="source_unavailable",
+                )
+            ),
+        ),
         free_window_import=SimpleNamespace(last_at=None, imported_kwh=0),
         _configured_time=lambda key, default: time.fromisoformat(str(config.get(key, default))),
         async_update_listeners=lambda: None,
+    )
+
+
+def _set_power_telemetry(coordinator, hass: HomeAssistant, *, grid_kw, battery_kw):
+    observed_at = hass.states.get("sensor.site_grid").last_updated
+    coordinator.telemetry = NormalizedTelemetry(
+        grid_power=NormalizedSample(
+            grid_kw,
+            "kW",
+            (TelemetrySource("sensor.site_grid", grid_kw, "kW", observed_at),),
+            "positive_import",
+            True,
+            True,
+            "ok",
+        ),
+        battery_power=NormalizedSample(
+            battery_kw,
+            "kW",
+            (
+                TelemetrySource(
+                    "sensor.battery_power", battery_kw, "kW", observed_at
+                ),
+            ),
+            "positive_charge",
+            True,
+            True,
+            "ok",
+        ),
+        solar_power=coordinator.telemetry.solar_power,
+        house_load=coordinator.telemetry.house_load,
+        site_grid_current=coordinator.telemetry.site_grid_current,
     )
 
 
@@ -267,13 +339,14 @@ async def test_solar_spill_runtime_ports_measured_surplus_to_tessie(
             foxess_control_owner="local_modbus",
             ev_solar_spill_enabled=True,
             battery_power_entity="sensor.battery_power",
-            battery_charge_positive=True,
+            battery_power_positive_direction="positive_charge",
             grid_power_entity="sensor.site_grid",
-            grid_import_positive=True,
+            grid_power_positive_direction="positive_import",
             bonus_window_start="21:00:00",
             bonus_window_end="22:00:00",
         )
     )
+    _set_power_telemetry(coordinator, hass, grid_kw=-2, battery_kw=0.5)
     coordinator.snapshot = replace(coordinator.snapshot, battery_soc=100)
     hass.states.async_set("sensor.site_battery_soc", "100", {"unit_of_measurement": "%"})
     controller = ActiveEvController(hass, coordinator)
@@ -322,6 +395,7 @@ async def test_opted_in_outside_policy_restores_baseline_after_reconnect(
             bonus_window_end="22:00:00",
         )
     )
+    _set_power_telemetry(coordinator, hass, grid_kw=0, battery_kw=0)
     controller = ActiveEvController(hass, coordinator)
     battery_state = hass.states.get("sensor.battery_power")
     assert battery_state is not None

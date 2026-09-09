@@ -6,13 +6,64 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
 from .active import ActiveFoxessController
-from .const import PLATFORMS
+from .const import (
+    BATTERY_POSITIVE_CHARGE,
+    BATTERY_POSITIVE_DISCHARGE,
+    CONF_BATTERY_CHARGE_POSITIVE,
+    CONF_BATTERY_POWER_DIRECTION,
+    CONF_GRID_IMPORT_POSITIVE,
+    CONF_GRID_POWER_DIRECTION,
+    CONF_SIGN_CONVENTIONS_VERIFIED,
+    CONF_SITE_GRID_CURRENT_DIRECTION,
+    CONF_SOLAR_POWER_DIRECTION,
+    CONF_TELEMETRY_MAX_AGE_SECONDS,
+    DEFAULT_SIGN_CONVENTIONS_VERIFIED,
+    DEFAULT_SITE_GRID_CURRENT_DIRECTION,
+    DEFAULT_SOLAR_POWER_DIRECTION,
+    DEFAULT_TELEMETRY_MAX_AGE_SECONDS,
+    GRID_POSITIVE_EXPORT,
+    GRID_POSITIVE_IMPORT,
+    PLATFORMS,
+)
 from .coordinator import EnergyCoordinator
 from .ev_active import ActiveEvController
 from .manual_test import ManualTestController
 from .services import register_services, unregister_services
 
 type EnergyConfigEntry = ConfigEntry[EnergyCoordinator]
+
+
+async def async_migrate_entry(hass: HomeAssistant, entry: EnergyConfigEntry) -> bool:
+    """Migrate ambiguous legacy booleans to explicit, locked conventions."""
+    if entry.version > 2:
+        return False
+    if entry.version == 1:
+        data = dict(entry.data)
+        data[CONF_GRID_POWER_DIRECTION] = (
+            GRID_POSITIVE_IMPORT
+            if bool(data.pop(CONF_GRID_IMPORT_POSITIVE, True))
+            else GRID_POSITIVE_EXPORT
+        )
+        data[CONF_BATTERY_POWER_DIRECTION] = (
+            BATTERY_POSITIVE_CHARGE
+            if bool(data.pop(CONF_BATTERY_CHARGE_POSITIVE, True))
+            else BATTERY_POSITIVE_DISCHARGE
+        )
+        data.setdefault(CONF_SOLAR_POWER_DIRECTION, DEFAULT_SOLAR_POWER_DIRECTION)
+        data.setdefault(
+            CONF_SITE_GRID_CURRENT_DIRECTION,
+            DEFAULT_SITE_GRID_CURRENT_DIRECTION,
+        )
+        data.setdefault(
+            CONF_TELEMETRY_MAX_AGE_SECONDS,
+            DEFAULT_TELEMETRY_MAX_AGE_SECONDS,
+        )
+        # An upgrade cannot prove that previously configured signs were
+        # electrically checked. Existing automatic requests fail closed until
+        # the operator reviews the normalized sensors and confirms them.
+        data[CONF_SIGN_CONVENTIONS_VERIFIED] = DEFAULT_SIGN_CONVENTIONS_VERIFIED
+        hass.config_entries.async_update_entry(entry, data=data, version=2)
+    return True
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: EnergyConfigEntry) -> bool:

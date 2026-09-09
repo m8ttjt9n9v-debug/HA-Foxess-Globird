@@ -3,11 +3,16 @@
 from __future__ import annotations
 
 DOMAIN = "home_energy_orchestrator"
-PLATFORMS = ["sensor", "number", "button", "switch", "select"]
+PLATFORMS = ["sensor", "binary_sensor", "number", "button", "switch", "select"]
 
 CONF_BATTERY_SOC = "battery_soc_entity"
 CONF_BATTERY_POWER = "battery_power_entity"
+# Preferred pilot-faithful mapping. When both magnitude sensors are supplied,
+# HEO calculates charge minus discharge and ignores the signed fallback above.
+CONF_BATTERY_CHARGE_POWER = "battery_charge_power_entity"
+CONF_BATTERY_DISCHARGE_POWER = "battery_discharge_power_entity"
 CONF_BATTERY_CHARGE_POSITIVE = "battery_charge_positive"
+CONF_BATTERY_POWER_DIRECTION = "battery_power_positive_direction"
 CONF_BATTERY_CAPACITY_ENTITY = "battery_capacity_entity"
 CONF_BATTERY_CAPACITY = "battery_capacity_kwh"
 CONF_BATTERY_FLOOR = "battery_floor_percent"
@@ -24,6 +29,7 @@ CONF_EXPORT_RATE = "export_rate_per_kwh"
 CONF_SUPER_EXPORT_RATE = "super_export_rate_per_kwh"
 CONF_DAILY_CHARGE = "daily_charge"
 CONF_GRID_IMPORT_POSITIVE = "grid_import_positive"
+CONF_GRID_POWER_DIRECTION = "grid_power_positive_direction"
 CONF_SITE_PHASE_COUNT = "site_phase_count"
 CONF_SERVICE_IMPORT_LIMIT_A = "service_import_limit_a"
 CONF_EXPORT_LIMIT_KW = "export_limit_kw"
@@ -32,6 +38,7 @@ CONF_INVERTER_DISCHARGE_LIMIT_KW = "inverter_discharge_limit_kw"
 CONF_HOUSE_LOAD = "house_load_entity"
 CONF_HEATER_POWER = "heater_power_entity"
 CONF_SOLAR_POWER = "solar_power_entity"
+CONF_SOLAR_POWER_DIRECTION = "solar_power_generation_direction"
 CONF_RESERVE = "reserve_kwh"
 CONF_EV_SOC = "ev_soc_entity"
 CONF_EV_MAX_CURRENT = "ev_max_current"
@@ -114,6 +121,9 @@ CONF_EV_ARRIVAL_RESERVE_SOC = "ev_arrival_reserve_soc_percent"
 CONF_EV_LEARNING_MINIMUM_SAMPLES = "ev_learning_minimum_samples"
 CONF_SITE_GRID_HEADROOM_CURRENT = "site_grid_headroom_current_a"
 CONF_SITE_GRID_CURRENT = "site_grid_current_entity"
+CONF_SITE_GRID_CURRENT_DIRECTION = "site_grid_current_positive_direction"
+CONF_SIGN_CONVENTIONS_VERIFIED = "sign_conventions_verified"
+CONF_TELEMETRY_MAX_AGE_SECONDS = "telemetry_max_age_seconds"
 CONF_BATTERY_FREE_WINDOW_TARGET = "battery_free_window_target_percent"
 CONF_BATTERY_CHARGE_EFFICIENCY = "battery_charge_efficiency_percent"
 CONF_EV_ALLOWANCE_GUARD_ENABLED = "ev_allowance_guard_enabled"
@@ -189,6 +199,21 @@ DEFAULT_SITE_GRID_HEADROOM_CURRENT = 1.0
 DEFAULT_BATTERY_FREE_WINDOW_TARGET = 100.0
 DEFAULT_BATTERY_CHARGE_EFFICIENCY = 95.0
 DEFAULT_BATTERY_CHARGE_POSITIVE = True
+GRID_POSITIVE_IMPORT = "positive_import"
+GRID_POSITIVE_EXPORT = "positive_export"
+GRID_POWER_DIRECTIONS = (GRID_POSITIVE_IMPORT, GRID_POSITIVE_EXPORT)
+BATTERY_POSITIVE_CHARGE = "positive_charge"
+BATTERY_POSITIVE_DISCHARGE = "positive_discharge"
+BATTERY_POWER_DIRECTIONS = (BATTERY_POSITIVE_CHARGE, BATTERY_POSITIVE_DISCHARGE)
+SOLAR_GENERATION_POSITIVE = "generation_positive"
+SOLAR_GENERATION_NEGATIVE = "generation_negative"
+SOLAR_POWER_DIRECTIONS = (SOLAR_GENERATION_POSITIVE, SOLAR_GENERATION_NEGATIVE)
+DEFAULT_GRID_POWER_DIRECTION = GRID_POSITIVE_IMPORT
+DEFAULT_BATTERY_POWER_DIRECTION = BATTERY_POSITIVE_CHARGE
+DEFAULT_SOLAR_POWER_DIRECTION = SOLAR_GENERATION_POSITIVE
+DEFAULT_SITE_GRID_CURRENT_DIRECTION = GRID_POSITIVE_IMPORT
+DEFAULT_SIGN_CONVENTIONS_VERIFIED = False
+DEFAULT_TELEMETRY_MAX_AGE_SECONDS = 90.0
 DEFAULT_EV_ALLOWANCE_GUARD_ENABLED = True
 DEFAULT_EV_ALLOWANCE_SAFETY_MARGIN = 0.0
 DEFAULT_EV_SOLAR_SPILL_ENABLED = False

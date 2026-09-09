@@ -4,7 +4,7 @@ A Home Assistant custom integration for a site-configured energy ledger,
 conservative demand learning, bounded FoxESS diagnostics, the verified
 Working Single Phase Pilot Site ZEROHERO export policy, and a faithful direct-EVSE free-window port.
 
-Version 0.8.1 deliberately excludes the rewritten automatic battery controller
+Version 0.9.0 deliberately excludes the rewritten automatic battery controller
 that was not a faithful port of the proven Working Single Phase Pilot Site.
 Automatic FoxESS free charging remains absent. Separately gated direct-EVSE and
 smart-socket Tessie paths have returned through port-first characterization and
@@ -40,7 +40,11 @@ rooms, and other site-specific cards belong in a local overlay.
   are never inferred.
 
 - Normalized battery SoC/energy, signed grid import/export, solar, house-load,
-  and optional EV observation sensors.
+  and optional EV observation sensors. One timestamp-aware boundary converts
+  all supported power units and configured directions into import-positive
+  grid/current, charge-positive battery, and generation-positive solar values.
+  Automatic writes remain locked until those conventions are explicitly
+  verified. See the [normalization contract](docs/telemetry-normalization.md).
 - Persisted daily import, free-window import, and hourly ZEROHERO evidence.
 - Configurable tariff estimates, electrical limits, tariff windows, allowance,
   battery reserve, and export policy; control logic contains no personal entity

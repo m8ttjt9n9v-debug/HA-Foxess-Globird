@@ -15,9 +15,7 @@ from homeassistant.util import dt as dt_util
 
 from .const import (
     CONF_BATTERY_CHARGE_EFFICIENCY,
-    CONF_BATTERY_CHARGE_POSITIVE,
     CONF_BATTERY_FREE_WINDOW_TARGET,
-    CONF_BATTERY_POWER,
     CONF_BATTERY_SOC,
     CONF_BONUS_WINDOW_END,
     CONF_BONUS_WINDOW_START,
@@ -72,14 +70,10 @@ from .const import (
     CONF_FOXESS_CONTROL_OWNER,
     CONF_FREE_CHARGE_END,
     CONF_FREE_CHARGE_START,
-    CONF_GRID_IMPORT_POSITIVE,
-    CONF_GRID_POWER,
     CONF_SERVICE_IMPORT_LIMIT_A,
-    CONF_SITE_GRID_CURRENT,
     CONF_SITE_GRID_HEADROOM_CURRENT,
     CONF_SITE_PHASE_COUNT,
     DEFAULT_BATTERY_CHARGE_EFFICIENCY,
-    DEFAULT_BATTERY_CHARGE_POSITIVE,
     DEFAULT_BATTERY_FREE_WINDOW_TARGET,
     DEFAULT_BONUS_WINDOW_END,
     DEFAULT_BONUS_WINDOW_START,
@@ -129,12 +123,7 @@ from .const import (
 )
 from .coordinator import EnergyCoordinator
 from .ev_adapter import EvEntityMap, EvServiceAdapter, EvWriteBlocked, ev_control_gate_status
-from .normalise import (
-    current_to_a,
-    energy_to_kwh,
-    power_to_kw,
-    signed_grid_power_to_import_kw,
-)
+from .normalise import current_to_a, energy_to_kwh
 from .planner.ev import (
     DIRECT_EVSE_MAX_ATTEMPTS,
     AllowanceCeilingInputs,
@@ -1409,18 +1398,24 @@ class ActiveEvController:
         current_minimum: float,
         current_step: float,
     ) -> SolarSpillDecision:
-        grid = self._power_sample(CONF_GRID_POWER)
-        battery = self._power_sample(CONF_BATTERY_POWER)
+        telemetry = self.coordinator.telemetry
+        grid = None if telemetry is None else telemetry.grid_power
+        battery = None if telemetry is None else telemetry.battery_power
         actual_state = self.hass.states.get(
             str(self.coordinator.config.get(CONF_EV_ACTUAL_CURRENT, ""))
         )
         soc_state = self.hass.states.get(str(self.coordinator.config.get(CONF_BATTERY_SOC, "")))
         ev_current, ev_valid = self._actual_ev_current_a()
         timestamps = [
-            state.last_updated
-            for state in (grid[1], battery[1], actual_state, soc_state)
-            if state is not None
+            source.updated_at
+            for sample in (grid, battery)
+            if sample is not None
+            for source in sample.sources
+            if source.updated_at is not None
         ]
+        timestamps.extend(
+            state.last_updated for state in (actual_state, soc_state) if state is not None
+        )
         max_age = self._float(
             CONF_EV_TELEMETRY_MAX_AGE_SECONDS,
             DEFAULT_EV_TELEMETRY_MAX_AGE_SECONDS,
@@ -1430,30 +1425,24 @@ class ActiveEvController:
             DEFAULT_EV_TELEMETRY_MAX_SKEW_SECONDS,
         )
         coherent = (
-            grid[0] is not None
-            and battery[0] is not None
+            grid is not None
+            and grid.value is not None
+            and battery is not None
+            and battery.value is not None
             and ev_valid
-            and len(timestamps) == 4
+            and actual_state is not None
+            and soc_state is not None
+            and all(
+                source.updated_at is not None
+                for sample in (grid, battery)
+                for source in sample.sources
+            )
             and all(0 <= (now - timestamp).total_seconds() <= max_age for timestamp in timestamps)
             and (max(timestamps) - min(timestamps)).total_seconds() <= max_skew
         )
-        grid_import = (
-            signed_grid_power_to_import_kw(
-                grid[0], bool(self.coordinator.config.get(CONF_GRID_IMPORT_POSITIVE, True))
-            )
-            if grid[0] is not None
-            else 0.0
-        )
+        grid_import = grid.value if grid is not None and grid.value is not None else 0.0
         battery_charge = (
-            (
-                battery[0]
-                if self.coordinator.config.get(
-                    CONF_BATTERY_CHARGE_POSITIVE, DEFAULT_BATTERY_CHARGE_POSITIVE
-                )
-                else -battery[0]
-            )
-            if battery[0] is not None
-            else 0.0
+            battery.value if battery is not None and battery.value is not None else 0.0
         )
         voltage = self._float(CONF_EV_VOLTAGE, DEFAULT_EV_VOLTAGE)
         phases = int(self._float(CONF_EV_PHASE_COUNT, DEFAULT_EV_PHASE_COUNT))
@@ -1479,17 +1468,6 @@ class ActiveEvController:
                 current_ceiling_a=ceiling,
             )
         )
-
-    def _power_sample(self, key: str):
-        entity = self.coordinator.config.get(key)
-        state = self.hass.states.get(str(entity)) if entity else None
-        if state is None or state.state in _UNKNOWN_STATES:
-            return None, state
-        try:
-            value = power_to_kw(float(state.state), state.attributes.get("unit_of_measurement"))
-        except (TypeError, ValueError):
-            return None, state
-        return (value if isfinite(value) else None), state
 
     def _pre_free_window(self, now: datetime) -> tuple[datetime, bool, float]:
         free_time = self.coordinator._configured_time(  # noqa: SLF001
@@ -1546,24 +1524,10 @@ class ActiveEvController:
         )
 
     def _grid_current_a(self) -> tuple[float, bool]:
-        mapped = self.coordinator.config.get(CONF_SITE_GRID_CURRENT)
-        if mapped:
-            state = self.hass.states.get(str(mapped))
-            if state is None or state.state in _UNKNOWN_STATES:
-                return 0.0, False
-            try:
-                result = current_to_a(
-                    float(state.state), state.attributes.get("unit_of_measurement")
-                )
-                return (result, True) if isfinite(result) else (0.0, False)
-            except (TypeError, ValueError):
-                return 0.0, False
-        phases = int(self._float(CONF_SITE_PHASE_COUNT, DEFAULT_SITE_PHASE_COUNT))
-        snapshot = self.coordinator.snapshot
-        if phases != 1 or snapshot is None or snapshot.grid_power_kw is None:
+        telemetry = self.coordinator.telemetry
+        if telemetry is None or telemetry.site_grid_current.value is None:
             return 0.0, False
-        voltage = self._float(CONF_EV_VOLTAGE, DEFAULT_EV_VOLTAGE)
-        return snapshot.grid_power_kw * 1000 / voltage, voltage > 0
+        return telemetry.site_grid_current.value, True
 
     def _actual_ev_current_a(self) -> tuple[float, bool]:
         charging = self._entity_state(CONF_EV_CHARGING_STATE)

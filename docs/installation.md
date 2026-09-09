@@ -18,7 +18,7 @@ HACS installation requires a public GitHub repository. This project publishes
 versioned GitHub releases for the custom-repository channel; inclusion in
 HACS's default catalogue is a separate review process.
 
-Version 0.8.1 is observer-by-default. Automatic FoxESS free charging is not
+Version 0.9.0 is observer-by-default. Automatic FoxESS free charging is not
 present; the earlier simplified controller remains removed. The verified
 ZEROHERO export path and the faithful direct-EVSE/smart-socket Tessie paths are
 separately gated. Bounded FoxESS Diagnostics remain explicitly submitted actions.
@@ -33,9 +33,16 @@ mandatory connected-EV baseline during setup or reconfiguration. The full
 ported behavior is recorded in the
 [ZEROHERO export policy](zerohero-export-policy.md).
 
-Import [`examples/dashboard.yaml`](../examples/dashboard.yaml) as a Lovelace
-starter view; HACS does not install dashboards automatically. Generated
-entities use stable `sensor.home_energy_*` IDs where the stable ID is unused.
+HACS installs the files in `custom_components/home_energy_orchestrator` and
+Home Assistant then creates HEO's entities when the integration is configured.
+It does **not** register or overwrite a Lovelace dashboard. To use the current
+example, create a new dashboard, open its raw configuration editor, and paste
+[`examples/dashboard.yaml`](../examples/dashboard.yaml). This is a manual,
+one-time snapshot: later HACS upgrades do not modify that dashboard, so copy
+new example changes deliberately while preserving local cards. Upgrade-safe
+generated dashboards and reusable Lovelace strategy/cards remain roadmap work.
+Generated entities use stable `sensor.home_energy_*` IDs where the stable ID is
+unused.
 
 When FoxESS Modbus or Tessie is already installed, setup ranks entities from
 one unambiguous device of each integration and pre-fills recognized roles.
@@ -85,7 +92,10 @@ remain disabled.
   `sensor.bms_kwh_remaining_1`). The observer treats this as 100%-SoC potential capacity and
   calculates current energy as potential capacity × SoC. The numeric capacity remains the
   explicit fallback when no measured capacity sensor is selected.
-- Confirm the grid sensor's sign convention using a known load. The setup form asks whether positive means import.
+- Confirm grid direction using a known load, battery direction during a known
+  charge or discharge, and solar direction during daylight. Review the
+  canonical HEO sensors, then explicitly confirm sign commissioning. See the
+  [normalization contract](telemetry-normalization.md).
 - Record usable battery capacity, battery floor, and any reserve required for the site.
 - If you select a protected house-load sensor, set the free-charge window and
   explicit occupied and away fallbacks. Map a whole-house source when it is the

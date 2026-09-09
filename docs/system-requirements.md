@@ -100,6 +100,9 @@ efficiency.
 
 Multi-sensor controls must use temporally coherent samples and fail closed when
 freshness, units, signs, presence, connection, or ownership cannot be proven.
+Configure each raw sign once and consume HEO's canonical sensors everywhere
+else; the full conventions and commissioning procedure are documented in
+[telemetry normalization](telemetry-normalization.md).
 
 ## Dashboard installation
 

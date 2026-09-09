@@ -19,9 +19,10 @@ from .const import (
     CONF_EV_AUTOMATIC_CONTROL_ENABLED,
     CONF_FOXESS_CONTROL_OWNER,
     CONF_REHEARSAL_MODE,
-    CONF_SOLAR_POWER,
+    CONF_SIGN_CONVENTIONS_VERIFIED,
     CONF_ZERO_IMPORT_THRESHOLD_KW,
     DEFAULT_FOXESS_CONTROL_OWNER,
+    DEFAULT_SIGN_CONVENTIONS_VERIFIED,
     DEFAULT_ZERO_IMPORT_THRESHOLD_KW,
     DOMAIN,
     FOXESS_CONTROL_OWNER_CLOUD,
@@ -62,6 +63,14 @@ DESCRIPTIONS = (
         suggested_display_precision=2,
     ),
     SensorEntityDescription(
+        key="grid_power",
+        name="Grid Power (Import Positive)",
+        native_unit_of_measurement=UnitOfPower.KILO_WATT,
+        device_class="power",
+        state_class="measurement",
+        suggested_display_precision=2,
+    ),
+    SensorEntityDescription(
         key="grid_import",
         name="Grid Import",
         native_unit_of_measurement=UnitOfPower.KILO_WATT,
@@ -72,6 +81,14 @@ DESCRIPTIONS = (
     SensorEntityDescription(
         key="grid_export",
         name="Grid Export",
+        native_unit_of_measurement=UnitOfPower.KILO_WATT,
+        device_class="power",
+        state_class="measurement",
+        suggested_display_precision=2,
+    ),
+    SensorEntityDescription(
+        key="battery_power",
+        name="Battery Power (Charge Positive)",
         native_unit_of_measurement=UnitOfPower.KILO_WATT,
         device_class="power",
         state_class="measurement",
@@ -92,6 +109,14 @@ DESCRIPTIONS = (
         device_class="power",
         state_class="measurement",
         suggested_display_precision=2,
+    ),
+    SensorEntityDescription(
+        key="site_grid_current",
+        name="Site Grid Current (Import Positive)",
+        native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
+        device_class="current",
+        state_class="measurement",
+        suggested_display_precision=1,
     ),
     SensorEntityDescription(
         key="ev_soc",
@@ -476,16 +501,22 @@ class EnergySensor(CoordinatorEntity[EnergyCoordinator], SensorEntity):
         ev_learning = (
             ev_controller.learned_charge_limit if ev_controller is not None else None
         )
+        telemetry = self.coordinator.telemetry
         values = {
             "status": ledger.reason,
             "battery_soc": None if snapshot is None else snapshot.battery_soc,
             "battery_potential_capacity": ledger.battery_potential_capacity_kwh,
             "battery_energy": ledger.battery_energy_kwh,
             "available_energy": ledger.available_after_reserve_kwh,
+            "grid_power": None if telemetry is None else telemetry.grid_power.value,
             "grid_import": ledger.grid_import_kw,
             "grid_export": ledger.grid_export_kw,
+            "battery_power": None if telemetry is None else telemetry.battery_power.value,
             "house_load": None if snapshot is None else snapshot.house_load_kw,
-            "solar_power": self.coordinator._power(self.coordinator.config.get(CONF_SOLAR_POWER)),
+            "solar_power": None if telemetry is None else telemetry.solar_power.value,
+            "site_grid_current": (
+                None if telemetry is None else telemetry.site_grid_current.value
+            ),
             "ev_soc": None if snapshot is None else snapshot.ev_soc,
             "ev_max_power": ledger.ev_max_power_kw,
             "ev_control_status": (
@@ -646,6 +677,37 @@ class EnergySensor(CoordinatorEntity[EnergyCoordinator], SensorEntity):
 
     @property
     def extra_state_attributes(self):
+        telemetry_samples = (
+            {
+                "grid_power": self.coordinator.telemetry.grid_power,
+                "battery_power": self.coordinator.telemetry.battery_power,
+                "solar_power": self.coordinator.telemetry.solar_power,
+                "house_load": self.coordinator.telemetry.house_load,
+                "site_grid_current": self.coordinator.telemetry.site_grid_current,
+            }
+            if self.coordinator.telemetry is not None
+            else {}
+        )
+        if sample := telemetry_samples.get(self.entity_description.key):
+            return {
+                "positive_direction": sample.positive_direction,
+                "valid": sample.valid,
+                "fresh": sample.fresh,
+                "reason": sample.reason,
+                "sources": [
+                    {
+                        "entity_id": source.entity_id,
+                        "raw_value": source.raw_value,
+                        "raw_unit": source.raw_unit,
+                        "updated_at": (
+                            source.updated_at.isoformat()
+                            if source.updated_at is not None
+                            else None
+                        ),
+                    }
+                    for source in sample.sources
+                ],
+            }
         if self.entity_description.key == "zerohero_import_window":
             accumulator = self.coordinator.zerohero_import
             return {
@@ -789,6 +851,12 @@ class EnergySensor(CoordinatorEntity[EnergyCoordinator], SensorEntity):
                 else 0
             ),
             "automatic_control_enabled": foxess_requested,
+            "sign_conventions_verified": bool(
+                self.coordinator.config.get(
+                    CONF_SIGN_CONVENTIONS_VERIFIED,
+                    DEFAULT_SIGN_CONVENTIONS_VERIFIED,
+                )
+            ),
             "foxess_modbus_control_effective": foxess_enabled,
             "foxess_control_owner": foxess_owner,
             "automatic_export_enabled": export_enabled,

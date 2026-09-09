@@ -35,6 +35,7 @@ from .const import (
     CONF_FREE_CHARGE_START,
     CONF_INVERTER_DISCHARGE_LIMIT_KW,
     CONF_REHEARSAL_MODE,
+    CONF_SIGN_CONVENTIONS_VERIFIED,
     DEFAULT_AUTOMATIC_EXPORT_ENABLED,
     DEFAULT_BONUS_WINDOW_START,
     DEFAULT_DISCHARGE_EFFICIENCY_PERCENT,
@@ -47,6 +48,7 @@ from .const import (
     DEFAULT_FOXESS_CONTROL_OWNER,
     DEFAULT_FREE_CHARGE_START,
     DEFAULT_INVERTER_DISCHARGE_LIMIT_KW,
+    DEFAULT_SIGN_CONVENTIONS_VERIFIED,
     FOXESS_CONTROL_OWNER_CLOUD,
     FOXESS_CONTROL_OWNER_MODBUS,
 )
@@ -102,6 +104,11 @@ class ActiveFoxessController:
             return "disabled"
         if self.coordinator.config.get(CONF_REHEARSAL_MODE, True):
             return "rehearsal"
+        if not self.coordinator.config.get(
+            CONF_SIGN_CONVENTIONS_VERIFIED,
+            DEFAULT_SIGN_CONVENTIONS_VERIFIED,
+        ):
+            return "sign_conventions_unverified"
         mapping = (
             self.coordinator.config.get(CONF_FOXESS_WORK_MODE),
             self.coordinator.config.get(CONF_FOXESS_FORCE_CHARGE_POWER),
@@ -152,6 +159,12 @@ class ActiveFoxessController:
             return
         if self.coordinator.config.get(CONF_REHEARSAL_MODE, True):
             self.last_reason = "rehearsal_mode"
+            return
+        if not self.coordinator.config.get(
+            CONF_SIGN_CONVENTIONS_VERIFIED,
+            DEFAULT_SIGN_CONVENTIONS_VERIFIED,
+        ):
+            self.last_reason = "sign_conventions_unverified"
             return
         mapping = (
             self.coordinator.config.get(CONF_FOXESS_WORK_MODE),

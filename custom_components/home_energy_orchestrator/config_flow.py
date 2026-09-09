@@ -13,15 +13,20 @@ from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import selector
 
 from .const import (
+    BATTERY_POSITIVE_DISCHARGE,
+    BATTERY_POWER_DIRECTIONS,
     CONF_AUTOMATIC_CONTROL_ENABLED,
     CONF_AUTOMATIC_EXPORT_ENABLED,
     CONF_BATTERY_CAPACITY,
     CONF_BATTERY_CAPACITY_ENTITY,
     CONF_BATTERY_CHARGE_EFFICIENCY,
     CONF_BATTERY_CHARGE_POSITIVE,
+    CONF_BATTERY_CHARGE_POWER,
+    CONF_BATTERY_DISCHARGE_POWER,
     CONF_BATTERY_FLOOR,
     CONF_BATTERY_FREE_WINDOW_TARGET,
     CONF_BATTERY_POWER,
+    CONF_BATTERY_POWER_DIRECTION,
     CONF_BATTERY_SOC,
     CONF_BONUS_WINDOW_END,
     CONF_BONUS_WINDOW_START,
@@ -91,6 +96,7 @@ from .const import (
     CONF_FREE_CHARGE_START,
     CONF_GRID_IMPORT_POSITIVE,
     CONF_GRID_POWER,
+    CONF_GRID_POWER_DIRECTION,
     CONF_HEATER_POWER,
     CONF_HOUSE_AWAY_CONFIRMATION_HOURS,
     CONF_HOUSE_AWAY_FALLBACK,
@@ -108,11 +114,15 @@ from .const import (
     CONF_RESERVE,
     CONF_SERVICE_IMPORT_LIMIT_A,
     CONF_SHOULDER_RATE,
+    CONF_SIGN_CONVENTIONS_VERIFIED,
     CONF_SITE_GRID_CURRENT,
+    CONF_SITE_GRID_CURRENT_DIRECTION,
     CONF_SITE_GRID_HEADROOM_CURRENT,
     CONF_SITE_PHASE_COUNT,
     CONF_SOLAR_POWER,
+    CONF_SOLAR_POWER_DIRECTION,
     CONF_SUPER_EXPORT_RATE,
+    CONF_TELEMETRY_MAX_AGE_SECONDS,
     CONF_ZERO_IMPORT_CONFIRM_MINUTES,
     CONF_ZERO_IMPORT_THRESHOLD_KW,
     DEFAULT_AUTOMATIC_CONTROL_ENABLED,
@@ -121,6 +131,7 @@ from .const import (
     DEFAULT_BATTERY_CHARGE_POSITIVE,
     DEFAULT_BATTERY_FLOOR,
     DEFAULT_BATTERY_FREE_WINDOW_TARGET,
+    DEFAULT_BATTERY_POWER_DIRECTION,
     DEFAULT_BONUS_WINDOW_END,
     DEFAULT_BONUS_WINDOW_START,
     DEFAULT_DAILY_CHARGE,
@@ -171,6 +182,7 @@ from .const import (
     DEFAULT_FOXESS_CONTROL_OWNER,
     DEFAULT_FREE_CHARGE_END,
     DEFAULT_FREE_CHARGE_START,
+    DEFAULT_GRID_POWER_DIRECTION,
     DEFAULT_HOUSE_AWAY_CONFIRMATION_HOURS,
     DEFAULT_HOUSE_AWAY_FALLBACK_KWH,
     DEFAULT_HOUSE_LEARNING_FALLBACK_KWH,
@@ -186,9 +198,13 @@ from .const import (
     DEFAULT_RESERVE_KWH,
     DEFAULT_SERVICE_IMPORT_LIMIT_A,
     DEFAULT_SHOULDER_RATE,
+    DEFAULT_SIGN_CONVENTIONS_VERIFIED,
+    DEFAULT_SITE_GRID_CURRENT_DIRECTION,
     DEFAULT_SITE_GRID_HEADROOM_CURRENT,
     DEFAULT_SITE_PHASE_COUNT,
+    DEFAULT_SOLAR_POWER_DIRECTION,
     DEFAULT_SUPER_EXPORT_RATE,
+    DEFAULT_TELEMETRY_MAX_AGE_SECONDS,
     DEFAULT_ZERO_IMPORT_CONFIRM_MINUTES,
     DEFAULT_ZERO_IMPORT_THRESHOLD_KW,
     DOMAIN,
@@ -198,7 +214,10 @@ from .const import (
     EV_LOCATION_MODES,
     FOXESS_CONTROL_OWNER_MODBUS,
     FOXESS_CONTROL_OWNERS,
+    GRID_POSITIVE_EXPORT,
+    GRID_POWER_DIRECTIONS,
     HOUSE_OCCUPANCY_MODES,
+    SOLAR_POWER_DIRECTIONS,
 )
 from .discovery import DiscoveryEntity, discover_entity_defaults
 
@@ -211,7 +230,23 @@ SWITCH_ENTITY = selector.EntitySelector(selector.EntitySelectorConfig(domain="sw
 class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Create and maintain one observer per independently configured site."""
 
-    VERSION = 1
+    VERSION = 2
+
+    _NORMALIZATION_KEYS = frozenset(
+        {
+            CONF_GRID_POWER,
+            CONF_GRID_POWER_DIRECTION,
+            CONF_BATTERY_POWER,
+            CONF_BATTERY_POWER_DIRECTION,
+            CONF_BATTERY_CHARGE_POWER,
+            CONF_BATTERY_DISCHARGE_POWER,
+            CONF_SOLAR_POWER,
+            CONF_SOLAR_POWER_DIRECTION,
+            CONF_HOUSE_LOAD,
+            CONF_SITE_GRID_CURRENT,
+            CONF_SITE_GRID_CURRENT_DIRECTION,
+        }
+    )
 
     async def async_step_user(self, user_input: dict[str, object] | None = None):
         """Collect the mappings and site limits required by the observer."""
@@ -241,6 +276,12 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             elif CONF_EV_CHARGE_TO_FULL in entry.data:
                 user_input[CONF_EV_CHARGE_TO_FULL] = entry.data[CONF_EV_CHARGE_TO_FULL]
             user_input = self._apply_defaults(user_input)
+            old_normalized = self._apply_defaults(dict(entry.data))
+            if any(
+                user_input.get(key) != old_normalized.get(key)
+                for key in self._NORMALIZATION_KEYS
+            ):
+                user_input[CONF_SIGN_CONVENTIONS_VERIFIED] = False
             errors = self._validate_input(user_input)
             if not errors:
                 title = str(user_input.pop(CONF_NAME))
@@ -311,13 +352,17 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 ): selector.TextSelector(),
                 vol.Required(CONF_BATTERY_SOC, default=defaults.get(CONF_BATTERY_SOC)): ENTITY,
                 optional_entity(CONF_BATTERY_POWER): ENTITY,
+                optional_entity(CONF_BATTERY_CHARGE_POWER): ENTITY,
+                optional_entity(CONF_BATTERY_DISCHARGE_POWER): ENTITY,
                 vol.Required(
-                    CONF_BATTERY_CHARGE_POSITIVE,
+                    CONF_BATTERY_POWER_DIRECTION,
                     default=defaults.get(
-                        CONF_BATTERY_CHARGE_POSITIVE,
-                        DEFAULT_BATTERY_CHARGE_POSITIVE,
+                        CONF_BATTERY_POWER_DIRECTION,
+                        DEFAULT_BATTERY_POWER_DIRECTION,
                     ),
-                ): selector.BooleanSelector(),
+                ): selector.SelectSelector(
+                    selector.SelectSelectorConfig(options=list(BATTERY_POWER_DIRECTIONS))
+                ),
                 optional_entity(CONF_BATTERY_CAPACITY_ENTITY): ENTITY,
                 vol.Required(
                     CONF_BATTERY_CAPACITY, default=defaults.get(CONF_BATTERY_CAPACITY, 10.0)
@@ -331,9 +376,13 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 ): vol.Coerce(float),
                 vol.Required(CONF_GRID_POWER, default=defaults.get(CONF_GRID_POWER)): ENTITY,
                 vol.Required(
-                    CONF_GRID_IMPORT_POSITIVE,
-                    default=defaults.get(CONF_GRID_IMPORT_POSITIVE, True),
-                ): selector.BooleanSelector(),
+                    CONF_GRID_POWER_DIRECTION,
+                    default=defaults.get(
+                        CONF_GRID_POWER_DIRECTION, DEFAULT_GRID_POWER_DIRECTION
+                    ),
+                ): selector.SelectSelector(
+                    selector.SelectSelectorConfig(options=list(GRID_POWER_DIRECTIONS))
+                ),
                 optional_entity(CONF_DAILY_IMPORT_ENTITY): ENTITY,
                 vol.Required(
                     CONF_DAILY_FREE_ALLOWANCE_KWH,
@@ -404,6 +453,14 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 optional_entity(CONF_HOUSE_LOAD): ENTITY,
                 optional_entity(CONF_HEATER_POWER): ENTITY,
                 optional_entity(CONF_SOLAR_POWER): ENTITY,
+                vol.Required(
+                    CONF_SOLAR_POWER_DIRECTION,
+                    default=defaults.get(
+                        CONF_SOLAR_POWER_DIRECTION, DEFAULT_SOLAR_POWER_DIRECTION
+                    ),
+                ): selector.SelectSelector(
+                    selector.SelectSelectorConfig(options=list(SOLAR_POWER_DIRECTIONS))
+                ),
                 vol.Required(
                     CONF_FREE_CHARGE_START,
                     default=defaults.get(CONF_FREE_CHARGE_START, DEFAULT_FREE_CHARGE_START),
@@ -625,6 +682,29 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 ): vol.Coerce(float),
                 optional_entity(CONF_SITE_GRID_CURRENT): ENTITY,
                 vol.Required(
+                    CONF_SITE_GRID_CURRENT_DIRECTION,
+                    default=defaults.get(
+                        CONF_SITE_GRID_CURRENT_DIRECTION,
+                        DEFAULT_SITE_GRID_CURRENT_DIRECTION,
+                    ),
+                ): selector.SelectSelector(
+                    selector.SelectSelectorConfig(options=list(GRID_POWER_DIRECTIONS))
+                ),
+                vol.Required(
+                    CONF_TELEMETRY_MAX_AGE_SECONDS,
+                    default=defaults.get(
+                        CONF_TELEMETRY_MAX_AGE_SECONDS,
+                        DEFAULT_TELEMETRY_MAX_AGE_SECONDS,
+                    ),
+                ): vol.Coerce(float),
+                vol.Required(
+                    CONF_SIGN_CONVENTIONS_VERIFIED,
+                    default=defaults.get(
+                        CONF_SIGN_CONVENTIONS_VERIFIED,
+                        DEFAULT_SIGN_CONVENTIONS_VERIFIED,
+                    ),
+                ): selector.BooleanSelector(),
+                vol.Required(
                     CONF_BATTERY_FREE_WINDOW_TARGET,
                     default=defaults.get(
                         CONF_BATTERY_FREE_WINDOW_TARGET,
@@ -778,6 +858,8 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     def _apply_defaults(data: dict[str, object]) -> dict[str, object]:
         """Backfill options for entries created before learning was exposed."""
         removed = {
+            CONF_BATTERY_CHARGE_POSITIVE,
+            CONF_GRID_IMPORT_POSITIVE,
             "ev_charger_profile",
             "inverter_capacity_kw",
             "bonus_load_following_percent",
@@ -789,8 +871,39 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         result = {
             **cleaned,
             CONF_FREE_CHARGE_START: data.get(CONF_FREE_CHARGE_START, DEFAULT_FREE_CHARGE_START),
-            CONF_BATTERY_CHARGE_POSITIVE: data.get(
-                CONF_BATTERY_CHARGE_POSITIVE, DEFAULT_BATTERY_CHARGE_POSITIVE
+            CONF_BATTERY_POWER_DIRECTION: data.get(
+                CONF_BATTERY_POWER_DIRECTION,
+                (
+                    DEFAULT_BATTERY_POWER_DIRECTION
+                    if data.get(
+                        CONF_BATTERY_CHARGE_POSITIVE,
+                        DEFAULT_BATTERY_CHARGE_POSITIVE,
+                    )
+                    else BATTERY_POSITIVE_DISCHARGE
+                ),
+            ),
+            CONF_GRID_POWER_DIRECTION: data.get(
+                CONF_GRID_POWER_DIRECTION,
+                (
+                    DEFAULT_GRID_POWER_DIRECTION
+                    if data.get(CONF_GRID_IMPORT_POSITIVE, True)
+                    else GRID_POSITIVE_EXPORT
+                ),
+            ),
+            CONF_SOLAR_POWER_DIRECTION: data.get(
+                CONF_SOLAR_POWER_DIRECTION, DEFAULT_SOLAR_POWER_DIRECTION
+            ),
+            CONF_SITE_GRID_CURRENT_DIRECTION: data.get(
+                CONF_SITE_GRID_CURRENT_DIRECTION,
+                DEFAULT_SITE_GRID_CURRENT_DIRECTION,
+            ),
+            CONF_SIGN_CONVENTIONS_VERIFIED: data.get(
+                CONF_SIGN_CONVENTIONS_VERIFIED,
+                DEFAULT_SIGN_CONVENTIONS_VERIFIED,
+            ),
+            CONF_TELEMETRY_MAX_AGE_SECONDS: data.get(
+                CONF_TELEMETRY_MAX_AGE_SECONDS,
+                DEFAULT_TELEMETRY_MAX_AGE_SECONDS,
             ),
             CONF_FREE_CHARGE_END: data.get(CONF_FREE_CHARGE_END, DEFAULT_FREE_CHARGE_END),
             CONF_SITE_PHASE_COUNT: data.get(CONF_SITE_PHASE_COUNT, DEFAULT_SITE_PHASE_COUNT),
@@ -1006,10 +1119,20 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             return {CONF_NAME: "invalid_name"}
         if data.get(CONF_FOXESS_CONTROL_OWNER) not in FOXESS_CONTROL_OWNERS:
             return {CONF_FOXESS_CONTROL_OWNER: "invalid_foxess_control_owner"}
+        if data.get(CONF_GRID_POWER_DIRECTION) not in GRID_POWER_DIRECTIONS:
+            return {CONF_GRID_POWER_DIRECTION: "invalid_power_direction"}
+        if data.get(CONF_BATTERY_POWER_DIRECTION) not in BATTERY_POWER_DIRECTIONS:
+            return {CONF_BATTERY_POWER_DIRECTION: "invalid_power_direction"}
+        if data.get(CONF_SOLAR_POWER_DIRECTION) not in SOLAR_POWER_DIRECTIONS:
+            return {CONF_SOLAR_POWER_DIRECTION: "invalid_power_direction"}
+        if data.get(CONF_SITE_GRID_CURRENT_DIRECTION) not in GRID_POWER_DIRECTIONS:
+            return {CONF_SITE_GRID_CURRENT_DIRECTION: "invalid_power_direction"}
         for key in (
             CONF_BATTERY_SOC,
             CONF_BATTERY_CAPACITY_ENTITY,
             CONF_BATTERY_POWER,
+            CONF_BATTERY_CHARGE_POWER,
+            CONF_BATTERY_DISCHARGE_POWER,
             CONF_DAILY_IMPORT_ENTITY,
             CONF_GRID_POWER,
             CONF_HEATER_POWER,
@@ -1040,6 +1163,12 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
         if any(foxess_mapping) and not all(foxess_mapping):
             return {"base": "incomplete_foxess_mapping"}
+        split_battery_mapping = (
+            data.get(CONF_BATTERY_CHARGE_POWER),
+            data.get(CONF_BATTERY_DISCHARGE_POWER),
+        )
+        if any(split_battery_mapping) and not all(split_battery_mapping):
+            return {"base": "incomplete_split_battery_mapping"}
         ev_mapping = (
             data.get(CONF_EV_SOC),
             data.get(CONF_EV_AT_HOME),
@@ -1053,7 +1182,9 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
         if data.get(CONF_EV_CONTROL_COMMISSIONED) and not all(ev_mapping):
             return {"base": "incomplete_ev_mapping"}
-        if data.get(CONF_EV_SOLAR_SPILL_ENABLED) and not data.get(CONF_BATTERY_POWER):
+        if data.get(CONF_EV_SOLAR_SPILL_ENABLED) and not (
+            data.get(CONF_BATTERY_POWER) or all(split_battery_mapping)
+        ):
             return {"base": "solar_spill_battery_power_mapping_required"}
         if (
             data.get(CONF_EV_SOLAR_SPILL_ENABLED)
@@ -1123,6 +1254,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             allowance_margin = float(data[CONF_EV_ALLOWANCE_SAFETY_MARGIN])
             solar_spill_soc = float(data[CONF_EV_SOLAR_SPILL_BATTERY_SOC])
             telemetry_max_age = float(data[CONF_EV_TELEMETRY_MAX_AGE_SECONDS])
+            normalized_telemetry_max_age = float(data[CONF_TELEMETRY_MAX_AGE_SECONDS])
             telemetry_max_skew = float(data[CONF_EV_TELEMETRY_MAX_SKEW_SECONDS])
             fallback = float(data[CONF_HOUSE_LEARNING_FALLBACK])
             away_fallback = float(data[CONF_HOUSE_AWAY_FALLBACK])
@@ -1242,6 +1374,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             or allowance_margin < 0
             or not 0 <= solar_spill_soc <= 100
             or telemetry_max_age <= 0
+            or normalized_telemetry_max_age <= 0
             or telemetry_max_skew < 0
             or fallback < 0
             or away_fallback < 0

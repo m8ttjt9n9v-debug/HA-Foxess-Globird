@@ -7,6 +7,7 @@ def commissioned_config(**changes):
         "ev_automatic_control_enabled": True,
         "rehearsal_mode": False,
         "ev_control_commissioned": True,
+        "sign_conventions_verified": True,
         **{key: f"sensor.{index}" for index, key in enumerate(EV_REQUIRED_ENTITY_KEYS)},
     }
     config.update(changes)
@@ -23,7 +24,7 @@ def test_gate_priority_is_explicit_and_fail_closed():
         ev_control_gate_status(
             {"ev_automatic_control_enabled": True, "rehearsal_mode": False}
         )
-        == "not_commissioned"
+        == "sign_conventions_unverified"
     )
     config = commissioned_config(ev_charge_switch_entity=None)
     assert ev_control_gate_status(config) == "incomplete_mapping"

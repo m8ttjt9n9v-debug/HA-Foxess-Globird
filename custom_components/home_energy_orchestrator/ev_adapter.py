@@ -15,9 +15,11 @@ from .const import (
     CONF_EV_SMART_SOCKET,
     CONF_EV_SMART_SOCKET_CURRENT_LIMIT,
     CONF_REHEARSAL_MODE,
+    CONF_SIGN_CONVENTIONS_VERIFIED,
     CONF_SITE_GRID_CURRENT,
     CONF_SITE_PHASE_COUNT,
     DEFAULT_EV_CHARGE_PATH,
+    DEFAULT_SIGN_CONVENTIONS_VERIFIED,
     DEFAULT_SITE_PHASE_COUNT,
     EV_CHARGE_PATH_SMART_SOCKET,
     EV_REQUIRED_ENTITY_KEYS,
@@ -135,6 +137,11 @@ def ev_control_gate_status(
         return "disabled"
     if config.get(CONF_REHEARSAL_MODE, True):
         return "safety_locked"
+    if not config.get(
+        CONF_SIGN_CONVENTIONS_VERIFIED,
+        DEFAULT_SIGN_CONVENTIONS_VERIFIED,
+    ):
+        return "sign_conventions_unverified"
     if not config.get(CONF_EV_CONTROL_COMMISSIONED, False):
         return "not_commissioned"
     if not all(config.get(key) for key in EV_REQUIRED_ENTITY_KEYS):

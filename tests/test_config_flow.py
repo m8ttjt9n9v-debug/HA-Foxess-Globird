@@ -247,6 +247,38 @@ async def test_solar_spill_requires_signed_battery_power_mapping(hass):
     }
 
 
+async def test_split_battery_mapping_must_be_complete(hass):
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": SOURCE_USER},
+        data={
+            "name": "Partial split battery",
+            **ENTRY_DATA,
+            "battery_charge_power_entity": "sensor.battery_charge",
+        },
+    )
+
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"] == {"base": "incomplete_split_battery_mapping"}
+
+
+async def test_solar_spill_accepts_complete_split_battery_mapping(hass):
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": SOURCE_USER},
+        data={
+            "name": "Split battery solar spill",
+            **ENTRY_DATA,
+            "foxess_control_owner": "local_modbus",
+            "ev_solar_spill_enabled": True,
+            "battery_charge_power_entity": "sensor.battery_charge",
+            "battery_discharge_power_entity": "sensor.battery_discharge",
+        },
+    )
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+
+
 async def test_smart_socket_commissioning_requires_switch_and_physical_limit(hass):
     mappings = {
         "ev_soc_entity": "sensor.car_soc",
@@ -449,6 +481,33 @@ async def test_reconfigure_updates_and_reloads_an_entry(hass):
     await hass.async_block_till_done()
     assert entry.title == "Updated Site"
     assert entry.data == updated_data
+    assert await hass.config_entries.async_unload(entry.entry_id)
+
+
+async def test_reconfigure_resets_sign_verification_when_a_source_changes(hass):
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Verified Site",
+        version=2,
+        data={**ENTRY_DATA, "sign_conventions_verified": True},
+    )
+    entry.add_to_hass(hass)
+    updated = {
+        **ENTRY_DATA,
+        "grid_power_entity": "sensor.replacement_grid",
+        "sign_conventions_verified": True,
+    }
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": SOURCE_RECONFIGURE, "entry_id": entry.entry_id},
+        data={"name": "Verified Site", **updated},
+    )
+
+    assert result["type"] is FlowResultType.ABORT
+    await hass.async_block_till_done()
+    assert entry.data["grid_power_entity"] == "sensor.replacement_grid"
+    assert entry.data["sign_conventions_verified"] is False
     assert await hass.config_entries.async_unload(entry.entry_id)
 
 
