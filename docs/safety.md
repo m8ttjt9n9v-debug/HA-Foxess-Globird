@@ -2,13 +2,14 @@
 
 Home Assistant is supervisory software; it is not a substitute for compliant electrical design, equipment protections, breaker ratings, EVSE protections, or installer verification.
 
-Version 0.9.0 is observer-by-default. ZEROHERO selling requires Local Modbus
+Version 0.12.0 is observer-by-default. ZEROHERO selling requires Local Modbus
 ownership, the FoxESS automatic setting, the separate automatic-export toggle,
 Safety Lock being OFF, complete FoxESS actuator mapping, valid telemetry, and
 commissioned limits. The independent direct-EVSE/smart-socket free-window path
-requires its own intent, commissioning and complete Tessie mappings. Automatic FoxESS free
-charging is not implemented. The repository does not claim hardware
-compatibility merely because an entity can be selected.
+requires its own intent, commissioning and complete Tessie mappings. Automatic
+FoxESS free charging is a separate default-off Local Modbus extension with a
+persistent fixed-power session and bounded Self Use restoration. The repository
+does not claim hardware compatibility merely because an entity can be selected.
 
 Automatic FoxESS and EV writes also require explicit sign commissioning. Any
 upgrade from the ambiguous legacy booleans, or any later change to a normalized
@@ -27,6 +28,13 @@ only mapped Tessie and, when selected, smart-outlet entities. This does not perm
 control. Disable every other Tesla current/charge-limit writer before EV
 commissioning. The controller confirms feedback and stops retrying an unchanged
 target after three command attempts rather than flapping indefinitely.
+
+The battery-charge controller likewise stops after three unconfirmed command
+attempts. Its SoC target qualifies session start only; once HEO owns the
+session, it remains latched until the configured end to prevent threshold
+flapping. Turn off the independent charge switch and confirm Self Use before
+engaging Safety Lock or unloading an active controller, because Safety Lock
+also forbids recovery writes.
 
 The Diagnostics view is an explicit commissioning surface, not an automatic
 schedule. It refuses charge tests outside the free window, requires Rehearsal

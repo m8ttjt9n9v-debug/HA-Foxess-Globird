@@ -20,11 +20,18 @@ confirmation automatically. See [telemetry normalization](telemetry-normalizatio
 Before commissioning FoxESS actuation, choose one owner for the entire day.
 Local Modbus requires FoxCloud Mode Scheduler and all legacy inverter writers
 to be disabled. Validate mapped mode and power feedback, then use only the
-bounded Diagnostics tests. Automatic battery charging is not implemented.
-ZEROHERO selling remains default-off; enable it only after its feedback and
-rollback paths are recorded. The
+bounded Diagnostics tests. Automatic battery charging remains default-off;
+verify that its target is above current SoC before rehearsal, confirm its
+displayed bounded power and 24-hour window, then test one supervised window.
+Place the inverter in Self Use first; HEO will not adopt an unlatched forced or
+different base mode. Confirm Force Charge feedback after the start and Self Use plus zero force
+targets after the end. Diagnostics cannot start while an automatic charge or
+export session remains latched. ZEROHERO selling likewise remains default-off; enable it
+only after its feedback and rollback paths are recorded. The
 [ZEROHERO export policy](zerohero-export-policy.md) defines the ported selling
-algorithm and its persisted recovery behavior.
+algorithm and its persisted recovery behavior; the
+[Local Modbus charge policy](local-modbus-free-charge.md) defines the separate
+charge extension.
 
 Direct-EVSE commissioning is independent of FoxESS ownership. First leave
 Automatic EV Control off and Safety Lock on, then verify mapped SoC, stored

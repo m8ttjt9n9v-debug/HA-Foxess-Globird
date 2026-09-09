@@ -13,6 +13,10 @@ Status here describes behavioral parity, not merely the presence of code.
 - [x] Configurable tariff, battery reserve, phase, service, inverter, EV, export,
   and timing inputs without site entity IDs in control code.
 - [x] Explicit FoxESS ownership: Observer, Local Modbus, or FoxCloud Scheduler.
+- [x] Separately identified, default-off Local Modbus free-window battery
+  charging extension: configured 24-hour window and SoC start qualification,
+  fixed bounded power, persistent session latch, finite feedback retries,
+  noon/midnight regression coverage, and deliberate Self Use restoration.
 - [x] Safety Lock, rehearsal behavior, redacted diagnostics, and bounded manual
   FoxESS tests with Self Use restoration.
 - [x] Faithful Working Single Phase Pilot Site ZEROHERO export core: protected-energy calculation,
@@ -106,9 +110,11 @@ Working Single Phase Pilot Site parity.
   them, and distinguish firmware capability from assumptions.
 - [ ] Design a cloud-schedule adapter only after the full schedule/remaining-mode
   semantics are proven. Never substitute mixed local Modbus commands.
-- [ ] Only if explicitly requested as new functionality, design a default-off
-  local-Modbus battery free-charge extension after writer tracing and schedule
-  interaction are proven. This is not required for canonical source parity.
+- [x] Implement the explicitly requested default-off Local Modbus battery free-
+  charge extension as new functionality, not canonical source parity. It reuses
+  HEO's mapped FoxESS adapter and ZEROHERO session boundaries, requires exclusive
+  Local Modbus ownership, and does not claim to identify or suppress unrelated
+  writers. Durable writer tracing remains a separate unfinished investigation.
 - [x] Add the deliberately narrow first stage of opt-in **EV-before-export**
   arbitration: below a user-adjustable EV SoC target, prevent a new automatic
   ZEROHERO export or stop an HEO-owned active one without changing the saved

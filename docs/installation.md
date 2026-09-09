@@ -18,10 +18,19 @@ HACS installation requires a public GitHub repository. This project publishes
 versioned GitHub releases for the custom-repository channel; inclusion in
 HACS's default catalogue is a separate review process.
 
-Version 0.9.0 is observer-by-default. Automatic FoxESS free charging is not
-present; the earlier simplified controller remains removed. The verified
-ZEROHERO export path and the faithful direct-EVSE/smart-socket Tessie paths are
-separately gated. Bounded FoxESS Diagnostics remain explicitly submitted actions.
+Version 0.12.0 is observer-by-default. The earlier simplified battery controller
+remains removed; a newly specified fixed-window Local Modbus charge extension
+is available behind its own default-off switch. The verified ZEROHERO export
+path and faithful direct-EVSE/smart-socket Tessie paths remain separately gated.
+Bounded FoxESS Diagnostics remain explicitly submitted actions.
+
+Automatic battery charging requires **Local Modbus** ownership, automatic
+FoxESS control, complete actuator mappings, verified signs, Safety Lock OFF,
+and `switch.home_energy_automatic_charge` ON. Configure the free-window start,
+end, battery target and inverter charge limit first. The inverter limit is the
+fixed requested power and is bounded by the mapped FoxESS number maximum. The
+session remains latched until the window end and then restores Self Use. See
+the [Local Modbus charge policy](local-modbus-free-charge.md).
 
 Automatic ZEROHERO export is a third, default-off behavior toggle beneath the
 FoxESS gate. It operates only when **Local Modbus** is the selected FoxESS
@@ -87,6 +96,9 @@ remain disabled.
 - HEO may observe beside an existing controller. Before selecting Local Modbus
   or enabling any write path, disable every other inverter writer and record
   its previous state for rollback.
+- If adopting automatic battery charging, first disable FoxCloud Mode Scheduler
+  for the whole day and verify no legacy automation writes work mode or force
+  power. The charge and export windows must not overlap.
 - Identify a battery-SOC sensor and a signed grid-power sensor with a power unit of W, kW, or MW.
 - If available, select the battery potential-capacity sensor (for example, FoxESS Modbus
   `sensor.bms_kwh_remaining_1`). The observer treats this as 100%-SoC potential capacity and

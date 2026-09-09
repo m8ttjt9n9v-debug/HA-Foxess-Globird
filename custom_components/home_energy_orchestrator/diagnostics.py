@@ -8,6 +8,7 @@ from homeassistant.core import HomeAssistant
 
 from . import EnergyConfigEntry
 from .const import (
+    CONF_AUTOMATIC_CHARGE_ENABLED,
     CONF_AUTOMATIC_CONTROL_ENABLED,
     CONF_AUTOMATIC_EXPORT_ENABLED,
     CONF_EV_AUTOMATIC_CONTROL_ENABLED,
@@ -19,6 +20,7 @@ from .const import (
     CONF_FOXESS_WORK_MODE,
     CONF_REHEARSAL_MODE,
     CONF_SIGN_CONVENTIONS_VERIFIED,
+    DEFAULT_AUTOMATIC_CHARGE_ENABLED,
     DEFAULT_EV_BEFORE_EXPORT_ENABLED,
     DEFAULT_EV_BEFORE_EXPORT_SOC_TARGET,
     DEFAULT_FOXESS_CONTROL_OWNER,
@@ -64,6 +66,22 @@ async def async_get_config_entry_diagnostics(
             ),
             "foxess_automatic_control_enabled": bool(
                 entry.data.get(CONF_AUTOMATIC_CONTROL_ENABLED, False)
+            ),
+            "automatic_charge_enabled": bool(
+                entry.data.get(
+                    CONF_AUTOMATIC_CHARGE_ENABLED,
+                    DEFAULT_AUTOMATIC_CHARGE_ENABLED,
+                )
+            ),
+            "charge_session_phase": (
+                active_controller.charge_session.phase
+                if active_controller is not None
+                else "unavailable"
+            ),
+            "charge_power_target_kw": (
+                active_controller.charge_power_target_kw
+                if active_controller is not None
+                else None
             ),
             "automatic_export_enabled": bool(entry.data.get(CONF_AUTOMATIC_EXPORT_ENABLED, False)),
             "automatic_export_effective": (

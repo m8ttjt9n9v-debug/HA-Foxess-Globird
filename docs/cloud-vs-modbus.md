@@ -26,9 +26,10 @@ What the available evidence says:
 
 ## Consequence for the free-energy window
 
-HEO does not currently automate FoxESS free-window charging. A future local
-controller could dynamically coordinate the allowance, but only after the
-Working Single Phase Pilot Site policy is faithfully ported and the H3 transition fault is traced.
+HEO provides a default-off fixed-power free-window Force Charge extension under
+exclusive Local Modbus ownership. It uses HEO's configured local-time window
+and the FoxESS Modbus work-mode/force-power entities; it does not read or write
+FoxESS native schedule periods. It is not a dynamic allowance-pacing controller.
 
 If FoxCloud/Mode Scheduler owns the window, a Modbus change made by Home
 Assistant may be overwritten or may cancel the remainder of the cloud period.
@@ -47,7 +48,8 @@ The HACS integration requires one explicit owner:
 
 - **Observer only**: no HEO FoxESS writes.
 - **Local Modbus**: FoxCloud Mode Scheduler must be disabled. HEO may use the
-  commissioned local actuator mappings.
+  commissioned local actuator mappings for its independently enabled battery
+  charge and ZEROHERO export sessions.
 - **FoxCloud Mode Scheduler**: all HEO Modbus automation and diagnostics are
   blocked for the entire day.
 

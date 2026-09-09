@@ -23,6 +23,9 @@ from custom_components.home_energy_orchestrator.manual_test import (
     ManualTestController,
     ManualTestError,
 )
+from custom_components.home_energy_orchestrator.planner.charge_session import (
+    ChargeSessionState,
+)
 from custom_components.home_energy_orchestrator.planner.manual_test import (
     estimate_charge,
     estimate_discharge,
@@ -112,6 +115,18 @@ async def test_controller_blocks_charge_when_battery_is_full(hass) -> None:
     controller = ManualTestController(hass, coordinator)
 
     with pytest.raises(ManualTestError, match="already at 100%"):
+        await controller.async_start("charge", 1.0, 1.0)
+
+
+async def test_controller_blocks_diagnostic_during_automatic_charge_session(hass) -> None:
+    coordinator = _coordinator()
+    coordinator.active_controller = SimpleNamespace(
+        charge_session=ChargeSessionState("active", 10.0),
+        export_session=SimpleNamespace(phase="idle"),
+    )
+    controller = ManualTestController(hass, coordinator)
+
+    with pytest.raises(ManualTestError, match="active automatic FoxESS session"):
         await controller.async_start("charge", 1.0, 1.0)
 
 

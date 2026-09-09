@@ -15,6 +15,7 @@ from homeassistant.helpers import selector
 from .const import (
     BATTERY_POSITIVE_DISCHARGE,
     BATTERY_POWER_DIRECTIONS,
+    CONF_AUTOMATIC_CHARGE_ENABLED,
     CONF_AUTOMATIC_CONTROL_ENABLED,
     CONF_AUTOMATIC_EXPORT_ENABLED,
     CONF_BATTERY_CAPACITY,
@@ -132,6 +133,7 @@ from .const import (
     CONF_TELEMETRY_MAX_AGE_SECONDS,
     CONF_ZERO_IMPORT_CONFIRM_MINUTES,
     CONF_ZERO_IMPORT_THRESHOLD_KW,
+    DEFAULT_AUTOMATIC_CHARGE_ENABLED,
     DEFAULT_AUTOMATIC_CONTROL_ENABLED,
     DEFAULT_AUTOMATIC_EXPORT_ENABLED,
     DEFAULT_BATTERY_CHARGE_EFFICIENCY,
@@ -239,6 +241,28 @@ ENTITY = selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor"))
 SELECT_ENTITY = selector.EntitySelector(selector.EntitySelectorConfig(domain="select"))
 NUMBER_ENTITY = selector.EntitySelector(selector.EntitySelectorConfig(domain="number"))
 SWITCH_ENTITY = selector.EntitySelector(selector.EntitySelectorConfig(domain="switch"))
+
+
+def _time_windows_overlap(
+    first_start: time,
+    first_end: time,
+    second_start: time,
+    second_end: time,
+) -> bool:
+    """Return whether two non-empty daily windows overlap on a 24-hour clock."""
+
+    def segments(start: time, end: time) -> tuple[tuple[int, int], ...]:
+        start_s = start.hour * 3600 + start.minute * 60 + start.second
+        end_s = end.hour * 3600 + end.minute * 60 + end.second
+        if start_s < end_s:
+            return ((start_s, end_s),)
+        return ((start_s, 86400), (0, end_s))
+
+    return any(
+        max(first_left, second_left) < min(first_right, second_right)
+        for first_left, first_right in segments(first_start, first_end)
+        for second_left, second_right in segments(second_start, second_end)
+    )
 
 
 class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -881,6 +905,13 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     ),
                 ): selector.BooleanSelector(),
                 vol.Required(
+                    CONF_AUTOMATIC_CHARGE_ENABLED,
+                    default=defaults.get(
+                        CONF_AUTOMATIC_CHARGE_ENABLED,
+                        DEFAULT_AUTOMATIC_CHARGE_ENABLED,
+                    ),
+                ): selector.BooleanSelector(),
+                vol.Required(
                     CONF_AUTOMATIC_EXPORT_ENABLED,
                     default=defaults.get(
                         CONF_AUTOMATIC_EXPORT_ENABLED, DEFAULT_AUTOMATIC_EXPORT_ENABLED
@@ -1179,6 +1210,10 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             CONF_AUTOMATIC_CONTROL_ENABLED: data.get(
                 CONF_AUTOMATIC_CONTROL_ENABLED, DEFAULT_AUTOMATIC_CONTROL_ENABLED
             ),
+            CONF_AUTOMATIC_CHARGE_ENABLED: data.get(
+                CONF_AUTOMATIC_CHARGE_ENABLED,
+                DEFAULT_AUTOMATIC_CHARGE_ENABLED,
+            ),
             CONF_AUTOMATIC_EXPORT_ENABLED: data.get(
                 CONF_AUTOMATIC_EXPORT_ENABLED, DEFAULT_AUTOMATIC_EXPORT_ENABLED
             ),
@@ -1373,6 +1408,11 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             or bonus_start == bonus_end
             or discharge_finish == bonus_start
             or peak_start == peak_end
+            or (
+                bool(data.get(CONF_AUTOMATIC_CHARGE_ENABLED))
+                and bool(data.get(CONF_AUTOMATIC_EXPORT_ENABLED))
+                and _time_windows_overlap(start, end, bonus_start, discharge_finish)
+            )
             or not math.isfinite(fallback)
             or fallback < 0
         ):

@@ -27,6 +27,13 @@ dashboard, commission electrical limits, or migrate personal entity mappings.
 The FoxESS work-mode and force-power entities must be explicitly mapped. Entity
 availability alone does not prove safe hardware compatibility.
 
+Automatic Local Modbus battery charging additionally requires the work-mode
+entity to advertise `Self Use` and `Force Charge`, a positive commissioned
+inverter charge limit, a positive live maximum on the force-charge number, a
+fresh battery SoC below the configured target at session start, and non-
+overlapping charge/export control windows. It uses the inverter limit as its
+fixed requested power for the window and remains default-off after installation.
+
 ### Modbus TCP connection ownership
 
 Use one Modbus TCP client for an inverter bridge unless that exact bridge and

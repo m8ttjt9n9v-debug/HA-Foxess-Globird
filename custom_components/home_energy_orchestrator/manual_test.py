@@ -254,6 +254,14 @@ class ManualTestController:
             raise ManualTestError("complete the three FoxESS actuator mappings first")
         if self.coordinator.snapshot is None or self.coordinator.data is None:
             raise ManualTestError("live telemetry is unavailable")
+        automatic = getattr(self.coordinator, "active_controller", None)
+        if automatic is not None and any(
+            session.phase != "idle"
+            for session in (automatic.charge_session, automatic.export_session)
+        ):
+            raise ManualTestError(
+                "stop the active automatic FoxESS session before a diagnostic test"
+            )
 
     def _validate_power(self, kind: str, value: float) -> float:
         try:

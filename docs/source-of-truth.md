@@ -39,10 +39,15 @@ layers around the proven algorithm, not replacement algorithms.
   accumulator, active-session target and start latch survive restart.
 - Bounded, explicitly submitted FoxESS diagnostics remain available behind
   their guards. They are not schedules.
-- Automatic FoxESS free-window charging is not implemented.
+- A separately gated, default-off Local Modbus free-window Force Charge
+  extension is implemented. It uses the configured 24-hour window, requires
+  fresh SoC below target to start, freezes bounded power for the session,
+  persists its latch/retry state, and deliberately restores Self Use at the
+  end. It does not program native schedule registers.
 - The canonical pilot source contains no local automatic `Force Charge` writer;
-  its EV controller assumes battery charging is externally established. A new
-  local battery controller is therefore an extension, not missing port code.
+  its EV controller assumes battery charging is externally established. The
+  local battery controller is therefore explicitly an extension, not missing
+  port code or claimed parity.
 - Direct-EVSE free-window Tessie current, charge-limit, and charge-start control
   is implemented. Default-off solar-spill and latest-start pre-free stages are
   also implemented for Local Modbus ownership. All three use the same bounded

@@ -6,11 +6,13 @@ from homeassistant.helpers import entity_registry as er
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.home_energy_orchestrator.const import (
+    CONF_AUTOMATIC_CHARGE_ENABLED,
     CONF_AUTOMATIC_EXPORT_ENABLED,
     CONF_EV_AUTOMATIC_CONTROL_ENABLED,
     CONF_EV_BEFORE_EXPORT_ENABLED,
     CONF_EV_BEFORE_EXPORT_SOC_TARGET,
     CONF_FOXESS_CONTROL_OWNER,
+    DEFAULT_AUTOMATIC_CHARGE_ENABLED,
     DEFAULT_EV_BEFORE_EXPORT_ENABLED,
     DEFAULT_EV_BEFORE_EXPORT_SOC_TARGET,
     DEFAULT_FOXESS_CONTROL_OWNER,
@@ -130,6 +132,21 @@ async def test_user_flow_defaults_legacy_automatic_export_to_disabled(hass):
 
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["data"][CONF_AUTOMATIC_EXPORT_ENABLED] is False
+
+
+async def test_user_flow_defaults_legacy_automatic_charge_to_disabled(hass):
+    legacy_data = {
+        key: value for key, value in ENTRY_DATA.items() if key != CONF_AUTOMATIC_CHARGE_ENABLED
+    }
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": SOURCE_USER},
+        data={"name": "Legacy charge site", **legacy_data},
+    )
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["data"][CONF_AUTOMATIC_CHARGE_ENABLED] is DEFAULT_AUTOMATIC_CHARGE_ENABLED
 
 
 async def test_user_flow_defaults_legacy_ev_before_export_to_disabled(hass):
@@ -508,6 +525,26 @@ async def test_user_flow_rejects_invalid_learning_schedule(hass):
             **ENTRY_DATA,
             "free_charge_window_start": "12:00:00",
             "free_charge_window_end": "12:00:00",
+        },
+    )
+
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"] == {"base": "invalid_schedule"}
+
+
+async def test_user_flow_rejects_overlapping_charge_and_export_sessions(hass):
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": SOURCE_USER},
+        data={
+            "name": "Overlapping control windows",
+            **ENTRY_DATA,
+            "free_charge_window_start": "20:00:00",
+            "free_charge_window_end": "22:00:00",
+            "bonus_window_start": "18:00:00",
+            "force_discharge_finish": "21:01:00",
+            "automatic_charge_enabled": True,
+            "automatic_export_enabled": True,
         },
     )
 

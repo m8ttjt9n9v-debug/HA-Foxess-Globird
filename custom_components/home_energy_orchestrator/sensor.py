@@ -14,6 +14,7 @@ from homeassistant.util import dt as dt_util
 
 from . import EnergyConfigEntry
 from .const import (
+    CONF_AUTOMATIC_CHARGE_ENABLED,
     CONF_AUTOMATIC_CONTROL_ENABLED,
     CONF_AUTOMATIC_EXPORT_ENABLED,
     CONF_EV_AUTOMATIC_CONTROL_ENABLED,
@@ -21,6 +22,7 @@ from .const import (
     CONF_REHEARSAL_MODE,
     CONF_SIGN_CONVENTIONS_VERIFIED,
     CONF_ZERO_IMPORT_THRESHOLD_KW,
+    DEFAULT_AUTOMATIC_CHARGE_ENABLED,
     DEFAULT_FOXESS_CONTROL_OWNER,
     DEFAULT_SIGN_CONVENTIONS_VERIFIED,
     DEFAULT_ZERO_IMPORT_THRESHOLD_KW,
@@ -355,6 +357,19 @@ DESCRIPTIONS = (
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
         device_class="energy",
         suggested_display_precision=2,
+    ),
+    SensorEntityDescription(
+        key="free_charge_power_target",
+        name="Free-Window Battery Charge Power Target",
+        native_unit_of_measurement=UnitOfPower.KILO_WATT,
+        device_class="power",
+        state_class="measurement",
+        suggested_display_precision=2,
+    ),
+    SensorEntityDescription(
+        key="free_charge_completion",
+        name="Free-Window Battery Charge Status",
+        icon="mdi:battery-clock",
     ),
     SensorEntityDescription(
         key="bonus_zero_import_allowed",
@@ -704,6 +719,16 @@ class EnergySensor(CoordinatorEntity[EnergyCoordinator], SensorEntity):
                 else round(ledger.estimated_energy_cost, 2)
             ),
             "free_charge_allowed": ledger.free_charge_allowed_kwh,
+            "free_charge_power_target": (
+                None
+                if self.coordinator.active_controller is None
+                else self.coordinator.active_controller.charge_power_target_kw
+            ),
+            "free_charge_completion": (
+                "unavailable"
+                if self.coordinator.active_controller is None
+                else self.coordinator.active_controller.charge_session.phase
+            ),
             "bonus_zero_import_allowed": ledger.bonus_zero_import_allowed,
             "zerohero_import_window": (
                 None
@@ -912,6 +937,12 @@ class EnergySensor(CoordinatorEntity[EnergyCoordinator], SensorEntity):
             return None
         learning = self.coordinator.learning_result
         foxess_requested = bool(self.coordinator.config.get(CONF_AUTOMATIC_CONTROL_ENABLED, False))
+        charge_enabled = bool(
+            self.coordinator.config.get(
+                CONF_AUTOMATIC_CHARGE_ENABLED,
+                DEFAULT_AUTOMATIC_CHARGE_ENABLED,
+            )
+        )
         foxess_owner = self.coordinator.config.get(
             CONF_FOXESS_CONTROL_OWNER, DEFAULT_FOXESS_CONTROL_OWNER
         )
@@ -931,6 +962,10 @@ class EnergySensor(CoordinatorEntity[EnergyCoordinator], SensorEntity):
         )
         if foxess_owner == FOXESS_CONTROL_OWNER_CLOUD:
             control_mode = "foxcloud_scheduler"
+        elif foxess_enabled and charge_enabled and export_enabled:
+            control_mode = "local_modbus_charge_and_export"
+        elif foxess_enabled and charge_enabled:
+            control_mode = "local_modbus_free_charge"
         elif foxess_enabled and export_enabled:
             control_mode = "zerohero_export"
         elif foxess_enabled:
@@ -956,6 +991,7 @@ class EnergySensor(CoordinatorEntity[EnergyCoordinator], SensorEntity):
                 else 0
             ),
             "automatic_control_enabled": foxess_requested,
+            "automatic_charge_enabled": charge_enabled,
             "sign_conventions_verified": bool(
                 self.coordinator.config.get(
                     CONF_SIGN_CONVENTIONS_VERIFIED,
@@ -1029,6 +1065,16 @@ class EnergySensor(CoordinatorEntity[EnergyCoordinator], SensorEntity):
                 self.coordinator.active_controller.export_session.phase
                 if self.coordinator.active_controller
                 else "unavailable"
+            ),
+            "charge_session_phase": (
+                self.coordinator.active_controller.charge_session.phase
+                if self.coordinator.active_controller
+                else "unavailable"
+            ),
+            "charge_power_target_kw": (
+                self.coordinator.active_controller.charge_power_target_kw
+                if self.coordinator.active_controller
+                else None
             ),
             "export_allowance_remaining_kwh": (
                 self.coordinator.active_controller.export_allowance_remaining_kwh

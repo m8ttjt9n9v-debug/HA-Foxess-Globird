@@ -68,6 +68,12 @@ views:
             entity: sensor.home_energy_status
             name: Orchestrator status
           - type: tile
+            entity: sensor.home_energy_free_charge_completion
+            name: Battery charge controller
+          - type: tile
+            entity: sensor.home_energy_free_charge_power_target
+            name: Battery charge power
+          - type: tile
             entity: sensor.home_energy_zerohero_export_status
             name: Export controller
           - type: tile
@@ -439,6 +445,8 @@ views:
             title: Automation Requests
             show_header_toggle: false
             entities:
+              - entity: switch.home_energy_automatic_charge
+                name: Automatic battery free charge
               - entity: switch.home_energy_automatic_export
                 name: Automatic ZEROHERO export
               - entity: switch.home_energy_ev_before_export
@@ -569,6 +577,10 @@ views:
                 name: Controller status
               - entity: sensor.home_energy_tariff_status
                 name: Tariff guard
+              - entity: sensor.home_energy_free_charge_completion
+                name: Battery charge session
+              - entity: sensor.home_energy_free_charge_power_target
+                name: Battery charge power target
               - entity: sensor.home_energy_bonus_zero_import_allowed
                 name: ZEROHERO guard
               - entity: sensor.home_energy_ev_solar_spill_status
@@ -616,6 +628,8 @@ views:
                 name: EV actual current
               - entity: sensor.home_energy_zerohero_export_status
                 name: Export status
+              - entity: sensor.home_energy_free_charge_completion
+                name: Battery charge status
               - entity: sensor.home_energy_learning_status
                 name: Learning status
 

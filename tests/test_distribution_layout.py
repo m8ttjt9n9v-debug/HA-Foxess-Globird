@@ -127,4 +127,5 @@ def test_example_dashboard_uses_the_integration_entity_ids() -> None:
         "sensor.home_energy_ev_actual_current_average",
         "sensor.home_energy_ev_reconciliation_attempts",
         "switch.home_energy_automatic_ev_control",
+        "switch.home_energy_automatic_charge",
     } <= set(entity_ids)

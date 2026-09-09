@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.12.0 — Local Modbus free-window battery charging
+
+- Add a separately identified, default-off scheduled house-battery Force
+  Charge extension for exclusive Local Modbus ownership. It does not program
+  FoxESS native schedule-period registers.
+- Use the configured 24-hour free-window start/end and battery target. Fresh
+  normalized SoC below target qualifies a new session; the session then remains
+  fixed and latched until the window end to avoid target-boundary mode flapping.
+- Request the commissioned inverter charge limit, bounded again by the mapped
+  FoxESS force-charge number maximum. Clear discharge power, set charge power,
+  wait, and then select Force Charge through the shared FoxESS adapter.
+- Persist the session phase, frozen power, attempts and last-command timestamp.
+  Reconcile direct mapped feedback every 30 seconds with at most three attempts,
+  and deliberately restore Self Use after the window or when the independent
+  charge request is disabled.
+- Require Local Modbus ownership, the master FoxESS gate, verified telemetry
+  directions, complete actuator mappings and Safety Lock OFF. FoxCloud
+  ownership blocks the extension for the entire day.
+- Add an integration-owned Automatic Battery Free Charge switch, status/power
+  sensors, diagnostics, dashboard cards, provenance, restart tests, a noon-
+  versus-midnight regression test, and overlapping-window rejection.
+
 ## 0.11.0 — opt-in EV-before-export gate
 
 - Add the deliberately small first stage of EV-before-export arbitration. When

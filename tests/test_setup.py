@@ -52,6 +52,7 @@ ENTRY_DATA = {
     "house_away_confirmation_hours": 6.0,
     "house_occupancy_mode": "auto",
     "automatic_control_enabled": False,
+    "automatic_charge_enabled": False,
     "automatic_export_enabled": False,
     "ev_before_export_enabled": False,
     "ev_before_export_soc_target_percent": 40.0,
@@ -141,7 +142,10 @@ async def test_setup_observes_normalised_values_and_never_calls_services(hass):
     assert hass.states.get(status).state == "observer_only"
     assert hass.states.get(status).attributes["writes_performed"] == 0
     assert hass.states.get(status).attributes["automatic_control_enabled"] is False
+    assert hass.states.get(status).attributes["automatic_charge_enabled"] is False
     assert hass.states.get(status).attributes["mode"] == "observe"
+    assert hass.states.get("switch.home_energy_automatic_charge").state == "off"
+    assert hass.states.get("sensor.home_energy_free_charge_completion").state == "idle"
     assert hass.states.get("sensor.home_energy_ev_solar_spill_status").state == "disabled"
     assert hass.states.get("sensor.home_energy_ev_pre_free_status").state == "disabled"
     diagnostics = await async_get_config_entry_diagnostics(hass, entry)
@@ -283,6 +287,29 @@ async def test_automatic_export_switch_is_independent_and_persists(hass):
 
     assert hass.states.get("switch.home_energy_automatic_export").state == "on"
     assert entry.data["automatic_export_enabled"] is True
+    assert entry.data["automatic_control_enabled"] is False
+    assert entry.data["rehearsal_mode"] is True
+
+
+async def test_automatic_charge_switch_is_independent_and_persists(hass):
+    hass.states.async_set("sensor.test_battery_soc", "60", {"unit_of_measurement": "%"})
+    hass.states.async_set("sensor.test_grid_power", "0", {"unit_of_measurement": "kW"})
+    entry = MockConfigEntry(domain=DOMAIN, title="Charge site", data=ENTRY_DATA)
+    entry.add_to_hass(hass)
+
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    assert hass.states.get("switch.home_energy_automatic_charge").state == "off"
+
+    await hass.services.async_call(
+        "switch",
+        "turn_on",
+        {"entity_id": "switch.home_energy_automatic_charge"},
+        blocking=True,
+    )
+
+    assert hass.states.get("switch.home_energy_automatic_charge").state == "on"
+    assert entry.data["automatic_charge_enabled"] is True
     assert entry.data["automatic_control_enabled"] is False
     assert entry.data["rehearsal_mode"] is True
 

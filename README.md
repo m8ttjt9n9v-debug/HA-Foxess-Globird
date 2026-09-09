@@ -2,14 +2,16 @@
 
 A Home Assistant custom integration for a site-configured energy ledger,
 conservative demand learning, bounded FoxESS diagnostics, the verified
-Working Single Phase Pilot Site ZEROHERO export policy, and a faithful direct-EVSE free-window port.
+Working Single Phase Pilot Site ZEROHERO export policy, a faithful direct-EVSE free-window port,
+and a default-off Local Modbus battery-charge extension.
 
-Version 0.11.0 deliberately excludes the rewritten automatic battery controller
-that was not a faithful port of the proven Working Single Phase Pilot Site.
-Automatic FoxESS free charging remains absent. Separately gated direct-EVSE and
-smart-socket Tessie paths have returned through port-first characterization and
-restart-safe reconciliation. Remaining behaviors are tracked in the
-[roadmap](ROADMAP.md).
+Version 0.12.0 adds newly requested fixed-window battery charging without
+restoring the earlier rewritten controller. It reuses the bounded ZEROHERO
+actuator/session pattern, remains separately gated and default-off, and is
+documented as an extension because the canonical pilot YAML had no local Force
+Charge writer. Separately gated Tessie paths retain their port-first
+characterization and restart-safe reconciliation. Remaining behaviors are
+tracked in the [roadmap](ROADMAP.md).
 
 ## Installation
 
@@ -59,6 +61,12 @@ rooms, and other site-specific cards belong in a local overlay.
   [house-learning provenance](docs/house-learning-port.md).
 - Explicit FoxESS ownership: Observer only, Local Modbus, or FoxCloud Mode
   Scheduler. Cloud ownership blocks every HEO Modbus write for the entire day.
+- Default-off scheduled house-battery Force Charge under exclusive Local
+  Modbus ownership. It starts only inside the configured free window with fresh
+  SoC below the configured target, latches the bounded configured inverter
+  charge power for that window, and deliberately restores Self Use afterward.
+  It does not write native FoxESS schedule periods. See the
+  [Local Modbus charge policy](docs/local-modbus-free-charge.md).
 - The proven Working Single Phase Pilot Site ZEROHERO export policy behind independent default-off
   gates. It protects learned house energy and a configured mandatory connected-
   EV baseline, computes the latest fixed-power start, persists its session,
@@ -106,6 +114,9 @@ The integration exposes `switch.home_energy_safety_lock`: ON means no hardware
 writes. Turning it OFF does not enable automation. Automatic export additionally
 requires Local Modbus ownership, the FoxESS automatic gate, and
 `switch.home_energy_automatic_export`.
+Automatic battery charging uses the same ownership/master/safety gates plus
+`switch.home_energy_automatic_charge`; its power is the commissioned inverter
+charge limit bounded by the mapped FoxESS entity.
 `switch.home_energy_ev_before_export` is a further opt-in arbitration gate;
 set its threshold with `number.home_energy_ev_before_export_soc_target`.
 Direct-EVSE control instead requires `switch.home_energy_automatic_ev_control`,
@@ -124,13 +135,13 @@ timeout.
 
 ## Not currently implemented
 
-- Automatic FoxESS free-window charging or post-charge reconciliation.
+- FoxESS native schedule-period programming.
 - Mixed FoxCloud schedule and local Modbus control.
 
 The canonical pilot source has no local automatic battery `Force Charge`
-writer. See the [battery ownership boundary](docs/free-window-battery-ownership.md):
-a future local free-charge controller would be a separately commissioned new
-extension, not code that can be claimed as a direct port.
+writer. The new controller is therefore a separately commissioned extension,
+not code claimed as a direct port. See the
+[battery ownership boundary](docs/free-window-battery-ownership.md).
 
 These are intentionally absent rather than represented by simplified rewrite
 code. The [project source of truth](docs/source-of-truth.md) records the public
