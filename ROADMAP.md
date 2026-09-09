@@ -139,16 +139,30 @@ Working Single Phase Pilot Site parity.
   explicit dashboard schema version, preview migrations, and never silently
   overwrite a user's dashboard. HACS upgrades must be able to deliver compatible
   dashboard changes without raw-YAML copy and paste.
-- [ ] Add an explicit manual inverter-mode recovery surface for Local Modbus
-  ownership. Self Use, Force Charge, and Force Discharge require confirmed
-  profile support and mapped feedback; Backup is shown only when the
-  commissioned inverter advertises or has independently proven that capability.
-  A manual selection must suspend automatic reconciliation for a visible,
-  persistent hold so HEO cannot immediately undo the operator's command. Force
-  modes must require explicit power and duration, remain bounded, show direct
-  feedback, and restore or hand control back deliberately. Define Safety Lock,
-  ownership, confirmation, timeout, restart, and cloud-scheduler interactions
-  before exposing buttons.
+- [ ] Add an explicit manual inverter-control hold for Local Modbus ownership,
+  using the mapped FoxESS Modbus entities instead of reproducing inverter
+  profiles, register writes, force-power bounds, or remote-control watchdog
+  behavior. The dashboard mirrors only the options currently advertised by the
+  mapped work-mode select, so Backup appears only when FoxESS Modbus exposes it;
+  Force Charge and Force Discharge use that integration's mapped native power
+  controls and limits.
+
+  Before forwarding a manual mode selection, HEO must persist a visible manual
+  hold and cancel every HEO-owned inverter session that could later restore or
+  reassert another mode, including automatic export and an active diagnostic.
+  Cancelling for a manual handoff must clear HEO latches/timers without sending
+  a competing Self Use restoration over the operator's requested mode. While
+  the hold is active, no HEO automatic inverter reconciliation may run. A
+  separate deliberate action returns control to automation; merely choosing
+  Self Use does not silently resume it. A timed force-mode convenience may be
+  added later, but is not required for the first native-entity surface.
+
+  Safety Lock and exclusive Local Modbus ownership remain mandatory. HEO can
+  suppress only its own writers: FoxCloud scheduling and legacy or unrelated
+  Home Assistant inverter automations must already be disabled and cannot be
+  treated as cancelled merely because the HEO hold is active. Test command
+  ordering, restart persistence, active-session handoff, missing entities,
+  changing advertised options, and explicit release before exposing controls.
 - [x] Package the proven seven-view dashboard information architecture using
   HEO-owned entities, with site-specific Tessie, weather, room, and equipment
   cards explicitly retained as local overlays.

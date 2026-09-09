@@ -104,12 +104,16 @@ layers around the proven algorithm, not replacement algorithms.
 - Dashboard delivery remains manual in the current release. A future generated
   dashboard or Lovelace strategy/card layer must be upgrade-safe, versioned, and
   preserve local overlays rather than overwriting user customisation.
-- Future manual inverter-mode recovery is a distinct operator-control feature,
-  not an automation bypass. It must establish a persistent visible hold that
-  suspends HEO reconciliation, retain exclusive Local Modbus ownership, verify
-  command feedback, and bound every force-power request by explicit power and
-  duration. Mode choices are capability-driven; Backup must not appear merely
-  because one supported H3 profile provides it.
+- Future manual inverter recovery is a distinct operator-control handoff, not a
+  second inverter implementation. HEO will use the mapped FoxESS Modbus work-
+  mode select and native force-power entities, mirror only their advertised
+  options and bounds, and leave register, profile and remote-watchdog behavior
+  to that integration. HEO must first persist a visible manual hold and cancel
+  its own export/diagnostic latches without issuing a restoration command that
+  overwrites the operator's selection. The hold survives restart and suppresses
+  all HEO inverter reconciliation until an explicit resume action. Safety Lock
+  and exclusive Local Modbus ownership remain mandatory. The hold cannot stop
+  or prove the absence of FoxCloud or unrelated Home Assistant writers.
 - Treat an EW11 Modbus TCP bridge as single-client unless its exact hardware and
   firmware are independently proven otherwise. Concurrent polling alone can
   make the observed bridge unresponsive, regardless of which client owns write
