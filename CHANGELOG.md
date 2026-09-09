@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.9.0 — canonical telemetry normalization
 
 - Replace scattered raw signed-power handling with one timestamp-aware
   canonical telemetry boundary. HEO now publishes import-positive grid/current,
