@@ -104,6 +104,31 @@ Working Single Phase Pilot Site parity.
 - [ ] Only if explicitly requested as new functionality, design a default-off
   local-Modbus battery free-charge extension after writer tracing and schedule
   interaction are proven. This is not required for canonical source parity.
+- [ ] Add an opt-in **EV-before-export** arbitration policy. When the vehicle is
+  confirmed home and connected and its SoC is below a user-configured threshold,
+  allocate otherwise-exportable energy to EV charging before starting or
+  continuing an automatic grid-export session. Reaching the threshold returns
+  priority to the normal export policy. Define separately whether eligible
+  energy may come from live solar surplus, protected battery energy, or paid
+  grid import; the first implementation must not silently import paid energy or
+  discharge the home battery into the EV. Preserve the configured service,
+  connector, reserve, daily-allowance, tariff, ownership, Safety Lock, telemetry,
+  and anti-flapping gates. Expose the active priority and withheld/exported
+  energy in diagnostics and the dashboard.
+- [ ] Add an opt-in weekly **EV ready-by target** policy with three user-facing
+  modes: **Off**, **Learned with overrides**, and **User schedule**. Each weekday
+  has an optional ready time and desired SoC; an unset day means no departure
+  target. User schedule uses only those entries. Learned mode requires a new,
+  independently validated history of actual home-departure times and departure
+  SoC needs—existing cumulative-energy P85 learning does not provide this—and
+  any configured weekday entry overrides that day's learned target. Calculate
+  the latest safe start from current SoC, usable capacity, charging efficiency,
+  commissioned charging power, and all eligible tariff/free windows, then
+  continuously re-plan from confirmed charging feedback. Define missed-target,
+  low-confidence, away, unplugged, DST/time-zone, overnight-boundary, conflicting
+  target, and restart behavior before actuation. The dashboard must show the
+  source of today's target (none, learned, or user override), confidence,
+  required energy, planned start, and whether the target is currently achievable.
 - [ ] Replace manual dashboard copying with an upgrade-safe, integration-owned
   dashboard delivery mechanism. Evaluate a generated Lovelace dashboard and
   reusable strategy/cards; preserve user overlays and custom cards, carry an
