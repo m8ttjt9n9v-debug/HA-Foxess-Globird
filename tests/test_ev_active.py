@@ -285,6 +285,7 @@ async def test_ev_runtime_only_applies_general_limit_outside_free_window(
     start = datetime(2026, 9, 7, 0, 1, tzinfo=UTC)
     await controller.async_reconcile(start)
     await controller.async_reconcile(start + timedelta(seconds=30))
+    await hass.async_block_till_done()
 
     assert controller.last_reason == "outside_window_general_limit_awaiting_feedback"
     assert controller.last_actions == ()
@@ -314,6 +315,7 @@ async def test_cloud_owner_blocks_opted_in_outside_window_stages(
     )
 
     await controller.async_reconcile(datetime(2026, 9, 7, 0, 1, tzinfo=UTC))
+    await hass.async_block_till_done()
 
     assert controller.last_reason == "general_limit"
     assert controller.last_actions == ("set_charge_limit",)

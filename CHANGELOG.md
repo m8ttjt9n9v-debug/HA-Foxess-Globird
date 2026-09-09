@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.10.1 — deterministic Home Assistant service-call tests
+
+- Wait for Home Assistant's event loop before asserting service-call events in
+  the cloud-owner and outside-window general-limit tests. Runtime behavior is
+  unchanged from 0.10.0.
+
 ## 0.10.0 — daily EV ready-by allocation
 
 - Add a separate, configuration-driven extension around the pilot's retained

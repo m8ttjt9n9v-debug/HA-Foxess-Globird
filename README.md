@@ -4,7 +4,7 @@ A Home Assistant custom integration for a site-configured energy ledger,
 conservative demand learning, bounded FoxESS diagnostics, the verified
 Working Single Phase Pilot Site ZEROHERO export policy, and a faithful direct-EVSE free-window port.
 
-Version 0.10.0 deliberately excludes the rewritten automatic battery controller
+Version 0.10.1 deliberately excludes the rewritten automatic battery controller
 that was not a faithful port of the proven Working Single Phase Pilot Site.
 Automatic FoxESS free charging remains absent. Separately gated direct-EVSE and
 smart-socket Tessie paths have returned through port-first characterization and
