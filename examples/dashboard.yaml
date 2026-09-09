@@ -171,6 +171,42 @@ views:
         column_span: 2
         cards:
           - type: heading
+            heading: Daily EV Ready-By Backfill
+            heading_style: title
+            icon: mdi:car-clock
+          - type: markdown
+            content: >-
+              The configured wall-energy allocation is protected from HEO
+              export and scheduled backwards from the ready time. With
+              FoxCloud ownership, HEO cannot guarantee that prior cloud export
+              preserved it; the live battery/house ledger determines what is
+              still achievable. Charge to full is a separate paid-grid
+              override and remains bounded by connector and service limits.
+          - type: tile
+            entity: sensor.home_energy_ev_daily_backfill_status
+            name: Ready-by decision
+          - type: tile
+            entity: sensor.home_energy_ev_daily_backfill_remaining
+            name: Protected allocation remaining
+          - type: tile
+            entity: sensor.home_energy_ev_daily_backfill_delivered
+            name: Delivered this ready cycle
+          - type: tile
+            entity: sensor.home_energy_ev_daily_backfill_planned_energy
+            name: Planned wall energy
+          - type: tile
+            entity: sensor.home_energy_ev_daily_backfill_shortfall
+            name: Allocation shortfall
+          - type: tile
+            entity: sensor.home_energy_ev_daily_backfill_planned_start
+            name: Latest start
+          - type: tile
+            entity: sensor.home_energy_ev_daily_backfill_current_target
+            name: Capped current
+      - type: grid
+        column_span: 2
+        cards:
+          - type: heading
             heading: Daily Driving and Charge-Limit Learning
             heading_style: title
             icon: mdi:chart-bell-curve-cumulative

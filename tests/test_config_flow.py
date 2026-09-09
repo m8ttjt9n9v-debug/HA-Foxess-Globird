@@ -128,6 +128,42 @@ async def test_user_flow_defaults_legacy_automatic_export_to_disabled(hass):
     assert result["data"][CONF_AUTOMATIC_EXPORT_ENABLED] is False
 
 
+async def test_daily_backfill_is_allowed_with_foxcloud_when_fully_configured(hass):
+    data = {
+        **ENTRY_DATA,
+        "foxess_control_owner": "foxcloud_scheduler",
+        "ev_daily_backfill_energy_kwh": 5,
+        "ev_daily_ready_time": "08:00:00",
+        "ev_outside_inverter_percent": 30,
+        "inverter_discharge_limit_kw": 15,
+    }
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": SOURCE_USER},
+        data={"name": "Cloud EV Site", **data},
+    )
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+
+
+async def test_daily_backfill_fails_closed_without_an_outside_power_cap(hass):
+    data = {
+        **ENTRY_DATA,
+        "ev_daily_backfill_energy_kwh": 5,
+        "ev_outside_inverter_percent": 0,
+    }
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": SOURCE_USER},
+        data={"name": "Invalid Daily Backfill", **data},
+    )
+
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"]["base"] == "invalid_daily_ev_backfill"
+
+
 async def test_user_flow_defaults_legacy_ev_control_to_disabled(hass):
     legacy_data = {
         key: value

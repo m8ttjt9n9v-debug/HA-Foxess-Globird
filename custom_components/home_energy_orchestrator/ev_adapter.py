@@ -113,6 +113,13 @@ class EvServiceAdapter:
                 target={"entity_id": self.entities.charge_switch_entity},
                 blocking=True,
             )
+        elif command.action == "stop_charging":
+            await self.hass.services.async_call(
+                "switch",
+                "turn_off",
+                target={"entity_id": self.entities.charge_switch_entity},
+                blocking=True,
+            )
         elif command.action in {"turn_on_smart_socket", "turn_off_smart_socket"}:
             if not self.entities.smart_socket_entity:
                 raise EvWriteBlocked("smart-socket actuator is not mapped")

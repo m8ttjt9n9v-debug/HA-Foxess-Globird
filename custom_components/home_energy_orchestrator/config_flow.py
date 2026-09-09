@@ -40,6 +40,7 @@ from .const import (
     CONF_EV_ARRIVAL_RESERVE_SOC,
     CONF_EV_AT_HOME,
     CONF_EV_AUTOMATIC_CONTROL_ENABLED,
+    CONF_EV_BACKFILL_BUFFER_MINUTES,
     CONF_EV_CABLE_CONNECTED,
     CONF_EV_CHARGE_EFFICIENCY,
     CONF_EV_CHARGE_LIMIT,
@@ -47,9 +48,12 @@ from .const import (
     CONF_EV_CHARGE_SWITCH,
     CONF_EV_CHARGE_TO_FULL,
     CONF_EV_CHARGE_TO_FULL_ENABLED,
+    CONF_EV_CHARGE_TO_FULL_MAX_HOURS,
     CONF_EV_CHARGING_STATE,
     CONF_EV_CONTROL_COMMISSIONED,
     CONF_EV_CURRENT_LIMIT,
+    CONF_EV_DAILY_BACKFILL_ENERGY,
+    CONF_EV_DAILY_READY_TIME,
     CONF_EV_DIRECT_LIMIT_HEADROOM,
     CONF_EV_FREE_WINDOW_CHARGE_LIMIT,
     CONF_EV_FREE_WINDOW_MINIMUM_CURRENT,
@@ -60,6 +64,7 @@ from .const import (
     CONF_EV_LOCATION_MODE,
     CONF_EV_MAX_CURRENT,
     CONF_EV_MIN_CURRENT,
+    CONF_EV_OUTSIDE_INVERTER_PERCENT,
     CONF_EV_PHASE_COUNT,
     CONF_EV_PRE_FREE_ENABLED,
     CONF_EV_PROTECTED_BASELINE_A,
@@ -141,10 +146,14 @@ from .const import (
     DEFAULT_EV_ALLOWANCE_SAFETY_MARGIN,
     DEFAULT_EV_ARRIVAL_RESERVE_SOC,
     DEFAULT_EV_AUTOMATIC_CONTROL_ENABLED,
+    DEFAULT_EV_BACKFILL_BUFFER_MINUTES,
     DEFAULT_EV_CHARGE_EFFICIENCY,
     DEFAULT_EV_CHARGE_PATH,
     DEFAULT_EV_CHARGE_TO_FULL_ENABLED,
+    DEFAULT_EV_CHARGE_TO_FULL_MAX_HOURS,
     DEFAULT_EV_CONTROL_COMMISSIONED,
+    DEFAULT_EV_DAILY_BACKFILL_ENERGY,
+    DEFAULT_EV_DAILY_READY_TIME,
     DEFAULT_EV_DIRECT_LIMIT_HEADROOM,
     DEFAULT_EV_FREE_WINDOW_CHARGE_LIMIT,
     DEFAULT_EV_FREE_WINDOW_MINIMUM_CURRENT,
@@ -154,6 +163,7 @@ from .const import (
     DEFAULT_EV_LOCATION_MODE,
     DEFAULT_EV_MAX_CURRENT,
     DEFAULT_EV_MIN_CURRENT,
+    DEFAULT_EV_OUTSIDE_INVERTER_PERCENT,
     DEFAULT_EV_PHASE_COUNT,
     DEFAULT_EV_PRE_FREE_ENABLED,
     DEFAULT_EV_PROTECTED_BASELINE_A,
@@ -656,6 +666,13 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     ),
                 ): vol.Coerce(float),
                 vol.Required(
+                    CONF_EV_CHARGE_TO_FULL_MAX_HOURS,
+                    default=defaults.get(
+                        CONF_EV_CHARGE_TO_FULL_MAX_HOURS,
+                        DEFAULT_EV_CHARGE_TO_FULL_MAX_HOURS,
+                    ),
+                ): vol.Coerce(float),
+                vol.Required(
                     CONF_EV_CHARGE_EFFICIENCY,
                     default=defaults.get(CONF_EV_CHARGE_EFFICIENCY, DEFAULT_EV_CHARGE_EFFICIENCY),
                 ): vol.Coerce(float),
@@ -749,6 +766,34 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     CONF_EV_PRE_FREE_ENABLED,
                     default=defaults.get(CONF_EV_PRE_FREE_ENABLED, DEFAULT_EV_PRE_FREE_ENABLED),
                 ): selector.BooleanSelector(),
+                vol.Required(
+                    CONF_EV_DAILY_BACKFILL_ENERGY,
+                    default=defaults.get(
+                        CONF_EV_DAILY_BACKFILL_ENERGY,
+                        DEFAULT_EV_DAILY_BACKFILL_ENERGY,
+                    ),
+                ): vol.Coerce(float),
+                vol.Required(
+                    CONF_EV_DAILY_READY_TIME,
+                    default=defaults.get(
+                        CONF_EV_DAILY_READY_TIME,
+                        DEFAULT_EV_DAILY_READY_TIME,
+                    ),
+                ): selector.TimeSelector(),
+                vol.Required(
+                    CONF_EV_OUTSIDE_INVERTER_PERCENT,
+                    default=defaults.get(
+                        CONF_EV_OUTSIDE_INVERTER_PERCENT,
+                        DEFAULT_EV_OUTSIDE_INVERTER_PERCENT,
+                    ),
+                ): vol.Coerce(float),
+                vol.Required(
+                    CONF_EV_BACKFILL_BUFFER_MINUTES,
+                    default=defaults.get(
+                        CONF_EV_BACKFILL_BUFFER_MINUTES,
+                        DEFAULT_EV_BACKFILL_BUFFER_MINUTES,
+                    ),
+                ): vol.Coerce(float),
                 vol.Required(
                     CONF_EV_TELEMETRY_MAX_AGE_SECONDS,
                     default=defaults.get(
@@ -1017,6 +1062,10 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             CONF_EV_CHARGE_EFFICIENCY: data.get(
                 CONF_EV_CHARGE_EFFICIENCY, DEFAULT_EV_CHARGE_EFFICIENCY
             ),
+            CONF_EV_CHARGE_TO_FULL_MAX_HOURS: data.get(
+                CONF_EV_CHARGE_TO_FULL_MAX_HOURS,
+                DEFAULT_EV_CHARGE_TO_FULL_MAX_HOURS,
+            ),
             CONF_EV_ARRIVAL_RESERVE_SOC: data.get(
                 CONF_EV_ARRIVAL_RESERVE_SOC, DEFAULT_EV_ARRIVAL_RESERVE_SOC
             ),
@@ -1048,6 +1097,22 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             ),
             CONF_EV_PRE_FREE_ENABLED: data.get(
                 CONF_EV_PRE_FREE_ENABLED, DEFAULT_EV_PRE_FREE_ENABLED
+            ),
+            CONF_EV_DAILY_BACKFILL_ENERGY: data.get(
+                CONF_EV_DAILY_BACKFILL_ENERGY,
+                DEFAULT_EV_DAILY_BACKFILL_ENERGY,
+            ),
+            CONF_EV_DAILY_READY_TIME: data.get(
+                CONF_EV_DAILY_READY_TIME,
+                DEFAULT_EV_DAILY_READY_TIME,
+            ),
+            CONF_EV_OUTSIDE_INVERTER_PERCENT: data.get(
+                CONF_EV_OUTSIDE_INVERTER_PERCENT,
+                DEFAULT_EV_OUTSIDE_INVERTER_PERCENT,
+            ),
+            CONF_EV_BACKFILL_BUFFER_MINUTES: data.get(
+                CONF_EV_BACKFILL_BUFFER_MINUTES,
+                DEFAULT_EV_BACKFILL_BUFFER_MINUTES,
             ),
             CONF_EV_TELEMETRY_MAX_AGE_SECONDS: data.get(
                 CONF_EV_TELEMETRY_MAX_AGE_SECONDS,
@@ -1241,10 +1306,14 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             export_discharge_power = float(data[CONF_EXPORT_DISCHARGE_POWER_KW])
             discharge_efficiency = float(data[CONF_DISCHARGE_EFFICIENCY_PERCENT])
             protected_ev_baseline = float(data[CONF_EV_PROTECTED_BASELINE_A])
+            daily_backfill_energy = float(data[CONF_EV_DAILY_BACKFILL_ENERGY])
+            outside_inverter_percent = float(data[CONF_EV_OUTSIDE_INVERTER_PERCENT])
+            backfill_buffer_minutes = float(data[CONF_EV_BACKFILL_BUFFER_MINUTES])
             ev_free_limit = float(data[CONF_EV_FREE_WINDOW_CHARGE_LIMIT])
             ev_free_minimum = float(data[CONF_EV_FREE_WINDOW_MINIMUM_CURRENT])
             ev_settle_minutes = float(data[CONF_EV_FREE_WINDOW_SETTLE_MINUTES])
             ev_limit_headroom = float(data[CONF_EV_DIRECT_LIMIT_HEADROOM])
+            charge_to_full_max_hours = float(data[CONF_EV_CHARGE_TO_FULL_MAX_HOURS])
             ev_charge_efficiency = float(data[CONF_EV_CHARGE_EFFICIENCY])
             ev_arrival_reserve = float(data[CONF_EV_ARRIVAL_RESERVE_SOC])
             ev_learning_minimum = float(data[CONF_EV_LEARNING_MINIMUM_SAMPLES])
@@ -1267,6 +1336,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             bonus_start = time.fromisoformat(str(data[CONF_BONUS_WINDOW_START]))
             bonus_end = time.fromisoformat(str(data[CONF_BONUS_WINDOW_END]))
             discharge_finish = time.fromisoformat(str(data[CONF_FORCE_DISCHARGE_FINISH]))
+            daily_ready = time.fromisoformat(str(data[CONF_EV_DAILY_READY_TIME]))
             peak_start = time.fromisoformat(str(data[CONF_PEAK_WINDOW_START]))
             peak_end = time.fromisoformat(str(data[CONF_PEAK_WINDOW_END]))
         except (KeyError, TypeError, ValueError):
@@ -1310,10 +1380,14 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             export_discharge_power,
             discharge_efficiency,
             protected_ev_baseline,
+            daily_backfill_energy,
+            outside_inverter_percent,
+            backfill_buffer_minutes,
             ev_free_limit,
             ev_free_minimum,
             ev_settle_minutes,
             ev_limit_headroom,
+            charge_to_full_max_hours,
             ev_charge_efficiency,
             ev_arrival_reserve,
             ev_learning_minimum,
@@ -1358,11 +1432,15 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             or export_discharge_power < 0
             or not 50 <= discharge_efficiency <= 100
             or protected_ev_baseline < 0
+            or daily_backfill_energy < 0
+            or not 0 <= outside_inverter_percent <= 100
+            or backfill_buffer_minutes < 0
             or not 0 <= ev_free_limit <= 100
             or ev_free_minimum < 0
             or ev_free_minimum > max_current
             or ev_settle_minutes < 0
             or ev_limit_headroom < 0
+            or charge_to_full_max_hours <= 0
             or not 0 < ev_charge_efficiency <= 100
             or not 0 <= ev_arrival_reserve <= 100
             or not 1 <= ev_learning_minimum <= 28
@@ -1382,6 +1460,12 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             or (bool(data.get(CONF_EV_CONTROL_COMMISSIONED)) and service_import_limit <= 0)
         ):
             return {"base": "invalid_site_limits"}
+        if daily_backfill_energy > 0 and (
+            outside_inverter_percent <= 0
+            or inverter_discharge_limit <= 0
+            or daily_ready >= start
+        ):
+            return {"base": "invalid_daily_ev_backfill"}
         if (
             data.get(CONF_EV_CONTROL_COMMISSIONED)
             and site_phase_count > 1

@@ -59,7 +59,15 @@ template/helper built from phase sensors. Aggregate power is not a substitute
 because the controller must protect each phase's configured service limit.
 If that mapped multiphase current is unavailable, EV actuation is blocked.
 
-The direct path never issues a stop or pause. The smart-socket path additionally
+The retained pilot direct path never issues a stop or pause. The optional daily
+ready-by extension may stop only a session it started when its frozen wall-
+energy target, soft SoC limit, ready deadline, or safety condition is reached.
+It requires a configured daily allocation, ready time, inverter-output
+percentage, inverter discharge/output rating, and current house/available-
+energy ledger. It can operate with FoxCloud ownership because it writes Tessie
+only; that mode cannot reserve energy against earlier cloud export.
+
+The smart-socket path additionally
 requires a mapped on/off outlet, its commissioned physical current ceiling,
 and selected recovery/settling timings. It does not depend on a particular
 outlet vendor.

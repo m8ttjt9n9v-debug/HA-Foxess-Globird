@@ -35,3 +35,17 @@ requires a signed most-loaded-phase current sensor in amperes; aggregate site
 power is not accepted. After rehearsal, disable competing Tesla writers before
 unlocking and enabling this path. A latched maximum-attempt fault is evidence
 to investigate, not permission to toggle the gate repeatedly.
+
+For daily ready-by backfill, configure wall-side kWh, a ready time before the
+free-power window, an outside-window percentage of commissioned inverter
+output, and any desired planning buffer. Start with Safety Lock on and verify
+the displayed planned energy, whole-amp current, latest start, protected house
+energy, allocation shortfall, and service headroom. Zero kWh disables the
+policy. FoxCloud ownership is permitted because this path writes Tessie only,
+but it cannot guarantee the allocation survived earlier cloud-controlled
+export; only Local Modbus ZEROHERO can reserve it prospectively.
+
+Treat Charge to Full as a paid-import override. Confirm its configured timeout
+and service/connector limits before use; it may start charging immediately
+outside free power and clears when full, disconnected after starting, or timed
+out.

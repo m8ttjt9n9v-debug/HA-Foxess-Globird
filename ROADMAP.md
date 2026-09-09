@@ -49,6 +49,11 @@ Status here describes behavioral parity, not merely the presence of code.
   budget, vehicle wall-energy room, additional-power calculation, backwards
   scheduling, restart-persistent phase/start, live current reduction, and
   export-session exclusion.
+- [x] Configuration-driven daily EV ready-by allocation extension: ready-cycle
+  protection, live post-midnight energy calculation, proportional discretionary
+  share, discrete inverter-percentage/service cap, latest-start latch, confirmed
+  wall-energy accounting, shortfall reporting, cloud-compatible Tessie-only
+  operation, and prospective Local-Modbus export protection.
 - [x] Faithful Tessie daily-driving learning: exact free-window-boundary
   cumulative-meter deltas, restart-persistent 28-sample/35-day history, P85
   selection, configured arrival reserve, full-window fallback, actuator-step

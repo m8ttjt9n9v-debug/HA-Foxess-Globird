@@ -191,3 +191,5 @@ deliberately last priority for the H3 hands-off free-window objective.
 
 The completed outside-window stages are specified separately in
 [`ev-solar-spill-and-pre-free-policy.md`](ev-solar-spill-and-pre-free-policy.md).
+The separately configured daily allocation extension is specified in
+[`ev-daily-ready-backfill.md`](ev-daily-ready-backfill.md).

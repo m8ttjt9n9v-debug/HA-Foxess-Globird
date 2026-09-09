@@ -4,7 +4,7 @@ A Home Assistant custom integration for a site-configured energy ledger,
 conservative demand learning, bounded FoxESS diagnostics, the verified
 Working Single Phase Pilot Site ZEROHERO export policy, and a faithful direct-EVSE free-window port.
 
-Version 0.9.0 deliberately excludes the rewritten automatic battery controller
+Version 0.10.0 deliberately excludes the rewritten automatic battery controller
 that was not a faithful port of the proven Working Single Phase Pilot Site.
 Automatic FoxESS free charging remains absent. Separately gated direct-EVSE and
 smart-socket Tessie paths have returned through port-first characterization and
@@ -77,6 +77,12 @@ rooms, and other site-specific cards belong in a local overlay.
   pre-free backfill spends only protected post-export energy that the vehicle
   can accept before the next free window. See the
   [outside-window policy](docs/ev-solar-spill-and-pre-free-policy.md).
+- Optional daily EV ready-by backfill extends the pilot latest-start arithmetic
+  with a configured wall-energy allocation and outside-window inverter
+  percentage. It may write Tessie while FoxCloud owns the inverter, using the
+  current battery/house ledger; only Local Modbus ownership lets HEO protect the
+  next allocation prospectively from its own export. See the
+  [daily ready-by policy](docs/ev-daily-ready-backfill.md).
 - The explicitly selected smart-socket path stages a service-valid current
   before outlet power, waits the configured connector-settle period, then
   re-bounds current and starts charging. A sustained `no_power` fault receives
@@ -102,10 +108,12 @@ spill and pre-free backfill require Local Modbus ownership and remain separately
 default-off. Safety Lock blocks every hardware write.
 
 HEO creates `switch.home_energy_ev_charge_to_full` automatically. It replaces
-the pilot YAML's external Toggle helper: ON temporarily selects Tessie's maximum
-charge limit and prioritizes the commissioned connector ceiling in the managed
-free window, while every normal safety, service-current, and free-allowance
-guard remains active. It does not start an outside-window session by itself.
+the pilot YAML's external Toggle helper. ON is an explicit paid-grid override:
+it may start charging outside the free window at the maximum permitted by the
+commissioned connector and service headroom. It bypasses normal daily-energy
+and inverter-percentage policy, but not Safety Lock or physical limits, and
+automatically clears at full, disconnect after starting, or the configured
+timeout.
 
 ## Not currently implemented
 

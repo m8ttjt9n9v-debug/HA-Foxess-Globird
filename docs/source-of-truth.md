@@ -31,6 +31,12 @@ layers around the proven algorithm, not replacement algorithms.
 - A faithful direct-EVSE free-window Tessie path is present behind its own
   default-off intent, explicit commissioning flag, complete mappings, and the
   shared Safety Lock. It has not been enabled on a live site.
+- The daily EV ready-by allocation is a separately identified configurable
+  extension around the retained latest-start arithmetic. Its Tessie-only path
+  may run with FoxCloud ownership from live post-midnight energy, but only
+  Local Modbus ownership allows HEO to protect the following ready cycle from
+  its own ZEROHERO export. The ready-to-ready ledger, confirmed wall-energy
+  accumulator, active-session target and start latch survive restart.
 - Bounded, explicitly submitted FoxESS diagnostics remain available behind
   their guards. They are not schedules.
 - Automatic FoxESS free-window charging is not implemented.

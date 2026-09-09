@@ -164,6 +164,24 @@ async def test_ev_adapter_maps_smart_socket_commands_only_to_explicit_outlet(
     ]
 
 
+async def test_ev_adapter_stops_only_the_explicit_vehicle_charge_switch(
+    hass: HomeAssistant,
+) -> None:
+    execution = []
+
+    async def record(call) -> None:
+        execution.append((call.service, call.data["entity_id"]))
+
+    hass.services.async_register("switch", "turn_off", record)
+    adapter = EvServiceAdapter(hass, ENTITIES, allow_writes=True)
+
+    await adapter.async_execute(
+        EvCommandPlan((EvCommand("stop_charging"),), "allocation_complete")
+    )
+
+    assert execution == [("turn_off", "switch.car_charge")]
+
+
 async def test_ev_adapter_blocks_unmapped_smart_socket(hass: HomeAssistant) -> None:
     adapter = EvServiceAdapter(hass, ENTITIES, allow_writes=True)
     with pytest.raises(EvWriteBlocked, match="not mapped"):

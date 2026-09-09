@@ -235,6 +235,50 @@ DESCRIPTIONS = (
         suggested_display_precision=1,
     ),
     SensorEntityDescription(
+        key="ev_daily_backfill_status", name="EV Daily Ready-By Backfill Status"
+    ),
+    SensorEntityDescription(
+        key="ev_daily_backfill_remaining",
+        name="EV Daily Backfill Allocation Remaining",
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        device_class="energy",
+        suggested_display_precision=2,
+    ),
+    SensorEntityDescription(
+        key="ev_daily_backfill_delivered",
+        name="EV Daily Backfill Delivered",
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        device_class="energy",
+        suggested_display_precision=2,
+    ),
+    SensorEntityDescription(
+        key="ev_daily_backfill_planned_energy",
+        name="EV Daily Backfill Planned Energy",
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        device_class="energy",
+        suggested_display_precision=2,
+    ),
+    SensorEntityDescription(
+        key="ev_daily_backfill_shortfall",
+        name="EV Daily Backfill Allocation Shortfall",
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        device_class="energy",
+        suggested_display_precision=2,
+    ),
+    SensorEntityDescription(
+        key="ev_daily_backfill_planned_start",
+        name="EV Daily Backfill Planned Start",
+        device_class="timestamp",
+    ),
+    SensorEntityDescription(
+        key="ev_daily_backfill_current_target",
+        name="EV Daily Backfill Current Target",
+        native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
+        device_class="current",
+        state_class="measurement",
+        suggested_display_precision=1,
+    ),
+    SensorEntityDescription(
         key="ev_daily_driving_energy",
         name="EV Daily Driving Energy",
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
@@ -578,6 +622,45 @@ class EnergySensor(CoordinatorEntity[EnergyCoordinator], SensorEntity):
             "ev_pre_free_current_target": (
                 ev_controller.pre_free_current_a if ev_controller is not None else None
             ),
+            "ev_daily_backfill_status": (
+                "active"
+                if ev_controller is not None and ev_controller.daily_backfill_active
+                else ev_controller.daily_backfill_plan.phase
+                if ev_controller is not None and ev_controller.daily_backfill_plan is not None
+                else "disabled"
+            ),
+            "ev_daily_backfill_remaining": (
+                ev_controller.daily_backfill_plan.remaining_allocation_kwh
+                if ev_controller is not None and ev_controller.daily_backfill_plan is not None
+                else None
+            ),
+            "ev_daily_backfill_delivered": (
+                ev_controller.daily_backfill_delivered_kwh
+                if ev_controller is not None
+                else None
+            ),
+            "ev_daily_backfill_planned_energy": (
+                ev_controller.daily_backfill_plan.planned_energy_kwh
+                if ev_controller is not None and ev_controller.daily_backfill_plan is not None
+                else None
+            ),
+            "ev_daily_backfill_shortfall": (
+                ev_controller.daily_backfill_plan.allocation_shortfall_kwh
+                if ev_controller is not None and ev_controller.daily_backfill_plan is not None
+                else None
+            ),
+            "ev_daily_backfill_planned_start": (
+                ev_controller.daily_backfill_frozen_start
+                if ev_controller is not None and ev_controller.daily_backfill_active
+                else ev_controller.daily_backfill_plan.planned_start
+                if ev_controller is not None and ev_controller.daily_backfill_plan is not None
+                else None
+            ),
+            "ev_daily_backfill_current_target": (
+                ev_controller.daily_backfill_plan.current_ceiling_a
+                if ev_controller is not None and ev_controller.daily_backfill_plan is not None
+                else None
+            ),
             "ev_daily_driving_energy": (
                 ev_controller.daily_driving_energy_kwh
                 if ev_controller is not None
@@ -777,6 +860,18 @@ class EnergySensor(CoordinatorEntity[EnergyCoordinator], SensorEntity):
                 ),
                 "pre_free_current_a": controller.pre_free_current_a,
                 "outside_control_active": controller.outside_control_active,
+                "daily_backfill_active": controller.daily_backfill_active,
+                "daily_backfill_cycle_ready_at": (
+                    controller.daily_backfill_cycle_ready_at
+                ),
+                "daily_backfill_delivered_kwh": (
+                    controller.daily_backfill_delivered_kwh
+                ),
+                "daily_backfill_session_target_kwh": (
+                    controller.daily_backfill_session_target_kwh
+                ),
+                "daily_backfill_frozen_start": controller.daily_backfill_frozen_start,
+                "charge_to_full_started_at": controller.charge_to_full_started_at,
                 "driving_learning_mode": (
                     controller.learned_charge_limit.mode
                     if controller.learned_charge_limit is not None

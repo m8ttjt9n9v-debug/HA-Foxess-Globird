@@ -20,11 +20,13 @@ from .const import (
     CONF_BONUS_WINDOW_END,
     CONF_BONUS_WINDOW_START,
     CONF_DAILY_FREE_ALLOWANCE_KWH,
+    CONF_DISCHARGE_EFFICIENCY_PERCENT,
     CONF_EV_ACTUAL_CURRENT,
     CONF_EV_ALLOWANCE_GUARD_ENABLED,
     CONF_EV_ALLOWANCE_SAFETY_MARGIN,
     CONF_EV_ARRIVAL_RESERVE_SOC,
     CONF_EV_AT_HOME,
+    CONF_EV_BACKFILL_BUFFER_MINUTES,
     CONF_EV_CABLE_CONNECTED,
     CONF_EV_CHARGE_EFFICIENCY,
     CONF_EV_CHARGE_LIMIT,
@@ -32,8 +34,11 @@ from .const import (
     CONF_EV_CHARGE_SWITCH,
     CONF_EV_CHARGE_TO_FULL,
     CONF_EV_CHARGE_TO_FULL_ENABLED,
+    CONF_EV_CHARGE_TO_FULL_MAX_HOURS,
     CONF_EV_CHARGING_STATE,
     CONF_EV_CURRENT_LIMIT,
+    CONF_EV_DAILY_BACKFILL_ENERGY,
+    CONF_EV_DAILY_READY_TIME,
     CONF_EV_DIRECT_LIMIT_HEADROOM,
     CONF_EV_FREE_WINDOW_CHARGE_LIMIT,
     CONF_EV_FREE_WINDOW_MINIMUM_CURRENT,
@@ -43,6 +48,7 @@ from .const import (
     CONF_EV_LIFETIME_ENERGY,
     CONF_EV_LOCATION_MODE,
     CONF_EV_MAX_CURRENT,
+    CONF_EV_OUTSIDE_INVERTER_PERCENT,
     CONF_EV_PHASE_COUNT,
     CONF_EV_PRE_FREE_ENABLED,
     CONF_EV_PROTECTED_BASELINE_A,
@@ -70,6 +76,7 @@ from .const import (
     CONF_FOXESS_CONTROL_OWNER,
     CONF_FREE_CHARGE_END,
     CONF_FREE_CHARGE_START,
+    CONF_INVERTER_DISCHARGE_LIMIT_KW,
     CONF_SERVICE_IMPORT_LIMIT_A,
     CONF_SITE_GRID_HEADROOM_CURRENT,
     CONF_SITE_PHASE_COUNT,
@@ -78,12 +85,17 @@ from .const import (
     DEFAULT_BONUS_WINDOW_END,
     DEFAULT_BONUS_WINDOW_START,
     DEFAULT_DAILY_FREE_ALLOWANCE_KWH,
+    DEFAULT_DISCHARGE_EFFICIENCY_PERCENT,
     DEFAULT_EV_ALLOWANCE_GUARD_ENABLED,
     DEFAULT_EV_ALLOWANCE_SAFETY_MARGIN,
     DEFAULT_EV_ARRIVAL_RESERVE_SOC,
+    DEFAULT_EV_BACKFILL_BUFFER_MINUTES,
     DEFAULT_EV_CHARGE_EFFICIENCY,
     DEFAULT_EV_CHARGE_PATH,
     DEFAULT_EV_CHARGE_TO_FULL_ENABLED,
+    DEFAULT_EV_CHARGE_TO_FULL_MAX_HOURS,
+    DEFAULT_EV_DAILY_BACKFILL_ENERGY,
+    DEFAULT_EV_DAILY_READY_TIME,
     DEFAULT_EV_DIRECT_LIMIT_HEADROOM,
     DEFAULT_EV_FREE_WINDOW_CHARGE_LIMIT,
     DEFAULT_EV_FREE_WINDOW_MINIMUM_CURRENT,
@@ -91,6 +103,7 @@ from .const import (
     DEFAULT_EV_FREE_WINDOW_SETTLE_MINUTES,
     DEFAULT_EV_LEARNING_MINIMUM_SAMPLES,
     DEFAULT_EV_LOCATION_MODE,
+    DEFAULT_EV_OUTSIDE_INVERTER_PERCENT,
     DEFAULT_EV_PHASE_COUNT,
     DEFAULT_EV_PRE_FREE_ENABLED,
     DEFAULT_EV_PROTECTED_BASELINE_A,
@@ -115,6 +128,7 @@ from .const import (
     DEFAULT_FOXESS_CONTROL_OWNER,
     DEFAULT_FREE_CHARGE_END,
     DEFAULT_FREE_CHARGE_START,
+    DEFAULT_INVERTER_DISCHARGE_LIMIT_KW,
     DEFAULT_SERVICE_IMPORT_LIMIT_A,
     DEFAULT_SITE_GRID_HEADROOM_CURRENT,
     DEFAULT_SITE_PHASE_COUNT,
@@ -132,6 +146,7 @@ from .planner.ev import (
     DirectEvseReconciliationState,
     EvCommand,
     EvCommandPlan,
+    EvCurrentDecision,
     FreeWindowCurrentInputs,
     SmartSocketObservation,
     SmartSocketRecoveryObservation,
@@ -145,6 +160,11 @@ from .planner.ev import (
     plan_smart_socket_commands,
     reconcile_direct_evse,
     reconcile_smart_socket_recovery,
+)
+from .planner.ev_daily_backfill import (
+    DailyBackfillInputs,
+    DailyBackfillPlan,
+    calculate_daily_backfill_plan,
 )
 from .planner.ev_learning import (
     DrivingSnapshotState,
@@ -205,8 +225,22 @@ class ActiveEvController:
         self.daily_driving_energy_kwh: float | None = None
         self.learned_charge_limit: LearnedChargeLimitDecision | None = None
         self.pre_free_current_a: float | None = None
+        self.daily_backfill_plan: DailyBackfillPlan | None = None
+        self.daily_backfill_cycle_ready_at: datetime | None = None
+        self.daily_backfill_delivered_kwh = 0.0
+        self.daily_backfill_active = False
+        self.daily_backfill_session_target_kwh = 0.0
+        self.daily_backfill_session_start_delivered_kwh = 0.0
+        self.daily_backfill_frozen_start: datetime | None = None
+        self.daily_backfill_last_sample_at: datetime | None = None
+        self.daily_backfill_last_actual_current_a: float | None = None
+        self.daily_backfill_stop_pending = False
+        self.daily_backfill_stop_attempts = 0
+        self.daily_backfill_last_stop_at: datetime | None = None
+        self.charge_to_full_started_at: datetime | None = None
         self.outside_control_active = False
         self.outside_target_active = False
+        self.outside_stop_requested = False
         self.last_decision_at: datetime | None = None
         self._decision_fingerprint: tuple[object, ...] | None = None
         self._general_limit_write_fingerprint: tuple[float, float] | None = None
@@ -302,6 +336,10 @@ class ActiveEvController:
                 self.charge_switch_on = observation.charge_switch_on
             self.grid_average.observe(now, grid_current, source_valid=grid_valid)
             self.ev_average.observe(now, ev_current, source_valid=ev_valid)
+            self._update_daily_backfill_energy(
+                now,
+                ev_current if ev_valid else None,
+            )
             if self.last_saved_at is None or now - self.last_saved_at >= timedelta(minutes=1):
                 await self._async_save(now)
 
@@ -331,6 +369,16 @@ class ActiveEvController:
             connected, connection_reason = self._connected_at_home()
             in_window, elapsed_minutes, remaining_hours = self._free_window(now)
             if not connected:
+                if self.charge_to_full_started_at is not None:
+                    await self._async_clear_charge_to_full()
+                    self.charge_to_full_started_at = None
+                self.daily_backfill_active = False
+                self.daily_backfill_session_target_kwh = 0.0
+                self.daily_backfill_session_start_delivered_kwh = 0.0
+                self.daily_backfill_frozen_start = None
+                self.daily_backfill_stop_pending = False
+                self.daily_backfill_stop_attempts = 0
+                self.daily_backfill_last_stop_at = None
                 self.pre_free_session = PreFreeSessionState()
                 self.pre_free_phase = "not_eligible"
                 self.outside_control_active = False
@@ -354,16 +402,57 @@ class ActiveEvController:
             vehicle_soc = self._entity_number(CONF_EV_SOC)
             if vehicle_soc is not None:
                 self._learned_general_limit(observation, vehicle_soc=vehicle_soc)
+            if self._charge_to_full_requested():
+                if self.charge_to_full_started_at is None:
+                    self.charge_to_full_started_at = now
+                maximum = observation.limit_maximum_percent or 100.0
+                timed_out = now - self.charge_to_full_started_at >= timedelta(
+                    hours=self._float(
+                        CONF_EV_CHARGE_TO_FULL_MAX_HOURS,
+                        DEFAULT_EV_CHARGE_TO_FULL_MAX_HOURS,
+                    )
+                )
+                if (vehicle_soc is not None and vehicle_soc >= maximum) or timed_out:
+                    await self._async_clear_charge_to_full()
+                    self.charge_to_full_started_at = None
+                    if self._float(
+                        CONF_EV_PROTECTED_BASELINE_A,
+                        DEFAULT_EV_PROTECTED_BASELINE_A,
+                    ) <= 0:
+                        self.daily_backfill_stop_pending = True
+                        self.daily_backfill_stop_attempts = 0
+                        self.daily_backfill_last_stop_at = None
+            else:
+                if (
+                    self.charge_to_full_started_at is not None
+                    and self._float(
+                        CONF_EV_PROTECTED_BASELINE_A,
+                        DEFAULT_EV_PROTECTED_BASELINE_A,
+                    )
+                    <= 0
+                ):
+                    self.daily_backfill_stop_pending = True
+                    self.daily_backfill_stop_attempts = 0
+                    self.daily_backfill_last_stop_at = None
+                self.charge_to_full_started_at = None
 
             outside_enabled = bool(
-                self.coordinator.config.get(CONF_FOXESS_CONTROL_OWNER, DEFAULT_FOXESS_CONTROL_OWNER)
-                == FOXESS_CONTROL_OWNER_MODBUS
-                and (
+                self._daily_backfill_enabled()
+                or self._charge_to_full_requested()
+                or self.daily_backfill_stop_pending
+                or (
+                    self.coordinator.config.get(
+                        CONF_FOXESS_CONTROL_OWNER,
+                        DEFAULT_FOXESS_CONTROL_OWNER,
+                    )
+                    == FOXESS_CONTROL_OWNER_MODBUS
+                    and (
                     self.coordinator.config.get(
                         CONF_EV_SOLAR_SPILL_ENABLED, DEFAULT_EV_SOLAR_SPILL_ENABLED
                     )
                     or self.coordinator.config.get(
                         CONF_EV_PRE_FREE_ENABLED, DEFAULT_EV_PRE_FREE_ENABLED
+                    )
                     )
                 )
             )
@@ -435,6 +524,39 @@ class ActiveEvController:
                     connected_for_planning=connected,
                     gate=gate,
                 )
+                return
+            if self.outside_stop_requested:
+                if not observation.charge_switch_on:
+                    self.daily_backfill_stop_pending = False
+                    self.daily_backfill_stop_attempts = 0
+                    self.daily_backfill_last_stop_at = None
+                    self.outside_control_active = False
+                    self.last_reason = "daily_backfill_stopped"
+                    await self._async_save(now)
+                    return
+                if self.daily_backfill_stop_attempts >= DIRECT_EVSE_MAX_ATTEMPTS:
+                    self.last_reason = "daily_backfill_stop_fault_maximum_attempts"
+                    return
+                if (
+                    self.daily_backfill_last_stop_at is not None
+                    and now - self.daily_backfill_last_stop_at < timedelta(seconds=30)
+                ):
+                    self.last_reason = "daily_backfill_stop_awaiting_feedback"
+                    return
+                commands = (EvCommand("stop_charging"),)
+                plan = EvCommandPlan(commands, "daily_backfill_complete")
+                if gate == "safety_locked":
+                    self.last_actions = tuple(
+                        f"would_{command.action}" for command in plan.commands
+                    )
+                    self.last_reason = "rehearsal_daily_backfill_complete"
+                    return
+                if plan.commands:
+                    await self._async_execute_ev_plan(plan, now)
+                    if self.last_actions == ("stop_charging",):
+                        self.daily_backfill_stop_attempts += 1
+                        self.daily_backfill_last_stop_at = now
+                        await self._async_save(now)
                 return
             if gate == "safety_locked":
                 rehearsal_plan = plan_direct_evse_commands(
@@ -1144,10 +1266,8 @@ class ActiveEvController:
 
     def _calculate_outside_target(self, now: datetime, observation: DirectEvseObservation) -> bool:
         """Port solar spill and latest-start backfill without touching FoxESS."""
+        self.outside_stop_requested = False
         snapshot = self.coordinator.snapshot
-        if snapshot is None or snapshot.battery_soc is None:
-            self.last_reason = "site_snapshot_unavailable"
-            return False
         current_minimum = observation.current_minimum_a
         current_step = observation.current_step_a
         if current_minimum is None or current_step is None:
@@ -1157,6 +1277,10 @@ class ActiveEvController:
         if ceiling <= 0:
             self.last_reason = "ev_physical_ceiling_uncommissioned"
             return False
+        service_ceiling = self._outside_service_ceiling_a(
+            ceiling,
+            current_step=current_step,
+        )
         baseline = min(
             max(
                 self._float(CONF_EV_PROTECTED_BASELINE_A, DEFAULT_EV_PROTECTED_BASELINE_A),
@@ -1172,18 +1296,78 @@ class ActiveEvController:
         soft_limit = self._float(
             CONF_EV_FREE_WINDOW_CHARGE_LIMIT, DEFAULT_EV_FREE_WINDOW_CHARGE_LIMIT
         )
+        charge_to_full = self._charge_to_full_requested()
+        if charge_to_full and service_ceiling < current_minimum:
+            self.last_reason = "charge_to_full_service_headroom_unavailable"
+            return False
+
+        self.daily_backfill_plan = None
+        daily_current_a = 0.0
+        if self._daily_backfill_enabled() and not charge_to_full:
+            self.daily_backfill_plan = self._calculate_daily_backfill_plan(
+                now,
+                vehicle_soc=vehicle_soc,
+                vehicle_soft_limit=soft_limit,
+                charger_minimum_a=current_minimum,
+                current_step_a=current_step,
+                charger_ceiling_a=service_ceiling,
+            )
+            plan = self.daily_backfill_plan
+            if plan is not None:
+                if self.daily_backfill_active:
+                    session_delivered = max(
+                        self.daily_backfill_delivered_kwh
+                        - self.daily_backfill_session_start_delivered_kwh,
+                        0.0,
+                    )
+                    if (
+                        session_delivered >= self.daily_backfill_session_target_kwh
+                        or plan.phase
+                        in {
+                            "ready_time_passed",
+                            "vehicle_target_reached",
+                            "protected_energy_unavailable",
+                            "outside_power_ceiling_too_low",
+                        }
+                    ):
+                        self.daily_backfill_active = False
+                        self.daily_backfill_session_target_kwh = 0.0
+                        self.daily_backfill_session_start_delivered_kwh = 0.0
+                        self.daily_backfill_frozen_start = None
+                        self.daily_backfill_stop_pending = True
+                        self.daily_backfill_stop_attempts = 0
+                        self.daily_backfill_last_stop_at = None
+                elif plan.phase == "charge_now" and plan.planned_energy_kwh > 0:
+                    self.daily_backfill_active = True
+                    self.daily_backfill_session_target_kwh = plan.planned_energy_kwh
+                    self.daily_backfill_session_start_delivered_kwh = (
+                        self.daily_backfill_delivered_kwh
+                    )
+                    self.daily_backfill_frozen_start = plan.planned_start
+                    self.daily_backfill_last_sample_at = now
+                    self.daily_backfill_last_actual_current_a = self.actual_current_a
+                    self.daily_backfill_stop_pending = False
+                    self.daily_backfill_stop_attempts = 0
+                    self.daily_backfill_last_stop_at = None
+                if self.daily_backfill_active:
+                    daily_current_a = plan.current_ceiling_a
 
         self.solar_spill = SolarSpillDecision(0.0, 0.0, "disabled")
         if self.coordinator.config.get(CONF_EV_SOLAR_SPILL_ENABLED, DEFAULT_EV_SOLAR_SPILL_ENABLED):
-            self.solar_spill = self._solar_spill_decision(
-                now,
-                snapshot.battery_soc,
-                vehicle_soc,
-                soft_limit,
-                ceiling,
-                current_minimum,
-                current_step,
-            )
+            if snapshot is None or snapshot.battery_soc is None:
+                self.solar_spill = SolarSpillDecision(
+                    0.0, 0.0, "site_snapshot_unavailable"
+                )
+            else:
+                self.solar_spill = self._solar_spill_decision(
+                    now,
+                    snapshot.battery_soc,
+                    vehicle_soc,
+                    soft_limit,
+                    ceiling,
+                    current_minimum,
+                    current_step,
+                )
 
         self.pre_free_plan = None
         self.pre_free_current_a = baseline
@@ -1265,18 +1449,41 @@ class ActiveEvController:
             self.pre_free_session = PreFreeSessionState()
             self.pre_free_phase = "disabled"
 
-        selected = select_outside_window_current(
-            baseline_a=baseline,
-            current_ceiling_a=ceiling,
-            charger_minimum_a=current_minimum,
-            pre_free_active=self.pre_free_session.active,
-            pre_free_current_a=self.pre_free_current_a,
-            solar_spill_current_a=self.solar_spill.current_a,
-        )
+        if charge_to_full:
+            selected = EvCurrentDecision(
+                service_ceiling,
+                "charge_to_full_paid_grid_override",
+            )
+        elif self.daily_backfill_active:
+            selected = EvCurrentDecision(daily_current_a, "daily_ready_backfill")
+        else:
+            selected = select_outside_window_current(
+                baseline_a=baseline,
+                current_ceiling_a=ceiling,
+                charger_minimum_a=current_minimum,
+                pre_free_active=self.pre_free_session.active,
+                pre_free_current_a=self.pre_free_current_a,
+                solar_spill_current_a=self.solar_spill.current_a,
+            )
         self.outside_target_active = bool(
-            self.pre_free_session.active or self.solar_spill.current_a >= current_minimum
+            charge_to_full
+            or self.daily_backfill_active
+            or self.pre_free_session.active
+            or self.solar_spill.current_a >= current_minimum
         )
         if self.outside_target_active:
+            self.outside_control_active = True
+        elif (
+            self.daily_backfill_stop_pending
+            and self._float(
+                CONF_EV_PROTECTED_BASELINE_A,
+                DEFAULT_EV_PROTECTED_BASELINE_A,
+            )
+            <= 0
+            and not self.pre_free_session.active
+            and self.solar_spill.current_a < current_minimum
+        ):
+            self.outside_stop_requested = True
             self.outside_control_active = True
         if not self.outside_target_active and not self.outside_control_active:
             self.decision_phase = selected.phase
@@ -1293,7 +1500,9 @@ class ActiveEvController:
             vehicle_soc=vehicle_soc,
         )
         policy_limit = (
-            soft_limit
+            limit_max
+            if charge_to_full
+            else soft_limit
             if self.outside_target_active or learned_limit is None
             else learned_limit.limit_percent
         )
@@ -1316,6 +1525,221 @@ class ActiveEvController:
         self.decision_phase = selected.phase
         self.allowance_phase = "outside_free_window"
         return True
+
+    def _calculate_daily_backfill_plan(
+        self,
+        now: datetime,
+        *,
+        vehicle_soc: float,
+        vehicle_soft_limit: float,
+        charger_minimum_a: float,
+        current_step_a: float,
+        charger_ceiling_a: float,
+    ) -> DailyBackfillPlan | None:
+        """Apply the approved ready-by extension to current live energy."""
+        data = self.coordinator.data
+        protected_house = getattr(self.coordinator, "learning_remaining_kwh", None)
+        stored_energy = self._entity_energy(CONF_EV_STORED_ENERGY)
+        if (
+            data is None
+            or data.available_after_reserve_kwh is None
+            or protected_house is None
+            or stored_energy is None
+        ):
+            self.last_reason = "daily_backfill_energy_inputs_unavailable"
+            return None
+        ready_at, planning_start, next_free = self._daily_ready_cycle(now)
+        self._roll_daily_backfill_cycle(ready_at)
+        vehicle_room = estimate_vehicle_energy_to_target_kwh(
+            stored_energy_kwh=stored_energy,
+            current_soc_percent=vehicle_soc,
+            target_soc_percent=vehicle_soft_limit,
+            charge_efficiency_percent=self._float(
+                CONF_EV_CHARGE_EFFICIENCY,
+                DEFAULT_EV_CHARGE_EFFICIENCY,
+            ),
+        )
+        return calculate_daily_backfill_plan(
+            DailyBackfillInputs(
+                now=now,
+                ready_at=ready_at,
+                planning_window_start=planning_start,
+                next_free_start=next_free,
+                available_ac_after_reserve_kwh=max(
+                    float(data.available_after_reserve_kwh), 0.0
+                )
+                * self._float(
+                    CONF_DISCHARGE_EFFICIENCY_PERCENT,
+                    DEFAULT_DISCHARGE_EFFICIENCY_PERCENT,
+                )
+                / 100,
+                protected_house_kwh=max(float(protected_house), 0.0),
+                protected_ev_allocation_kwh=self._float(
+                    CONF_EV_DAILY_BACKFILL_ENERGY,
+                    DEFAULT_EV_DAILY_BACKFILL_ENERGY,
+                ),
+                delivered_this_cycle_kwh=self.daily_backfill_delivered_kwh,
+                vehicle_wall_room_kwh=vehicle_room,
+                inverter_output_limit_kw=self._float(
+                    CONF_INVERTER_DISCHARGE_LIMIT_KW,
+                    DEFAULT_INVERTER_DISCHARGE_LIMIT_KW,
+                ),
+                outside_inverter_percent=self._float(
+                    CONF_EV_OUTSIDE_INVERTER_PERCENT,
+                    DEFAULT_EV_OUTSIDE_INVERTER_PERCENT,
+                ),
+                voltage_v=self._float(CONF_EV_VOLTAGE, DEFAULT_EV_VOLTAGE),
+                phase_count=int(
+                    self._float(CONF_EV_PHASE_COUNT, DEFAULT_EV_PHASE_COUNT)
+                ),
+                current_step_a=current_step_a,
+                charger_minimum_a=charger_minimum_a,
+                charger_maximum_a=charger_ceiling_a,
+                planning_buffer_minutes=self._float(
+                    CONF_EV_BACKFILL_BUFFER_MINUTES,
+                    DEFAULT_EV_BACKFILL_BUFFER_MINUTES,
+                ),
+            )
+        )
+
+    def _daily_backfill_enabled(self) -> bool:
+        return (
+            self._float(
+                CONF_EV_DAILY_BACKFILL_ENERGY,
+                DEFAULT_EV_DAILY_BACKFILL_ENERGY,
+            )
+            > 0
+        )
+
+    def _outside_service_ceiling_a(
+        self,
+        physical_ceiling_a: float,
+        *,
+        current_step: float,
+    ) -> float:
+        """Bound outside charging by commissioned per-phase service headroom."""
+        service_limit = self._float(
+            CONF_SERVICE_IMPORT_LIMIT_A,
+            DEFAULT_SERVICE_IMPORT_LIMIT_A,
+        )
+        if service_limit <= 0:
+            return physical_ceiling_a
+        grid_current, grid_valid = self._grid_current_a()
+        actual_current, actual_valid = self._actual_ev_current_a()
+        if not grid_valid or not actual_valid:
+            return 0.0
+        non_ev_current = max(grid_current - actual_current, 0.0)
+        available = max(
+            service_limit
+            - self._float(
+                CONF_SITE_GRID_HEADROOM_CURRENT,
+                DEFAULT_SITE_GRID_HEADROOM_CURRENT,
+            )
+            - non_ev_current,
+            0.0,
+        )
+        stepped = int(available / current_step) * current_step
+        return round(min(physical_ceiling_a, stepped), 3)
+
+    def _daily_ready_cycle(
+        self, now: datetime
+    ) -> tuple[datetime, datetime, datetime]:
+        ready_time = self.coordinator._configured_time(  # noqa: SLF001
+            CONF_EV_DAILY_READY_TIME,
+            DEFAULT_EV_DAILY_READY_TIME,
+        )
+        free_time = self.coordinator._configured_time(  # noqa: SLF001
+            CONF_FREE_CHARGE_START,
+            DEFAULT_FREE_CHARGE_START,
+        )
+        ready_at = datetime.combine(now.date(), ready_time, tzinfo=now.tzinfo)
+        if now >= ready_at:
+            ready_at += timedelta(days=1)
+        planning_start = datetime.combine(
+            ready_at.date(),
+            datetime.min.time(),
+            tzinfo=now.tzinfo,
+        )
+        next_free = datetime.combine(ready_at.date(), free_time, tzinfo=now.tzinfo)
+        if next_free <= ready_at:
+            next_free += timedelta(days=1)
+        return ready_at, planning_start, next_free
+
+    def _roll_daily_backfill_cycle(self, ready_at: datetime) -> None:
+        if self.daily_backfill_cycle_ready_at == ready_at:
+            return
+        if self.daily_backfill_active:
+            self.daily_backfill_stop_pending = True
+            self.daily_backfill_stop_attempts = 0
+            self.daily_backfill_last_stop_at = None
+        self.daily_backfill_cycle_ready_at = ready_at
+        self.daily_backfill_delivered_kwh = 0.0
+        self.daily_backfill_active = False
+        self.daily_backfill_session_target_kwh = 0.0
+        self.daily_backfill_session_start_delivered_kwh = 0.0
+        self.daily_backfill_frozen_start = None
+        self.daily_backfill_last_sample_at = None
+        self.daily_backfill_last_actual_current_a = None
+
+    def _update_daily_backfill_energy(
+        self, now: datetime, actual_current_a: float | None
+    ) -> None:
+        """Integrate confirmed wall current only while this policy owns charging."""
+        if not self._daily_backfill_enabled():
+            return
+        ready_at, _, _ = self._daily_ready_cycle(now)
+        self._roll_daily_backfill_cycle(ready_at)
+        previous_at = self.daily_backfill_last_sample_at
+        previous_current = self.daily_backfill_last_actual_current_a
+        if (
+            self.daily_backfill_active
+            and actual_current_a is not None
+            and previous_at is not None
+            and previous_current is not None
+            and now >= previous_at
+            and now - previous_at
+            <= timedelta(
+                seconds=self._float(
+                    CONF_EV_TELEMETRY_MAX_AGE_SECONDS,
+                    DEFAULT_EV_TELEMETRY_MAX_AGE_SECONDS,
+                )
+            )
+        ):
+            hours = (now - previous_at).total_seconds() / 3600
+            average_current = (previous_current + actual_current_a) / 2
+            self.daily_backfill_delivered_kwh += (
+                average_current
+                * self._float(CONF_EV_VOLTAGE, DEFAULT_EV_VOLTAGE)
+                * int(self._float(CONF_EV_PHASE_COUNT, DEFAULT_EV_PHASE_COUNT))
+                / 1000
+                * hours
+            )
+        self.daily_backfill_last_sample_at = now if self.daily_backfill_active else None
+        self.daily_backfill_last_actual_current_a = (
+            actual_current_a if self.daily_backfill_active else None
+        )
+
+    def daily_backfill_protection_kwh(self, now: datetime) -> float:
+        """Energy Local-Modbus export must retain for the next ready deadline."""
+        if not self._daily_backfill_enabled():
+            return 0.0
+        ready_at, _, _ = self._daily_ready_cycle(now)
+        delivered = (
+            self.daily_backfill_delivered_kwh
+            if self.daily_backfill_cycle_ready_at == ready_at
+            else 0.0
+        )
+        return round(
+            max(
+                self._float(
+                    CONF_EV_DAILY_BACKFILL_ENERGY,
+                    DEFAULT_EV_DAILY_BACKFILL_ENERGY,
+                )
+                - delivered,
+                0.0,
+            ),
+            3,
+        )
 
     def _learned_general_limit(
         self,
@@ -1661,6 +2085,21 @@ class ActiveEvController:
             )
         return self._is_on(CONF_EV_CHARGE_TO_FULL)
 
+    async def _async_clear_charge_to_full(self) -> None:
+        """Clear the HEO-owned paid-grid override after its bounded session."""
+        entry = self.hass.config_entries.async_get_entry(self.coordinator.entry_id)
+        if entry is None:
+            return
+        config = {
+            key: value
+            for key, value in entry.data.items()
+            if key != CONF_EV_CHARGE_TO_FULL
+        }
+        config[CONF_EV_CHARGE_TO_FULL_ENABLED] = False
+        self.hass.config_entries.async_update_entry(entry, data=config)
+        self.coordinator.config.pop(CONF_EV_CHARGE_TO_FULL, None)
+        self.coordinator.config[CONF_EV_CHARGE_TO_FULL_ENABLED] = False
+
     def _float(self, key: str, default: float) -> float:
         try:
             value = float(self.coordinator.config.get(key, default))
@@ -1777,6 +2216,71 @@ class ActiveEvController:
                 active=pre_free_active,
                 frozen_start=frozen_start,
             )
+            daily = payload.get("daily_backfill", {})
+            if not isinstance(daily, dict):
+                raise ValueError
+            cycle_raw = daily.get("cycle_ready_at")
+            cycle_ready_at = (
+                datetime.fromisoformat(str(cycle_raw)) if cycle_raw else None
+            )
+            frozen_daily_raw = daily.get("frozen_start")
+            frozen_daily = (
+                datetime.fromisoformat(str(frozen_daily_raw))
+                if frozen_daily_raw
+                else None
+            )
+            delivered = float(daily.get("delivered_kwh", 0.0))
+            session_target = float(daily.get("session_target_kwh", 0.0))
+            session_start = float(daily.get("session_start_delivered_kwh", 0.0))
+            daily_active = bool(daily.get("active", False))
+            if (
+                any(
+                    not isfinite(value) or value < 0
+                    for value in (delivered, session_target, session_start)
+                )
+                or cycle_ready_at is not None
+                and cycle_ready_at.tzinfo is None
+                or frozen_daily is not None
+                and frozen_daily.tzinfo is None
+                or daily_active != (frozen_daily is not None)
+            ):
+                raise ValueError
+            self.daily_backfill_cycle_ready_at = cycle_ready_at
+            self.daily_backfill_delivered_kwh = delivered
+            self.daily_backfill_active = daily_active
+            self.daily_backfill_session_target_kwh = session_target
+            self.daily_backfill_session_start_delivered_kwh = session_start
+            self.daily_backfill_frozen_start = frozen_daily
+            self.daily_backfill_stop_pending = bool(
+                daily.get("stop_pending", False)
+            )
+            self.daily_backfill_stop_attempts = int(
+                daily.get("stop_attempts", 0)
+            )
+            stop_at_raw = daily.get("last_stop_at")
+            self.daily_backfill_last_stop_at = (
+                datetime.fromisoformat(str(stop_at_raw)) if stop_at_raw else None
+            )
+            if (
+                not 0 <= self.daily_backfill_stop_attempts <= DIRECT_EVSE_MAX_ATTEMPTS
+                or self.daily_backfill_last_stop_at is not None
+                and (
+                    self.daily_backfill_last_stop_at.tzinfo is None
+                    or self.daily_backfill_last_stop_at > now
+                )
+            ):
+                raise ValueError
+            charge_full_raw = payload.get("charge_to_full_started_at")
+            charge_full_started = (
+                datetime.fromisoformat(str(charge_full_raw))
+                if charge_full_raw
+                else None
+            )
+            if charge_full_started is not None and (
+                charge_full_started.tzinfo is None or charge_full_started > now
+            ):
+                raise ValueError
+            self.charge_to_full_started_at = charge_full_started
             self.outside_control_active = bool(payload.get("outside_control_active", False))
             smart_recovery = payload.get("smart_recovery", {})
             if not isinstance(smart_recovery, dict):
@@ -1826,6 +2330,16 @@ class ActiveEvController:
         except (KeyError, TypeError, ValueError):
             self.reconciliation = DirectEvseReconciliationState()
             self.pre_free_session = PreFreeSessionState()
+            self.daily_backfill_cycle_ready_at = None
+            self.daily_backfill_delivered_kwh = 0.0
+            self.daily_backfill_active = False
+            self.daily_backfill_session_target_kwh = 0.0
+            self.daily_backfill_session_start_delivered_kwh = 0.0
+            self.daily_backfill_frozen_start = None
+            self.daily_backfill_stop_pending = False
+            self.daily_backfill_stop_attempts = 0
+            self.daily_backfill_last_stop_at = None
+            self.charge_to_full_started_at = None
             self.outside_control_active = False
             self.smart_recovery = SmartSocketRecoveryState()
 
@@ -1863,7 +2377,37 @@ class ActiveEvController:
                         if self.pre_free_session.frozen_start is not None
                         else None
                     ),
+                    "stop_pending": self.daily_backfill_stop_pending,
+                    "stop_attempts": self.daily_backfill_stop_attempts,
+                    "last_stop_at": (
+                        self.daily_backfill_last_stop_at.isoformat()
+                        if self.daily_backfill_last_stop_at is not None
+                        else None
+                    ),
                 },
+                "daily_backfill": {
+                    "cycle_ready_at": (
+                        self.daily_backfill_cycle_ready_at.isoformat()
+                        if self.daily_backfill_cycle_ready_at is not None
+                        else None
+                    ),
+                    "delivered_kwh": round(self.daily_backfill_delivered_kwh, 6),
+                    "active": self.daily_backfill_active,
+                    "session_target_kwh": self.daily_backfill_session_target_kwh,
+                    "session_start_delivered_kwh": (
+                        self.daily_backfill_session_start_delivered_kwh
+                    ),
+                    "frozen_start": (
+                        self.daily_backfill_frozen_start.isoformat()
+                        if self.daily_backfill_frozen_start is not None
+                        else None
+                    ),
+                },
+                "charge_to_full_started_at": (
+                    self.charge_to_full_started_at.isoformat()
+                    if self.charge_to_full_started_at is not None
+                    else None
+                ),
                 "outside_control_active": self.outside_control_active,
                 "smart_recovery": {
                     "attempted": self.smart_recovery.attempted,

@@ -239,6 +239,9 @@ class ActiveFoxessController:
             protected_ev = self._protected_keepalive_energy_kwh(
                 self._hours_until_next_free(now)
             )
+            ev_controller = getattr(self.coordinator, "ev_controller", None)
+            if protected_ev is not None and ev_controller is not None:
+                protected_ev += ev_controller.daily_backfill_protection_kwh(now)
             self.export_protected_ev_kwh = protected_ev
             available = self.coordinator.data.available_after_reserve_kwh
             if (

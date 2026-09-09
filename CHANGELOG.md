@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.10.0 — daily EV ready-by allocation
+
+- Add a separate, configuration-driven extension around the pilot's retained
+  latest-start backfill: daily protected EV wall energy, ready time,
+  outside-window inverter percentage, and planning buffer.
+- Use ready-to-ready accounting so Local-Modbus ZEROHERO export protects the
+  following morning's remaining EV allocation. With FoxCloud ownership, use
+  the current live battery/house ledger without pretending prior cloud export
+  was controlled or that the allocation is guaranteed.
+- Protect the remaining house budget once, then the remaining EV allocation,
+  and offer a time-proportional share of any further discretionary energy.
+  Cap the result by vehicle room, live energy, connector rating, commissioned
+  service headroom, and whole actuator steps.
+- Persist the ready-cycle deadline, confirmed delivered wall energy, session
+  target, and frozen latest start. Expose planned energy/current/start,
+  remaining allocation, delivered energy, and shortfall on the dashboard.
+- Make Charge to Full the documented paid-grid exception outside the free
+  window. It bypasses normal energy and inverter-percentage policy but retains
+  Safety Lock, connector and service limits, and clears at full, disconnect
+  after start, or its configured timeout.
+
 ## 0.9.0 — canonical telemetry normalization
 
 - Replace scattered raw signed-power handling with one timestamp-aware
