@@ -50,6 +50,14 @@ power is not accepted. After rehearsal, disable competing Tesla writers before
 unlocking and enabling this path. A latched maximum-attempt fault is evidence
 to investigate, not permission to toggle the gate repeatedly.
 
+Before selecting EV location policy **Auto**, verify Home Assistant's Home
+location under Settings → System → General. The mapped Tessie device tracker is
+classified against that Home zone; a default or incorrect Home location will
+correctly report the vehicle as `not_home` and block every home-current write.
+Use the explicit **Home** override only when the operator intentionally wants to
+bypass zone classification for a known home connector. It does not bypass the
+cable or charging-state gates.
+
 For daily ready-by backfill, configure wall-side kWh, a ready time before the
 free-power window, an outside-window percentage of commissioned inverter
 output, and any desired planning buffer. Start with Safety Lock on and verify

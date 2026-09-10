@@ -117,6 +117,16 @@ views:
           - type: tile
             entity: switch.home_energy_ev_charge_to_full
             name: Charge to full
+          - type: entities
+            title: EV vs Evening Export
+            show_header_toggle: false
+            entities:
+              - entity: switch.home_energy_ev_before_export
+                name: Prioritise EV before export
+              - entity: number.home_energy_ev_before_export_soc_target
+                name: Keep energy for EV until SoC reaches
+              - entity: sensor.home_energy_ev_before_export_status
+                name: Current priority decision
           - type: tile
             entity: sensor.home_energy_ev_current_target
             name: Current target
