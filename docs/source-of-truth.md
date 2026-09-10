@@ -170,6 +170,12 @@ export while preserving the user's saved export request. It neither starts EV
 charging nor selects an energy source. Invalid or unavailable EV SoC withholds
 export only while the opt-in is enabled.
 
+Dashboard plan entities describe actions HEO is currently permitted to take,
+not merely an internal economic candidate. When EV-before-export or another
+effective gate withholds export, planned start, energy and duration are absent
+and the export status names the hold. The internal candidate remains available
+to the controller for immediate recalculation when the hold clears.
+
 ## Inverter evidence rules
 
 For supported H3 remote control, work mode register `49203` uses `1` Self Use,

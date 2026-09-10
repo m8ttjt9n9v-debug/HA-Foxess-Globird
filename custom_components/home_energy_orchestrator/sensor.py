@@ -543,9 +543,57 @@ class EnergySensor(CoordinatorEntity[EnergyCoordinator], SensorEntity):
             identifiers={(DOMAIN, entry.entry_id)},
             name=entry.title,
             manufacturer="FoxESS GloBird Tesla Energy Orchestrator",
-            model="Observer",
+            model="Energy Orchestrator",
             entry_type=DeviceEntryType.SERVICE,
         )
+
+    def _control_mode(self) -> str:
+        """Return the commissioned control surface, not the ledger reason."""
+        config = self.coordinator.config
+        owner = config.get(CONF_FOXESS_CONTROL_OWNER, DEFAULT_FOXESS_CONTROL_OWNER)
+        controller = self.coordinator.active_controller
+        foxess_ready = controller is not None and controller.gate_status == "ready"
+        charge_enabled = bool(
+            config.get(
+                CONF_AUTOMATIC_CHARGE_ENABLED,
+                DEFAULT_AUTOMATIC_CHARGE_ENABLED,
+            )
+        )
+        export_enabled = bool(config.get(CONF_AUTOMATIC_EXPORT_ENABLED, False))
+        if owner == FOXESS_CONTROL_OWNER_CLOUD:
+            return "foxcloud_scheduler"
+        if foxess_ready and charge_enabled and export_enabled:
+            return "local_modbus_charge_and_export"
+        if foxess_ready and charge_enabled:
+            return "local_modbus_free_charge"
+        if foxess_ready and export_enabled:
+            return "zerohero_export"
+        if foxess_ready:
+            return "local_modbus_ready"
+        return "observe"
+
+    def _effective_export_plan(self):
+        """Expose an export plan only while export is actually permitted."""
+        controller = self.coordinator.active_controller
+        if (
+            controller is None
+            or not controller.export_effective_enabled
+            or controller.export_plan is None
+        ):
+            return None
+        return controller.export_plan
+
+    def _export_status(self) -> str:
+        """Explain whether export is disabled, withheld, or running."""
+        controller = self.coordinator.active_controller
+        if controller is None:
+            return "unavailable"
+        if not self.coordinator.config.get(CONF_AUTOMATIC_EXPORT_ENABLED, False):
+            return "disabled"
+        decision = controller.ev_before_export_decision
+        if not decision.export_allowed:
+            return f"withheld_{decision.reason}"
+        return controller.export_session.phase
 
     @property
     def native_value(self):
@@ -567,8 +615,9 @@ class EnergySensor(CoordinatorEntity[EnergyCoordinator], SensorEntity):
             ev_controller.learned_charge_limit if ev_controller is not None else None
         )
         telemetry = self.coordinator.telemetry
+        export_plan = self._effective_export_plan()
         values = {
-            "status": ledger.reason,
+            "status": self._control_mode(),
             "battery_soc": None if snapshot is None else snapshot.battery_soc,
             "battery_potential_capacity": ledger.battery_potential_capacity_kwh,
             "battery_energy": ledger.battery_energy_kwh,
@@ -745,29 +794,19 @@ class EnergySensor(CoordinatorEntity[EnergyCoordinator], SensorEntity):
                 else self.coordinator.active_controller.export_plan.sellable_energy_kwh
             ),
             "zerohero_planned_export_energy": (
-                None
-                if self.coordinator.active_controller is None
-                or self.coordinator.active_controller.export_plan is None
-                else self.coordinator.active_controller.export_plan.planned_export_energy_kwh
+                None if export_plan is None else export_plan.planned_export_energy_kwh
             ),
             "zerohero_planned_duration": (
                 None
-                if self.coordinator.active_controller is None
-                or self.coordinator.active_controller.export_plan is None
-                else round(
-                    self.coordinator.active_controller.export_plan.planned_duration_h * 60, 1
-                )
+                if export_plan is None
+                else round(export_plan.planned_duration_h * 60, 1)
             ),
             "zerohero_planned_start": (
                 None
-                if self.coordinator.active_controller is None
+                if export_plan is None or self.coordinator.active_controller is None
                 else self.coordinator.active_controller.export_planned_start
             ),
-            "zerohero_export_status": (
-                "unavailable"
-                if self.coordinator.active_controller is None
-                else self.coordinator.active_controller.export_session.phase
-            ),
+            "zerohero_export_status": self._export_status(),
             "ev_before_export_status": (
                 "unavailable"
                 if self.coordinator.active_controller is None
@@ -961,20 +1000,9 @@ class EnergySensor(CoordinatorEntity[EnergyCoordinator], SensorEntity):
             if ev_controller is not None
             else ev_control_gate_status(self.coordinator.config)
         )
-        if foxess_owner == FOXESS_CONTROL_OWNER_CLOUD:
-            control_mode = "foxcloud_scheduler"
-        elif foxess_enabled and charge_enabled and export_enabled:
-            control_mode = "local_modbus_charge_and_export"
-        elif foxess_enabled and charge_enabled:
-            control_mode = "local_modbus_free_charge"
-        elif foxess_enabled and export_enabled:
-            control_mode = "zerohero_export"
-        elif foxess_enabled:
-            control_mode = "local_modbus_ready"
-        else:
-            control_mode = "observe"
         return {
-            "mode": control_mode,
+            "mode": self._control_mode(),
+            "ledger_status": self.coordinator.data.reason,
             "control_gate": foxess_gate,
             "last_control_reason": (
                 self.coordinator.active_controller.last_reason

@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.12.5 — Truthful controller presentation
+
+- Report the commissioned HEO control mode as the orchestrator status instead
+  of exposing the house-learning ledger's legacy `observer_only` reason. The
+  ledger reason remains available as a diagnostic status attribute.
+- Keep calculating the underlying economic export candidate, but expose its
+  planned start, energy and duration only when automatic export is effectively
+  permitted. An EV-before-export hold now reports
+  `withheld_ev_below_target` rather than presenting a dormant export as an
+  imminent action.
+- Rename the Home Assistant device model from Observer to Energy Orchestrator.
+
 ## 0.12.4 — Protected baseline with unavailable headroom
 
 - Treat a live outside-window service ceiling below the physical EV charging
