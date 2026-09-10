@@ -518,6 +518,38 @@ async def test_multiphase_ev_commissioning_requires_controlling_current_mapping(
     assert accepted["type"] is FlowResultType.CREATE_ENTRY
 
 
+async def test_current_mapping_rejects_power_unit_and_preserves_submitted_values(hass):
+    hass.states.async_set(
+        "sensor.grid_ct",
+        "-0.003",
+        {"unit_of_measurement": "kW", "device_class": "power"},
+    )
+    submitted = {
+        "name": "My manually mapped site",
+        **ENTRY_DATA,
+        "battery_soc_entity": "sensor.my_battery_soc",
+        "site_grid_current_entity": "sensor.grid_ct",
+    }
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": SOURCE_USER},
+        data=submitted,
+    )
+
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"] == {
+        "site_grid_current_entity": "invalid_current_entity_unit"
+    }
+    markers = {
+        marker.schema: marker
+        for marker in result["data_schema"].schema
+        if hasattr(marker, "schema")
+    }
+    assert markers["battery_soc_entity"].default() == "sensor.my_battery_soc"
+    assert markers["site_grid_current_entity"].default() == "sensor.grid_ct"
+
+
 async def test_user_flow_preserves_explicit_foxess_actuator_mappings(hass):
     mappings = {
         "foxess_work_mode_entity": "select.foxess_work_mode",

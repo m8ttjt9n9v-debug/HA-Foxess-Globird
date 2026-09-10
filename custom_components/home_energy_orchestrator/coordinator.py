@@ -725,6 +725,7 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
         )
 
         current_source = self._source(self.config.get(CONF_SITE_GRID_CURRENT))
+        current = None
         if current_source is not None:
             current_direction = self._direction(
                 CONF_SITE_GRID_CURRENT_DIRECTION,
@@ -737,17 +738,28 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
                 multiplier=1.0 if current_direction == GRID_POSITIVE_IMPORT else -1.0,
                 positive_direction=GRID_POSITIVE_IMPORT,
             )
-        elif self._configured_site_phase_count() == 1 and grid.value is not None:
+        if (
+            (current is None or current.value is None)
+            and self._configured_site_phase_count() == 1
+            and grid.value is not None
+        ):
             voltage = self._configured_float(CONF_EV_VOLTAGE)
             current = (
                 NormalizedSample(
                     value=grid.value * 1000 / voltage,
                     unit="A",
-                    sources=grid.sources,
+                    sources=(
+                        *(current.sources if current is not None else ()),
+                        *grid.sources,
+                    ),
                     positive_direction=GRID_POSITIVE_IMPORT,
                     valid=grid.valid,
                     fresh=grid.fresh,
-                    reason="derived_from_grid_power",
+                    reason=(
+                        "derived_from_grid_power"
+                        if current_source is None
+                        else "derived_from_grid_power_current_fallback"
+                    ),
                 )
                 if voltage > 0
                 else unavailable_sample(
@@ -757,7 +769,7 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
                     sources=grid.sources,
                 )
             )
-        else:
+        if current is None:
             current = unavailable_sample(
                 unit="A",
                 positive_direction=GRID_POSITIVE_IMPORT,

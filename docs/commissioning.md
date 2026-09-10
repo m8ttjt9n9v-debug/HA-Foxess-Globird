@@ -44,7 +44,11 @@ Direct-EVSE commissioning is independent of FoxESS ownership. First leave
 Automatic EV Control off and Safety Lock on, then verify mapped SoC, stored
 energy, at-home evidence, cable state, charging state, actual current, writable
 current range, writable charge-limit range, and charge switch. Confirm the
-configured physical connector rating and service limit. A multiphase site also
+configured physical connector rating and service limit. On a single-phase site,
+leave the optional most-loaded-phase current mapping blank unless a genuine
+amperage sensor is available; HEO derives service current from normalized grid
+power and configured voltage. Do not map a W or kW CT power entity into that
+current role. A multiphase site also
 requires a signed most-loaded-phase current sensor in amperes; aggregate site
 power is not accepted. After rehearsal, disable competing Tesla writers before
 unlocking and enabling this path. A latched maximum-attempt fault is evidence

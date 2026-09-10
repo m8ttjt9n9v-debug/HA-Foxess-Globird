@@ -62,9 +62,20 @@ unsupported-unit readings become unavailable rather than zero. Multi-source EV
 decisions additionally retain their existing coherence-window check.
 
 On a single-phase site HEO may derive signed service current from canonical
-grid power and configured voltage. A multiphase site must map a trustworthy
-signed current for the most-loaded service phase; aggregate three-phase power
-cannot prove per-phase headroom.
+grid power and configured voltage. Leave the optional current mapping blank to
+use this path. The current mapping accepts only a sensor measured in amperes;
+an upgraded single-phase entry containing an invalid power-unit mapping also
+falls back to the grid-power derivation and exposes that provenance in the
+normalized sensor. A multiphase site must map a trustworthy signed current for
+the most-loaded service phase; aggregate three-phase power cannot prove
+per-phase headroom.
+
+Saving a changed normalized source or direction deliberately clears the
+verification interlock and reloads the integration. During that reload the
+economic export plan and its sellable-energy sensor can be unavailable because
+no automatic control evaluation is permitted. Recheck the canonical signs and
+explicitly confirm them again; do not treat an enabled automation-request
+switch as proof that its independent commissioning gate is open.
 
 ## Upgrade boundary
 

@@ -198,6 +198,35 @@ async def test_reversed_foxess_signs_expose_one_canonical_surface(hass):
     assert hass.states.get("binary_sensor.home_energy_sign_conventions_verified").state == "on"
 
 
+async def test_single_phase_invalid_current_mapping_uses_grid_power_fallback(hass):
+    hass.states.async_set("sensor.test_battery_soc", "60", {"unit_of_measurement": "%"})
+    hass.states.async_set("sensor.test_grid_power", "2.3", {"unit_of_measurement": "kW"})
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Single-phase current fallback",
+        version=2,
+        data={
+            **ENTRY_DATA,
+            "site_grid_current_entity": "sensor.test_grid_power",
+            "ev_voltage": 230.0,
+        },
+    )
+    entry.add_to_hass(hass)
+
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    current = hass.states.get("sensor.home_energy_site_grid_current")
+    assert current.state == "10.0"
+    assert current.attributes["valid"] is True
+    assert current.attributes["fresh"] is True
+    assert current.attributes["reason"] == "derived_from_grid_power_current_fallback"
+    assert [source["entity_id"] for source in current.attributes["sources"]] == [
+        "sensor.test_grid_power",
+        "sensor.test_grid_power",
+    ]
+
+
 async def test_split_battery_sources_preserve_pilot_charge_minus_discharge(hass):
     hass.states.async_set("sensor.test_battery_soc", "60", {"unit_of_measurement": "%"})
     hass.states.async_set("sensor.test_grid_power", "0", {"unit_of_measurement": "kW"})

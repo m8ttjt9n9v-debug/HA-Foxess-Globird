@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.12.6 — Safe single-phase current fallback
+
+- Reject power entities from the optional most-loaded-phase current mapping;
+  that role must report amperes. A single-phase site may leave the mapping
+  blank and derive signed service current from normalized grid power and its
+  configured voltage.
+- If an upgraded single-phase entry already contains a power sensor in the
+  current role, fail over to that same grid-power derivation instead of making
+  EV service headroom permanently unavailable. Multiphase sites continue to
+  fail closed without explicit most-loaded-phase current evidence.
+- Preserve all submitted mappings and limits when setup or reconfiguration
+  validation finds an error, so correcting one field no longer resets the rest
+  of a manually commissioned form.
+
 ## 0.12.5 — Truthful controller presentation
 
 - Report the commissioned HEO control mode as the orchestrator status instead

@@ -255,6 +255,7 @@
     "error": {
       "invalid_name": "Enter a site name.",
       "invalid_entity": "Select a valid Home Assistant entity.",
+      "invalid_current_entity_unit": "Select a current sensor measured in amperes. For a single-phase site, leave this blank to derive current from signed grid power and configured voltage.",
       "incomplete_foxess_mapping": "Map all three FoxESS control entities, or leave all three unmapped.",
       "incomplete_ev_mapping": "Commissioned EV control requires every Tessie telemetry and actuator mapping.",
       "solar_spill_battery_power_mapping_required": "Solar-spill charging requires an explicitly mapped signed battery-power sensor.",

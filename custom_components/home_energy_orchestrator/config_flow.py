@@ -237,8 +237,12 @@ from .const import (
     SOLAR_POWER_DIRECTIONS,
 )
 from .discovery import DiscoveryEntity, discover_entity_defaults
+from .normalise import current_to_a
 
 ENTITY = selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor"))
+CURRENT_ENTITY = selector.EntitySelector(
+    selector.EntitySelectorConfig(domain="sensor", device_class="current")
+)
 SELECT_ENTITY = selector.EntitySelector(selector.EntitySelectorConfig(domain="select"))
 NUMBER_ENTITY = selector.EntitySelector(selector.EntitySelectorConfig(domain="number"))
 SWITCH_ENTITY = selector.EntitySelector(selector.EntitySelectorConfig(domain="switch"))
@@ -338,7 +342,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             errors = self._validate_input(user_input)
             if errors:
                 return self.async_show_form(
-                    step_id="user", data_schema=self._schema(), errors=errors
+                    step_id="user", data_schema=self._schema(user_input), errors=errors
                 )
             if user_input.get(CONF_AUTOMATIC_CHARGE_ENABLED):
                 return self._show_schedule_confirmation(user_input, reconfigure=False)
@@ -379,7 +383,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     reason="reconfigure_successful",
                 )
             return self.async_show_form(
-                step_id="reconfigure", data_schema=self._schema(entry.data), errors=errors
+                step_id="reconfigure", data_schema=self._schema(user_input), errors=errors
             )
         return self.async_show_form(
             step_id="reconfigure",
@@ -840,7 +844,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         DEFAULT_SITE_GRID_HEADROOM_CURRENT,
                     ),
                 ): vol.Coerce(float),
-                optional_entity(CONF_SITE_GRID_CURRENT): ENTITY,
+                optional_entity(CONF_SITE_GRID_CURRENT): CURRENT_ENTITY,
                 vol.Required(
                     CONF_SITE_GRID_CURRENT_DIRECTION,
                     default=defaults.get(
@@ -1356,8 +1360,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             result[CONF_EV_LIFETIME_ENERGY] = data[CONF_EV_LIFETIME_ENERGY]
         return result
 
-    @staticmethod
-    def _validate_input(data: dict[str, object]) -> dict[str, str]:
+    def _validate_input(self, data: dict[str, object]) -> dict[str, str]:
         """Reject malformed IDs and unsafe physical limits before saving them."""
         if not str(data.get(CONF_NAME, "")).strip():
             return {CONF_NAME: "invalid_name"}
@@ -1400,6 +1403,16 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             entity_id = data.get(key)
             if entity_id is not None and not valid_entity_id(str(entity_id)):
                 return {key: "invalid_entity"}
+        current_entity = data.get(CONF_SITE_GRID_CURRENT)
+        current_state = self.hass.states.get(str(current_entity)) if current_entity else None
+        if current_state is not None:
+            try:
+                current_to_a(
+                    float(current_state.state),
+                    current_state.attributes.get("unit_of_measurement"),
+                )
+            except (TypeError, ValueError):
+                return {CONF_SITE_GRID_CURRENT: "invalid_current_entity_unit"}
         foxess_mapping = (
             data.get(CONF_FOXESS_WORK_MODE),
             data.get(CONF_FOXESS_FORCE_CHARGE_POWER),
