@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.12.2 — Project identity
+
+- Rename the integration **FoxESS GloBird Tesla Energy Orchestrator** to reflect
+  its independently gated FoxESS battery, GloBird tariff, and Tesla charging
+  control paths. Preserve the integration domain and entity IDs for upgrades.
+- Record the normalized EV charge-rate and EV-exclusive house-load helpers
+  required by the proven pilot power-flow card as explicit roadmap work.
+
 ## 0.12.1 — Explicit battery-schedule confirmation
 
 - Show the submitted battery free-power window in unambiguous 24-hour notation,

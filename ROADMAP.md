@@ -126,10 +126,15 @@ Working Single Phase Pilot Site parity.
   battery charging, ZEROHERO export, EV-before-export priority and threshold,
   automatic EV control, and Safety Lock. Descriptions must be sourced from one
   maintained documentation vocabulary rather than duplicated dashboard text.
-- [ ] Add a live site-power card that clearly separates house load, EV load,
-  solar, battery, grid import, and grid export. Battery and EV SoC controls
-  should also show current charge/discharge power, even when that requires
-  larger cards.
+- [ ] Add the normalized helpers required by the Working Single Phase Pilot
+  Site power-flow card: EV charge rate in kW and house load excluding EV load.
+  Define the input topology explicitly so an already EV-exclusive house sensor
+  is not reduced twice, and fail unavailable when the subtraction cannot be
+  supported by fresh compatible telemetry.
+- [ ] Add a live site-power card that clearly separates house load excluding EV,
+  EV charge rate, solar, battery, grid import, and grid export. Battery and EV
+  SoC controls should also show current charge/discharge power, even when that
+  requires larger cards.
 - [ ] Add a plain-language Current Plan surface describing the next house,
   battery, export, and EV actions and their scheduled times. Never label EV
   charging as house load in the human-facing presentation.
@@ -152,10 +157,14 @@ Working Single Phase Pilot Site parity.
 - [ ] Add a Charge to Full decision estimate: completion time, predicted grid
   versus battery contribution, tariff-aware total cost, and average cost per
   kWh, so the operator can compare home charging with another charging option.
-- [ ] Reassess the product name and 1.0 readiness only after sustained trials of
-  automated battery buying, ZEROHERO selling, and EV charging on the Working
-  Single Phase Pilot Site and the H3 site. Publish only independently proven
-  inverter/battery combinations as known working.
+- [x] Rename the project **FoxESS GloBird Tesla Energy Orchestrator** now that it
+  includes active, independently gated battery, export, and EV control paths.
+  Retain the stable `home_energy_orchestrator` domain and entity IDs so upgrades
+  do not break existing installations.
+- [ ] Reassess 1.0 readiness only after sustained trials of automated battery
+  buying, ZEROHERO selling, and EV charging on the Working Single Phase Pilot
+  Site and the H3 site. Publish only independently proven inverter/battery
+  combinations as known working.
 
 - [x] Make the free-window allowance topology-aware for arbitrary phase
   count, per-phase service limits, charger phases, voltage, and commissioned

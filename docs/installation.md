@@ -10,8 +10,8 @@ step.
 ## HACS custom repository (after publishing)
 
 1. In HACS, open **Integrations** and add this repository as a custom repository with category **Integration**.
-2. Download **FoxESS Globird Energy Observer** and restart Home Assistant.
-3. Go to **Settings → Devices & services → Add integration** and select **FoxESS Globird Energy Observer**.
+2. Download **FoxESS GloBird Tesla Energy Orchestrator** and restart Home Assistant.
+3. Go to **Settings → Devices & services → Add integration** and select **FoxESS GloBird Tesla Energy Orchestrator**.
 4. Complete the entity-mapping form. No edits to `configuration.yaml` are needed.
 
 HACS installation requires a public GitHub repository. This project publishes

@@ -42,6 +42,7 @@ def test_hacs_metadata_matches_the_integration_manifest() -> None:
         "codeowners",
     } <= manifest.keys()
     assert manifest["domain"] == "home_energy_orchestrator"
+    assert manifest["name"] == "FoxESS GloBird Tesla Energy Orchestrator"
     assert manifest["codeowners"] == ["@m8ttjt9n9v-debug"]
     assert manifest["documentation"] == "https://github.com/m8ttjt9n9v-debug/HA-Foxess-Globird"
     assert (

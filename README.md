@@ -1,11 +1,12 @@
-# FoxESS Globird Energy Observer
+# FoxESS GloBird Tesla Energy Orchestrator
 
-A Home Assistant custom integration for a site-configured energy ledger,
-conservative demand learning, bounded FoxESS diagnostics, the verified
-Working Single Phase Pilot Site ZEROHERO export policy, a faithful direct-EVSE free-window port,
-and a default-off Local Modbus battery-charge extension.
+A Home Assistant custom integration that coordinates FoxESS batteries, GloBird
+energy plans, and Tesla charging. It provides a site-configured energy ledger,
+conservative demand learning, bounded FoxESS diagnostics, the verified Working
+Single Phase Pilot Site ZEROHERO export policy, a faithful direct-EVSE
+free-window port, and a default-off Local Modbus battery-charge extension.
 
-Version 0.12.1 includes newly requested fixed-window battery charging without
+The scheduled battery controller includes fixed-window charging without
 restoring the earlier rewritten controller. It reuses the bounded ZEROHERO
 actuator/session pattern, remains separately gated and default-off, and is
 documented as an extension because the canonical pilot YAML had no local Force
@@ -25,7 +26,7 @@ Install this public repository in HACS as a custom **Integration** repository:
 
 `https://github.com/m8ttjt9n9v-debug/HA-Foxess-Globird`
 
-Restart Home Assistant and add **FoxESS Globird Energy Observer** under
+Restart Home Assistant and add **FoxESS GloBird Tesla Energy Orchestrator** under
 **Settings → Devices & services**. No `configuration.yaml` edit is required.
 The setup flow explicitly maps telemetry and FoxESS actuators and asks for the
 commissioned limits for that site.

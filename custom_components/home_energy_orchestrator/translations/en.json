@@ -2,7 +2,7 @@
   "config": {
     "step": {
       "user": {
-        "title": "Set up FoxESS Globird Energy Observer",
+        "title": "Set up FoxESS GloBird Tesla Energy Orchestrator",
         "description": "Compatible entities from one unambiguous FoxESS Modbus device and one Tessie vehicle are pre-filled when detected. Verify every suggestion and sign convention. Choose exactly one FoxESS owner: observer, local Modbus, or FoxCloud Mode Scheduler. HEO creates its own Charge to Full, automatic battery-charge, and house-occupancy controls after setup; do not create helpers for them. Local battery charging is a default-off extension; ZEROHERO export remains the ported inverter policy. The Safety Lock is ON by default.",
         "data": {
           "name": "Site name",
@@ -123,7 +123,7 @@
         }
       },
       "reconfigure": {
-        "title": "Reconfigure FoxESS Globird Energy Observer",
+        "title": "Reconfigure FoxESS GloBird Tesla Energy Orchestrator",
         "description": "Detected entities fill missing mappings and replace only stale mappings that no longer exist; nothing changes until you submit this form. Verify every suggestion. Charge to Full and house occupancy are HEO-owned controls, not helper mappings. Update site limits and the exclusive FoxESS owner as required. Safety Lock ON blocks all hardware writes.",
         "data": {
           "name": "Site name",

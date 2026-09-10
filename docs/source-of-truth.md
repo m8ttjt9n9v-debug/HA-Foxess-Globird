@@ -1,5 +1,9 @@
 # Project source of truth
 
+The public product name is **FoxESS GloBird Tesla Energy Orchestrator**. The
+existing `home_energy_orchestrator` integration domain, entity IDs, and `HEO`
+short form remain stable for upgrade compatibility.
+
 This is the public, durable design record for the project. Git records what
 changed; this file records the authority order, supported behavior, and rules
 future work must preserve. Site addresses, credentials, incident chronology,

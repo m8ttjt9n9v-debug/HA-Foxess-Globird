@@ -10,7 +10,7 @@ live inverter.
    Assistant configuration's `custom_components` directory, or install the
    repository through HACS.
 2. Restart Home Assistant.
-3. Add **FoxESS Globird Energy Observer** under **Settings → Devices &
+3. Add **FoxESS GloBird Tesla Energy Orchestrator** under **Settings → Devices &
    services**.
 
 ## Synthetic inputs
