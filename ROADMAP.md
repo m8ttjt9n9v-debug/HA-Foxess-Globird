@@ -72,10 +72,20 @@ Status here describes behavioral parity, not merely the presence of code.
 
 ## Confirmed bugs
 
-- [ ] Preserve every submitted mapping and value when setup or reconfiguration
+- [x] Preserve every submitted mapping and value when setup or reconfiguration
   validation fails. The form must redisplay the user's complete attempted
   configuration and attach errors to the relevant section; it must not rebuild
   the page from discovery defaults and force manual entity mapping to restart.
+  Completed in v0.12.6.
+
+- [ ] Allow reconfiguration to complete when the operator changes FoxESS
+  ownership from Local Modbus to Observer or FoxCloud Scheduler while
+  Local-Modbus-only solar-spill or pre-free EV options remain enabled. Do not
+  silently enable those policies and do not block the ownership change. Save
+  the safe non-Modbus owner, then show a dedicated follow-up warning that the
+  incompatible EV stages are suspended until Local Modbus ownership returns,
+  with a clear option to disable them. The emergency Safety Lock must remain an
+  immediate, independent block on every HEO-owned FoxESS and Tessie command.
 
 - [ ] Fix paired battery-magnitude freshness handling. During steady charging or
   discharging, the inactive FoxESS magnitude can remain exactly zero without a
