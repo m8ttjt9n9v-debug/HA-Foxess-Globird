@@ -6,6 +6,7 @@ from homeassistant.components.switch import SwitchEntity, SwitchEntityDescriptio
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
@@ -18,6 +19,7 @@ from .const import (
     CONF_EV_BEFORE_EXPORT_ENABLED,
     CONF_EV_CHARGE_TO_FULL,
     CONF_EV_CHARGE_TO_FULL_ENABLED,
+    CONF_FREE_CHARGE_SCHEDULE_CONFIRMED,
     CONF_REHEARSAL_MODE,
     DEFAULT_AUTOMATIC_CHARGE_ENABLED,
     DEFAULT_EV_BEFORE_EXPORT_ENABLED,
@@ -209,6 +211,10 @@ class AutomaticChargeSwitch(CoordinatorEntity[EnergyCoordinator], SwitchEntity):
         )
 
     async def async_turn_on(self, **kwargs: object) -> None:
+        if not self.coordinator.config.get(CONF_FREE_CHARGE_SCHEDULE_CONFIRMED, False):
+            raise HomeAssistantError(
+                "Reconfigure HEO and confirm the exact 24-hour free-power schedule first"
+            )
         await self._set_enabled(True)
 
     async def async_turn_off(self, **kwargs: object) -> None:

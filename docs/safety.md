@@ -36,6 +36,11 @@ flapping. Turn off the independent charge switch and confirm Self Use before
 engaging Safety Lock or unloading an active controller, because Safety Lock
 also forbids recovery writes.
 
+Automatic battery charging additionally requires a persisted schedule
+confirmation. The setup flow displays exact 24-hour times and duration, and
+requires a separate acknowledgement for a crossing-midnight window. A v0.12
+upgrade disables its charge request until this confirmation is completed.
+
 The Diagnostics view is an explicit commissioning surface, not an automatic
 schedule. It refuses charge tests outside the free window, requires Rehearsal
 mode (Safety Lock) off and complete FoxESS mapping, bounds each run to 120 minutes, and

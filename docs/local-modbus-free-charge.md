@@ -52,6 +52,13 @@ of actuator feedback moves the persisted session into recovery. When feedback
 returns, HEO resumes only while the same configured window is still active;
 otherwise it deliberately restores `Self Use`.
 
+Automatic battery charging cannot be enabled until setup or Reconfigure shows
+the saved start and end in 24-hour notation, its duration, and a 24-hour
+timeline and the operator confirms them. A schedule whose end is earlier than
+its start is interpreted as crossing midnight and requires a second explicit
+acknowledgement. Electricity-provider windows can vary by account signup date;
+HEO does not infer a tariff cohort from the provider name.
+
 ## Exclusions
 
 - This does not read or write FoxESS native schedule-period registers.

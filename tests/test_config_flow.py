@@ -12,6 +12,7 @@ from custom_components.home_energy_orchestrator.const import (
     CONF_EV_BEFORE_EXPORT_ENABLED,
     CONF_EV_BEFORE_EXPORT_SOC_TARGET,
     CONF_FOXESS_CONTROL_OWNER,
+    CONF_FREE_CHARGE_SCHEDULE_CONFIRMED,
     DEFAULT_AUTOMATIC_CHARGE_ENABLED,
     DEFAULT_EV_BEFORE_EXPORT_ENABLED,
     DEFAULT_EV_BEFORE_EXPORT_SOC_TARGET,
@@ -20,6 +21,15 @@ from custom_components.home_energy_orchestrator.const import (
 )
 
 from .test_setup import ENTRY_DATA
+
+
+async def _confirm_schedule(hass, result, *, overnight: bool = False):
+    confirmation = {"confirm_schedule": True}
+    if overnight:
+        confirmation["confirm_overnight"] = True
+    return await hass.config_entries.flow.async_configure(
+        result["flow_id"], user_input=confirmation
+    )
 
 
 async def test_user_flow_creates_a_config_entry(hass):
@@ -32,6 +42,68 @@ async def test_user_flow_creates_a_config_entry(hass):
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["title"] == "Test Site"
     assert result["data"] == ENTRY_DATA
+
+
+async def test_enabled_battery_schedule_requires_unambiguous_confirmation(hass):
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": SOURCE_USER},
+        data={"name": "Charge Site", **ENTRY_DATA, "automatic_charge_enabled": True},
+    )
+
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "confirm_schedule"
+    assert (
+        result["description_placeholders"]["schedule_summary"]
+        == "12:01 → 14:59 (2 h 58 min, same day)"
+    )
+    assert "██████" in result["description_placeholders"]["schedule_timeline"]
+    markers = {marker.schema for marker in result["data_schema"].schema}
+    assert markers == {"confirm_schedule"}
+
+    rejected = await hass.config_entries.flow.async_configure(
+        result["flow_id"], user_input={"confirm_schedule": False}
+    )
+    assert rejected["errors"] == {
+        "confirm_schedule": "schedule_confirmation_required"
+    }
+
+    created = await _confirm_schedule(hass, rejected)
+    assert created["type"] is FlowResultType.CREATE_ENTRY
+    assert created["data"][CONF_FREE_CHARGE_SCHEDULE_CONFIRMED] is True
+
+
+async def test_overnight_battery_schedule_requires_separate_confirmation(hass):
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": SOURCE_USER},
+        data={
+            "name": "Overnight Site",
+            **ENTRY_DATA,
+            "automatic_charge_enabled": True,
+            "free_charge_window_start": "23:01:00",
+            "free_charge_window_end": "13:59:00",
+        },
+    )
+
+    assert result["step_id"] == "confirm_schedule"
+    assert (
+        result["description_placeholders"]["schedule_summary"]
+        == "23:01 → 13:59 (14 h 58 min, crosses midnight)"
+    )
+    markers = {marker.schema for marker in result["data_schema"].schema}
+    assert markers == {"confirm_schedule", "confirm_overnight"}
+
+    rejected = await hass.config_entries.flow.async_configure(
+        result["flow_id"], user_input={"confirm_schedule": True, "confirm_overnight": False}
+    )
+    assert rejected["errors"] == {
+        "confirm_overnight": "overnight_confirmation_required"
+    }
+
+    created = await _confirm_schedule(hass, rejected, overnight=True)
+    assert created["type"] is FlowResultType.CREATE_ENTRY
+    assert created["data"][CONF_FREE_CHARGE_SCHEDULE_CONFIRMED] is True
 
 
 async def test_user_form_prefills_unambiguous_foxess_and_tessie_entities(hass):
@@ -579,6 +651,41 @@ async def test_reconfigure_updates_and_reloads_an_entry(hass):
     await hass.async_block_till_done()
     assert entry.title == "Updated Site"
     assert entry.data == updated_data
+    assert await hass.config_entries.async_unload(entry.entry_id)
+
+
+async def test_reconfigure_enabled_charge_requires_schedule_confirmation(hass):
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Charge Site",
+        version=3,
+        data=ENTRY_DATA,
+    )
+    entry.add_to_hass(hass)
+    updated_data = {
+        **ENTRY_DATA,
+        "automatic_charge_enabled": True,
+        "free_charge_window_start": "11:01:00",
+        "free_charge_window_end": "13:59:00",
+    }
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": SOURCE_RECONFIGURE, "entry_id": entry.entry_id},
+        data={"name": "Charge Site", **updated_data},
+    )
+
+    assert result["step_id"] == "confirm_schedule"
+    assert (
+        result["description_placeholders"]["schedule_summary"]
+        == "11:01 → 13:59 (2 h 58 min, same day)"
+    )
+    completed = await _confirm_schedule(hass, result)
+    assert completed["type"] is FlowResultType.ABORT
+    assert completed["reason"] == "reconfigure_successful"
+    await hass.async_block_till_done()
+    assert entry.data["automatic_charge_enabled"] is True
+    assert entry.data[CONF_FREE_CHARGE_SCHEDULE_CONFIRMED] is True
     assert await hass.config_entries.async_unload(entry.entry_id)
 
 

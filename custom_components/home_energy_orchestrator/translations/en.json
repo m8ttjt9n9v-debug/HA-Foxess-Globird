@@ -37,8 +37,8 @@
           "heater_power_entity": "Separately metered heater power sensor (optional)",
           "solar_power_entity": "AC-coupled solar power sensor (optional)",
           "solar_power_generation_direction": "Solar sensor generation direction",
-          "free_charge_window_start": "Free-charge window start",
-          "free_charge_window_end": "Free-charge window end",
+          "free_charge_window_start": "Battery free-power window start (confirm the AM/PM value carefully)",
+          "free_charge_window_end": "Battery free-power window end (confirm the AM/PM value carefully)",
           "house_learning_fallback_kwh": "Occupied protected-cycle fallback (kWh)",
           "house_away_fallback_kwh": "Away protected-cycle fallback (kWh)",
           "house_away_confirmation_hours": "All-person away confirmation (hours)",
@@ -114,7 +114,7 @@
           "zero_import_confirm_minutes": "Local telemetry debounce only (minutes)",
           "foxess_control_owner": "FoxESS control owner (never mix cloud scheduler and Modbus)",
           "automatic_control_enabled": "Enable HEO Local Modbus master gate",
-          "automatic_charge_enabled": "Initial automatic battery free-charge request (a dashboard switch is created)",
+          "automatic_charge_enabled": "Enable automatic battery free charging (the exact schedule must be confirmed on the next screen)",
           "automatic_export_enabled": "Enable automatic ZEROHERO export (Local Modbus owner only)",
           "ev_before_export_enabled": "Prioritise EV before automatic export",
           "ev_before_export_soc_target_percent": "Withhold export while EV SoC is below (%)",
@@ -158,8 +158,8 @@
           "heater_power_entity": "Separately metered heater power sensor (optional)",
           "solar_power_entity": "AC-coupled solar power sensor (optional)",
           "solar_power_generation_direction": "Solar sensor generation direction",
-          "free_charge_window_start": "Free-charge window start",
-          "free_charge_window_end": "Free-charge window end",
+          "free_charge_window_start": "Battery free-power window start (confirm the AM/PM value carefully)",
+          "free_charge_window_end": "Battery free-power window end (confirm the AM/PM value carefully)",
           "house_learning_fallback_kwh": "Occupied protected-cycle fallback (kWh)",
           "house_away_fallback_kwh": "Away protected-cycle fallback (kWh)",
           "house_away_confirmation_hours": "All-person away confirmation (hours)",
@@ -235,12 +235,20 @@
           "zero_import_confirm_minutes": "Local telemetry debounce only (minutes)",
           "foxess_control_owner": "FoxESS control owner (never mix cloud scheduler and Modbus)",
           "automatic_control_enabled": "Enable HEO Local Modbus master gate",
-          "automatic_charge_enabled": "Initial automatic battery free-charge request (a dashboard switch is created)",
+          "automatic_charge_enabled": "Enable automatic battery free charging (the exact schedule must be confirmed on the next screen)",
           "automatic_export_enabled": "Enable automatic ZEROHERO export (Local Modbus owner only)",
           "ev_before_export_enabled": "Prioritise EV before automatic export",
           "ev_before_export_soc_target_percent": "Withhold export while EV SoC is below (%)",
           "ev_automatic_control_enabled": "Request automatic EV control (independent of FoxESS ownership)",
           "rehearsal_mode": "Safety Lock (ON = no hardware writes)"
+        }
+      },
+      "confirm_schedule": {
+        "title": "Confirm the battery free-power schedule",
+        "description": "Review the exact saved times in unambiguous 24-hour format.\n\n**{schedule_summary}**\n\n{schedule_timeline}\n\n{schedule_warning}\n\nElectricity-provider windows can differ by signup date. Confirm these times against the tariff for this specific account. HEO will treat a crossing-midnight window as active on both sides of midnight.",
+        "data": {
+          "confirm_schedule": "I confirm that these exact 24-hour start and end times match this account",
+          "confirm_overnight": "I explicitly intend this battery charging window to cross midnight"
         }
       }
     },
@@ -260,9 +268,14 @@
       "invalid_site_limits": "Check capacity, floor, reserve, charger, inverter, current, and voltage limits.",
       "invalid_daily_ev_backfill": "Daily EV backfill requires a commissioned inverter output/discharge limit, a non-zero outside-window percentage, and a ready time before the free-power window.",
       "invalid_schedule": "Choose different free-charge times and a non-negative fallback.",
-      "invalid_foxess_control_owner": "Choose observer only, local Modbus, or FoxCloud Mode Scheduler."
-      ,"invalid_power_direction": "Choose the direction represented by a positive sensor value."
-      ,"incomplete_split_battery_mapping": "Map both battery charge and discharge magnitude sensors, or leave both blank."
+      "invalid_foxess_control_owner": "Choose observer only, local Modbus, or FoxCloud Mode Scheduler.",
+      "invalid_power_direction": "Choose the direction represented by a positive sensor value.",
+      "incomplete_split_battery_mapping": "Map both battery charge and discharge magnitude sensors, or leave both blank.",
+      "schedule_confirmation_required": "Confirm the exact 24-hour schedule before saving.",
+      "overnight_confirmation_required": "An overnight charging window requires the separate crossing-midnight confirmation."
+    },
+    "abort": {
+      "schedule_confirmation_expired": "The pending schedule confirmation expired. Reopen configuration and review the times again."
     }
   },
   "selector": {

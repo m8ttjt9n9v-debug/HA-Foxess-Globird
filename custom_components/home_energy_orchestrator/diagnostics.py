@@ -18,6 +18,7 @@ from .const import (
     CONF_FOXESS_FORCE_CHARGE_POWER,
     CONF_FOXESS_FORCE_DISCHARGE_POWER,
     CONF_FOXESS_WORK_MODE,
+    CONF_FREE_CHARGE_SCHEDULE_CONFIRMED,
     CONF_REHEARSAL_MODE,
     CONF_SIGN_CONVENTIONS_VERIFIED,
     DEFAULT_AUTOMATIC_CHARGE_ENABLED,
@@ -72,6 +73,9 @@ async def async_get_config_entry_diagnostics(
                     CONF_AUTOMATIC_CHARGE_ENABLED,
                     DEFAULT_AUTOMATIC_CHARGE_ENABLED,
                 )
+            ),
+            "free_charge_schedule_confirmed": bool(
+                entry.data.get(CONF_FREE_CHARGE_SCHEDULE_CONFIRMED, False)
             ),
             "charge_session_phase": (
                 active_controller.charge_session.phase

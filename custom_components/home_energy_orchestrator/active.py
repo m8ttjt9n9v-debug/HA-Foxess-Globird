@@ -38,6 +38,7 @@ from .const import (
     CONF_FOXESS_FORCE_DISCHARGE_POWER,
     CONF_FOXESS_WORK_MODE,
     CONF_FREE_CHARGE_END,
+    CONF_FREE_CHARGE_SCHEDULE_CONFIRMED,
     CONF_FREE_CHARGE_START,
     CONF_INVERTER_CHARGE_LIMIT_KW,
     CONF_INVERTER_DISCHARGE_LIMIT_KW,
@@ -244,12 +245,16 @@ class ActiveFoxessController:
         now: datetime,
     ) -> bool:
         """Run the default-off fixed-power free-window charge extension."""
-        enabled = bool(
+        requested_enabled = bool(
             self.coordinator.config.get(
                 CONF_AUTOMATIC_CHARGE_ENABLED,
                 DEFAULT_AUTOMATIC_CHARGE_ENABLED,
             )
         )
+        schedule_confirmed = bool(
+            self.coordinator.config.get(CONF_FREE_CHARGE_SCHEDULE_CONFIRMED, False)
+        )
+        enabled = requested_enabled and schedule_confirmed
         window_active = self.coordinator._free_window_hours_remaining(now) > 0  # noqa: SLF001
         configured_max = self._configured(
             CONF_INVERTER_CHARGE_LIMIT_KW,
@@ -275,6 +280,10 @@ class ActiveFoxessController:
             and charge_max > 0
         )
         latched = self.charge_session.phase != "idle"
+        if requested_enabled and not schedule_confirmed and not latched:
+            self.last_reason = "charge_schedule_unconfirmed"
+            self.last_actions = ()
+            return True
         if (
             not latched
             and enabled

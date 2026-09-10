@@ -101,6 +101,7 @@ from .const import (
     CONF_FOXESS_FORCE_DISCHARGE_POWER,
     CONF_FOXESS_WORK_MODE,
     CONF_FREE_CHARGE_END,
+    CONF_FREE_CHARGE_SCHEDULE_CONFIRMED,
     CONF_FREE_CHARGE_START,
     CONF_GRID_IMPORT_POSITIVE,
     CONF_GRID_POWER,
@@ -241,6 +242,8 @@ ENTITY = selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor"))
 SELECT_ENTITY = selector.EntitySelector(selector.EntitySelectorConfig(domain="select"))
 NUMBER_ENTITY = selector.EntitySelector(selector.EntitySelectorConfig(domain="number"))
 SWITCH_ENTITY = selector.EntitySelector(selector.EntitySelectorConfig(domain="switch"))
+CONF_CONFIRM_SCHEDULE = "confirm_schedule"
+CONF_CONFIRM_OVERNIGHT = "confirm_overnight"
 
 
 def _time_windows_overlap(
@@ -265,10 +268,52 @@ def _time_windows_overlap(
     )
 
 
+def _window_duration_minutes(start: time, end: time) -> int:
+    """Return the positive duration of a non-empty daily window."""
+    start_minutes = start.hour * 60 + start.minute
+    end_minutes = end.hour * 60 + end.minute
+    return (end_minutes - start_minutes) % (24 * 60)
+
+
+def _schedule_confirmation(start: time, end: time) -> dict[str, str]:
+    """Build an unambiguous 24-hour summary and compact visual timeline."""
+    duration = _window_duration_minutes(start, end)
+    hours, minutes = divmod(duration, 60)
+    crosses_midnight = end <= start
+    duration_text = f"{hours} h {minutes:02d} min"
+    day_text = "crosses midnight" if crosses_midnight else "same day"
+    summary = (
+        f"{start.strftime('%H:%M')} → {end.strftime('%H:%M')} "
+        f"({duration_text}, {day_text})"
+    )
+    start_minute = start.hour * 60 + start.minute
+    cells = []
+    for index in range(48):
+        midpoint = index * 30 + 15
+        active = (
+            start_minute <= midpoint < start_minute + duration
+            or start_minute <= midpoint + 24 * 60 < start_minute + duration
+        )
+        cells.append("█" if active else "·")
+    warning = (
+        "⚠️ This schedule crosses midnight. It starts on one day and ends the next day."
+        if crosses_midnight
+        else "This schedule starts and ends on the same day."
+    )
+    return {
+        "schedule_summary": summary,
+        "schedule_timeline": f"`00:00 |{''.join(cells)}| 24:00`",
+        "schedule_warning": warning,
+    }
+
+
 class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Create and maintain one observer per independently configured site."""
 
-    VERSION = 2
+    VERSION = 3
+
+    _pending_input: dict[str, object] | None = None
+    _pending_reconfigure = False
 
     _NORMALIZATION_KEYS = frozenset(
         {
@@ -295,6 +340,8 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 return self.async_show_form(
                     step_id="user", data_schema=self._schema(), errors=errors
                 )
+            if user_input.get(CONF_AUTOMATIC_CHARGE_ENABLED):
+                return self._show_schedule_confirmation(user_input, reconfigure=False)
             title = str(user_input.pop(CONF_NAME))
             await self.async_set_unique_id(title.strip().casefold())
             self._abort_if_unique_id_configured()
@@ -322,6 +369,8 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 user_input[CONF_SIGN_CONVENTIONS_VERIFIED] = False
             errors = self._validate_input(user_input)
             if not errors:
+                if user_input.get(CONF_AUTOMATIC_CHARGE_ENABLED):
+                    return self._show_schedule_confirmation(user_input, reconfigure=True)
                 title = str(user_input.pop(CONF_NAME))
                 return self.async_update_reload_and_abort(
                     entry,
@@ -335,6 +384,72 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return self.async_show_form(
             step_id="reconfigure",
             data_schema=self._schema(self._reconfigure_defaults(entry)),
+        )
+
+    async def async_step_confirm_schedule(
+        self, user_input: dict[str, object] | None = None
+    ):
+        """Require explicit review of the exact 24-hour free-power window."""
+        if self._pending_input is None:
+            return self.async_abort(reason="schedule_confirmation_expired")
+        start = time.fromisoformat(str(self._pending_input[CONF_FREE_CHARGE_START]))
+        end = time.fromisoformat(str(self._pending_input[CONF_FREE_CHARGE_END]))
+        crosses_midnight = end <= start
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            if not user_input.get(CONF_CONFIRM_SCHEDULE):
+                errors[CONF_CONFIRM_SCHEDULE] = "schedule_confirmation_required"
+            if crosses_midnight and not user_input.get(CONF_CONFIRM_OVERNIGHT):
+                errors[CONF_CONFIRM_OVERNIGHT] = "overnight_confirmation_required"
+            if not errors:
+                pending = dict(self._pending_input)
+                pending[CONF_FREE_CHARGE_SCHEDULE_CONFIRMED] = True
+                title = str(pending.pop(CONF_NAME))
+                self._pending_input = None
+                if self._pending_reconfigure:
+                    entry = self._get_reconfigure_entry()
+                    return self.async_update_reload_and_abort(
+                        entry,
+                        title=title,
+                        data_updates=pending,
+                        reason="reconfigure_successful",
+                    )
+                await self.async_set_unique_id(title.strip().casefold())
+                self._abort_if_unique_id_configured()
+                return self.async_create_entry(title=title, data=pending)
+        schema: dict[vol.Marker, object] = {
+            vol.Required(CONF_CONFIRM_SCHEDULE, default=False): selector.BooleanSelector()
+        }
+        if crosses_midnight:
+            schema[vol.Required(CONF_CONFIRM_OVERNIGHT, default=False)] = (
+                selector.BooleanSelector()
+            )
+        return self.async_show_form(
+            step_id="confirm_schedule",
+            data_schema=vol.Schema(schema),
+            errors=errors,
+            description_placeholders=_schedule_confirmation(start, end),
+        )
+
+    @callback
+    def _show_schedule_confirmation(
+        self, user_input: dict[str, object], *, reconfigure: bool
+    ):
+        self._pending_input = dict(user_input)
+        self._pending_reconfigure = reconfigure
+        start = time.fromisoformat(str(user_input[CONF_FREE_CHARGE_START]))
+        end = time.fromisoformat(str(user_input[CONF_FREE_CHARGE_END]))
+        schema: dict[vol.Marker, object] = {
+            vol.Required(CONF_CONFIRM_SCHEDULE, default=False): selector.BooleanSelector()
+        }
+        if end <= start:
+            schema[vol.Required(CONF_CONFIRM_OVERNIGHT, default=False)] = (
+                selector.BooleanSelector()
+            )
+        return self.async_show_form(
+            step_id="confirm_schedule",
+            data_schema=vol.Schema(schema),
+            description_placeholders=_schedule_confirmation(start, end),
         )
 
     @callback
@@ -1000,6 +1115,9 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 DEFAULT_TELEMETRY_MAX_AGE_SECONDS,
             ),
             CONF_FREE_CHARGE_END: data.get(CONF_FREE_CHARGE_END, DEFAULT_FREE_CHARGE_END),
+            CONF_FREE_CHARGE_SCHEDULE_CONFIRMED: data.get(
+                CONF_FREE_CHARGE_SCHEDULE_CONFIRMED, False
+            ),
             CONF_SITE_PHASE_COUNT: data.get(CONF_SITE_PHASE_COUNT, DEFAULT_SITE_PHASE_COUNT),
             CONF_DAILY_FREE_ALLOWANCE_KWH: data.get(
                 CONF_DAILY_FREE_ALLOWANCE_KWH, DEFAULT_DAILY_FREE_ALLOWANCE_KWH

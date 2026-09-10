@@ -31,6 +31,11 @@ end, battery target and inverter charge limit first. The inverter limit is the
 fixed requested power and is bounded by the mapped FoxESS number maximum. The
 session remains latched until the window end and then restores Self Use. See
 the [Local Modbus charge policy](local-modbus-free-charge.md).
+When automatic charging is selected, HEO shows the saved times in unambiguous
+24-hour notation with the duration and timeline. Confirm them against the
+specific account tariff. Overnight windows require a second acknowledgement.
+Upgrading from v0.12 disables the charge request until this review is completed
+through Reconfigure.
 
 Automatic ZEROHERO export is a third, default-off behavior toggle beneath the
 FoxESS gate. It operates only when **Local Modbus** is the selected FoxESS

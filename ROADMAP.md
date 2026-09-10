@@ -98,6 +98,65 @@ Working Single Phase Pilot Site parity.
 
 ## Required extensions and investigation
 
+### Human commissioning and dashboard usability
+
+- [x] Add a mandatory confirmation step before automatic Local Modbus battery
+  charging can be enabled. Show the exact window in 24-hour notation, its
+  duration, a compact 24-hour timeline, and a second explicit confirmation for
+  any window that crosses midnight. Provider windows can differ by account
+  signup date, so the UI must tell the operator to verify the actual tariff.
+- [ ] Publish a pre-commissioning worksheet and guided setup introduction that
+  lists every required value and mapped entity. Explain how to inspect live
+  entity states under known import/export, battery charge/discharge, and solar
+  generation conditions before confirming sensor directions.
+- [ ] Explain the optional paired battery charge/discharge magnitude sensors in
+  plain language, including when they are preferable to one signed battery
+  power sensor and that both members of the pair are required.
+- [ ] Fix bounded FoxESS diagnostic submission so requested power is clamped to
+  the smaller of the commissioned inverter limit and the mapped native number
+  maximum. A rejected service call must not leave a diagnostic session latched
+  as active or require a manual Stop action before retrying.
+- [ ] Add an upgrade-safe dashboard configuration surface for occupied and away
+  house fallback energy, away-confirmation duration, house occupancy policy,
+  EV supply path, EV location policy, free-window priority, all telemetry sign
+  directions, Charge to Full timeout, whole-site free-energy allowance and
+  margin, daily protected EV energy, daily ready-by time, and outside-window EV
+  inverter percentage.
+- [ ] Put the operational switches on that configuration surface: Local Modbus
+  battery charging, ZEROHERO export, EV-before-export priority and threshold,
+  automatic EV control, and Safety Lock. Descriptions must be sourced from one
+  maintained documentation vocabulary rather than duplicated dashboard text.
+- [ ] Add a live site-power card that clearly separates house load, EV load,
+  solar, battery, grid import, and grid export. Battery and EV SoC controls
+  should also show current charge/discharge power, even when that requires
+  larger cards.
+- [ ] Add a plain-language Current Plan surface describing the next house,
+  battery, export, and EV actions and their scheduled times. Never label EV
+  charging as house load in the human-facing presentation.
+- [ ] Show configured battery-charge and export windows on a persistent 24-hour
+  dashboard timeline, including explicit next-day presentation for overnight
+  windows.
+- [ ] Build the Advanced view from the proven Working Single Phase Pilot Site
+  calibration layout, while retaining configuration-driven entities and
+  upgrade-safe user overlays.
+- [ ] Make dashboard help extensive but maintainable from the same canonical
+  documentation source as setup, entities, and README guidance.
+- [ ] Add safe Tessie convenience controls for unlock, front trunk, rear trunk,
+  and window venting, with explicit confirmation appropriate to each action.
+- [ ] Add solar forecasting and weather context. First characterize whether and
+  how the Working Single Phase Pilot Site currently uses forecast, temperature,
+  heating-demand, and solar relationships; port that evidence before extending
+  control decisions.
+- [ ] Reduce unnecessary hyphenated prose during a dedicated human copy-edit
+  without changing established entity IDs or configuration keys.
+- [ ] Add a Charge to Full decision estimate: completion time, predicted grid
+  versus battery contribution, tariff-aware total cost, and average cost per
+  kWh, so the operator can compare home charging with another charging option.
+- [ ] Reassess the product name and 1.0 readiness only after sustained trials of
+  automated battery buying, ZEROHERO selling, and EV charging on the Working
+  Single Phase Pilot Site and the H3 site. Publish only independently proven
+  inverter/battery combinations as known working.
+
 - [x] Make the free-window allowance topology-aware for arbitrary phase
   count, per-phase service limits, charger phases, voltage, and commissioned
   current limits without changing its base decisions. Multiphase active control

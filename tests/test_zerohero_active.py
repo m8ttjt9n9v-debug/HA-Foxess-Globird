@@ -30,6 +30,7 @@ from custom_components.home_energy_orchestrator.const import (
     CONF_FOXESS_FORCE_DISCHARGE_POWER,
     CONF_FOXESS_WORK_MODE,
     CONF_FREE_CHARGE_END,
+    CONF_FREE_CHARGE_SCHEDULE_CONFIRMED,
     CONF_FREE_CHARGE_START,
     CONF_INVERTER_CHARGE_LIMIT_KW,
     CONF_INVERTER_DISCHARGE_LIMIT_KW,
@@ -50,6 +51,7 @@ def _coordinator(**config):
     values = {
         CONF_AUTOMATIC_CONTROL_ENABLED: False,
         CONF_AUTOMATIC_CHARGE_ENABLED: False,
+        CONF_FREE_CHARGE_SCHEDULE_CONFIRMED: True,
         CONF_FOXESS_CONTROL_OWNER: FOXESS_CONTROL_OWNER_MODBUS,
         CONF_REHEARSAL_MODE: True,
         CONF_SIGN_CONVENTIONS_VERIFIED: True,
@@ -192,6 +194,45 @@ async def test_master_gate_alone_cannot_write_at_midnight(hass, monkeypatch):
 
     assert controller.last_reason == "no_automatic_foxess_policy_active"
     assert controller.export_session.phase == "idle"
+    assert calls == []
+
+
+async def test_unconfirmed_charge_schedule_is_an_absolute_no_start_gate(
+    hass, monkeypatch
+):
+    calls = []
+    hass.bus.async_listen(EVENT_CALL_SERVICE, calls.append)
+    hass.states.async_set(
+        "select.foxess_mode",
+        "Self Use",
+        {"options": ["Self Use", "Force Discharge", "Force Charge"]},
+    )
+    hass.states.async_set(
+        "number.foxess_charge", "0", {"unit_of_measurement": "kW", "max": 15}
+    )
+    hass.states.async_set(
+        "number.foxess_discharge", "0", {"unit_of_measurement": "kW", "max": 15}
+    )
+    monkeypatch.setattr(
+        "custom_components.home_energy_orchestrator.active.dt_util.now",
+        lambda: datetime(2026, 9, 10, 12, 30, tzinfo=UTC),
+    )
+    controller = ActiveFoxessController(
+        hass,
+        _coordinator(
+            **{
+                CONF_AUTOMATIC_CONTROL_ENABLED: True,
+                CONF_AUTOMATIC_CHARGE_ENABLED: True,
+                CONF_FREE_CHARGE_SCHEDULE_CONFIRMED: False,
+                CONF_REHEARSAL_MODE: False,
+            }
+        ),
+    )
+
+    await controller.async_reconcile()
+
+    assert controller.charge_session.phase == "idle"
+    assert controller.last_reason == "charge_schedule_unconfirmed"
     assert calls == []
 
 

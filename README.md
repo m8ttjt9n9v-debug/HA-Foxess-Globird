@@ -5,13 +5,19 @@ conservative demand learning, bounded FoxESS diagnostics, the verified
 Working Single Phase Pilot Site ZEROHERO export policy, a faithful direct-EVSE free-window port,
 and a default-off Local Modbus battery-charge extension.
 
-Version 0.12.0 adds newly requested fixed-window battery charging without
+Version 0.12.1 includes newly requested fixed-window battery charging without
 restoring the earlier rewritten controller. It reuses the bounded ZEROHERO
 actuator/session pattern, remains separately gated and default-off, and is
 documented as an extension because the canonical pilot YAML had no local Force
 Charge writer. Separately gated Tessie paths retain their port-first
 characterization and restart-safe reconciliation. Remaining behaviors are
 tracked in the [roadmap](ROADMAP.md).
+
+When automatic battery charging is requested, setup shows the exact free-power
+window in 24-hour notation, its duration, and a 24-hour timeline before saving.
+An overnight window requires a separate confirmation. Existing v0.12 entries
+fail safe on upgrade: automatic battery charging is disabled until the schedule
+has been reviewed through Reconfigure.
 
 ## Installation
 

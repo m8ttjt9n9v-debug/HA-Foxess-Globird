@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.12.1 — Explicit battery-schedule confirmation
+
+- Show the submitted battery free-power window in unambiguous 24-hour notation,
+  with its duration and a compact 24-hour timeline, before saving an enabled
+  automatic charge request.
+- Require a second explicit acknowledgement when the selected window crosses
+  midnight. Provider windows may differ by account signup date, so confirmation
+  directs the operator to verify the tariff for the specific account.
+- Persist schedule confirmation separately from automation intent. Upgrades
+  from v0.12 fail safe by disabling automatic battery charging until the new
+  confirmation is completed; the dashboard switch cannot bypass it.
+- Record the deferred commissioning, diagnostics, dashboard, Tessie, weather,
+  documentation, copy-editing, cost-estimation, naming, and 1.0-readiness work
+  requested during the first v0.12 live trial.
+
 ## 0.12.0 — Local Modbus free-window battery charging
 
 - Add a separately identified, default-off scheduled house-battery Force

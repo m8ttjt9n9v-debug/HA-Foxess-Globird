@@ -19,6 +19,7 @@ from .const import (
     CONF_AUTOMATIC_EXPORT_ENABLED,
     CONF_EV_AUTOMATIC_CONTROL_ENABLED,
     CONF_FOXESS_CONTROL_OWNER,
+    CONF_FREE_CHARGE_SCHEDULE_CONFIRMED,
     CONF_REHEARSAL_MODE,
     CONF_SIGN_CONVENTIONS_VERIFIED,
     CONF_ZERO_IMPORT_THRESHOLD_KW,
@@ -992,6 +993,11 @@ class EnergySensor(CoordinatorEntity[EnergyCoordinator], SensorEntity):
             ),
             "automatic_control_enabled": foxess_requested,
             "automatic_charge_enabled": charge_enabled,
+            "free_charge_schedule_confirmed": bool(
+                self.coordinator.config.get(
+                    CONF_FREE_CHARGE_SCHEDULE_CONFIRMED, False
+                )
+            ),
             "sign_conventions_verified": bool(
                 self.coordinator.config.get(
                     CONF_SIGN_CONVENTIONS_VERIFIED,

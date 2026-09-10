@@ -44,6 +44,10 @@ layers around the proven algorithm, not replacement algorithms.
   fresh SoC below target to start, freezes bounded power for the session,
   persists its latch/retry state, and deliberately restores Self Use at the
   end. It does not program native schedule registers.
+- Automatic Force Charge additionally requires an explicitly confirmed
+  schedule. Setup presents exact 24-hour times, duration, and a visual timeline;
+  a crossing-midnight window needs a second acknowledgement. v0.12 entries are
+  migrated with charging disabled until this review is completed.
 - The canonical pilot source contains no local automatic `Force Charge` writer;
   its EV controller assumes battery charging is externally established. The
   local battery controller is therefore explicitly an extension, not missing

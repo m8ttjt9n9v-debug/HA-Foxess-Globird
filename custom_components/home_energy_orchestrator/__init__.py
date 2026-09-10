@@ -9,8 +9,10 @@ from .active import ActiveFoxessController
 from .const import (
     BATTERY_POSITIVE_CHARGE,
     BATTERY_POSITIVE_DISCHARGE,
+    CONF_AUTOMATIC_CHARGE_ENABLED,
     CONF_BATTERY_CHARGE_POSITIVE,
     CONF_BATTERY_POWER_DIRECTION,
+    CONF_FREE_CHARGE_SCHEDULE_CONFIRMED,
     CONF_GRID_IMPORT_POSITIVE,
     CONF_GRID_POWER_DIRECTION,
     CONF_SIGN_CONVENTIONS_VERIFIED,
@@ -35,7 +37,7 @@ type EnergyConfigEntry = ConfigEntry[EnergyCoordinator]
 
 async def async_migrate_entry(hass: HomeAssistant, entry: EnergyConfigEntry) -> bool:
     """Migrate ambiguous legacy booleans to explicit, locked conventions."""
-    if entry.version > 2:
+    if entry.version > 3:
         return False
     if entry.version == 1:
         data = dict(entry.data)
@@ -63,6 +65,14 @@ async def async_migrate_entry(hass: HomeAssistant, entry: EnergyConfigEntry) -> 
         # the operator reviews the normalized sensors and confirms them.
         data[CONF_SIGN_CONVENTIONS_VERIFIED] = DEFAULT_SIGN_CONVENTIONS_VERIFIED
         hass.config_entries.async_update_entry(entry, data=data, version=2)
+    if entry.version == 2:
+        data = dict(entry.data)
+        # v0.12 accepted visually ambiguous overnight windows. Require the
+        # operator to review the 24-hour confirmation before this new writer
+        # can be enabled again.
+        data[CONF_FREE_CHARGE_SCHEDULE_CONFIRMED] = False
+        data[CONF_AUTOMATIC_CHARGE_ENABLED] = False
+        hass.config_entries.async_update_entry(entry, data=data, version=3)
     return True
 
 

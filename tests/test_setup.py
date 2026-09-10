@@ -3,8 +3,10 @@ from __future__ import annotations
 from datetime import UTC, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
+import pytest
 from homeassistant.const import EVENT_CALL_SERVICE, STATE_UNAVAILABLE
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import entity_registry as er
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
@@ -47,6 +49,7 @@ ENTRY_DATA = {
     "house_load_entity": "sensor.test_house_load",
     "free_charge_window_start": "12:01:00",
     "free_charge_window_end": "14:59:00",
+    "free_charge_schedule_confirmed": False,
     "house_learning_fallback_kwh": 17.5,
     "house_away_fallback_kwh": 6.5,
     "house_away_confirmation_hours": 6.0,
@@ -143,6 +146,7 @@ async def test_setup_observes_normalised_values_and_never_calls_services(hass):
     assert hass.states.get(status).attributes["writes_performed"] == 0
     assert hass.states.get(status).attributes["automatic_control_enabled"] is False
     assert hass.states.get(status).attributes["automatic_charge_enabled"] is False
+    assert hass.states.get(status).attributes["free_charge_schedule_confirmed"] is False
     assert hass.states.get(status).attributes["mode"] == "observe"
     assert hass.states.get("switch.home_energy_automatic_charge").state == "off"
     assert hass.states.get("sensor.home_energy_free_charge_completion").state == "idle"
@@ -150,6 +154,7 @@ async def test_setup_observes_normalised_values_and_never_calls_services(hass):
     assert hass.states.get("sensor.home_energy_ev_pre_free_status").state == "disabled"
     diagnostics = await async_get_config_entry_diagnostics(hass, entry)
     assert diagnostics["actuators"]["foxess_automatic_control_enabled"] is False
+    assert diagnostics["actuators"]["free_charge_schedule_confirmed"] is False
     assert diagnostics["actuators"]["foxess_control_owner"] == "observer_only"
     assert diagnostics["actuators"]["writes_enabled"] is False
     assert service_calls == []
@@ -239,10 +244,12 @@ async def test_version_one_sign_booleans_migrate_locked(hass):
 
     assert await async_migrate_entry(hass, entry)
 
-    assert entry.version == 2
+    assert entry.version == 3
     assert entry.data["grid_power_positive_direction"] == "positive_export"
     assert entry.data["battery_power_positive_direction"] == "positive_discharge"
     assert entry.data["sign_conventions_verified"] is False
+    assert entry.data["free_charge_schedule_confirmed"] is False
+    assert entry.data["automatic_charge_enabled"] is False
     assert "grid_import_positive" not in entry.data
     assert "battery_charge_positive" not in entry.data
 
@@ -294,7 +301,12 @@ async def test_automatic_export_switch_is_independent_and_persists(hass):
 async def test_automatic_charge_switch_is_independent_and_persists(hass):
     hass.states.async_set("sensor.test_battery_soc", "60", {"unit_of_measurement": "%"})
     hass.states.async_set("sensor.test_grid_power", "0", {"unit_of_measurement": "kW"})
-    entry = MockConfigEntry(domain=DOMAIN, title="Charge site", data=ENTRY_DATA)
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Charge site",
+        version=3,
+        data={**ENTRY_DATA, "free_charge_schedule_confirmed": True},
+    )
     entry.add_to_hass(hass)
 
     assert await hass.config_entries.async_setup(entry.entry_id)
@@ -312,6 +324,42 @@ async def test_automatic_charge_switch_is_independent_and_persists(hass):
     assert entry.data["automatic_charge_enabled"] is True
     assert entry.data["automatic_control_enabled"] is False
     assert entry.data["rehearsal_mode"] is True
+
+
+async def test_automatic_charge_switch_rejects_an_unconfirmed_schedule(hass):
+    hass.states.async_set("sensor.test_battery_soc", "60", {"unit_of_measurement": "%"})
+    hass.states.async_set("sensor.test_grid_power", "0", {"unit_of_measurement": "kW"})
+    entry = MockConfigEntry(domain=DOMAIN, title="Unconfirmed schedule", version=3, data=ENTRY_DATA)
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    with pytest.raises(HomeAssistantError, match="confirm the exact 24-hour"):
+        await hass.services.async_call(
+            "switch",
+            "turn_on",
+            {"entity_id": "switch.home_energy_automatic_charge"},
+            blocking=True,
+        )
+
+    assert hass.states.get("switch.home_energy_automatic_charge").state == "off"
+    assert entry.data["automatic_charge_enabled"] is False
+
+
+async def test_version_two_migration_disables_unconfirmed_automatic_charge(hass):
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Version two schedule",
+        version=2,
+        data={**ENTRY_DATA, "automatic_charge_enabled": True},
+    )
+    entry.add_to_hass(hass)
+
+    assert await async_migrate_entry(hass, entry)
+
+    assert entry.version == 3
+    assert entry.data["automatic_charge_enabled"] is False
+    assert entry.data["free_charge_schedule_confirmed"] is False
 
 
 async def test_ev_before_export_controls_are_integration_owned_and_persist(hass):
