@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.12.4 — Protected baseline with unavailable headroom
+
+- Treat a live outside-window service ceiling below the physical EV charging
+  minimum as the existing fail-closed `outside_power_ceiling_too_low` planning
+  result. Discretionary backfill remains blocked, while the separately protected
+  baseline can still reconcile to its configured minimum.
+- Add the live-derived zero-service-ceiling regression exposed while verifying
+  v0.12.3 on the disposable commissioning site.
+
 ## 0.12.3 — Tessie reconnect baseline
 
 - Restore the Working Single Phase Pilot Site's interpretation of Tessie's

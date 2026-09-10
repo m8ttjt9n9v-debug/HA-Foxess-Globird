@@ -89,6 +89,14 @@ def test_zero_percent_is_an_explicit_fail_closed_configuration():
     assert plan.phase == "outside_power_ceiling_too_low"
 
 
+def test_live_service_ceiling_below_physical_minimum_fails_closed():
+    plan = calculate_daily_backfill_plan(
+        _inputs(charger_minimum_a=1, charger_maximum_a=0)
+    )
+    assert plan.current_ceiling_a == 0
+    assert plan.phase == "outside_power_ceiling_too_low"
+
+
 def test_ready_must_be_before_next_free_window():
     with pytest.raises(ValueError):
         calculate_daily_backfill_plan(

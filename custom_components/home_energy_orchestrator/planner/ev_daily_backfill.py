@@ -152,7 +152,8 @@ def _validate(inputs: DailyBackfillInputs) -> None:
         raise ValueError("ready time must fall inside the pre-free planning interval")
     if inputs.phase_count < 1 or inputs.voltage_v <= 0 or inputs.current_step_a <= 0:
         raise ValueError("electrical topology must be commissioned")
-    if inputs.charger_maximum_a < inputs.charger_minimum_a:
-        raise ValueError("charger maximum cannot be below its minimum")
+    # A live service-headroom ceiling may legitimately fall below the physical
+    # charging minimum. That is the planner's fail-closed
+    # ``outside_power_ceiling_too_low`` result, not invalid commissioning.
     if inputs.outside_inverter_percent > 100:
         raise ValueError("outside inverter percentage cannot exceed 100")
