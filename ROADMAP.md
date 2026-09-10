@@ -70,6 +70,20 @@ Status here describes behavioral parity, not merely the presence of code.
   ambiguity rejection, disabled-entity filtering, and stale-only reconfigure
   suggestions without inferred signs, limits, ownership, or write authority.
 
+## Confirmed bugs
+
+- [ ] Fix paired battery-magnitude freshness handling. During steady charging or
+  discharging, the inactive FoxESS magnitude can remain exactly zero without a
+  new Home Assistant `last_updated` timestamp. HEO currently marks the combined
+  `sensor.home_energy_battery_power` unavailable when that unchanged zero ages
+  beyond the telemetry limit, even while the active magnitude and signed battery
+  sensor remain fresh. Do not solve this by accepting an arbitrary stale zero.
+  Prefer a fresh, explicitly mapped signed battery-power sample when the pair is
+  not fresh, or establish coherent same-device reporting evidence. Add regression
+  coverage for steady charge, steady discharge, direction changes, disconnected
+  inputs, restart, and genuine stale telemetry before the distributed power-flow
+  card relies on the normalized sensor.
+
 ## Removed pending a faithful port
 
 These behaviors existed in earlier HEO releases as simplified or newly written
