@@ -110,6 +110,10 @@ layers around the proven algorithm, not replacement algorithms.
   Overview, Tesla, House, Solar & Weather, Configuration, Advanced, and Manual.
   Shared views use only HEO-owned entity IDs; vehicle-native, weather, room, and
   other site-specific cards are local overlays rather than shared assumptions.
+- Dashboard design is informed by the Working Single Phase Pilot Site, but the
+  clean disposable test installation is the staging and acceptance template for
+  the distributed dashboard. Only dashboard changes reviewed there and accepted
+  by the project owner are promoted into `examples/dashboard.yaml`.
 - The dashboard must not expose Home Assistant's entities-card aggregate toggle
   as though it were an HEO master switch. Safety Lock is the global no-write
   interlock (ON means no HEO hardware commands); export and EV switches are

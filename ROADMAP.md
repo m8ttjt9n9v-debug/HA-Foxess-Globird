@@ -100,6 +100,12 @@ Working Single Phase Pilot Site parity.
 
 ### Human commissioning and dashboard usability
 
+- [x] Define the clean disposable test installation as the staging and
+  acceptance template for the distributed dashboard. Use the Working Single
+  Phase Pilot Site as the design reference, iterate on the clean-site dashboard
+  until accepted, and then promote that approved configuration into the
+  repository rather than maintaining an independently designed example.
+
 - [x] Add a mandatory confirmation step before automatic Local Modbus battery
   charging can be enabled. Show the exact window in 24-hour notation, its
   duration, a compact 24-hour timeline, and a second explicit confirmation for
