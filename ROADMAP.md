@@ -72,6 +72,11 @@ Status here describes behavioral parity, not merely the presence of code.
 
 ## Confirmed bugs
 
+- [ ] Preserve every submitted mapping and value when setup or reconfiguration
+  validation fails. The form must redisplay the user's complete attempted
+  configuration and attach errors to the relevant section; it must not rebuild
+  the page from discovery defaults and force manual entity mapping to restart.
+
 - [ ] Fix paired battery-magnitude freshness handling. During steady charging or
   discharging, the inactive FoxESS magnitude can remain exactly zero without a
   new Home Assistant `last_updated` timestamp. HEO currently marks the combined
@@ -113,6 +118,13 @@ Working Single Phase Pilot Site parity.
 ## Required extensions and investigation
 
 ### Human commissioning and dashboard usability
+
+- [ ] Add an explicit **Configure EV automation?** commissioning choice. When
+  disabled, hide EV telemetry, actuator, capacity, floor, reserve, charger,
+  inverter, current, voltage, learning, and policy fields; skip all EV-specific
+  validation; and create no impression that Tessie or an EV is required for a
+  FoxESS-only installation. Re-enabling it must preserve previously saved EV
+  configuration.
 
 - [x] Define the clean disposable test installation as the staging and
   acceptance template for the distributed dashboard. Use the Working Single

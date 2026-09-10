@@ -691,7 +691,7 @@ class ActiveEvController:
     ) -> None:
         """Port the pilot's outside-window socket-off rule when unplugged."""
         smart = self._smart_socket_observation(now, observation)
-        physical_minimum = observation.current_minimum_a
+        physical_minimum = self._physical_charging_minimum_a(observation)
         if smart is None or physical_minimum is None:
             self.last_reason = "smart_socket_feedback_unavailable"
             return
@@ -739,7 +739,7 @@ class ActiveEvController:
         if smart is None:
             self.last_reason = "smart_socket_feedback_unavailable"
             return
-        physical_minimum = observation.current_minimum_a
+        physical_minimum = self._physical_charging_minimum_a(observation)
         physical_ceiling = self._path_ceiling_a()
         if physical_minimum is None or physical_ceiling < physical_minimum:
             self.last_reason = "smart_socket_physical_limits_invalid"
@@ -1052,7 +1052,7 @@ class ActiveEvController:
             return False
         grid = self.grid_average.result(now)
         ev = self.ev_average.result(now)
-        current_minimum = observation.current_minimum_a
+        current_minimum = self._physical_charging_minimum_a(observation)
         current_step = observation.current_step_a
         if current_minimum is None or current_step is None:
             self.last_reason = "ev_actuator_metadata_unavailable"
@@ -1268,7 +1268,7 @@ class ActiveEvController:
         """Port solar spill and latest-start backfill without touching FoxESS."""
         self.outside_stop_requested = False
         snapshot = self.coordinator.snapshot
-        current_minimum = observation.current_minimum_a
+        current_minimum = self._physical_charging_minimum_a(observation)
         current_step = observation.current_step_a
         if current_minimum is None or current_step is None:
             self.last_reason = "ev_actuator_metadata_unavailable"
@@ -2000,6 +2000,17 @@ class ActiveEvController:
         except (KeyError, TypeError, ValueError):
             return None
 
+    @staticmethod
+    def _physical_charging_minimum_a(
+        observation: DirectEvseObservation,
+    ) -> float | None:
+        """Port the pilot's Tessie min=0 fallback to one actuator step."""
+        minimum = observation.current_minimum_a
+        step = observation.current_step_a
+        if minimum is None or step is None or step <= 0:
+            return None
+        return minimum if minimum > 0 else step
+
     def _free_window(self, now: datetime) -> tuple[bool, float, float]:
         start = self.coordinator._configured_time(  # noqa: SLF001
             CONF_FREE_CHARGE_START, DEFAULT_FREE_CHARGE_START
@@ -2377,13 +2388,6 @@ class ActiveEvController:
                         if self.pre_free_session.frozen_start is not None
                         else None
                     ),
-                    "stop_pending": self.daily_backfill_stop_pending,
-                    "stop_attempts": self.daily_backfill_stop_attempts,
-                    "last_stop_at": (
-                        self.daily_backfill_last_stop_at.isoformat()
-                        if self.daily_backfill_last_stop_at is not None
-                        else None
-                    ),
                 },
                 "daily_backfill": {
                     "cycle_ready_at": (
@@ -2400,6 +2404,13 @@ class ActiveEvController:
                     "frozen_start": (
                         self.daily_backfill_frozen_start.isoformat()
                         if self.daily_backfill_frozen_start is not None
+                        else None
+                    ),
+                    "stop_pending": self.daily_backfill_stop_pending,
+                    "stop_attempts": self.daily_backfill_stop_attempts,
+                    "last_stop_at": (
+                        self.daily_backfill_last_stop_at.isoformat()
+                        if self.daily_backfill_last_stop_at is not None
                         else None
                     ),
                 },

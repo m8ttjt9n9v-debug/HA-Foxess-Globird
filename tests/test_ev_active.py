@@ -375,7 +375,7 @@ async def test_opted_in_outside_policy_restores_baseline_after_reconnect(
     hass.states.async_set(
         "number.car_current",
         "10",
-        {"min": 1, "max": 16, "step": 1, "unit_of_measurement": "A"},
+        {"min": 0, "max": 16, "step": 1, "unit_of_measurement": "A"},
     )
     hass.states.async_set("switch.car_charge", "on")
     hass.states.async_set("sensor.site_grid", "0", {"unit_of_measurement": "kW"})
@@ -408,6 +408,7 @@ async def test_opted_in_outside_policy_restores_baseline_after_reconnect(
 
     assert controller.solar_spill.phase == "battery_not_full"
     assert controller.target_current_a == 1
+    assert controller.decision_phase == "protected_baseline"
     assert controller.outside_control_active is True
     current_calls = [
         event
@@ -641,6 +642,9 @@ async def test_daily_backfill_cycle_and_delivered_energy_survive_restart(
     first.daily_backfill_session_target_kwh = 4
     first.daily_backfill_session_start_delivered_kwh = 1
     first.daily_backfill_frozen_start = datetime(2026, 9, 7, 5, tzinfo=UTC)
+    first.daily_backfill_stop_pending = True
+    first.daily_backfill_stop_attempts = 2
+    first.daily_backfill_last_stop_at = datetime(2026, 9, 7, 5, 59, tzinfo=UTC)
     await first._async_save(datetime(2026, 9, 7, 6, tzinfo=UTC))  # noqa: SLF001
 
     restored = ActiveEvController(hass, coordinator)
@@ -651,6 +655,11 @@ async def test_daily_backfill_cycle_and_delivered_energy_survive_restart(
     assert restored.daily_backfill_session_target_kwh == 4
     assert restored.daily_backfill_frozen_start == datetime(
         2026, 9, 7, 5, tzinfo=UTC
+    )
+    assert restored.daily_backfill_stop_pending is True
+    assert restored.daily_backfill_stop_attempts == 2
+    assert restored.daily_backfill_last_stop_at == datetime(
+        2026, 9, 7, 5, 59, tzinfo=UTC
     )
 
 

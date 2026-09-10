@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.12.3 — Tessie reconnect baseline
+
+- Restore the Working Single Phase Pilot Site's interpretation of Tessie's
+  current metadata: when the number entity advertises a zero minimum, one
+  positive actuator step is the minimum physical charging command. This keeps
+  an opted-in direct-EVSE outside-window policy at its configured protected
+  baseline instead of selecting a false 0 A solar-spill target.
+- Preserve pending daily-backfill stop reconciliation in the correct persisted
+  state object so a Home Assistant restart cannot discard an unfinished stop.
+- Add a live-derived regression for a Tesla reconnect outside the free window
+  with Tessie's actual `min: 0`, `step: 1` metadata.
+
 ## 0.12.2 — Project identity
 
 - Rename the integration **FoxESS GloBird Tesla Energy Orchestrator** to reflect
