@@ -33,6 +33,13 @@ algorithm and its persisted recovery behavior; the
 [Local Modbus charge policy](local-modbus-free-charge.md) defines the separate
 charge extension.
 
+In the FoxESS Modbus integration itself, verify **Export Power Limit**, **Force
+Charge Power**, **Force Discharge Power**, and **Import Power Limit** against the
+commissioned site before testing. Do not interpret a successful work-mode
+selection as proof of non-zero power: confirm direct battery and grid telemetry.
+HEO may legitimately leave both force-power setpoints at zero after restoring
+Self Use, but it does not change the native import/export power-limit entities.
+
 Direct-EVSE commissioning is independent of FoxESS ownership. First leave
 Automatic EV Control off and Safety Lock on, then verify mapped SoC, stored
 energy, at-home evidence, cable state, charging state, actual current, writable

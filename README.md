@@ -41,6 +41,11 @@ the proven site's operational information architecture while using only
 integration-owned entity IDs. Vehicle-native Tessie cards, local weather,
 rooms, and other site-specific cards belong in a local overlay.
 
+FoxESS commissioning must include the upstream integration's Export Power
+Limit, Force Charge Power, Force Discharge Power, and Import Power Limit. See
+the commissioning checklist for the distinction between inverter limits and
+HEO-managed force-power setpoints.
+
 ## Current capabilities
 
 - Assisted FoxESS Modbus and Tessie entity discovery during setup and

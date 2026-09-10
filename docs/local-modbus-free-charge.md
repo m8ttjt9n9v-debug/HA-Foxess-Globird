@@ -29,6 +29,12 @@ introducing a second FoxESS implementation:
 | Restart recovery | Persist phase, requested power, attempts, and last-command timestamp |
 | Competing control | FoxCloud ownership blocks the controller for the entire day |
 
+The upstream FoxESS Modbus controls must also be commissioned. Verify its
+Export Power Limit, Force Charge Power, Force Discharge Power, and Import Power
+Limit values before enabling HEO. HEO sets the two force-power targets required
+for an HEO-owned session and returns them to zero after Self Use restoration; it
+does not configure the inverter's import or export power-limit entities.
+
 ## Deliberate schedule semantics
 
 The window is half-open: start is included and end is excluded. Home

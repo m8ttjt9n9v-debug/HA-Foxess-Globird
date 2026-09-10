@@ -27,6 +27,20 @@ dashboard, commission electrical limits, or migrate personal entity mappings.
 The FoxESS work-mode and force-power entities must be explicitly mapped. Entity
 availability alone does not prove safe hardware compatibility.
 
+Before commissioning any FoxESS command, open the FoxESS Modbus integration and
+ensure **Export Power Limit**, **Force Charge Power**, **Force Discharge Power**,
+and **Import Power Limit** are properly set for the commissioned inverter and
+site. A zero force-power setpoint can make a manual Force Charge or Force
+Discharge mode selection produce no battery power; an incorrect import/export
+limit can constrain the inverter independently of HEO. Confirm the live values
+and native entity maxima rather than copying another site's ratings.
+
+HEO writes the mapped Force Charge Power and Force Discharge Power entities for
+its own bounded sessions. It clears the opposite force target before starting
+and clears both targets after restoring Self Use, so finding those two setpoints
+at zero after an HEO-controlled session can be expected. HEO does not currently
+write the FoxESS Modbus Import Power Limit or Export Power Limit entities.
+
 Automatic Local Modbus battery charging additionally requires the work-mode
 entity to advertise `Self Use` and `Force Charge`, a positive commissioned
 inverter charge limit, a positive live maximum on the force-charge number, a
