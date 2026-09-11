@@ -27,6 +27,20 @@ dashboard, commission electrical limits, or migrate personal entity mappings.
 The FoxESS work-mode and force-power entities must be explicitly mapped. Entity
 availability alone does not prove safe hardware compatibility.
 
+Local Modbus ownership requires a clean inverter schedule state. Delete or
+disable every inverter-local Mode Scheduler entry, then clear both legacy
+front-panel **Charge time** periods. Where the inverter shows P1/P2, set each
+start and end to the same value (the conventional cleared value is
+`00:00–00:00`) **and** set its grid-charge state to `Dis`. Do not treat matching
+times while the period still displays `En` as commissioned or safely disabled.
+FoxESS's [public H3 documentation](https://www.fox-ess.com/download/upfiles/EN-H3AC3-User-Manual-V1.0.4-20250107.pdf)
+exposes the Charge time menu but does not define equal-time behaviour across
+firmware. The FoxESS Modbus project confirms that these periods are
+[stored on the inverter](https://github.com/nathanmarlor/foxess_modbus/wiki/Force-Charge-and-Discharge),
+so HEO requires the explicit disabled state as well as a zero-duration period.
+FoxCloud ownership is the exception: its intended cloud schedule remains the
+sole inverter owner and all HEO Modbus writes stay blocked.
+
 Before commissioning any FoxESS command, open the FoxESS Modbus integration and
 ensure **Export Power Limit**, **Force Charge Power**, **Force Discharge Power**,
 and **Import Power Limit** are properly set for the commissioned inverter and

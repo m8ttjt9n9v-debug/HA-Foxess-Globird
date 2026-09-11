@@ -19,14 +19,21 @@ confirmation automatically. See [telemetry normalization](telemetry-normalizatio
 
 Before commissioning FoxESS actuation, choose one owner for the entire day.
 Local Modbus requires FoxCloud Mode Scheduler and all legacy inverter writers
-to be disabled. Also inspect the inverter's own front-panel charge periods and
-disable every unintended local schedule; an inverter-retained period may not be
-visible through FoxCloud or exposed as an entity by FoxESS Modbus, yet can still
-take control at its local start time. Record the enabled state, start and end of
-each period before changing it. Validate mapped mode and power feedback, then
-use only the bounded Diagnostics tests. Automatic battery charging remains
-default-off; verify that its target is above current SoC before rehearsal, confirm its
-displayed bounded power and 24-hour window, then test one supervised window.
+to be disabled. Delete or disable all inverter-local Mode Scheduler entries and
+clear both legacy front-panel **Charge time** periods. For P1/P2 controls, set
+each start and end to the same value (conventionally `00:00–00:00`) and set each
+grid-charge state to `Dis`. Do not rely on equal times alone while `En` remains
+displayed: FoxESS's [public H3 manual](https://www.fox-ess.com/download/upfiles/EN-H3AC3-User-Manual-V1.0.4-20250107.pdf)
+lists the Charge time control but does not specify equal-time semantics across
+firmware. The FoxESS Modbus project confirms that charge periods are
+[stored on the inverter](https://github.com/nathanmarlor/foxess_modbus/wiki/Force-Charge-and-Discharge).
+An inverter-retained period may not be visible through FoxCloud or exposed as
+an entity by FoxESS Modbus, yet can still take control at its local start time.
+Record each period's enabled state, start and end before changing it. Validate
+mapped mode and power feedback, then use only the bounded Diagnostics tests.
+Automatic battery charging remains default-off; verify that its target is
+above current SoC before rehearsal, confirm its displayed bounded power and 24-hour window, then
+test one supervised window.
 Place the inverter in Self Use first; HEO will not adopt an unlatched forced or
 different base mode. Confirm Force Charge feedback after the start and Self Use plus zero force
 targets after the end. Diagnostics cannot start while an automatic charge or
