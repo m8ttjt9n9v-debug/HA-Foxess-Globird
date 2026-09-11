@@ -76,6 +76,7 @@ from .const import (
     CONF_FOXESS_CONTROL_OWNER,
     CONF_FREE_CHARGE_END,
     CONF_FREE_CHARGE_START,
+    CONF_HOUSE_LOAD_INCLUDES_EV,
     CONF_INVERTER_DISCHARGE_LIMIT_KW,
     CONF_SERVICE_IMPORT_LIMIT_A,
     CONF_SITE_GRID_HEADROOM_CURRENT,
@@ -128,6 +129,7 @@ from .const import (
     DEFAULT_FOXESS_CONTROL_OWNER,
     DEFAULT_FREE_CHARGE_END,
     DEFAULT_FREE_CHARGE_START,
+    DEFAULT_HOUSE_LOAD_INCLUDES_EV,
     DEFAULT_INVERTER_DISCHARGE_LIMIT_KW,
     DEFAULT_SERVICE_IMPORT_LIMIT_A,
     DEFAULT_SITE_GRID_HEADROOM_CURRENT,
@@ -154,6 +156,7 @@ from .planner.ev import (
     apply_daily_allowance_ceiling,
     estimate_other_free_window_import_kwh,
     estimate_vehicle_energy_to_target_kwh,
+    house_load_excluding_ev_kw,
     plan_charge_limit_target,
     plan_direct_evse_commands,
     plan_free_window_current,
@@ -253,6 +256,8 @@ class ActiveEvController:
         self.actual_current_a: float | None = None
         self.decision_phase = "inactive"
         self.allowance_phase = "not_evaluated"
+        self.allowance_house_load_kw: float | None = None
+        self.allowance_ev_power_kw: float | None = None
         self.last_reason = "automatic_ev_control_disabled"
         self.last_actions: tuple[str, ...] = ()
         self.last_write_at: datetime | None = None
@@ -347,9 +352,7 @@ class ActiveEvController:
             if gate not in {"ready", "safety_locked"}:
                 self.last_reason = gate
                 return
-            charge_path = self.coordinator.config.get(
-                CONF_EV_CHARGE_PATH, DEFAULT_EV_CHARGE_PATH
-            )
+            charge_path = self.coordinator.config.get(CONF_EV_CHARGE_PATH, DEFAULT_EV_CHARGE_PATH)
             smart_path = charge_path == EV_CHARGE_PATH_SMART_SOCKET
             if not smart_path and (
                 self.smart_recovery != SmartSocketRecoveryState()
@@ -415,10 +418,13 @@ class ActiveEvController:
                 if (vehicle_soc is not None and vehicle_soc >= maximum) or timed_out:
                     await self._async_clear_charge_to_full()
                     self.charge_to_full_started_at = None
-                    if self._float(
-                        CONF_EV_PROTECTED_BASELINE_A,
-                        DEFAULT_EV_PROTECTED_BASELINE_A,
-                    ) <= 0:
+                    if (
+                        self._float(
+                            CONF_EV_PROTECTED_BASELINE_A,
+                            DEFAULT_EV_PROTECTED_BASELINE_A,
+                        )
+                        <= 0
+                    ):
                         self.daily_backfill_stop_pending = True
                         self.daily_backfill_stop_attempts = 0
                         self.daily_backfill_last_stop_at = None
@@ -447,12 +453,12 @@ class ActiveEvController:
                     )
                     == FOXESS_CONTROL_OWNER_MODBUS
                     and (
-                    self.coordinator.config.get(
-                        CONF_EV_SOLAR_SPILL_ENABLED, DEFAULT_EV_SOLAR_SPILL_ENABLED
-                    )
-                    or self.coordinator.config.get(
-                        CONF_EV_PRE_FREE_ENABLED, DEFAULT_EV_PRE_FREE_ENABLED
-                    )
+                        self.coordinator.config.get(
+                            CONF_EV_SOLAR_SPILL_ENABLED, DEFAULT_EV_SOLAR_SPILL_ENABLED
+                        )
+                        or self.coordinator.config.get(
+                            CONF_EV_PRE_FREE_ENABLED, DEFAULT_EV_PRE_FREE_ENABLED
+                        )
                     )
                 )
             )
@@ -715,9 +721,7 @@ class ActiveEvController:
             ),
         )
         if gate == "safety_locked":
-            self.last_actions = tuple(
-                f"would_{command.action}" for command in plan.commands
-            )
+            self.last_actions = tuple(f"would_{command.action}" for command in plan.commands)
             self.last_reason = f"rehearsal_{plan.reason}"
             return
         if plan.commands:
@@ -833,8 +837,7 @@ class ActiveEvController:
                 DEFAULT_EV_SMART_SOCKET_SETTLE_SECONDS,
             ),
             charge_allowed=(
-                connected_for_planning
-                and (self.target_current_a or 0.0) >= physical_minimum
+                connected_for_planning and (self.target_current_a or 0.0) >= physical_minimum
             ),
             in_free_window=in_window,
             connected_for_planning=connected_for_planning,
@@ -846,9 +849,7 @@ class ActiveEvController:
             ),
         )
         if gate == "safety_locked":
-            self.last_actions = tuple(
-                f"would_{command.action}" for command in plan.commands
-            )
+            self.last_actions = tuple(f"would_{command.action}" for command in plan.commands)
             self.last_reason = f"rehearsal_{plan.reason}"
             return
         plan = self._suppress_unconfirmed_smart_stage(plan, smart, now)
@@ -887,9 +888,7 @@ class ActiveEvController:
             return None
         socket_on = socket_state.state.lower() == "on"
         socket_on_seconds = (
-            max((now - socket_state.last_changed).total_seconds(), 0.0)
-            if socket_on
-            else 0.0
+            max((now - socket_state.last_changed).total_seconds(), 0.0) if socket_on else 0.0
         )
         return SmartSocketObservation(
             requested_current_a=observation.requested_current_a,
@@ -910,22 +909,17 @@ class ActiveEvController:
         physical_minimum_a: float,
     ) -> SmartSocketRecoveryObservation:
         charging_entity = self.coordinator.config.get(CONF_EV_CHARGING_STATE)
-        charging_state = (
-            self.hass.states.get(str(charging_entity)) if charging_entity else None
-        )
+        charging_state = self.hass.states.get(str(charging_entity)) if charging_entity else None
         charging_value = (
             charging_state.state.lower()
-            if charging_state is not None
-            and charging_state.state.lower() not in _UNKNOWN_STATES
+            if charging_state is not None and charging_state.state.lower() not in _UNKNOWN_STATES
             else None
         )
         stable_seconds = self._float(
             CONF_EV_SMART_RECOVERY_NO_POWER_SECONDS,
             DEFAULT_EV_SMART_RECOVERY_NO_POWER_SECONDS,
         )
-        at_home_state = self.hass.states.get(
-            str(self.coordinator.config.get(CONF_EV_AT_HOME, ""))
-        )
+        at_home_state = self.hass.states.get(str(self.coordinator.config.get(CONF_EV_AT_HOME, "")))
         cable_state = self.hass.states.get(
             str(self.coordinator.config.get(CONF_EV_CABLE_CONNECTED, ""))
         )
@@ -1142,6 +1136,8 @@ class ActiveEvController:
             base.phase if below_policy or charge_to_full else "policy_limit_reached"
         )
         self.allowance_phase = "disabled"
+        self.allowance_house_load_kw = None
+        self.allowance_ev_power_kw = None
         if self.coordinator.config.get(
             CONF_EV_ALLOWANCE_GUARD_ENABLED, DEFAULT_EV_ALLOWANCE_GUARD_ENABLED
         ):
@@ -1210,6 +1206,23 @@ class ActiveEvController:
         ):
             return None
         try:
+            allowance_house_load_kw = snapshot.house_load_kw
+            if self.coordinator.config.get(
+                CONF_HOUSE_LOAD_INCLUDES_EV, DEFAULT_HOUSE_LOAD_INCLUDES_EV
+            ):
+                actual_current, actual_current_valid = self._actual_ev_current_a()
+                if not actual_current_valid:
+                    return None
+                voltage = self._float(CONF_EV_VOLTAGE, DEFAULT_EV_VOLTAGE)
+                phases = int(self._float(CONF_EV_PHASE_COUNT, DEFAULT_EV_PHASE_COUNT))
+                allowance_house_load_kw = house_load_excluding_ev_kw(
+                    house_load_kw=snapshot.house_load_kw,
+                    actual_ev_current_a=actual_current,
+                    ev_voltage_v=voltage,
+                    ev_phase_count=phases,
+                )
+                self.allowance_ev_power_kw = round(actual_current * voltage * phases / 1000, 3)
+            self.allowance_house_load_kw = allowance_house_load_kw
             ev_need = estimate_vehicle_energy_to_target_kwh(
                 stored_energy_kwh=stored,
                 current_soc_percent=vehicle_soc,
@@ -1229,7 +1242,7 @@ class ActiveEvController:
                     CONF_BATTERY_CHARGE_EFFICIENCY,
                     DEFAULT_BATTERY_CHARGE_EFFICIENCY,
                 ),
-                house_load_kw=snapshot.house_load_kw,
+                house_load_kw=allowance_house_load_kw,
                 remaining_window_hours=remaining_hours,
             )
             return apply_daily_allowance_ceiling(
@@ -1355,9 +1368,7 @@ class ActiveEvController:
         self.solar_spill = SolarSpillDecision(0.0, 0.0, "disabled")
         if self.coordinator.config.get(CONF_EV_SOLAR_SPILL_ENABLED, DEFAULT_EV_SOLAR_SPILL_ENABLED):
             if snapshot is None or snapshot.battery_soc is None:
-                self.solar_spill = SolarSpillDecision(
-                    0.0, 0.0, "site_snapshot_unavailable"
-                )
+                self.solar_spill = SolarSpillDecision(0.0, 0.0, "site_snapshot_unavailable")
             else:
                 self.solar_spill = self._solar_spill_decision(
                     now,
@@ -1565,9 +1576,7 @@ class ActiveEvController:
                 ready_at=ready_at,
                 planning_window_start=planning_start,
                 next_free_start=next_free,
-                available_ac_after_reserve_kwh=max(
-                    float(data.available_after_reserve_kwh), 0.0
-                )
+                available_ac_after_reserve_kwh=max(float(data.available_after_reserve_kwh), 0.0)
                 * self._float(
                     CONF_DISCHARGE_EFFICIENCY_PERCENT,
                     DEFAULT_DISCHARGE_EFFICIENCY_PERCENT,
@@ -1589,9 +1598,7 @@ class ActiveEvController:
                     DEFAULT_EV_OUTSIDE_INVERTER_PERCENT,
                 ),
                 voltage_v=self._float(CONF_EV_VOLTAGE, DEFAULT_EV_VOLTAGE),
-                phase_count=int(
-                    self._float(CONF_EV_PHASE_COUNT, DEFAULT_EV_PHASE_COUNT)
-                ),
+                phase_count=int(self._float(CONF_EV_PHASE_COUNT, DEFAULT_EV_PHASE_COUNT)),
                 current_step_a=current_step_a,
                 charger_minimum_a=charger_minimum_a,
                 charger_maximum_a=charger_ceiling_a,
@@ -1641,9 +1648,7 @@ class ActiveEvController:
         stepped = int(available / current_step) * current_step
         return round(min(physical_ceiling_a, stepped), 3)
 
-    def _daily_ready_cycle(
-        self, now: datetime
-    ) -> tuple[datetime, datetime, datetime]:
+    def _daily_ready_cycle(self, now: datetime) -> tuple[datetime, datetime, datetime]:
         ready_time = self.coordinator._configured_time(  # noqa: SLF001
             CONF_EV_DAILY_READY_TIME,
             DEFAULT_EV_DAILY_READY_TIME,
@@ -1681,9 +1686,7 @@ class ActiveEvController:
         self.daily_backfill_last_sample_at = None
         self.daily_backfill_last_actual_current_a = None
 
-    def _update_daily_backfill_energy(
-        self, now: datetime, actual_current_a: float | None
-    ) -> None:
+    def _update_daily_backfill_energy(self, now: datetime, actual_current_a: float | None) -> None:
         """Integrate confirmed wall current only while this policy owns charging."""
         if not self._daily_backfill_enabled():
             return
@@ -1763,9 +1766,7 @@ class ActiveEvController:
             gain = estimate_free_window_soc_gain_percent(
                 maximum_current_a=self._path_ceiling_a(),
                 voltage_v=self._float(CONF_EV_VOLTAGE, DEFAULT_EV_VOLTAGE),
-                phase_count=int(
-                    self._float(CONF_EV_PHASE_COUNT, DEFAULT_EV_PHASE_COUNT)
-                ),
+                phase_count=int(self._float(CONF_EV_PHASE_COUNT, DEFAULT_EV_PHASE_COUNT)),
                 window_hours=self._free_window_duration_hours(),
                 charge_efficiency_percent=self._float(
                     CONF_EV_CHARGE_EFFICIENCY, DEFAULT_EV_CHARGE_EFFICIENCY
@@ -1865,9 +1866,7 @@ class ActiveEvController:
             and (max(timestamps) - min(timestamps)).total_seconds() <= max_skew
         )
         grid_import = grid.value if grid is not None and grid.value is not None else 0.0
-        battery_charge = (
-            battery.value if battery is not None and battery.value is not None else 0.0
-        )
+        battery_charge = battery.value if battery is not None and battery.value is not None else 0.0
         voltage = self._float(CONF_EV_VOLTAGE, DEFAULT_EV_VOLTAGE)
         phases = int(self._float(CONF_EV_PHASE_COUNT, DEFAULT_EV_PHASE_COUNT))
         return plan_solar_spill_current(
@@ -2075,9 +2074,7 @@ class ActiveEvController:
         if state is None:
             return None
         try:
-            value = energy_to_kwh(
-                float(state.state), state.attributes.get("unit_of_measurement")
-            )
+            value = energy_to_kwh(float(state.state), state.attributes.get("unit_of_measurement"))
         except (TypeError, ValueError):
             return None
         return value if isfinite(value) and value >= 0 else None
@@ -2101,11 +2098,7 @@ class ActiveEvController:
         entry = self.hass.config_entries.async_get_entry(self.coordinator.entry_id)
         if entry is None:
             return
-        config = {
-            key: value
-            for key, value in entry.data.items()
-            if key != CONF_EV_CHARGE_TO_FULL
-        }
+        config = {key: value for key, value in entry.data.items() if key != CONF_EV_CHARGE_TO_FULL}
         config[CONF_EV_CHARGE_TO_FULL_ENABLED] = False
         self.hass.config_entries.async_update_entry(entry, data=config)
         self.coordinator.config.pop(CONF_EV_CHARGE_TO_FULL, None)
@@ -2136,9 +2129,7 @@ class ActiveEvController:
         now = dt_util.now()
         self.grid_average.restore(payload.get("grid_average"), now)
         self.ev_average.restore(payload.get("ev_average"), now)
-        self.driving_history = DemandHistory.from_payload(
-            payload.get("driving_history"), now
-        )
+        self.driving_history = DemandHistory.from_payload(payload.get("driving_history"), now)
         driving_snapshot = payload.get("driving_snapshot")
         if isinstance(driving_snapshot, dict):
             try:
@@ -2231,14 +2222,10 @@ class ActiveEvController:
             if not isinstance(daily, dict):
                 raise ValueError
             cycle_raw = daily.get("cycle_ready_at")
-            cycle_ready_at = (
-                datetime.fromisoformat(str(cycle_raw)) if cycle_raw else None
-            )
+            cycle_ready_at = datetime.fromisoformat(str(cycle_raw)) if cycle_raw else None
             frozen_daily_raw = daily.get("frozen_start")
             frozen_daily = (
-                datetime.fromisoformat(str(frozen_daily_raw))
-                if frozen_daily_raw
-                else None
+                datetime.fromisoformat(str(frozen_daily_raw)) if frozen_daily_raw else None
             )
             delivered = float(daily.get("delivered_kwh", 0.0))
             session_target = float(daily.get("session_target_kwh", 0.0))
@@ -2262,12 +2249,8 @@ class ActiveEvController:
             self.daily_backfill_session_target_kwh = session_target
             self.daily_backfill_session_start_delivered_kwh = session_start
             self.daily_backfill_frozen_start = frozen_daily
-            self.daily_backfill_stop_pending = bool(
-                daily.get("stop_pending", False)
-            )
-            self.daily_backfill_stop_attempts = int(
-                daily.get("stop_attempts", 0)
-            )
+            self.daily_backfill_stop_pending = bool(daily.get("stop_pending", False))
+            self.daily_backfill_stop_attempts = int(daily.get("stop_attempts", 0))
             stop_at_raw = daily.get("last_stop_at")
             self.daily_backfill_last_stop_at = (
                 datetime.fromisoformat(str(stop_at_raw)) if stop_at_raw else None
@@ -2283,9 +2266,7 @@ class ActiveEvController:
                 raise ValueError
             charge_full_raw = payload.get("charge_to_full_started_at")
             charge_full_started = (
-                datetime.fromisoformat(str(charge_full_raw))
-                if charge_full_raw
-                else None
+                datetime.fromisoformat(str(charge_full_raw)) if charge_full_raw else None
             )
             if charge_full_started is not None and (
                 charge_full_started.tzinfo is None or charge_full_started > now
@@ -2298,9 +2279,7 @@ class ActiveEvController:
                 raise ValueError
             recovery_started_raw = smart_recovery.get("phase_started_at")
             recovery_started = (
-                datetime.fromisoformat(str(recovery_started_raw))
-                if recovery_started_raw
-                else None
+                datetime.fromisoformat(str(recovery_started_raw)) if recovery_started_raw else None
             )
             recovery_current = (
                 float(smart_recovery["recovery_current_a"])

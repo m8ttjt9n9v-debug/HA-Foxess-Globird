@@ -111,6 +111,16 @@ layers around the proven algorithm, not replacement algorithms.
 - A multiphase EV controller must receive explicit signed current for the
   most-loaded service phase. Aggregate power is not treated as proof that phase
   loading is balanced.
+- House-load topology is explicit. The retained pilot mapping already excludes
+  EV power and remains the default. A whole-house mapping may opt into removing
+  measured EV current converted with the commissioned voltage and EV phase
+  count exactly once for the free-window allowance projection. HEO never
+  infers this choice from entity names, site phase count, or inverter model;
+  invalid actual-current evidence makes the projection unavailable.
+- A mapped live FoxESS battery-capacity entity is authoritative over the
+  configured numeric fallback. Setup may prefill that fallback from an
+  unambiguous live FoxESS Modbus capacity value, but must not manufacture a
+  capacity from inverter rating or site identity.
 - The portable dashboard preserves the proven operational view structure:
   Overview, Tesla, House, Solar & Weather, Configuration, Advanced, and Manual.
   Shared views use only HEO-owned entity IDs; vehicle-native, weather, room, and

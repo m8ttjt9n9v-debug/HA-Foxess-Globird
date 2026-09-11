@@ -19,6 +19,7 @@ from custom_components.home_energy_orchestrator.planner.ev import (
     direct_evse_response_matches,
     estimate_other_free_window_import_kwh,
     estimate_vehicle_energy_to_target_kwh,
+    house_load_excluding_ev_kw,
     plan_charge_limit_target,
     plan_direct_evse_commands,
     plan_free_window_current,
@@ -107,9 +108,7 @@ def test_charge_limit_retained_away_and_policy_kept_separate_from_guard():
     )
     assert plan_charge_limit_target(base) == 90
     assert plan_charge_limit_target(replace(base, connected=True)) == 91
-    assert plan_charge_limit_target(
-        replace(base, connected=True, vehicle_soc_percent=60)
-    ) == 80
+    assert plan_charge_limit_target(replace(base, connected=True, vehicle_soc_percent=60)) == 80
 
 
 ALLOWANCE = AllowanceCeilingInputs(
@@ -166,9 +165,7 @@ def test_higher_capacity_site_continues_to_projection_check():
 
 
 def test_projected_overrun_activates_topology_aware_allowance_pacing():
-    decision = apply_daily_allowance_ceiling(
-        replace(ALLOWANCE, projected_ev_energy_kwh=30)
-    )
+    decision = apply_daily_allowance_ceiling(replace(ALLOWANCE, projected_ev_energy_kwh=30))
     # 15 kWh / 2 h / (230 V * 3 phases) = 10.86 A, floored to a 1 A step.
     assert decision.current_a == 10
     assert decision.phase == "allowance_pacing"
@@ -190,9 +187,7 @@ def test_allowance_is_configured_not_literal():
 
 
 def test_missing_allowance_meter_fails_to_protected_baseline():
-    decision = apply_daily_allowance_ceiling(
-        replace(ALLOWANCE, imported_in_window_kwh=None)
-    )
+    decision = apply_daily_allowance_ceiling(replace(ALLOWANCE, imported_in_window_kwh=None))
     assert decision.current_a == 1
     assert decision.phase == "allowance_meter_unavailable"
 
@@ -213,33 +208,66 @@ def test_allowance_validation_rejects_invalid_topology():
 def test_vehicle_need_uses_live_stored_energy_instead_of_fixed_capacity():
     # 45 kWh stored at 60% implies 75 kWh usable capacity. Reaching 80%
     # requires 15 kWh in the pack, or 16.667 kWh at 90% wall efficiency.
-    assert estimate_vehicle_energy_to_target_kwh(
-        stored_energy_kwh=45,
-        current_soc_percent=60,
-        target_soc_percent=80,
-        charge_efficiency_percent=90,
-    ) == 16.667
+    assert (
+        estimate_vehicle_energy_to_target_kwh(
+            stored_energy_kwh=45,
+            current_soc_percent=60,
+            target_soc_percent=80,
+            charge_efficiency_percent=90,
+        )
+        == 16.667
+    )
 
 
 def test_small_vehicle_top_up_projection_is_not_a_fixed_site_value():
-    assert estimate_vehicle_energy_to_target_kwh(
-        stored_energy_kwh=72,
-        current_soc_percent=96,
-        target_soc_percent=100,
-        charge_efficiency_percent=90,
-    ) == 3.333
+    assert (
+        estimate_vehicle_energy_to_target_kwh(
+            stored_energy_kwh=72,
+            current_soc_percent=96,
+            target_soc_percent=100,
+            charge_efficiency_percent=90,
+        )
+        == 3.333
+    )
 
 
 def test_other_projection_combines_configured_battery_gap_and_live_house_load():
     # 8 kWh pack gap at 80% efficiency plus 2 kW for two hours.
-    assert estimate_other_free_window_import_kwh(
-        battery_capacity_kwh=40,
-        battery_soc_percent=70,
-        battery_target_percent=90,
-        battery_charge_efficiency_percent=80,
-        house_load_kw=2,
-        remaining_window_hours=2,
-    ) == 14
+    assert (
+        estimate_other_free_window_import_kwh(
+            battery_capacity_kwh=40,
+            battery_soc_percent=70,
+            battery_target_percent=90,
+            battery_charge_efficiency_percent=80,
+            house_load_kw=2,
+            remaining_window_hours=2,
+        )
+        == 14
+    )
+
+
+def test_whole_house_topology_subtracts_three_phase_ev_once():
+    assert (
+        house_load_excluding_ev_kw(
+            house_load_kw=12,
+            actual_ev_current_a=16,
+            ev_voltage_v=230,
+            ev_phase_count=3,
+        )
+        == 0.96
+    )
+
+
+def test_whole_house_topology_clamps_small_meter_difference_to_zero():
+    assert (
+        house_load_excluding_ev_kw(
+            house_load_kw=10,
+            actual_ev_current_a=16,
+            ev_voltage_v=230,
+            ev_phase_count=3,
+        )
+        == 0
+    )
 
 
 DIRECT = DirectEvseObservation(
@@ -343,15 +371,9 @@ def test_smart_socket_zero_demand_power_policy_is_outside_window_only():
         power_switching_enabled=True,
     )
     powered = replace(SMART, socket_on=True, socket_on_seconds=60)
-    assert plan_smart_socket_commands(
-        powered, in_free_window=True, **common
-    ).commands == ()
-    outside = plan_smart_socket_commands(
-        powered, in_free_window=False, **common
-    )
-    assert [command.action for command in outside.commands] == [
-        "turn_off_smart_socket"
-    ]
+    assert plan_smart_socket_commands(powered, in_free_window=True, **common).commands == ()
+    outside = plan_smart_socket_commands(powered, in_free_window=False, **common)
+    assert [command.action for command in outside.commands] == ["turn_off_smart_socket"]
 
 
 def test_smart_socket_rating_is_configuration_not_a_literal():
@@ -534,9 +556,7 @@ def test_smart_socket_recovery_rearms_only_after_sustained_health_or_path_change
         now,
     )
     assert healthy.state == SmartSocketRecoveryState()
-    path_changed = _recover(
-        latched, replace(RECOVERY, smart_path_selected=False), now
-    )
+    path_changed = _recover(latched, replace(RECOVERY, smart_path_selected=False), now)
     assert path_changed.state == SmartSocketRecoveryState()
 
 

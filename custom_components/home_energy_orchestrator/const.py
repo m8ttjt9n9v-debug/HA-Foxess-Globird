@@ -36,6 +36,7 @@ CONF_EXPORT_LIMIT_KW = "export_limit_kw"
 CONF_INVERTER_CHARGE_LIMIT_KW = "inverter_charge_limit_kw"
 CONF_INVERTER_DISCHARGE_LIMIT_KW = "inverter_discharge_limit_kw"
 CONF_HOUSE_LOAD = "house_load_entity"
+CONF_HOUSE_LOAD_INCLUDES_EV = "house_load_includes_ev"
 CONF_HEATER_POWER = "heater_power_entity"
 CONF_SOLAR_POWER = "solar_power_entity"
 CONF_SOLAR_POWER_DIRECTION = "solar_power_generation_direction"
@@ -98,17 +99,11 @@ CONF_EV_SMART_SOCKET_SETTLE_SECONDS = "ev_smart_socket_settle_seconds"
 CONF_EV_SMART_SOCKET_RETRY_SECONDS = "ev_smart_socket_retry_seconds"
 CONF_EV_SMART_SOCKET_POWER_SWITCHING = "ev_smart_socket_power_switching"
 CONF_EV_SMART_RECOVERY_NO_POWER_SECONDS = "ev_smart_recovery_no_power_seconds"
-CONF_EV_SMART_RECOVERY_CURRENT_CONFIRM_SECONDS = (
-    "ev_smart_recovery_current_confirm_seconds"
-)
-CONF_EV_SMART_RECOVERY_SOCKET_CONFIRM_SECONDS = (
-    "ev_smart_recovery_socket_confirm_seconds"
-)
+CONF_EV_SMART_RECOVERY_CURRENT_CONFIRM_SECONDS = "ev_smart_recovery_current_confirm_seconds"
+CONF_EV_SMART_RECOVERY_SOCKET_CONFIRM_SECONDS = "ev_smart_recovery_socket_confirm_seconds"
 CONF_EV_SMART_RECOVERY_POWER_OFF_SECONDS = "ev_smart_recovery_power_off_seconds"
 CONF_EV_SMART_RECOVERY_POST_POWER_SECONDS = "ev_smart_recovery_post_power_seconds"
-CONF_EV_SMART_RECOVERY_CHARGING_CONFIRM_SECONDS = (
-    "ev_smart_recovery_charging_confirm_seconds"
-)
+CONF_EV_SMART_RECOVERY_CHARGING_CONFIRM_SECONDS = "ev_smart_recovery_charging_confirm_seconds"
 CONF_EV_SMART_RECOVERY_REARM_SECONDS = "ev_smart_recovery_rearm_seconds"
 CONF_EV_SMART_RECOVERY_IDLE_CURRENT_A = "ev_smart_recovery_idle_current_a"
 # Legacy YAML-helper mapping retained only as a compatibility fallback.
@@ -174,6 +169,7 @@ DEFAULT_SERVICE_IMPORT_LIMIT_A = 0.0
 DEFAULT_EXPORT_LIMIT_KW = 0.0
 DEFAULT_INVERTER_CHARGE_LIMIT_KW = 0.0
 DEFAULT_INVERTER_DISCHARGE_LIMIT_KW = 0.0
+DEFAULT_HOUSE_LOAD_INCLUDES_EV = False
 DEFAULT_EV_VOLTAGE = 230.0
 DEFAULT_EV_PHASE_COUNT = 1
 DEFAULT_EV_MIN_CURRENT = 0.0

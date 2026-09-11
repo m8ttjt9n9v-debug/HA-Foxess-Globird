@@ -47,6 +47,7 @@ ENTRY_DATA = {
     "inverter_charge_limit_kw": 0.0,
     "inverter_discharge_limit_kw": 0.0,
     "house_load_entity": "sensor.test_house_load",
+    "house_load_includes_ev": False,
     "free_charge_window_start": "12:01:00",
     "free_charge_window_end": "14:59:00",
     "free_charge_schedule_confirmed": False,
@@ -517,11 +518,7 @@ async def test_legacy_charge_to_full_helper_remains_until_owned_switch_is_used(h
     hass.states.async_set("sensor.test_battery_soc", "60", {"unit_of_measurement": "%"})
     hass.states.async_set("sensor.test_grid_power", "0", {"unit_of_measurement": "kW"})
     hass.states.async_set("input_boolean.old_charge_to_full", "on")
-    data = {
-        key: value
-        for key, value in ENTRY_DATA.items()
-        if key != "ev_charge_to_full_enabled"
-    }
+    data = {key: value for key, value in ENTRY_DATA.items() if key != "ev_charge_to_full_enabled"}
     data["ev_charge_to_full_entity"] = "input_boolean.old_charge_to_full"
     entry = MockConfigEntry(domain=DOMAIN, title="Legacy override site", data=data)
     entry.add_to_hass(hass)
@@ -719,13 +716,9 @@ async def test_separate_heater_history_is_persisted_and_combined_only_when_matur
 
     first_cycle = datetime(2026, 8, 27, tzinfo=UTC)
     for offset in range(7):
-        entry.runtime_data.demand_history.add(
-            first_cycle + timedelta(days=offset), offset + 1
-        )
+        entry.runtime_data.demand_history.add(first_cycle + timedelta(days=offset), offset + 1)
     for offset in range(6):
-        entry.runtime_data.heater_history.add(
-            first_cycle + timedelta(days=offset), offset + 1
-        )
+        entry.runtime_data.heater_history.add(first_cycle + timedelta(days=offset), offset + 1)
     await entry.runtime_data._async_save_demand_state()
     assert entry.runtime_data.learning_result.cycle_budget_kwh == 17.5
     assert entry.runtime_data.learning_result.model == "occupied_fallback"

@@ -59,6 +59,7 @@ def _controller_config(**changes):
         "ev_max_current": 16,
         "ev_voltage": 230,
         "ev_phase_count": 1,
+        "house_load_includes_ev": False,
         "site_phase_count": 1,
         "service_import_limit_a": 63,
         "site_grid_headroom_current_a": 1,
@@ -72,9 +73,7 @@ def _controller_config(**changes):
 def _coordinator(config):
     observed_at = datetime(2026, 9, 7, 12, 1, tzinfo=UTC)
     grid_source = TelemetrySource("sensor.site_grid", 10, "kW", observed_at)
-    grid = NormalizedSample(
-        10, "kW", (grid_source,), "positive_import", True, True, "ok"
-    )
+    grid = NormalizedSample(10, "kW", (grid_source,), "positive_import", True, True, "ok")
     return SimpleNamespace(
         config=config,
         entry_id="ev-runtime-test",
@@ -138,11 +137,7 @@ def _set_power_telemetry(coordinator, hass: HomeAssistant, *, grid_kw, battery_k
         battery_power=NormalizedSample(
             battery_kw,
             "kW",
-            (
-                TelemetrySource(
-                    "sensor.battery_power", battery_kw, "kW", observed_at
-                ),
-            ),
+            (TelemetrySource("sensor.battery_power", battery_kw, "kW", observed_at),),
             "positive_charge",
             True,
             True,
@@ -169,6 +164,70 @@ def _set_ev_states(hass: HomeAssistant) -> None:
     )
     hass.states.async_set("number.car_limit", "80", {"min": 50, "max": 100, "step": 1})
     hass.states.async_set("switch.car_charge", "off")
+
+
+def test_allowance_does_not_cycle_when_whole_house_meter_includes_ev(
+    hass: HomeAssistant,
+) -> None:
+    config = _controller_config(
+        ev_phase_count=3,
+        site_phase_count=3,
+        ev_allowance_guard_enabled=True,
+        daily_free_allowance_kwh=50,
+        house_load_includes_ev=True,
+    )
+    coordinator = _coordinator(config)
+    coordinator.free_window_import = SimpleNamespace(
+        last_at=datetime(2026, 9, 7, 12, 30, tzinfo=UTC), imported_kwh=25
+    )
+    controller = ActiveEvController(hass, coordinator)
+    hass.states.async_set("sensor.car_energy", "5", {"unit_of_measurement": "kWh"})
+    hass.states.async_set("sensor.car_charging", "charging")
+
+    hass.states.async_set("sensor.car_actual_current", "16", {"unit_of_measurement": "A"})
+    high_snapshot = replace(coordinator.snapshot, battery_soc=100, house_load_kw=12)
+    high = controller._allowance_target(  # noqa: SLF001
+        16, 1, 1, 1, 60, 50, 2, high_snapshot
+    )
+    hass.states.async_set("sensor.car_actual_current", "1", {"unit_of_measurement": "A"})
+    low_snapshot = replace(coordinator.snapshot, battery_soc=100, house_load_kw=1.65)
+    low = controller._allowance_target(  # noqa: SLF001
+        16, 1, 1, 1, 60, 50, 2, low_snapshot
+    )
+
+    assert high is not None and high.current_a == 16
+    assert low is not None and low.current_a == 16
+    assert high.phase == low.phase == "allowance_not_constraining"
+    assert controller.allowance_house_load_kw == 0.96
+
+
+def test_pilot_house_load_excluding_ev_is_not_subtracted_again(
+    hass: HomeAssistant,
+) -> None:
+    config = _controller_config(
+        ev_phase_count=3,
+        site_phase_count=3,
+        ev_allowance_guard_enabled=True,
+        daily_free_allowance_kwh=50,
+        house_load_includes_ev=False,
+    )
+    coordinator = _coordinator(config)
+    coordinator.free_window_import = SimpleNamespace(
+        last_at=datetime(2026, 9, 7, 12, 30, tzinfo=UTC), imported_kwh=25
+    )
+    controller = ActiveEvController(hass, coordinator)
+    hass.states.async_set("sensor.car_energy", "5", {"unit_of_measurement": "kWh"})
+    hass.states.async_set("sensor.car_charging", "charging")
+    hass.states.async_set("sensor.car_actual_current", "16", {"unit_of_measurement": "A"})
+
+    snapshot = replace(coordinator.snapshot, battery_soc=100, house_load_kw=12)
+    decision = controller._allowance_target(  # noqa: SLF001
+        16, 1, 1, 1, 60, 50, 2, snapshot
+    )
+
+    assert decision is not None and decision.current_a == 1
+    assert decision.phase == "allowance_below_charger_minimum"
+    assert controller.allowance_house_load_kw == 12
 
 
 async def test_ev_runtime_writes_tessie_but_not_foxess_when_cloud_owns_inverter(
@@ -413,8 +472,7 @@ async def test_opted_in_outside_policy_restores_baseline_after_reconnect(
     current_calls = [
         event
         for event in calls
-        if event.data["domain"] == "number"
-        and event.data["service_data"].get("value") == 1
+        if event.data["domain"] == "number" and event.data["service_data"].get("value") == 1
     ]
     assert len(current_calls) == 1
 
@@ -606,16 +664,12 @@ async def test_daily_policy_stops_its_owned_session_at_frozen_energy_target(
     coordinator.data = SimpleNamespace(available_after_reserve_kwh=14)
     coordinator.learning_remaining_kwh = 3
     controller = ActiveEvController(hass, coordinator)
-    controller.daily_backfill_cycle_ready_at = datetime(
-        2026, 9, 7, 8, tzinfo=UTC
-    )
+    controller.daily_backfill_cycle_ready_at = datetime(2026, 9, 7, 8, tzinfo=UTC)
     controller.daily_backfill_active = True
     controller.daily_backfill_delivered_kwh = 2
     controller.daily_backfill_session_start_delivered_kwh = 1
     controller.daily_backfill_session_target_kwh = 1
-    controller.daily_backfill_frozen_start = datetime(
-        2026, 9, 7, 5, tzinfo=UTC
-    )
+    controller.daily_backfill_frozen_start = datetime(2026, 9, 7, 5, tzinfo=UTC)
 
     await controller.async_reconcile(datetime(2026, 9, 7, 6, 30, tzinfo=UTC))
 
@@ -653,14 +707,10 @@ async def test_daily_backfill_cycle_and_delivered_energy_survive_restart(
     assert restored.daily_backfill_delivered_kwh == 2.25
     assert restored.daily_backfill_active is True
     assert restored.daily_backfill_session_target_kwh == 4
-    assert restored.daily_backfill_frozen_start == datetime(
-        2026, 9, 7, 5, tzinfo=UTC
-    )
+    assert restored.daily_backfill_frozen_start == datetime(2026, 9, 7, 5, tzinfo=UTC)
     assert restored.daily_backfill_stop_pending is True
     assert restored.daily_backfill_stop_attempts == 2
-    assert restored.daily_backfill_last_stop_at == datetime(
-        2026, 9, 7, 5, 59, tzinfo=UTC
-    )
+    assert restored.daily_backfill_last_stop_at == datetime(2026, 9, 7, 5, 59, tzinfo=UTC)
 
 
 def test_evening_export_protects_next_mornings_ready_cycle(
@@ -675,14 +725,10 @@ def test_evening_export_protects_next_mornings_ready_cycle(
         )
     )
     controller = ActiveEvController(hass, coordinator)
-    controller.daily_backfill_cycle_ready_at = datetime(
-        2026, 9, 8, 8, tzinfo=UTC
-    )
+    controller.daily_backfill_cycle_ready_at = datetime(2026, 9, 8, 8, tzinfo=UTC)
     controller.daily_backfill_delivered_kwh = 1.5
 
-    assert controller.daily_backfill_protection_kwh(
-        datetime(2026, 9, 7, 18, tzinfo=UTC)
-    ) == 3.5
+    assert controller.daily_backfill_protection_kwh(datetime(2026, 9, 7, 18, tzinfo=UTC)) == 3.5
 
 
 async def test_pre_free_phase_and_cleanup_ownership_survive_restart(
@@ -1036,15 +1082,11 @@ async def test_daily_driving_snapshot_survives_restart_and_ignores_missed_days(
     config = _controller_config(ev_lifetime_energy_entity="sensor.car_lifetime")
     coordinator = _coordinator(config)
     first = ActiveEvController(hass, coordinator)
-    hass.states.async_set(
-        "sensor.car_lifetime", "1000", {"unit_of_measurement": "kWh"}
-    )
+    hass.states.async_set("sensor.car_lifetime", "1000", {"unit_of_measurement": "kWh"})
     first_at = datetime(2026, 9, 7, 12, 1, tzinfo=UTC)
     await first._async_snapshot_driving(first_at)  # noqa: SLF001
 
-    hass.states.async_set(
-        "sensor.car_lifetime", "1018.5", {"unit_of_measurement": "kWh"}
-    )
+    hass.states.async_set("sensor.car_lifetime", "1018.5", {"unit_of_measurement": "kWh"})
     second_at = first_at + timedelta(days=1)
     await first._async_snapshot_driving(second_at)  # noqa: SLF001
     assert first.daily_driving_energy_kwh == 18.5
@@ -1059,9 +1101,7 @@ async def test_daily_driving_snapshot_survives_restart_and_ignores_missed_days(
     assert restored.driving_snapshot == first.driving_snapshot
     assert [sample.energy_kwh for sample in restored.driving_history.samples] == [18.5]
 
-    hass.states.async_set(
-        "sensor.car_lifetime", "1050", {"unit_of_measurement": "kWh"}
-    )
+    hass.states.async_set("sensor.car_lifetime", "1050", {"unit_of_measurement": "kWh"})
     await restored._async_snapshot_driving(second_at + timedelta(days=2))  # noqa: SLF001
     assert restored.daily_driving_energy_kwh is None
     assert [sample.energy_kwh for sample in restored.driving_history.samples] == [18.5]

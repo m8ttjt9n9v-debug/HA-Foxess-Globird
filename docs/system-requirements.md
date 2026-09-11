@@ -17,7 +17,11 @@ dashboard, commission electrical limits, or migrate personal entity mappings.
   that is the intended complete protected demand. At the Working Single Phase
   Pilot Site the mapped source is non-heater base-house power and the heater is
   supplied through the optional separate power mapping, preventing double
-  counting.
+  counting. If the mapped value includes EV charging, enable **Mapped
+  house-load sensor includes EV charging** so the allowance projection removes
+  live EV power exactly once. Leave it disabled for an already EV-exclusive
+  house sensor. This correction requires valid actual EV current plus the
+  commissioned EV voltage and phase count; missing evidence fails closed.
 - Home Assistant history/storage plus its built-in template, statistics, and
   integration-style behavior used by the source model and HEO persistence.
 - Home Assistant `person` entities are optional. Auto occupancy conservatively
@@ -93,6 +97,12 @@ most-loaded service phase, positive for import. This may be a trustworthy
 template/helper built from phase sensors. Aggregate power is not a substitute
 because the controller must protect each phase's configured service limit.
 If that mapped multiphase current is unavailable, EV actuation is blocked.
+
+FoxESS Modbus profiles that expose an unambiguous `BMS kWh Remaining` capacity
+entity are suggested automatically, and its current value prefills the setup
+fallback. HEO uses the mapped live capacity at runtime. The numeric capacity is
+used only while live capacity is unavailable and therefore still needs a
+credible commissioned value.
 
 The retained pilot direct path never issues a stop or pause. The optional daily
 ready-by extension may stop only a session it started when its frozen wall-

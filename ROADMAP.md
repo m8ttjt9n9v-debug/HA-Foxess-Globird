@@ -131,7 +131,39 @@ Working Single Phase Pilot Site parity.
 
 ### Human commissioning and dashboard usability
 
-- [ ] Add an explicit **Configure EV automation?** commissioning choice. When
+- [ ] **HIGH PRIORITY — replace the monolithic setup and reconfigure form with
+  a shared, multi-page commissioning flow.** Start with a short Site and
+  Capabilities page, followed by small logical pages for Battery, Inverter,
+  Grid and Tariff, House, Car and Charger, EV Policies, and Automation and
+  Safety, then a plain-language Review and Apply page. Reconfigure should also
+  provide a section menu so an operator can revisit one area without traversing
+  or re-entering every unrelated field.
+
+  Validate each page independently. A successful Next action must merge that
+  page into an in-flow working draft; returning to the page must show the
+  validated values, and an error on any later page must never discard completed
+  pages or rebuild manual mappings from discovery suggestions. An invalid page
+  must retain all of its submitted values and attach specific errors to that
+  page. Run cross-page validation at Review and direct the operator to the
+  relevant section without clearing the draft. Apply the complete configuration
+  and reload HEO only after final confirmation, so the live config entry is
+  never left partially updated. Cancelling before Apply must leave the existing
+  entry unchanged. Initial setup and reconfigure must share the same page
+  schemas, validation, descriptions, and tests so the two flows cannot drift.
+
+  The first page must include explicit **Configure solar?** and **Configure EV
+  automation?** capability choices. When solar is disabled, hide all solar
+  mappings and solar-dependent policy fields, skip their validation, and expose
+  canonical solar power as a deliberate `0` with provenance indicating that
+  solar was configured absent; do not require a fake zero-valued helper or
+  infer absence from unavailable telemetry. Solar-spill control must remain
+  unavailable while the capability is disabled. Re-enabling solar must restore
+  previously saved mappings rather than deleting them. Add navigation,
+  checkpoint-retention, cancellation, conditional-page, old-entry, and final
+  cross-page validation regression coverage.
+
+- [ ] Complete the **Configure EV automation?** capability behavior introduced
+  by the multi-page flow. When
   disabled, hide EV telemetry, actuator, capacity, floor, reserve, charger,
   inverter, current, voltage, learning, and policy fields; skip all EV-specific
   validation; and create no impression that Tessie or an EV is required for a
@@ -214,6 +246,12 @@ Working Single Phase Pilot Site parity.
   count, per-phase service limits, charger phases, voltage, and commissioned
   current limits without changing its base decisions. Multiphase active control
   requires an explicit most-loaded-phase signed current mapping.
+- [x] Make free-window allowance accounting explicit for house meters that
+  include EV charging. Subtract measured EV power exactly once only when the
+  operator selects that topology, preserve the pilot's already EV-exclusive
+  mapping by default, fail closed without valid current evidence, and expose
+  both projection inputs diagnostically. Completed in v0.12.8 after a live
+  three-phase 1 A/16 A oscillation exposed the double count.
 - [x] Add coherent-source validity and matched-sample validation to the active
   free-window EV decision. Other future multi-sensor policies retain this rule.
 - [ ] Add durable Home Assistant service-call and direct-Modbus transition

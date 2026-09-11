@@ -64,9 +64,7 @@ async def test_enabled_battery_schedule_requires_unambiguous_confirmation(hass):
     rejected = await hass.config_entries.flow.async_configure(
         result["flow_id"], user_input={"confirm_schedule": False}
     )
-    assert rejected["errors"] == {
-        "confirm_schedule": "schedule_confirmation_required"
-    }
+    assert rejected["errors"] == {"confirm_schedule": "schedule_confirmation_required"}
 
     created = await _confirm_schedule(hass, rejected)
     assert created["type"] is FlowResultType.CREATE_ENTRY
@@ -97,9 +95,7 @@ async def test_overnight_battery_schedule_requires_separate_confirmation(hass):
     rejected = await hass.config_entries.flow.async_configure(
         result["flow_id"], user_input={"confirm_schedule": True, "confirm_overnight": False}
     )
-    assert rejected["errors"] == {
-        "confirm_overnight": "overnight_confirmation_required"
-    }
+    assert rejected["errors"] == {"confirm_overnight": "overnight_confirmation_required"}
 
     created = await _confirm_schedule(hass, rejected, overnight=True)
     assert created["type"] is FlowResultType.CREATE_ENTRY
@@ -141,9 +137,7 @@ async def test_user_form_prefills_unambiguous_foxess_and_tessie_entities(hass):
         config_entry=tessie,
     )
 
-    result = await hass.config_entries.flow.async_init(
-        DOMAIN, context={"source": SOURCE_USER}
-    )
+    result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": SOURCE_USER})
 
     assert result["type"] is FlowResultType.FORM
     markers = {
@@ -155,10 +149,31 @@ async def test_user_form_prefills_unambiguous_foxess_and_tessie_entities(hass):
     assert markers["battery_soc_entity"].default() == "sensor.battery_soc"
     assert markers["grid_power_entity"].default() == "sensor.grid_ct"
     assert markers["ev_soc_entity"].default() == "sensor.jns_x_battery_level"
-    assert (
-        markers["ev_current_limit_entity"].default()
-        == "number.jns_x_charge_current"
+    assert markers["ev_current_limit_entity"].default() == "number.jns_x_charge_current"
+
+
+async def test_user_form_prefills_live_foxess_battery_capacity(hass):
+    foxess = MockConfigEntry(domain="foxess_modbus")
+    foxess.add_to_hass(hass)
+    registry = er.async_get(hass)
+    registry.async_get_or_create(
+        "sensor",
+        "foxess_modbus",
+        "bms_kwh_remaining",
+        suggested_object_id="bms_kwh_remaining",
+        config_entry=foxess,
     )
+    hass.states.async_set("sensor.bms_kwh_remaining", "40.32", {"unit_of_measurement": "kWh"})
+
+    result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": SOURCE_USER})
+    markers = {
+        marker.schema: marker
+        for marker in result["data_schema"].schema
+        if hasattr(marker, "schema")
+    }
+
+    assert markers["battery_capacity_entity"].default() == ("sensor.bms_kwh_remaining")
+    assert markers["battery_capacity_kwh"].default() == 40.32
 
 
 async def test_user_flow_defaults_existing_single_phase_ev_configuration(hass):
@@ -236,10 +251,7 @@ async def test_user_flow_defaults_legacy_ev_before_export_to_disabled(hass):
 
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["data"][CONF_EV_BEFORE_EXPORT_ENABLED] is DEFAULT_EV_BEFORE_EXPORT_ENABLED
-    assert (
-        result["data"][CONF_EV_BEFORE_EXPORT_SOC_TARGET]
-        == DEFAULT_EV_BEFORE_EXPORT_SOC_TARGET
-    )
+    assert result["data"][CONF_EV_BEFORE_EXPORT_SOC_TARGET] == DEFAULT_EV_BEFORE_EXPORT_SOC_TARGET
 
 
 async def test_daily_backfill_is_allowed_with_foxcloud_when_fully_configured(hass):
@@ -280,9 +292,7 @@ async def test_daily_backfill_fails_closed_without_an_outside_power_cap(hass):
 
 async def test_user_flow_defaults_legacy_ev_control_to_disabled(hass):
     legacy_data = {
-        key: value
-        for key, value in ENTRY_DATA.items()
-        if key != CONF_EV_AUTOMATIC_CONTROL_ENABLED
+        key: value for key, value in ENTRY_DATA.items() if key != CONF_EV_AUTOMATIC_CONTROL_ENABLED
     }
 
     result = await hass.config_entries.flow.async_init(
@@ -392,9 +402,7 @@ async def test_solar_spill_requires_signed_battery_power_mapping(hass):
     )
 
     assert result["type"] is FlowResultType.FORM
-    assert result["errors"] == {
-        "base": "solar_spill_battery_power_mapping_required"
-    }
+    assert result["errors"] == {"base": "solar_spill_battery_power_mapping_required"}
 
 
 async def test_split_battery_mapping_must_be_complete(hass):
@@ -538,9 +546,7 @@ async def test_current_mapping_rejects_power_unit_and_preserves_submitted_values
     )
 
     assert result["type"] is FlowResultType.FORM
-    assert result["errors"] == {
-        "site_grid_current_entity": "invalid_current_entity_unit"
-    }
+    assert result["errors"] == {"site_grid_current_entity": "invalid_current_entity_unit"}
     markers = {
         marker.schema: marker
         for marker in result["data_schema"].schema
@@ -750,18 +756,14 @@ async def test_reconfigure_resets_sign_verification_when_a_source_changes(hass):
 
 async def test_reconfigure_preserves_hidden_legacy_charge_to_full_mapping(hass):
     legacy_data = {
-        key: value
-        for key, value in ENTRY_DATA.items()
-        if key != "ev_charge_to_full_enabled"
+        key: value for key, value in ENTRY_DATA.items() if key != "ev_charge_to_full_enabled"
     }
     legacy_data["ev_charge_to_full_entity"] = "input_boolean.old_charge_to_full"
     entry = MockConfigEntry(domain=DOMAIN, title="Legacy Site", data=legacy_data)
     entry.add_to_hass(hass)
 
     submitted_data = {
-        key: value
-        for key, value in legacy_data.items()
-        if key != "ev_charge_to_full_entity"
+        key: value for key, value in legacy_data.items() if key != "ev_charge_to_full_entity"
     }
     result = await hass.config_entries.flow.async_init(
         DOMAIN,

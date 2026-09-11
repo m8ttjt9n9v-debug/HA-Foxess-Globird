@@ -611,9 +611,7 @@ class EnergySensor(CoordinatorEntity[EnergyCoordinator], SensorEntity):
         ev_current_average = (
             ev_controller.ev_average.result(now) if ev_controller is not None else None
         )
-        ev_learning = (
-            ev_controller.learned_charge_limit if ev_controller is not None else None
-        )
+        ev_learning = ev_controller.learned_charge_limit if ev_controller is not None else None
         telemetry = self.coordinator.telemetry
         export_plan = self._effective_export_plan()
         values = {
@@ -628,9 +626,7 @@ class EnergySensor(CoordinatorEntity[EnergyCoordinator], SensorEntity):
             "battery_power": None if telemetry is None else telemetry.battery_power.value,
             "house_load": None if snapshot is None else snapshot.house_load_kw,
             "solar_power": None if telemetry is None else telemetry.solar_power.value,
-            "site_grid_current": (
-                None if telemetry is None else telemetry.site_grid_current.value
-            ),
+            "site_grid_current": (None if telemetry is None else telemetry.site_grid_current.value),
             "ev_soc": None if snapshot is None else snapshot.ev_soc,
             "ev_max_power": ledger.ev_max_power_kw,
             "ev_control_status": (
@@ -661,9 +657,7 @@ class EnergySensor(CoordinatorEntity[EnergyCoordinator], SensorEntity):
                 ev_controller.reconciliation.attempts if ev_controller is not None else 0
             ),
             "ev_smart_socket_recovery_status": (
-                ev_controller.smart_recovery.phase
-                if ev_controller is not None
-                else "unavailable"
+                ev_controller.smart_recovery.phase if ev_controller is not None else "unavailable"
             ),
             "ev_solar_spill_status": (
                 ev_controller.solar_spill.phase if ev_controller is not None else "unavailable"
@@ -705,9 +699,7 @@ class EnergySensor(CoordinatorEntity[EnergyCoordinator], SensorEntity):
                 else None
             ),
             "ev_daily_backfill_delivered": (
-                ev_controller.daily_backfill_delivered_kwh
-                if ev_controller is not None
-                else None
+                ev_controller.daily_backfill_delivered_kwh if ev_controller is not None else None
             ),
             "ev_daily_backfill_planned_energy": (
                 ev_controller.daily_backfill_plan.planned_energy_kwh
@@ -732,25 +724,19 @@ class EnergySensor(CoordinatorEntity[EnergyCoordinator], SensorEntity):
                 else None
             ),
             "ev_daily_driving_energy": (
-                ev_controller.daily_driving_energy_kwh
-                if ev_controller is not None
-                else None
+                ev_controller.daily_driving_energy_kwh if ev_controller is not None else None
             ),
             "ev_driving_p85": (
                 ev_learning.p85_daily_energy_kwh if ev_learning is not None else None
             ),
             "ev_driving_learning_samples": (
-                len(ev_controller.driving_history.samples)
-                if ev_controller is not None
-                else 0
+                len(ev_controller.driving_history.samples) if ev_controller is not None else 0
             ),
             "ev_usable_capacity": (
                 ev_learning.usable_capacity_kwh if ev_learning is not None else None
             ),
             "ev_free_window_soc_gain": (
-                ev_learning.free_window_soc_gain_percent
-                if ev_learning is not None
-                else None
+                ev_learning.free_window_soc_gain_percent if ev_learning is not None else None
             ),
             "ev_learned_charge_limit": (
                 ev_learning.limit_percent if ev_learning is not None else None
@@ -797,9 +783,7 @@ class EnergySensor(CoordinatorEntity[EnergyCoordinator], SensorEntity):
                 None if export_plan is None else export_plan.planned_export_energy_kwh
             ),
             "zerohero_planned_duration": (
-                None
-                if export_plan is None
-                else round(export_plan.planned_duration_h * 60, 1)
+                None if export_plan is None else round(export_plan.planned_duration_h * 60, 1)
             ),
             "zerohero_planned_start": (
                 None
@@ -858,9 +842,7 @@ class EnergySensor(CoordinatorEntity[EnergyCoordinator], SensorEntity):
                         "raw_value": source.raw_value,
                         "raw_unit": source.raw_unit,
                         "updated_at": (
-                            source.updated_at.isoformat()
-                            if source.updated_at is not None
-                            else None
+                            source.updated_at.isoformat() if source.updated_at is not None else None
                         ),
                     }
                     for source in sample.sources
@@ -894,6 +876,8 @@ class EnergySensor(CoordinatorEntity[EnergyCoordinator], SensorEntity):
                 "gate": controller.gate_status,
                 "decision_phase": controller.decision_phase,
                 "allowance_phase": controller.allowance_phase,
+                "allowance_house_load_kw": controller.allowance_house_load_kw,
+                "allowance_ev_power_kw": controller.allowance_ev_power_kw,
                 "target_current_a": controller.target_current_a,
                 "target_limit_percent": controller.target_limit_percent,
                 "requested_current_a": controller.requested_current_a,
@@ -905,12 +889,8 @@ class EnergySensor(CoordinatorEntity[EnergyCoordinator], SensorEntity):
                 "maximum_reconciliation_attempts": DIRECT_EVSE_MAX_ATTEMPTS,
                 "smart_socket_recovery_phase": controller.smart_recovery.phase,
                 "smart_socket_recovery_attempted": controller.smart_recovery.attempted,
-                "smart_socket_recovery_started_at": (
-                    controller.smart_recovery.phase_started_at
-                ),
-                "smart_socket_recovery_current_a": (
-                    controller.smart_recovery.recovery_current_a
-                ),
+                "smart_socket_recovery_started_at": (controller.smart_recovery.phase_started_at),
+                "smart_socket_recovery_current_a": (controller.smart_recovery.recovery_current_a),
                 "grid_average_coverage": grid.age_coverage_ratio,
                 "grid_source_valid": grid.source_value_valid,
                 "ev_average_source_valid": actual.source_value_valid,
@@ -936,15 +916,9 @@ class EnergySensor(CoordinatorEntity[EnergyCoordinator], SensorEntity):
                 "pre_free_current_a": controller.pre_free_current_a,
                 "outside_control_active": controller.outside_control_active,
                 "daily_backfill_active": controller.daily_backfill_active,
-                "daily_backfill_cycle_ready_at": (
-                    controller.daily_backfill_cycle_ready_at
-                ),
-                "daily_backfill_delivered_kwh": (
-                    controller.daily_backfill_delivered_kwh
-                ),
-                "daily_backfill_session_target_kwh": (
-                    controller.daily_backfill_session_target_kwh
-                ),
+                "daily_backfill_cycle_ready_at": (controller.daily_backfill_cycle_ready_at),
+                "daily_backfill_delivered_kwh": (controller.daily_backfill_delivered_kwh),
+                "daily_backfill_session_target_kwh": (controller.daily_backfill_session_target_kwh),
                 "daily_backfill_frozen_start": controller.daily_backfill_frozen_start,
                 "charge_to_full_started_at": controller.charge_to_full_started_at,
                 "driving_learning_mode": (
@@ -1022,9 +996,7 @@ class EnergySensor(CoordinatorEntity[EnergyCoordinator], SensorEntity):
             "automatic_control_enabled": foxess_requested,
             "automatic_charge_enabled": charge_enabled,
             "free_charge_schedule_confirmed": bool(
-                self.coordinator.config.get(
-                    CONF_FREE_CHARGE_SCHEDULE_CONFIRMED, False
-                )
+                self.coordinator.config.get(CONF_FREE_CHARGE_SCHEDULE_CONFIRMED, False)
             ),
             "sign_conventions_verified": bool(
                 self.coordinator.config.get(
@@ -1080,19 +1052,15 @@ class EnergySensor(CoordinatorEntity[EnergyCoordinator], SensorEntity):
             ),
             "ev_driving_learning_mode": (
                 ev_controller.learned_charge_limit.mode
-                if ev_controller is not None
-                and ev_controller.learned_charge_limit is not None
+                if ev_controller is not None and ev_controller.learned_charge_limit is not None
                 else "unavailable"
             ),
             "ev_driving_learning_samples": (
-                len(ev_controller.driving_history.samples)
-                if ev_controller is not None
-                else 0
+                len(ev_controller.driving_history.samples) if ev_controller is not None else 0
             ),
             "ev_learned_general_limit_percent": (
                 ev_controller.learned_charge_limit.limit_percent
-                if ev_controller is not None
-                and ev_controller.learned_charge_limit is not None
+                if ev_controller is not None and ev_controller.learned_charge_limit is not None
                 else None
             ),
             "export_session_phase": (

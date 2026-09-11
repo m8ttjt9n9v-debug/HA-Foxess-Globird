@@ -111,6 +111,7 @@ from .const import (
     CONF_HOUSE_AWAY_FALLBACK,
     CONF_HOUSE_LEARNING_FALLBACK,
     CONF_HOUSE_LOAD,
+    CONF_HOUSE_LOAD_INCLUDES_EV,
     CONF_HOUSE_OCCUPANCY_MODE,
     CONF_INVERTER_CHARGE_LIMIT_KW,
     CONF_INVERTER_DISCHARGE_LIMIT_KW,
@@ -203,6 +204,7 @@ from .const import (
     DEFAULT_HOUSE_AWAY_CONFIRMATION_HOURS,
     DEFAULT_HOUSE_AWAY_FALLBACK_KWH,
     DEFAULT_HOUSE_LEARNING_FALLBACK_KWH,
+    DEFAULT_HOUSE_LOAD_INCLUDES_EV,
     DEFAULT_HOUSE_OCCUPANCY_MODE,
     DEFAULT_INVERTER_CHARGE_LIMIT_KW,
     DEFAULT_INVERTER_DISCHARGE_LIMIT_KW,
@@ -237,7 +239,7 @@ from .const import (
     SOLAR_POWER_DIRECTIONS,
 )
 from .discovery import DiscoveryEntity, discover_entity_defaults
-from .normalise import current_to_a
+from .normalise import current_to_a, energy_to_kwh
 
 ENTITY = selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor"))
 CURRENT_ENTITY = selector.EntitySelector(
@@ -286,10 +288,7 @@ def _schedule_confirmation(start: time, end: time) -> dict[str, str]:
     crosses_midnight = end <= start
     duration_text = f"{hours} h {minutes:02d} min"
     day_text = "crosses midnight" if crosses_midnight else "same day"
-    summary = (
-        f"{start.strftime('%H:%M')} → {end.strftime('%H:%M')} "
-        f"({duration_text}, {day_text})"
-    )
+    summary = f"{start.strftime('%H:%M')} → {end.strftime('%H:%M')} ({duration_text}, {day_text})"
     start_minute = start.hour * 60 + start.minute
     cells = []
     for index in range(48):
@@ -367,8 +366,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             user_input = self._apply_defaults(user_input)
             old_normalized = self._apply_defaults(dict(entry.data))
             if any(
-                user_input.get(key) != old_normalized.get(key)
-                for key in self._NORMALIZATION_KEYS
+                user_input.get(key) != old_normalized.get(key) for key in self._NORMALIZATION_KEYS
             ):
                 user_input[CONF_SIGN_CONVENTIONS_VERIFIED] = False
             errors = self._validate_input(user_input)
@@ -390,9 +388,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             data_schema=self._schema(self._reconfigure_defaults(entry)),
         )
 
-    async def async_step_confirm_schedule(
-        self, user_input: dict[str, object] | None = None
-    ):
+    async def async_step_confirm_schedule(self, user_input: dict[str, object] | None = None):
         """Require explicit review of the exact 24-hour free-power window."""
         if self._pending_input is None:
             return self.async_abort(reason="schedule_confirmation_expired")
@@ -425,9 +421,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             vol.Required(CONF_CONFIRM_SCHEDULE, default=False): selector.BooleanSelector()
         }
         if crosses_midnight:
-            schema[vol.Required(CONF_CONFIRM_OVERNIGHT, default=False)] = (
-                selector.BooleanSelector()
-            )
+            schema[vol.Required(CONF_CONFIRM_OVERNIGHT, default=False)] = selector.BooleanSelector()
         return self.async_show_form(
             step_id="confirm_schedule",
             data_schema=vol.Schema(schema),
@@ -436,9 +430,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
 
     @callback
-    def _show_schedule_confirmation(
-        self, user_input: dict[str, object], *, reconfigure: bool
-    ):
+    def _show_schedule_confirmation(self, user_input: dict[str, object], *, reconfigure: bool):
         self._pending_input = dict(user_input)
         self._pending_reconfigure = reconfigure
         start = time.fromisoformat(str(user_input[CONF_FREE_CHARGE_START]))
@@ -447,9 +439,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             vol.Required(CONF_CONFIRM_SCHEDULE, default=False): selector.BooleanSelector()
         }
         if end <= start:
-            schema[vol.Required(CONF_CONFIRM_OVERNIGHT, default=False)] = (
-                selector.BooleanSelector()
-            )
+            schema[vol.Required(CONF_CONFIRM_OVERNIGHT, default=False)] = selector.BooleanSelector()
         return self.async_show_form(
             step_id="confirm_schedule",
             data_schema=vol.Schema(schema),
@@ -460,7 +450,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     def _discovery_defaults(self) -> dict[str, object]:
         """Suggest unambiguous entities without changing any control setting."""
         registry = er.async_get(self.hass)
-        return discover_entity_defaults(
+        defaults: dict[str, object] = discover_entity_defaults(
             [
                 DiscoveryEntity(
                     entity_id=entry.entity_id,
@@ -473,11 +463,22 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 if entry.platform in {"foxess_modbus", "tessie"}
             ]
         )
+        capacity_entity = defaults.get(CONF_BATTERY_CAPACITY_ENTITY)
+        capacity_state = self.hass.states.get(str(capacity_entity)) if capacity_entity else None
+        if capacity_state is not None:
+            try:
+                capacity_kwh = energy_to_kwh(
+                    float(capacity_state.state),
+                    capacity_state.attributes.get("unit_of_measurement"),
+                )
+            except (TypeError, ValueError):
+                capacity_kwh = 0.0
+            if math.isfinite(capacity_kwh) and capacity_kwh > 0:
+                defaults[CONF_BATTERY_CAPACITY] = round(capacity_kwh, 3)
+        return defaults
 
     @callback
-    def _reconfigure_defaults(
-        self, entry: config_entries.ConfigEntry
-    ) -> dict[str, object]:
+    def _reconfigure_defaults(self, entry: config_entries.ConfigEntry) -> dict[str, object]:
         """Preserve valid mappings and propose replacements for stale ones."""
         defaults: dict[str, object] = {CONF_NAME: entry.title, **entry.data}
         registry = er.async_get(self.hass)
@@ -534,9 +535,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 vol.Required(CONF_GRID_POWER, default=defaults.get(CONF_GRID_POWER)): ENTITY,
                 vol.Required(
                     CONF_GRID_POWER_DIRECTION,
-                    default=defaults.get(
-                        CONF_GRID_POWER_DIRECTION, DEFAULT_GRID_POWER_DIRECTION
-                    ),
+                    default=defaults.get(CONF_GRID_POWER_DIRECTION, DEFAULT_GRID_POWER_DIRECTION),
                 ): selector.SelectSelector(
                     selector.SelectSelectorConfig(options=list(GRID_POWER_DIRECTIONS))
                 ),
@@ -608,13 +607,18 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     ),
                 ): vol.Coerce(float),
                 optional_entity(CONF_HOUSE_LOAD): ENTITY,
+                vol.Required(
+                    CONF_HOUSE_LOAD_INCLUDES_EV,
+                    default=defaults.get(
+                        CONF_HOUSE_LOAD_INCLUDES_EV,
+                        DEFAULT_HOUSE_LOAD_INCLUDES_EV,
+                    ),
+                ): selector.BooleanSelector(),
                 optional_entity(CONF_HEATER_POWER): ENTITY,
                 optional_entity(CONF_SOLAR_POWER): ENTITY,
                 vol.Required(
                     CONF_SOLAR_POWER_DIRECTION,
-                    default=defaults.get(
-                        CONF_SOLAR_POWER_DIRECTION, DEFAULT_SOLAR_POWER_DIRECTION
-                    ),
+                    default=defaults.get(CONF_SOLAR_POWER_DIRECTION, DEFAULT_SOLAR_POWER_DIRECTION),
                 ): selector.SelectSelector(
                     selector.SelectSelectorConfig(options=list(SOLAR_POWER_DIRECTIONS))
                 ),
@@ -1147,6 +1151,9 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             CONF_INVERTER_DISCHARGE_LIMIT_KW: data.get(
                 CONF_INVERTER_DISCHARGE_LIMIT_KW, DEFAULT_INVERTER_DISCHARGE_LIMIT_KW
             ),
+            CONF_HOUSE_LOAD_INCLUDES_EV: data.get(
+                CONF_HOUSE_LOAD_INCLUDES_EV, DEFAULT_HOUSE_LOAD_INCLUDES_EV
+            ),
             CONF_HOUSE_LEARNING_FALLBACK: data.get(
                 CONF_HOUSE_LEARNING_FALLBACK, DEFAULT_HOUSE_LEARNING_FALLBACK_KWH
             ),
@@ -1301,9 +1308,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 if CONF_EV_CHARGE_TO_FULL_ENABLED in data
                 else {CONF_EV_CHARGE_TO_FULL: data[CONF_EV_CHARGE_TO_FULL]}
                 if CONF_EV_CHARGE_TO_FULL in data
-                else {
-                    CONF_EV_CHARGE_TO_FULL_ENABLED: DEFAULT_EV_CHARGE_TO_FULL_ENABLED
-                }
+                else {CONF_EV_CHARGE_TO_FULL_ENABLED: DEFAULT_EV_CHARGE_TO_FULL_ENABLED}
             ),
             CONF_BONUS_WINDOW_START: data.get(CONF_BONUS_WINDOW_START, DEFAULT_BONUS_WINDOW_START),
             CONF_BONUS_WINDOW_END: data.get(CONF_BONUS_WINDOW_END, DEFAULT_BONUS_WINDOW_END),
@@ -1444,8 +1449,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         ):
             return {"base": "solar_spill_battery_power_mapping_required"}
         if (
-            data.get(CONF_EV_SOLAR_SPILL_ENABLED)
-            or data.get(CONF_EV_PRE_FREE_ENABLED)
+            data.get(CONF_EV_SOLAR_SPILL_ENABLED) or data.get(CONF_EV_PRE_FREE_ENABLED)
         ) and data.get(CONF_FOXESS_CONTROL_OWNER) != FOXESS_CONTROL_OWNER_MODBUS:
             return {"base": "outside_ev_policy_requires_local_modbus"}
         if data.get(CONF_EV_LOCATION_MODE) not in EV_LOCATION_MODES:
@@ -1480,9 +1484,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 float(data[CONF_EV_SMART_RECOVERY_CHARGING_CONFIRM_SECONDS]),
                 float(data[CONF_EV_SMART_RECOVERY_REARM_SECONDS]),
             )
-            smart_recovery_idle_current = float(
-                data[CONF_EV_SMART_RECOVERY_IDLE_CURRENT_A]
-            )
+            smart_recovery_idle_current = float(data[CONF_EV_SMART_RECOVERY_IDLE_CURRENT_A])
             phase_count = float(data[CONF_EV_PHASE_COUNT])
             voltage = float(data[CONF_EV_VOLTAGE])
             zero_import_threshold = float(data[CONF_ZERO_IMPORT_THRESHOLD_KW])
@@ -1661,9 +1663,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         ):
             return {"base": "invalid_site_limits"}
         if daily_backfill_energy > 0 and (
-            outside_inverter_percent <= 0
-            or inverter_discharge_limit <= 0
-            or daily_ready >= start
+            outside_inverter_percent <= 0 or inverter_discharge_limit <= 0 or daily_ready >= start
         ):
             return {"base": "invalid_daily_ev_backfill"}
         if (

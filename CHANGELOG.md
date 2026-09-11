@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.12.8 — Stable whole-house EV allowance accounting
+
+- Add an explicit **Mapped house-load sensor includes EV charging** topology
+  setting. When enabled, the free-window allowance projection removes measured
+  EV power exactly once before projecting non-EV house demand. This prevents a
+  whole-house meter from making the controller alternate between high and low
+  current as its own Tesla command changes the mapped load.
+- Preserve the Working Single Phase Pilot Site's EV-exclusive house-load
+  behavior by default. Invalid actual-current feedback fails the optional
+  correction closed instead of guessing, and controller diagnostics expose the
+  projected house load and removed EV power.
+- Prefill the numeric battery-capacity fallback from an unambiguous live FoxESS
+  Modbus capacity entity when available. Runtime continues to prefer that live
+  entity; the numeric value is now labelled as fallback only.
+
 ## 0.12.7 — Battery telemetry recovery
 
 - Keep the Working Single Phase Pilot Site's paired charge-minus-discharge
