@@ -1,5 +1,7 @@
 # FoxESS GloBird Tesla Energy Orchestrator
 
+Foxess Globird Tesla charging orchestrator.
+
 A Home Assistant custom integration that coordinates FoxESS batteries, GloBird
 energy plans, and Tesla charging. It provides a site-configured energy ledger,
 conservative demand learning, bounded FoxESS diagnostics, the verified Working

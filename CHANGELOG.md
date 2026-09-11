@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.12.12 — Discoverable release and compliant brand assets
+
+- Publish the fixes from 0.12.8 through 0.12.11 as an actual GitHub Release so
+  HACS can offer them instead of stopping at 0.12.7.
+- Supply the bundled integration icon at Home Assistant's required 256 px size
+  and add the 512 px high-resolution variant.
+- Use the public tagline **Foxess Globird Tesla charging orchestrator**.
+
 ## 0.12.11 — Bound EV transition holds
 
 - Restrict the whole-house current-transition hold to installations with the
