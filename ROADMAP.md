@@ -254,7 +254,9 @@ Working Single Phase Pilot Site parity.
 - [x] Defer only a vehicle-SoC-triggered early allowance recalculation while
   requested and actual EV current are converging in whole-house topology.
   Retain the normal three-minute boundary and never defer service-overrun
-  evaluation. Completed in v0.12.10.
+  evaluation or a target-SoC crossing; apply the hold only while allowance
+  protection is enabled. Completed in v0.12.10 and boundary-hardened in
+  v0.12.11.
 - [x] Add coherent-source validity and matched-sample validation to the active
   free-window EV decision. Other future multi-sensor policies retain this rule.
 - [ ] Add durable Home Assistant service-call and direct-Modbus transition

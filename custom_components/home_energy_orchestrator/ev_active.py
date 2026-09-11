@@ -476,9 +476,10 @@ class ActiveEvController:
                 # pilot's protected baseline after reconnects and restarts.
                 self.outside_control_active = True
 
+            charge_to_full_requested = self._charge_to_full_requested()
             decision_fingerprint = (
                 vehicle_soc,
-                self._charge_to_full_requested(),
+                charge_to_full_requested,
                 self.coordinator.config.get(
                     CONF_EV_FREE_WINDOW_PRIORITY, DEFAULT_EV_FREE_WINDOW_PRIORITY
                 ),
@@ -499,8 +500,31 @@ class ActiveEvController:
                 and decision_fingerprint[0] != self._decision_fingerprint[0]
                 and decision_fingerprint[1:] == self._decision_fingerprint[1:]
             )
+            try:
+                previous_vehicle_soc = float(self._decision_fingerprint[0])
+            except (TypeError, ValueError):
+                previous_vehicle_soc = None
+            policy_limit = (
+                100.0
+                if charge_to_full_requested
+                else self._float(
+                    CONF_EV_FREE_WINDOW_CHARGE_LIMIT,
+                    DEFAULT_EV_FREE_WINDOW_CHARGE_LIMIT,
+                )
+            )
+            soc_remains_below_policy = (
+                previous_vehicle_soc is not None
+                and previous_vehicle_soc < policy_limit
+                and vehicle_soc < policy_limit
+            )
             current_transition_pending = (
                 in_window
+                and bool(
+                    self.coordinator.config.get(
+                        CONF_EV_ALLOWANCE_GUARD_ENABLED,
+                        DEFAULT_EV_ALLOWANCE_GUARD_ENABLED,
+                    )
+                )
                 and bool(
                     self.coordinator.config.get(
                         CONF_HOUSE_LOAD_INCLUDES_EV,
@@ -518,6 +542,7 @@ class ActiveEvController:
             service_overrun = grid_valid and service_limit > 0 and grid_current > service_limit
             defer_soc_redecision = (
                 only_vehicle_soc_changed
+                and soc_remains_below_policy
                 and current_transition_pending
                 and not service_overrun
                 and not decision_interval_elapsed

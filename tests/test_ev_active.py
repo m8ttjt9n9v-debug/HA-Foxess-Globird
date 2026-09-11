@@ -350,11 +350,23 @@ async def test_soc_update_does_not_recalculate_whole_house_allowance_during_curr
     assert controller.last_actions == ("would_set_charge_current",)
 
 
-async def test_service_overrun_is_never_deferred_during_current_ramp(
+@pytest.mark.parametrize(
+    ("vehicle_soc", "previous_soc", "grid_current", "allowance_enabled"),
+    (
+        (81, 80, 81, True),
+        (100, 99, 38, True),
+        (81, 80, 38, False),
+    ),
+)
+async def test_current_transition_hold_never_masks_safety_or_policy_boundaries(
     hass: HomeAssistant,
+    vehicle_soc: float,
+    previous_soc: float,
+    grid_current: float,
+    allowance_enabled: bool,
 ) -> None:
     _set_ev_states(hass)
-    hass.states.async_set("sensor.car_soc", "81", {"unit_of_measurement": "%"})
+    hass.states.async_set("sensor.car_soc", str(vehicle_soc), {"unit_of_measurement": "%"})
     hass.states.async_set("sensor.car_charging", "charging")
     hass.states.async_set("sensor.car_actual_current", "3", {"unit_of_measurement": "A"})
     hass.states.async_set(
@@ -362,11 +374,17 @@ async def test_service_overrun_is_never_deferred_during_current_ramp(
         "16",
         {"min": 1, "max": 16, "step": 1, "unit_of_measurement": "A"},
     )
-    hass.states.async_set("sensor.most_loaded_phase_current", "81", {"unit_of_measurement": "A"})
+    hass.states.async_set(
+        "sensor.most_loaded_phase_current",
+        str(grid_current),
+        {"unit_of_measurement": "A"},
+    )
     config = _controller_config(
         site_phase_count=3,
         site_grid_current_entity="sensor.most_loaded_phase_current",
         service_import_limit_a=80,
+        ev_free_window_charge_limit_percent=100,
+        ev_allowance_guard_enabled=allowance_enabled,
         house_load_includes_ev=True,
         rehearsal_mode=True,
     )
@@ -375,9 +393,16 @@ async def test_service_overrun_is_never_deferred_during_current_ramp(
     coordinator.telemetry = replace(
         coordinator.telemetry,
         site_grid_current=NormalizedSample(
-            81,
+            grid_current,
             "A",
-            (TelemetrySource("sensor.most_loaded_phase_current", 81, "A", observed_at),),
+            (
+                TelemetrySource(
+                    "sensor.most_loaded_phase_current",
+                    grid_current,
+                    "A",
+                    observed_at,
+                ),
+            ),
             "positive_import",
             True,
             True,
@@ -389,7 +414,7 @@ async def test_service_overrun_is_never_deferred_during_current_ramp(
     controller.target_limit_percent = 90
     controller.last_decision_at = observed_at - timedelta(seconds=58)
     controller._decision_fingerprint = (  # noqa: SLF001
-        80,
+        previous_soc,
         False,
         "ev",
         1,

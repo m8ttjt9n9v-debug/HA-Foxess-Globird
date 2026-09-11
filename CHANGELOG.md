@@ -1,6 +1,15 @@
 # Changelog
 
-## 0.12.10 — Complete whole-house EV transition handling
+## 0.12.11 — Bound EV transition holds
+
+- Restrict the whole-house current-transition hold to installations with the
+  free-energy allowance guard enabled.
+- Require both the previous and current EV SoC to remain below the configured
+  target, so reaching the target is evaluated immediately.
+- Add boundary coverage for service overrun, target-SoC crossing, disabled
+  allowance protection, and the normal three-minute fail-closed timeout.
+
+## 0.12.10 — Whole-house EV transition handling
 
 - Prevent an early allowance recalculation when vehicle SoC is the only changed
   decision input and requested versus actual current is still converging.

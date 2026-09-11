@@ -121,7 +121,9 @@ layers around the proven algorithm, not replacement algorithms.
   the allowance while requested and actual EV current are still converging.
   Hold the existing target only until feedback agrees or the normal
   three-minute decision boundary. A measured service-limit overrun always
-  bypasses this transition hold.
+  bypasses this transition hold. The hold exists only while allowance
+  protection is enabled and both the prior and current EV SoC remain below the
+  configured target; reaching the target is evaluated immediately.
 - A mapped live FoxESS battery-capacity entity is authoritative over the
   configured numeric fallback. Setup may prefill that fallback from an
   unambiguous live FoxESS Modbus capacity value, but must not manufacture a
