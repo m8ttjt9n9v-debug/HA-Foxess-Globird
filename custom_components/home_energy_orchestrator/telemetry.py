@@ -188,6 +188,15 @@ def combine_battery_magnitudes(
 ) -> NormalizedSample:
     """Preserve the pilot convention: positive charge minus discharge."""
     sources = (*charge.sources, *discharge.sources)
+    if (charge.value is not None and charge.value < 0) or (
+        discharge.value is not None and discharge.value < 0
+    ):
+        return unavailable_sample(
+            unit="kW",
+            positive_direction="positive_charge",
+            reason="negative_magnitude",
+            sources=sources,
+        )
     if charge.value is None or discharge.value is None:
         reason = (
             f"charge_{charge.reason}"
@@ -200,13 +209,6 @@ def combine_battery_magnitudes(
             reason=reason,
             sources=sources,
         )
-    if charge.value < 0 or discharge.value < 0:
-        return unavailable_sample(
-            unit="kW",
-            positive_direction="positive_charge",
-            reason="negative_magnitude",
-            sources=sources,
-        )
     return NormalizedSample(
         value=charge.value - discharge.value,
         unit="kW",
@@ -216,3 +218,35 @@ def combine_battery_magnitudes(
         fresh=charge.fresh and discharge.fresh,
         reason="ok",
     )
+
+
+def battery_power_from_magnitudes_or_signed(
+    charge: NormalizedSample,
+    discharge: NormalizedSample,
+    signed: NormalizedSample,
+) -> NormalizedSample:
+    """Prefer the pilot pair, with a bounded fresh signed fallback."""
+    paired = combine_battery_magnitudes(charge, discharge)
+    if paired.value is not None:
+        return paired
+    if paired.reason == "negative_magnitude":
+        return paired
+
+    pair_reasons = {charge.reason, discharge.reason}
+    stale_pair_only = "stale" in pair_reasons and pair_reasons <= {"ok", "stale"}
+    if (
+        stale_pair_only
+        and signed.value is not None
+        and signed.valid
+        and signed.fresh
+    ):
+        return NormalizedSample(
+            value=signed.value,
+            unit="kW",
+            sources=(*paired.sources, *signed.sources),
+            positive_direction="positive_charge",
+            valid=True,
+            fresh=True,
+            reason="signed_fallback_pair_stale",
+        )
+    return paired

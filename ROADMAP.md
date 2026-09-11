@@ -87,7 +87,7 @@ Status here describes behavioral parity, not merely the presence of code.
   with a clear option to disable them. The emergency Safety Lock must remain an
   immediate, independent block on every HEO-owned FoxESS and Tessie command.
 
-- [ ] Fix paired battery-magnitude freshness handling. During steady charging or
+- [x] Fix paired battery-magnitude freshness handling. During steady charging or
   discharging, the inactive FoxESS magnitude can remain exactly zero without a
   new Home Assistant `last_updated` timestamp. HEO currently marks the combined
   `sensor.home_energy_battery_power` unavailable when that unchanged zero ages
@@ -97,7 +97,9 @@ Status here describes behavioral parity, not merely the presence of code.
   not fresh, or establish coherent same-device reporting evidence. Add regression
   coverage for steady charge, steady discharge, direction changes, disconnected
   inputs, restart, and genuine stale telemetry before the distributed power-flow
-  card relies on the normalized sensor.
+  card relies on the normalized sensor. Completed in v0.12.7 with a bounded
+  fresh signed-sensor fallback used only when staleness is the pair's sole
+  failure.
 
 ## Removed pending a faithful port
 

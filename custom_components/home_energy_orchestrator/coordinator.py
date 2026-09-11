@@ -123,7 +123,7 @@ from .telemetry import (
     NormalizedSample,
     NormalizedTelemetry,
     TelemetrySource,
-    combine_battery_magnitudes,
+    battery_power_from_magnitudes_or_signed,
     normalize_current_sample,
     normalize_power_sample,
     unavailable_sample,
@@ -657,6 +657,26 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
             positive_direction=GRID_POSITIVE_IMPORT,
         )
 
+        battery_direction = self._direction(
+            CONF_BATTERY_POWER_DIRECTION,
+            (
+                BATTERY_POSITIVE_CHARGE
+                if bool(
+                    self.config.get(
+                        CONF_BATTERY_CHARGE_POSITIVE,
+                        DEFAULT_BATTERY_CHARGE_POSITIVE,
+                    )
+                )
+                else BATTERY_POSITIVE_DISCHARGE
+            ),
+        )
+        signed_battery = self._power_sample(
+            CONF_BATTERY_POWER,
+            now=now,
+            direction=battery_direction,
+            positive_direction=BATTERY_POSITIVE_CHARGE,
+        )
+
         charge_source = self._source(self.config.get(CONF_BATTERY_CHARGE_POWER))
         discharge_source = self._source(self.config.get(CONF_BATTERY_DISCHARGE_POWER))
         if charge_source is not None or discharge_source is not None:
@@ -686,27 +706,11 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
                     unit="kW", positive_direction="positive_magnitude", reason="not_configured"
                 )
             )
-            battery = combine_battery_magnitudes(charge, discharge)
+            battery = battery_power_from_magnitudes_or_signed(
+                charge, discharge, signed_battery
+            )
         else:
-            battery_direction = self._direction(
-                CONF_BATTERY_POWER_DIRECTION,
-                (
-                    BATTERY_POSITIVE_CHARGE
-                    if bool(
-                        self.config.get(
-                            CONF_BATTERY_CHARGE_POSITIVE,
-                            DEFAULT_BATTERY_CHARGE_POSITIVE,
-                        )
-                    )
-                    else BATTERY_POSITIVE_DISCHARGE
-                ),
-            )
-            battery = self._power_sample(
-                CONF_BATTERY_POWER,
-                now=now,
-                direction=battery_direction,
-                positive_direction=BATTERY_POSITIVE_CHARGE,
-            )
+            battery = signed_battery
 
         solar_direction = self._direction(
             CONF_SOLAR_POWER_DIRECTION, DEFAULT_SOLAR_POWER_DIRECTION

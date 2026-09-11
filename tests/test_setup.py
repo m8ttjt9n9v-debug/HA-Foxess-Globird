@@ -254,6 +254,44 @@ async def test_split_battery_sources_preserve_pilot_charge_minus_discharge(hass)
     assert len(state.attributes["sources"]) == 2
 
 
+async def test_restart_recovers_from_stale_zero_with_fresh_signed_battery(hass):
+    now = datetime.now(UTC)
+    hass.states.async_set("sensor.test_battery_soc", "60", {"unit_of_measurement": "%"})
+    hass.states.async_set("sensor.test_grid_power", "0", {"unit_of_measurement": "kW"})
+    hass.states.async_set("sensor.test_house_load", "1", {"unit_of_measurement": "kW"})
+    hass.states.async_set("sensor.test_charge", "9.713", {"unit_of_measurement": "kW"})
+    hass.states.async_set(
+        "sensor.test_discharge",
+        "0",
+        {"unit_of_measurement": "kW"},
+        timestamp=(now - timedelta(minutes=10)).timestamp(),
+    )
+    hass.states.async_set("sensor.test_signed", "-9.713", {"unit_of_measurement": "kW"})
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Restarted paired battery",
+        version=3,
+        data={
+            **ENTRY_DATA,
+            "battery_power_entity": "sensor.test_signed",
+            "battery_power_positive_direction": "positive_discharge",
+            "battery_charge_power_entity": "sensor.test_charge",
+            "battery_discharge_power_entity": "sensor.test_discharge",
+        },
+    )
+    entry.add_to_hass(hass)
+
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    state = hass.states.get("sensor.home_energy_battery_power")
+    assert state is not None
+    assert state.state == "9.713"
+    assert state.attributes["fresh"] is True
+    assert state.attributes["reason"] == "signed_fallback_pair_stale"
+    assert len(state.attributes["sources"]) == 3
+
+
 async def test_version_one_sign_booleans_migrate_locked(hass):
     legacy = {
         **ENTRY_DATA,

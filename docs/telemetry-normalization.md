@@ -26,9 +26,15 @@ the Working Single Phase Pilot Site equation:
 
 `canonical battery power = charge magnitude - discharge magnitude`
 
-Both paired inputs are required and must be fresh. A negative magnitude is
-invalid. The paired mapping takes precedence over a signed mapping so there is
-only one battery value inside HEO.
+Both paired inputs are required and normally must be fresh. A negative
+magnitude is invalid. The paired mapping takes precedence over a signed mapping.
+Some FoxESS magnitude entities do not refresh `last_updated` while holding a
+steady zero; if freshness is the pair's only failure and the separately mapped
+signed battery sensor is fresh and valid, HEO uses that signed sample and marks
+the reason `signed_fallback_pair_stale`. Missing, invalid, disconnected,
+future-dated, or genuinely all-stale sources remain unavailable. This bounded
+fallback prevents a steady inactive zero from hiding recovered telemetry
+without accepting an arbitrary stale zero.
 
 ## Commissioning and fail-closed behavior
 

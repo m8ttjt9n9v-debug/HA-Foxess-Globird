@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.12.7 — Battery telemetry recovery
+
+- Keep the Working Single Phase Pilot Site's paired charge-minus-discharge
+  battery source authoritative while both magnitudes are fresh.
+- When an inactive zero magnitude alone stops refreshing, recover from the
+  separately mapped fresh signed battery-power sensor and expose the fallback
+  in canonical sensor provenance.
+- Continue to fail unavailable through genuine telemetry outages, disconnected
+  inputs, invalid magnitudes, future timestamps, or a stale signed fallback.
+
 ## 0.12.6 — Safe single-phase current fallback
 
 - Reject power entities from the optional most-loaded-phase current mapping;

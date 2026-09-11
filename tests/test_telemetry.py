@@ -8,6 +8,7 @@ import pytest
 
 from custom_components.home_energy_orchestrator.telemetry import (
     TelemetrySource,
+    battery_power_from_magnitudes_or_signed,
     combine_battery_magnitudes,
     normalize_current_sample,
     normalize_power_sample,
@@ -99,3 +100,91 @@ def test_split_battery_requires_two_nonnegative_magnitudes() -> None:
 
     assert combine_battery_magnitudes(missing, discharge).value is None
     assert combine_battery_magnitudes(negative, discharge).reason == "negative_magnitude"
+
+
+@pytest.mark.parametrize(
+    ("charge_kw", "charge_age", "discharge_kw", "discharge_age", "signed_raw", "expected"),
+    [
+        (9.713, 0, 0, 650, -9.713, 9.713),
+        (0, 650, 4.2, 0, 4.2, -4.2),
+    ],
+)
+def test_stale_inactive_magnitude_uses_fresh_signed_battery(
+    charge_kw: float,
+    charge_age: float,
+    discharge_kw: float,
+    discharge_age: float,
+    signed_raw: float,
+    expected: float,
+) -> None:
+    """A steady zero must not strand recovered same-inverter telemetry."""
+    charge = power(
+        "sensor.battery_charge", charge_kw, "kW", age_seconds=charge_age
+    )
+    discharge = power(
+        "sensor.battery_discharge", discharge_kw, "kW", age_seconds=discharge_age
+    )
+    signed = power("sensor.invbatpower", signed_raw, "kW", multiplier=-1)
+
+    battery = battery_power_from_magnitudes_or_signed(charge, discharge, signed)
+
+    assert battery.value == expected
+    assert battery.valid is True
+    assert battery.fresh is True
+    assert battery.reason == "signed_fallback_pair_stale"
+    assert [source.entity_id for source in battery.sources] == [
+        "sensor.battery_charge",
+        "sensor.battery_discharge",
+        "sensor.invbatpower",
+    ]
+
+
+def test_fresh_pair_keeps_priority_over_signed_battery() -> None:
+    charge = power("sensor.battery_charge", 0, "kW")
+    discharge = power("sensor.battery_discharge", 3, "kW")
+    signed = power("sensor.invbatpower", 99, "kW")
+
+    battery = battery_power_from_magnitudes_or_signed(charge, discharge, signed)
+
+    assert battery.value == -3
+    assert battery.reason == "ok"
+    assert len(battery.sources) == 2
+
+
+def test_genuine_stale_or_disconnected_battery_telemetry_stays_unavailable() -> None:
+    stale_charge = power("sensor.battery_charge", 2, "kW", age_seconds=650)
+    stale_discharge = power("sensor.battery_discharge", 0, "kW", age_seconds=650)
+    stale_signed = power("sensor.invbatpower", -2, "kW", multiplier=-1, age_seconds=650)
+    disconnected_charge = normalize_power_sample(
+        TelemetrySource("sensor.battery_charge", "unavailable", "kW", NOW),
+        now=NOW,
+        max_age_seconds=90,
+        multiplier=1,
+        positive_direction="positive_magnitude",
+    )
+    fresh_signed = power("sensor.invbatpower", -2, "kW", multiplier=-1)
+
+    assert (
+        battery_power_from_magnitudes_or_signed(
+            stale_charge, stale_discharge, stale_signed
+        ).value
+        is None
+    )
+    disconnected = battery_power_from_magnitudes_or_signed(
+        disconnected_charge,
+        power("sensor.battery_discharge", 0, "kW"),
+        fresh_signed,
+    )
+    assert disconnected.value is None
+    assert disconnected.reason == "charge_source_unavailable"
+
+
+def test_invalid_magnitude_is_not_hidden_by_signed_fallback() -> None:
+    negative = power("sensor.battery_charge", -1, "kW")
+    stale_discharge = power("sensor.battery_discharge", 0, "kW", age_seconds=650)
+    signed = power("sensor.invbatpower", -1, "kW", multiplier=-1)
+
+    battery = battery_power_from_magnitudes_or_signed(negative, stale_discharge, signed)
+
+    assert battery.value is None
+    assert battery.reason == "negative_magnitude"

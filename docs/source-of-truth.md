@@ -103,6 +103,11 @@ layers around the proven algorithm, not replacement algorithms.
   charge-minus-discharge magnitudes are supported. Source/direction changes and
   v1 migration clear an independent sign-verification gate, closing automatic
   FoxESS and EV writes until locally recommissioned.
+- Paired battery charge/discharge magnitudes remain the canonical pilot source.
+  When a steady inactive zero alone becomes stale, a separately mapped fresh
+  signed battery-power sensor may recover the canonical value with explicit
+  fallback provenance. Invalid magnitudes, disconnected sources and genuine
+  telemetry outages remain unavailable.
 - A multiphase EV controller must receive explicit signed current for the
   most-loaded service phase. Aggregate power is not treated as proof that phase
   loading is balanced.
