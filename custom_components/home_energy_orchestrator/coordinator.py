@@ -851,11 +851,10 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
                 )
                 self._zerohero_export_last_saved = exported
         try:
-            configured_capacity = self._configured_float(CONF_BATTERY_CAPACITY)
             measured_capacity = self._energy(self.config.get(CONF_BATTERY_CAPACITY_ENTITY))
             effective_capacity = (
                 measured_capacity if measured_capacity is not None and measured_capacity > 0
-                else configured_capacity
+                else self._configured_float(CONF_BATTERY_CAPACITY)
             )
             self.snapshot = SiteSnapshot(
                 battery_soc=battery_soc,

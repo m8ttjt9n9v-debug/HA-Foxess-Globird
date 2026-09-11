@@ -269,6 +269,7 @@
       "invalid_ev_charge_path": "Choose direct EVSE or smart socket.",
       "incomplete_smart_socket_mapping": "Commissioned smart-socket control requires its switch mapping and a current limit at least as high as the commissioned EV minimum.",
       "invalid_site_limits": "Check capacity, floor, reserve, charger, inverter, current, and voltage limits.",
+      "battery_capacity_required": "Select a live FoxESS battery-capacity sensor, or enter a commissioned fallback capacity.",
       "invalid_daily_ev_backfill": "Daily EV backfill requires a commissioned inverter output/discharge limit, a non-zero outside-window percentage, and a ready time before the free-power window.",
       "invalid_schedule": "Choose different free-charge times and a non-negative fallback.",
       "invalid_foxess_control_owner": "Choose observer only, local Modbus, or FoxCloud Mode Scheduler.",

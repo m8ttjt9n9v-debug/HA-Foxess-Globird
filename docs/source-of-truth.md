@@ -120,7 +120,9 @@ layers around the proven algorithm, not replacement algorithms.
 - A mapped live FoxESS battery-capacity entity is authoritative over the
   configured numeric fallback. Setup may prefill that fallback from an
   unambiguous live FoxESS Modbus capacity value, but must not manufacture a
-  capacity from inverter rating or site identity.
+  capacity from inverter rating or site identity. When no valid live capacity
+  exists, setup requires an explicit commissioned fallback and presents no
+  default value.
 - The portable dashboard preserves the proven operational view structure:
   Overview, Tesla, House, Solar & Weather, Configuration, Advanced, and Manual.
   Shared views use only HEO-owned entity IDs; vehicle-native, weather, room, and

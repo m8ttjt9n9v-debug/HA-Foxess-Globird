@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.12.9 — No fabricated battery capacity
+
+- Remove the setup wizard's invented 10 kWh battery-capacity default.
+- Accept a valid mapped live FoxESS capacity without requiring a numeric
+  fallback. When neither is available, keep the field blank and require the
+  operator to map live capacity or enter a commissioned fallback.
+- Resolve live capacity before reading the optional fallback at runtime, so an
+  installation backed by FoxESS telemetry fails closed if that telemetry later
+  disappears instead of depending on a fabricated site value.
+
 ## 0.12.8 — Stable whole-house EV allowance accounting
 
 - Add an explicit **Mapped house-load sensor includes EV charging** topology

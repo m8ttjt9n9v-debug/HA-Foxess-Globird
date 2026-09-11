@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import voluptuous as vol
 from homeassistant.config_entries import SOURCE_RECONFIGURE, SOURCE_USER
 from homeassistant.data_entry_flow import FlowResultType
 from homeassistant.helpers import entity_registry as er
@@ -174,6 +175,55 @@ async def test_user_form_prefills_live_foxess_battery_capacity(hass):
 
     assert markers["battery_capacity_entity"].default() == ("sensor.bms_kwh_remaining")
     assert markers["battery_capacity_kwh"].default() == 40.32
+
+
+async def test_user_form_has_no_invented_battery_capacity_default(hass):
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": SOURCE_USER}
+    )
+    markers = {
+        marker.schema: marker
+        for marker in result["data_schema"].schema
+        if hasattr(marker, "schema")
+    }
+
+    assert markers["battery_capacity_kwh"].default is vol.UNDEFINED
+
+
+async def test_live_capacity_allows_setup_without_numeric_fallback(hass):
+    hass.states.async_set(
+        "sensor.test_battery_capacity", "40.32", {"unit_of_measurement": "kWh"}
+    )
+    data = {
+        key: value for key, value in ENTRY_DATA.items() if key != "battery_capacity_kwh"
+    }
+    data["battery_capacity_entity"] = "sensor.test_battery_capacity"
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": SOURCE_USER},
+        data={"name": "Live Capacity Site", **data},
+    )
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert "battery_capacity_kwh" not in result["data"]
+
+
+async def test_setup_requires_live_capacity_or_explicit_fallback(hass):
+    data = {
+        key: value for key, value in ENTRY_DATA.items() if key != "battery_capacity_kwh"
+    }
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": SOURCE_USER},
+        data={"name": "Missing Capacity Site", **data},
+    )
+
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"] == {
+        "battery_capacity_kwh": "battery_capacity_required"
+    }
 
 
 async def test_user_flow_defaults_existing_single_phase_ev_configuration(hass):

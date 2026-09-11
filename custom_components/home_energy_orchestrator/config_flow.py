@@ -503,6 +503,11 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             value = defaults.get(key)
             return vol.Optional(key, default=value) if value else vol.Optional(key)
 
+        def optional_number(key: str):
+            """Show a numeric fallback without manufacturing a default value."""
+            value = defaults.get(key)
+            return vol.Optional(key, default=value) if value is not None else vol.Optional(key)
+
         return vol.Schema(
             {
                 vol.Required(
@@ -522,9 +527,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     selector.SelectSelectorConfig(options=list(BATTERY_POWER_DIRECTIONS))
                 ),
                 optional_entity(CONF_BATTERY_CAPACITY_ENTITY): ENTITY,
-                vol.Required(
-                    CONF_BATTERY_CAPACITY, default=defaults.get(CONF_BATTERY_CAPACITY, 10.0)
-                ): vol.Coerce(float),
+                optional_number(CONF_BATTERY_CAPACITY): vol.Coerce(float),
                 vol.Required(
                     CONF_BATTERY_FLOOR,
                     default=defaults.get(CONF_BATTERY_FLOOR, DEFAULT_BATTERY_FLOOR),
@@ -1461,7 +1464,11 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if data.get(CONF_EV_CHARGE_PATH) not in EV_CHARGE_PATHS:
             return {CONF_EV_CHARGE_PATH: "invalid_ev_charge_path"}
         try:
-            capacity = float(data[CONF_BATTERY_CAPACITY])
+            capacity = (
+                float(data[CONF_BATTERY_CAPACITY])
+                if data.get(CONF_BATTERY_CAPACITY) is not None
+                else None
+            )
             floor = float(data[CONF_BATTERY_FLOOR])
             reserve = float(data[CONF_RESERVE])
             site_phase_count = float(data[CONF_SITE_PHASE_COUNT])
@@ -1525,6 +1532,26 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             away_confirmation = float(data[CONF_HOUSE_AWAY_CONFIRMATION_HOURS])
         except (KeyError, TypeError, ValueError):
             return {"base": "invalid_site_limits"}
+        capacity_entity = data.get(CONF_BATTERY_CAPACITY_ENTITY)
+        capacity_state = self.hass.states.get(str(capacity_entity)) if capacity_entity else None
+        live_capacity = None
+        if capacity_state is not None:
+            try:
+                live_capacity = energy_to_kwh(
+                    float(capacity_state.state),
+                    capacity_state.attributes.get("unit_of_measurement"),
+                )
+            except (TypeError, ValueError):
+                live_capacity = None
+        capacity_for_validation = (
+            live_capacity
+            if live_capacity is not None
+            and math.isfinite(live_capacity)
+            and live_capacity > 0
+            else capacity
+        )
+        if capacity_for_validation is None:
+            return {CONF_BATTERY_CAPACITY: "battery_capacity_required"}
         try:
             start = time.fromisoformat(str(data[CONF_FREE_CHARGE_START]))
             end = time.fromisoformat(str(data[CONF_FREE_CHARGE_END]))
@@ -1551,7 +1578,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         ):
             return {"base": "invalid_schedule"}
         values = (
-            capacity,
+            capacity_for_validation,
             floor,
             reserve,
             service_import_limit,
@@ -1605,7 +1632,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
         if (
             not all(math.isfinite(value) for value in values)
-            or capacity <= 0
+            or capacity_for_validation <= 0
             or not 0 <= floor <= 100
             or reserve < 0
             or site_phase_count < 1

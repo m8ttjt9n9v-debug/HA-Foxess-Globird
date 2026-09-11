@@ -616,7 +616,14 @@ async def test_potential_capacity_is_multiplied_by_soc(hass):
     entry = MockConfigEntry(
         domain=DOMAIN,
         title="H3 Site",
-        data={**ENTRY_DATA, "battery_capacity_entity": "sensor.test_battery_capacity"},
+        data={
+            **{
+                key: value
+                for key, value in ENTRY_DATA.items()
+                if key != "battery_capacity_kwh"
+            },
+            "battery_capacity_entity": "sensor.test_battery_capacity",
+        },
     )
     entry.add_to_hass(hass)
     assert await hass.config_entries.async_setup(entry.entry_id)

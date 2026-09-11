@@ -101,8 +101,9 @@ If that mapped multiphase current is unavailable, EV actuation is blocked.
 FoxESS Modbus profiles that expose an unambiguous `BMS kWh Remaining` capacity
 entity are suggested automatically, and its current value prefills the setup
 fallback. HEO uses the mapped live capacity at runtime. The numeric capacity is
-used only while live capacity is unavailable and therefore still needs a
-credible commissioned value.
+optional when valid live capacity is available. If no live capacity is mapped,
+the operator must enter a credible commissioned fallback; HEO does not assume a
+default battery size.
 
 The retained pilot direct path never issues a stop or pause. The optional daily
 ready-by extension may stop only a session it started when its frozen wall-
