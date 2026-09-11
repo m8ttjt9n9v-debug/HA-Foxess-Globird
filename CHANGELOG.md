@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.12.10 — Complete whole-house EV transition handling
+
+- Prevent an early allowance recalculation when vehicle SoC is the only changed
+  decision input and requested versus actual current is still converging.
+- Apply the transition hold only to the explicit whole-house-includes-EV
+  topology, and release it when feedback agrees or at the normal three-minute
+  decision boundary.
+- Never defer service-limit overrun evaluation. Preserve the EV-exclusive
+  house-load topology unchanged.
+
 ## 0.12.9 — No fabricated battery capacity
 
 - Remove the setup wizard's invented 10 kWh battery-capacity default.

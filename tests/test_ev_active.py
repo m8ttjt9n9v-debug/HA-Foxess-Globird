@@ -266,6 +266,145 @@ async def test_ev_runtime_writes_tessie_but_not_foxess_when_cloud_owns_inverter(
     assert {event.data["domain"] for event in calls} == {"number", "switch"}
 
 
+async def test_soc_update_does_not_recalculate_whole_house_allowance_during_current_ramp(
+    hass: HomeAssistant,
+) -> None:
+    _set_ev_states(hass)
+    hass.states.async_set("sensor.car_soc", "81", {"unit_of_measurement": "%"})
+    hass.states.async_set("sensor.car_energy", "45", {"unit_of_measurement": "kWh"})
+    hass.states.async_set("sensor.car_charging", "charging")
+    hass.states.async_set("sensor.car_actual_current", "3", {"unit_of_measurement": "A"})
+    hass.states.async_set(
+        "number.car_current",
+        "16",
+        {"min": 1, "max": 16, "step": 1, "unit_of_measurement": "A"},
+    )
+    hass.states.async_set("number.car_limit", "100", {"min": 50, "max": 100, "step": 1})
+    hass.states.async_set("switch.car_charge", "on")
+    hass.states.async_set("sensor.most_loaded_phase_current", "38", {"unit_of_measurement": "A"})
+    config = _controller_config(
+        ev_phase_count=3,
+        site_phase_count=3,
+        site_grid_current_entity="sensor.most_loaded_phase_current",
+        service_import_limit_a=80,
+        ev_free_window_priority="house_battery",
+        ev_free_window_charge_limit_percent=100,
+        ev_allowance_guard_enabled=True,
+        daily_free_allowance_kwh=50,
+        ev_allowance_safety_margin_kwh=1,
+        house_load_includes_ev=True,
+        rehearsal_mode=True,
+    )
+    coordinator = _coordinator(config)
+    observed_at = datetime(2026, 9, 7, 12, 29, 15, tzinfo=UTC)
+    coordinator.snapshot = replace(
+        coordinator.snapshot,
+        battery_soc=58,
+        battery_capacity_kwh=40,
+        house_load_kw=12,
+    )
+    coordinator.telemetry = replace(
+        coordinator.telemetry,
+        site_grid_current=NormalizedSample(
+            38,
+            "A",
+            (TelemetrySource("sensor.most_loaded_phase_current", 38, "A", observed_at),),
+            "positive_import",
+            True,
+            True,
+            "ok",
+        ),
+    )
+    coordinator.free_window_import = SimpleNamespace(
+        last_at=observed_at,
+        imported_kwh=9,
+    )
+    controller = ActiveEvController(hass, coordinator)
+    controller.target_current_a = 16
+    controller.target_limit_percent = 100
+    controller.last_decision_at = observed_at - timedelta(seconds=58)
+    controller._decision_fingerprint = (  # noqa: SLF001
+        80,
+        False,
+        "house_battery",
+        1,
+        16,
+        1,
+        50,
+        100,
+        1,
+    )
+
+    await controller.async_reconcile(observed_at)
+
+    assert controller.target_current_a == 16
+    assert controller.decision_phase == "ev_current_transition_hold"
+    assert controller.allowance_phase == "transition_hold"
+    assert controller.writes_performed == 0
+
+    controller.last_decision_at = observed_at - timedelta(minutes=3)
+    await controller.async_reconcile(observed_at + timedelta(seconds=1))
+
+    assert controller.target_current_a == 1
+    assert controller.allowance_phase == "allowance_exhausted"
+    assert controller.last_actions == ("would_set_charge_current",)
+
+
+async def test_service_overrun_is_never_deferred_during_current_ramp(
+    hass: HomeAssistant,
+) -> None:
+    _set_ev_states(hass)
+    hass.states.async_set("sensor.car_soc", "81", {"unit_of_measurement": "%"})
+    hass.states.async_set("sensor.car_charging", "charging")
+    hass.states.async_set("sensor.car_actual_current", "3", {"unit_of_measurement": "A"})
+    hass.states.async_set(
+        "number.car_current",
+        "16",
+        {"min": 1, "max": 16, "step": 1, "unit_of_measurement": "A"},
+    )
+    hass.states.async_set("sensor.most_loaded_phase_current", "81", {"unit_of_measurement": "A"})
+    config = _controller_config(
+        site_phase_count=3,
+        site_grid_current_entity="sensor.most_loaded_phase_current",
+        service_import_limit_a=80,
+        house_load_includes_ev=True,
+        rehearsal_mode=True,
+    )
+    coordinator = _coordinator(config)
+    observed_at = datetime(2026, 9, 7, 12, 29, 15, tzinfo=UTC)
+    coordinator.telemetry = replace(
+        coordinator.telemetry,
+        site_grid_current=NormalizedSample(
+            81,
+            "A",
+            (TelemetrySource("sensor.most_loaded_phase_current", 81, "A", observed_at),),
+            "positive_import",
+            True,
+            True,
+            "ok",
+        ),
+    )
+    controller = ActiveEvController(hass, coordinator)
+    controller.target_current_a = 16
+    controller.target_limit_percent = 90
+    controller.last_decision_at = observed_at - timedelta(seconds=58)
+    controller._decision_fingerprint = (  # noqa: SLF001
+        80,
+        False,
+        "ev",
+        1,
+        16,
+        1,
+        50,
+        100,
+        1,
+    )
+
+    await controller.async_reconcile(observed_at)
+
+    assert controller.decision_phase != "ev_current_transition_hold"
+
+
 async def test_transient_tessie_max_bounds_transport_then_catches_up(
     hass: HomeAssistant,
 ) -> None:

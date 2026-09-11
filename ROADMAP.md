@@ -250,8 +250,11 @@ Working Single Phase Pilot Site parity.
   include EV charging. Subtract measured EV power exactly once only when the
   operator selects that topology, preserve the pilot's already EV-exclusive
   mapping by default, fail closed without valid current evidence, and expose
-  both projection inputs diagnostically. Completed in v0.12.8 after a live
-  three-phase 1 A/16 A oscillation exposed the double count.
+  both projection inputs diagnostically. Completed in v0.12.8.
+- [x] Defer only a vehicle-SoC-triggered early allowance recalculation while
+  requested and actual EV current are converging in whole-house topology.
+  Retain the normal three-minute boundary and never defer service-overrun
+  evaluation. Completed in v0.12.10.
 - [x] Add coherent-source validity and matched-sample validation to the active
   free-window EV decision. Other future multi-sensor policies retain this rule.
 - [ ] Add durable Home Assistant service-call and direct-Modbus transition

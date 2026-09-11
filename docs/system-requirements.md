@@ -22,6 +22,9 @@ dashboard, commission electrical limits, or migrate personal entity mappings.
   live EV power exactly once. Leave it disabled for an already EV-exclusive
   house sensor. This correction requires valid actual EV current plus the
   commissioned EV voltage and phase count; missing evidence fails closed.
+  HEO holds the existing target across a vehicle-SoC-only early recalculation
+  while requested and actual current are converging, but never defers a measured
+  service-limit overrun or the normal three-minute decision boundary.
 - Home Assistant history/storage plus its built-in template, statistics, and
   integration-style behavior used by the source model and HEO persistence.
 - Home Assistant `person` entities are optional. Auto occupancy conservatively

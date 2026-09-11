@@ -489,12 +489,48 @@ class ActiveEvController:
                 observation.limit_maximum_percent,
                 observation.limit_step_percent,
             )
+            decision_interval_elapsed = (
+                self.last_decision_at is not None
+                and now - self.last_decision_at >= timedelta(minutes=3)
+            )
+            fingerprint_changed = decision_fingerprint != self._decision_fingerprint
+            only_vehicle_soc_changed = (
+                self._decision_fingerprint is not None
+                and decision_fingerprint[0] != self._decision_fingerprint[0]
+                and decision_fingerprint[1:] == self._decision_fingerprint[1:]
+            )
+            current_transition_pending = (
+                in_window
+                and bool(
+                    self.coordinator.config.get(
+                        CONF_HOUSE_LOAD_INCLUDES_EV,
+                        DEFAULT_HOUSE_LOAD_INCLUDES_EV,
+                    )
+                )
+                and ev_valid
+                and observation.current_step_a is not None
+                and abs(observation.requested_current_a - ev_current)
+                > observation.current_step_a / 2
+            )
+            service_limit = self._float(
+                CONF_SERVICE_IMPORT_LIMIT_A, DEFAULT_SERVICE_IMPORT_LIMIT_A
+            )
+            service_overrun = grid_valid and service_limit > 0 and grid_current > service_limit
+            defer_soc_redecision = (
+                only_vehicle_soc_changed
+                and current_transition_pending
+                and not service_overrun
+                and not decision_interval_elapsed
+            )
             should_decide = not in_window or (
                 self.target_current_a is None
                 or self.last_decision_at is None
-                or now - self.last_decision_at >= timedelta(minutes=3)
-                or decision_fingerprint != self._decision_fingerprint
+                or decision_interval_elapsed
+                or (fingerprint_changed and not defer_soc_redecision)
             )
+            if defer_soc_redecision:
+                self.decision_phase = "ev_current_transition_hold"
+                self.allowance_phase = "transition_hold"
             if in_window and self.pre_free_session.active:
                 self.pre_free_session = PreFreeSessionState()
                 self.outside_control_active = False

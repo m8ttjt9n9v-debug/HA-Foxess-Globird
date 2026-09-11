@@ -117,6 +117,11 @@ layers around the proven algorithm, not replacement algorithms.
   count exactly once for the free-window allowance projection. HEO never
   infers this choice from entity names, site phase count, or inverter model;
   invalid actual-current evidence makes the projection unavailable.
+- In that whole-house topology, a vehicle-SoC update alone must not recalculate
+  the allowance while requested and actual EV current are still converging.
+  Hold the existing target only until feedback agrees or the normal
+  three-minute decision boundary. A measured service-limit overrun always
+  bypasses this transition hold.
 - A mapped live FoxESS battery-capacity entity is authoritative over the
   configured numeric fallback. Setup may prefill that fallback from an
   unambiguous live FoxESS Modbus capacity value, but must not manufacture a
