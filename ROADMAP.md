@@ -131,6 +131,14 @@ Working Single Phase Pilot Site parity.
 
 ### Human commissioning and dashboard usability
 
+- [ ] **NEXT SMALL FIX — expose all three primary automatic-control requests
+  together on the configuration dashboard:** Automatic Battery Free Charge
+  (grid import), Automatic ZEROHERO Export, and Automatic EV Control. The
+  integration-owned import switch already exists as
+  `switch.home_energy_automatic_charge`; add it beside the existing export and
+  EV switches, label all three in plain language, and show their effective gate
+  status so an enabled request is not mistaken for authorised hardware control.
+
 - [ ] **HIGH PRIORITY — replace the monolithic setup and reconfigure form with
   a shared, multi-page commissioning flow.** Start with a short Site and
   Capabilities page, followed by small logical pages for Battery, Inverter,
