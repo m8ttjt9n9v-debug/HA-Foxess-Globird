@@ -19,9 +19,13 @@ confirmation automatically. See [telemetry normalization](telemetry-normalizatio
 
 Before commissioning FoxESS actuation, choose one owner for the entire day.
 Local Modbus requires FoxCloud Mode Scheduler and all legacy inverter writers
-to be disabled. Validate mapped mode and power feedback, then use only the
-bounded Diagnostics tests. Automatic battery charging remains default-off;
-verify that its target is above current SoC before rehearsal, confirm its
+to be disabled. Also inspect the inverter's own front-panel charge periods and
+disable every unintended local schedule; an inverter-retained period may not be
+visible through FoxCloud or exposed as an entity by FoxESS Modbus, yet can still
+take control at its local start time. Record the enabled state, start and end of
+each period before changing it. Validate mapped mode and power feedback, then
+use only the bounded Diagnostics tests. Automatic battery charging remains
+default-off; verify that its target is above current SoC before rehearsal, confirm its
 displayed bounded power and 24-hour window, then test one supervised window.
 Place the inverter in Self Use first; HEO will not adopt an unlatched forced or
 different base mode. Confirm Force Charge feedback after the start and Self Use plus zero force
