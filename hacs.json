@@ -1,5 +1,7 @@
 {
   "name": "FoxESS GloBird Tesla Energy Orchestrator",
   "country": "AU",
-  "homeassistant": "2026.8.3"
+  "homeassistant": "2026.8.3",
+  "zip_release": true,
+  "filename": "home_energy_orchestrator.zip"
 }

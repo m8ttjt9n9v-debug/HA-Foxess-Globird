@@ -1,0 +1,50 @@
+name: Publish release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify tagged version
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag_version="${GITHUB_REF_NAME#v}"
+          manifest_version="$(
+            python -c 'import json; print(json.load(open("custom_components/home_energy_orchestrator/manifest.json"))["version"])'
+          )"
+          test "$tag_version" = "$manifest_version"
+
+      - name: Build integration archive
+        shell: bash
+        working-directory: custom_components/home_energy_orchestrator
+        run: |
+          zip -r "$GITHUB_WORKSPACE/home_energy_orchestrator.zip" . \
+            -x '__pycache__/*' '*.pyc' '.DS_Store'
+
+      - name: Verify archive layout
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(unzip -Z1 home_energy_orchestrator.zip | head -n 1)" != "custom_components/"
+          unzip -Z1 home_energy_orchestrator.zip | grep -Fxq 'manifest.json'
+          unzip -Z1 home_energy_orchestrator.zip | grep -Fxq '__init__.py'
+
+      - name: Create GitHub release with counted asset
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          gh release create "$GITHUB_REF_NAME" home_energy_orchestrator.zip \
+            --verify-tag \
+            --title "$GITHUB_REF_NAME" \
+            --generate-notes

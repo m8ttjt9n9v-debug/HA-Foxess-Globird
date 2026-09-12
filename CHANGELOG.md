@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.12.14 — Count HACS downloads
+
+- Publish the integration as a named GitHub release ZIP and configure HACS to
+  install that asset. GitHub can now count installation and update requests in
+  the HACS Downloads column.
+- Add a release workflow that checks the tag against the integration manifest,
+  packages only the integration directory, verifies the archive layout, and
+  creates the GitHub release with the ZIP attached.
+
 ## 0.12.13 — Restore pilot house-learning source semantics
 
 - Compose learned base-house power exactly as the Working Single Phase Pilot
