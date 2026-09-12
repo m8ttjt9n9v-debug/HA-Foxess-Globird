@@ -25,7 +25,10 @@ Status here describes behavioral parity, not merely the presence of code.
 - [x] Faithful occupancy-aware house-demand learning: persistent Auto/Home/Away
   policy, conservative all-person away confirmation, distinct occupied/away
   fallbacks, restart-persistent base and optional heater histories, paired P80
-  maturity, one selected protection budget, and over-gap rejection.
+  maturity, one selected protection budget, and over-gap rejection. v0.12.13
+  corrected the runtime source to retain the pilot's state-qualified EV and
+  heater subtraction, zero clamp, and left-method integration instead of
+  feeding an uncomposed whole-house value into a trapezoidal sampler.
 - [x] Pure Working Single Phase Pilot Site free-window EV current planner with golden branch-order
   tests, separate charge-policy/anti-pause limit planning, and a topology-aware
   daily-allowance ceiling that is inert for ordinary sessions that fit.

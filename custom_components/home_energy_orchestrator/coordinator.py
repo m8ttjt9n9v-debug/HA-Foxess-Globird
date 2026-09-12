@@ -7,7 +7,7 @@ from dataclasses import replace
 from datetime import datetime, time, timedelta
 from math import isfinite
 
-from homeassistant.core import CALLBACK_TYPE, Event, HomeAssistant, callback
+from homeassistant.core import CALLBACK_TYPE, Event, HomeAssistant, State, callback
 from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
@@ -30,6 +30,8 @@ from .const import (
     CONF_DAILY_CHARGE,
     CONF_DAILY_FREE_ALLOWANCE_KWH,
     CONF_DAILY_IMPORT_ENTITY,
+    CONF_EV_ACTUAL_CURRENT,
+    CONF_EV_CHARGING_STATE,
     CONF_EV_MAX_CURRENT,
     CONF_EV_MIN_CURRENT,
     CONF_EV_PHASE_COUNT,
@@ -45,6 +47,7 @@ from .const import (
     CONF_HOUSE_AWAY_FALLBACK,
     CONF_HOUSE_LEARNING_FALLBACK,
     CONF_HOUSE_LOAD,
+    CONF_HOUSE_LOAD_INCLUDES_EV,
     CONF_HOUSE_OCCUPANCY_MODE,
     CONF_INVERTER_CHARGE_LIMIT_KW,
     CONF_INVERTER_DISCHARGE_LIMIT_KW,
@@ -99,7 +102,7 @@ from .const import (
     SOLAR_GENERATION_POSITIVE,
 )
 from .models import EnergyLedger, SiteSnapshot
-from .normalise import energy_to_kwh, percent, power_to_kw
+from .normalise import current_to_a, energy_to_kwh, percent, power_to_kw
 from .planner.daily_meter import (
     DailyImportAccumulator,
     HourlyWindowImportAccumulator,
@@ -114,6 +117,7 @@ from .planner.learning import (
     OccupancyPerson,
     OccupancyResult,
     classify_energy_occupancy,
+    protected_base_house_power_kw,
     remaining_protected_cycle_budget_kwh,
     select_house_cycle_budget,
 )
@@ -206,6 +210,8 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
                     CONF_SOLAR_POWER,
                     CONF_SITE_GRID_CURRENT,
                     CONF_EV_SOC,
+                    CONF_EV_CHARGING_STATE,
+                    CONF_EV_ACTUAL_CURRENT,
                 )
                 if (entity_id := config.get(key))
             ),
@@ -903,12 +909,12 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
         """Feed qualified house-load readings into the rolling sampler."""
         if self.demand_sampler is None or self.snapshot is None:
             return
-        house_load_kw = self.snapshot.house_load_kw
+        now = dt_util.now()
+        house_load_kw = self._protected_house_learning_power_kw(now)
         if house_load_kw is None:
             return
         # Window boundaries are configured in Home Assistant's local site time.
         # Using UTC would silently learn a different interval at most sites.
-        now = dt_util.now()
         sample = self.demand_sampler.observe(now, house_load_kw)
         heater_sample = None
         if self.heater_sampler is not None:
@@ -928,6 +934,74 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
         ):
             await self._async_save_demand_state()
             self._demand_sampler_last_saved_at = now
+
+    def _protected_house_learning_power_kw(self, now: datetime) -> float | None:
+        """Return the pilot-compatible base-house power used by the learner."""
+        if self.snapshot is None or self.snapshot.house_load_kw is None:
+            return None
+        includes_ev = bool(self.config.get(CONF_HOUSE_LOAD_INCLUDES_EV, False))
+        ev_power_kw = self._state_qualified_ev_power_kw(now) if includes_ev else None
+        heater_mapped = bool(self.config.get(CONF_HEATER_POWER))
+        heater_power_kw = (
+            self._fresh_power(self.config.get(CONF_HEATER_POWER), now)
+            if heater_mapped
+            else None
+        )
+        return protected_base_house_power_kw(
+            self.snapshot.house_load_kw,
+            ev_power_kw=ev_power_kw,
+            heater_power_kw=heater_power_kw,
+            house_includes_ev=includes_ev,
+            heater_is_mapped=heater_mapped,
+        )
+
+    def _state_qualified_ev_power_kw(self, now: datetime) -> float | None:
+        """Port the pilot's charging-state-qualified EV power calculation."""
+        charging_entity = self.config.get(CONF_EV_CHARGING_STATE)
+        charging_state = self.hass.states.get(str(charging_entity)) if charging_entity else None
+        if charging_state is None:
+            return None
+        age_seconds = (now - self._state_reported_at(charging_state)).total_seconds()
+        if age_seconds < 0 or age_seconds > self._max_telemetry_age():
+            return None
+        if charging_state.state.lower() != "charging":
+            return 0.0
+        current_entity = self.config.get(CONF_EV_ACTUAL_CURRENT)
+        current_state = self.hass.states.get(str(current_entity)) if current_entity else None
+        if current_state is None:
+            return None
+        current_age_seconds = (now - self._state_reported_at(current_state)).total_seconds()
+        if current_age_seconds < 0 or current_age_seconds > self._max_telemetry_age():
+            return None
+        try:
+            current_a = current_to_a(
+                float(current_state.state),
+                current_state.attributes.get("unit_of_measurement"),
+            )
+            voltage_v = self._configured_float(CONF_EV_VOLTAGE)
+            phase_count = self._configured_phase_count()
+        except (TypeError, ValueError):
+            return None
+        if current_a < 0 or voltage_v <= 0:
+            return None
+        return current_a * voltage_v * phase_count / 1000
+
+    def _fresh_power(self, entity_id: object, now: datetime) -> float | None:
+        """Read a mapped power component only while its state is fresh."""
+        if not isinstance(entity_id, str) or not entity_id:
+            return None
+        state = self.hass.states.get(entity_id)
+        if state is None:
+            return None
+        age_seconds = (now - self._state_reported_at(state)).total_seconds()
+        if age_seconds < 0 or age_seconds > self._max_telemetry_age():
+            return None
+        return self._power(entity_id)
+
+    @staticmethod
+    def _state_reported_at(state: State) -> datetime:
+        """Use Home Assistant's report time so stable polled values stay fresh."""
+        return getattr(state, "last_reported", state.last_updated)
 
     async def _async_save_demand_state(self) -> None:
         """Persist completed history and the current partial cycle together."""

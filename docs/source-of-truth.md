@@ -89,6 +89,12 @@ layers around the proven algorithm, not replacement algorithms.
   fallback. Exactly one resulting budget enters the ledger, and weather
   forecasts remain diagnostic rather than an additive control term. Histories
   and in-progress samples survive ordinary restarts and reject over-gap cycles.
+  Source composition retains the pilot order: state-qualify Tessie current,
+  remove EV power exactly once only for a commissioned whole-house topology,
+  remove an optional separately metered heater exactly once, clamp base demand
+  at zero, and accumulate it with the pilot's left integration method. Invalid
+  required subtraction telemetry withholds sampling rather than learning a
+  knowingly incorrect load.
 - FoxCloud ownership blocks all HEO Modbus writes for the entire day. HEO does
   not mix cloud scheduling and local Modbus automation.
 - FoxCloud inverter ownership does not block free-window Tessie control,

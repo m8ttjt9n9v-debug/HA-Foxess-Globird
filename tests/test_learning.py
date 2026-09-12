@@ -13,6 +13,7 @@ from custom_components.home_energy_orchestrator.planner.learning import (
     DemandHistory,
     OccupancyPerson,
     classify_energy_occupancy,
+    protected_base_house_power_kw,
     remaining_protected_cycle_budget_kwh,
     retain_demand_samples,
     select_house_cycle_budget,
@@ -85,6 +86,40 @@ def test_history_add_keeps_existing_samples_when_a_late_row_arrives() -> None:
     assert [sample.energy_kwh for sample in history.samples] == [3, 4]
 
 
+def test_pilot_learning_source_subtracts_ev_and_heater_once_then_clamps() -> None:
+    assert protected_base_house_power_kw(
+        12.0,
+        ev_power_kw=6.9,
+        heater_power_kw=2.1,
+        house_includes_ev=True,
+        heater_is_mapped=True,
+    ) == pytest.approx(3.0)
+    assert protected_base_house_power_kw(
+        -4.0,
+        house_includes_ev=False,
+        heater_is_mapped=False,
+    ) == 0.0
+
+
+def test_learning_source_fails_closed_when_required_subtraction_is_unavailable() -> None:
+    assert protected_base_house_power_kw(5.0, house_includes_ev=True) is None
+    assert protected_base_house_power_kw(5.0, heater_is_mapped=True) is None
+
+
+def test_pilot_zero_clamp_prevents_negative_load_from_erasing_a_cycle() -> None:
+    sampler = DemandCycleSampler(time(12), time(15), max_gap=timedelta(days=2))
+    sampler.observe(datetime(2026, 9, 1, 12, tzinfo=UTC), 1.0)
+    sampler.observe(datetime(2026, 9, 1, 15, tzinfo=UTC), 1.0)
+    clamped = protected_base_house_power_kw(-4.0)
+    assert clamped == 0.0
+    sampler.observe(datetime(2026, 9, 1, 18, tzinfo=UTC), clamped)
+
+    sample = sampler.observe(datetime(2026, 9, 2, 12, tzinfo=UTC), 1.0)
+
+    assert sample is not None
+    assert sample.energy_kwh == pytest.approx(3.0)
+
+
 def test_cycle_sampler_excludes_the_free_window() -> None:
     sampler = DemandCycleSampler(
         time(12), time(15), max_gap=timedelta(days=2)
@@ -97,7 +132,7 @@ def test_cycle_sampler_excludes_the_free_window() -> None:
     assert sample.energy_kwh == 21
 
 
-def test_cycle_sampler_uses_trapezoid_power_between_readings() -> None:
+def test_cycle_sampler_uses_the_pilot_left_integration_method() -> None:
     sampler = DemandCycleSampler(
         time(12), time(15), max_gap=timedelta(days=2)
     )
@@ -106,7 +141,7 @@ def test_cycle_sampler_uses_trapezoid_power_between_readings() -> None:
     sampler.observe(datetime(2026, 9, 1, 18, tzinfo=UTC), 3)
     sample = sampler.observe(datetime(2026, 9, 2, 12, tzinfo=UTC), 3)
     assert sample is not None
-    assert sample.energy_kwh == 60
+    assert sample.energy_kwh == 57
 
 
 def test_cycle_sampler_restores_an_in_progress_cycle_after_short_restart() -> None:
@@ -147,10 +182,8 @@ def test_daily_sampler_splits_a_reading_across_the_boundary() -> None:
     sampler.observe(datetime(2026, 9, 1, 12, tzinfo=UTC), 1)
     sample = sampler.observe(datetime(2026, 9, 2, 13, tzinfo=UTC), 3)
     assert sample is not None
-    # Linear interpolation reaches 2.92 kW at 12:00, averaging 1.96 kW
-    # across the completed 24-hour cycle.
-    assert sample.energy_kwh == pytest.approx(47.04)
-    assert sampler.to_payload()["cycle_energy_kwh"] == pytest.approx(2.96)
+    assert sample.energy_kwh == pytest.approx(24.0)
+    assert sampler.to_payload()["cycle_energy_kwh"] == pytest.approx(1.0)
 
 
 def test_auto_occupancy_assumes_home_without_person_entities() -> None:

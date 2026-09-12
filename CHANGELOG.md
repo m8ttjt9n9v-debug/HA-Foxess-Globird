@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.12.13 — Restore pilot house-learning source semantics
+
+- Compose learned base-house power exactly as the Working Single Phase Pilot
+  Site does: remove state-qualified EV charging and an optional separately
+  metered heater exactly once, then clamp the result at zero.
+- Apply the EV subtraction only when the commissioned house-load topology says
+  the mapped sensor includes EV charging. A retained Tessie current is zero for
+  this calculation unless Tessie explicitly reports that the vehicle is
+  charging.
+- Prevent negative FoxESS load readings during battery charge or export from
+  resetting the entire in-progress protected-demand cycle.
+- Match the pilot's left-hand energy integration method for both base-house and
+  separately metered heater histories. Preserve the existing 28-sample,
+  35-day, seven-sample P80 policy and restart-persistent state.
+
 ## 0.12.12 — Discoverable release and compliant brand assets
 
 - Publish the fixes from 0.12.8 through 0.12.11 as an actual GitHub Release so

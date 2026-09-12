@@ -137,6 +137,40 @@ class DemandHistory:
         )
 
 
+def protected_base_house_power_kw(
+    house_power_kw: float,
+    *,
+    ev_power_kw: float | None = None,
+    heater_power_kw: float | None = None,
+    house_includes_ev: bool = False,
+    heater_is_mapped: bool = False,
+) -> float | None:
+    """Compose the pilot's non-EV, non-heater learning source.
+
+    The Working Single Phase Pilot Site removes state-qualified EV power and
+    separately metered heater power exactly once, then clamps the resulting
+    base-house demand at zero. A required component that is unavailable makes
+    the composed source unavailable rather than silently learning the wrong
+    load.
+    """
+    if not isfinite(house_power_kw):
+        return None
+    if house_includes_ev and (ev_power_kw is None or not isfinite(ev_power_kw)):
+        return None
+    if heater_is_mapped and (
+        heater_power_kw is None or not isfinite(heater_power_kw)
+    ):
+        return None
+    base_power_kw = house_power_kw
+    if house_includes_ev:
+        assert ev_power_kw is not None
+        base_power_kw -= max(ev_power_kw, 0.0)
+    if heater_is_mapped:
+        assert heater_power_kw is not None
+        base_power_kw -= max(heater_power_kw, 0.0)
+    return max(base_power_kw, 0.0)
+
+
 @dataclass(slots=True)
 class DemandCycleSampler:
     """Integrate non-free-window house power into completed daily cycles."""
@@ -178,7 +212,7 @@ class DemandCycleSampler:
         for begin, finish in zip(cuts, cuts[1:]):
             midpoint = begin + (finish - begin) / 2
             if not self._in_free_window(midpoint):
-                energy = self._trapezoid_energy(begin, finish, observed_at, house_power_kw)
+                energy = self._left_energy(begin, finish)
                 self._cycle_energy_kwh += energy if self._cycle_started else 0.0
             if finish in starts:
                 if self._cycle_started:
@@ -233,21 +267,10 @@ class DemandCycleSampler:
         self._cycle_started = False
         self._cycle_energy_kwh = 0.0
 
-    def _trapezoid_energy(
-        self, begin: datetime, finish: datetime, observed_at: datetime, observed_power_kw: float
-    ) -> float:
-        assert self._last_at is not None
+    def _left_energy(self, begin: datetime, finish: datetime) -> float:
+        """Mirror the pilot integration sensor's configured left method."""
         assert self._last_power_kw is not None
-        total_seconds = (observed_at - self._last_at).total_seconds()
-        begin_fraction = (begin - self._last_at).total_seconds() / total_seconds
-        finish_fraction = (finish - self._last_at).total_seconds() / total_seconds
-        begin_power = self._last_power_kw + (
-            observed_power_kw - self._last_power_kw
-        ) * begin_fraction
-        finish_power = self._last_power_kw + (
-            observed_power_kw - self._last_power_kw
-        ) * finish_fraction
-        return (begin_power + finish_power) / 2 * (finish - begin).total_seconds() / 3600
+        return self._last_power_kw * (finish - begin).total_seconds() / 3600
 
     def _window_bounds(self, day: date, tzinfo) -> tuple[datetime, datetime]:
         start = datetime.combine(day, self.free_window_start, tzinfo=tzinfo)
@@ -336,9 +359,7 @@ class DailyDemandCycleSampler:
         cuts = sorted({self._last_at, observed_at, *boundaries})
         for begin, finish in zip(cuts, cuts[1:]):
             if self._cycle_started:
-                self._cycle_energy_kwh += self._trapezoid_energy(
-                    begin, finish, observed_at, power_kw
-                )
+                self._cycle_energy_kwh += self._left_energy(begin, finish)
             if finish in boundaries:
                 if self._cycle_started:
                     result = DemandCycleSample(finish, self._cycle_energy_kwh)
@@ -402,21 +423,10 @@ class DailyDemandCycleSampler:
             day += timedelta(days=1)
         return boundaries
 
-    def _trapezoid_energy(
-        self, begin: datetime, finish: datetime, observed_at: datetime, observed_power_kw: float
-    ) -> float:
-        assert self._last_at is not None
+    def _left_energy(self, begin: datetime, finish: datetime) -> float:
+        """Mirror the pilot integration sensor's configured left method."""
         assert self._last_power_kw is not None
-        total_seconds = (observed_at - self._last_at).total_seconds()
-        begin_fraction = (begin - self._last_at).total_seconds() / total_seconds
-        finish_fraction = (finish - self._last_at).total_seconds() / total_seconds
-        begin_power = self._last_power_kw + (
-            observed_power_kw - self._last_power_kw
-        ) * begin_fraction
-        finish_power = self._last_power_kw + (
-            observed_power_kw - self._last_power_kw
-        ) * finish_fraction
-        return (begin_power + finish_power) / 2 * (finish - begin).total_seconds() / 3600
+        return self._last_power_kw * (finish - begin).total_seconds() / 3600
 
 
 def retain_demand_samples(

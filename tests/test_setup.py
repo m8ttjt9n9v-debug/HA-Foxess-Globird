@@ -811,3 +811,74 @@ async def test_learning_sampler_uses_home_assistant_local_time(hass, monkeypatch
 
     assert coordinator.demand_sampler._last_at == local_now
     coordinator.shutdown()
+
+
+async def test_learning_source_ports_pilot_ev_and_heater_subtraction(hass):
+    """Whole-house extensions retain the pilot's base-load composition."""
+    hass.states.async_set("sensor.test_ev_charging", "charging")
+    hass.states.async_set(
+        "sensor.test_ev_actual_current", "16", {"unit_of_measurement": "A"}
+    )
+    hass.states.async_set("sensor.test_heater", "1", {"unit_of_measurement": "kW"})
+    now = max(
+        hass.states.get(entity_id).last_updated
+        for entity_id in (
+            "sensor.test_ev_charging",
+            "sensor.test_ev_actual_current",
+            "sensor.test_heater",
+        )
+    )
+    coordinator = EnergyCoordinator(
+        hass,
+        {
+            **ENTRY_DATA,
+            "house_load_includes_ev": True,
+            "heater_power_entity": "sensor.test_heater",
+            "ev_charging_state_entity": "sensor.test_ev_charging",
+            "ev_actual_current_entity": "sensor.test_ev_actual_current",
+            "ev_voltage": 230.0,
+            "ev_phase_count": 3,
+        },
+        "learning-composition-test",
+    )
+    coordinator.snapshot = SiteSnapshot(
+        battery_soc=50,
+        battery_capacity_kwh=20,
+        battery_floor_percent=10,
+        reserve_kwh=0,
+        grid_power_kw=0,
+        house_load_kw=15,
+    )
+
+    assert coordinator._protected_house_learning_power_kw(now) == pytest.approx(2.96)
+    coordinator.shutdown()
+
+
+async def test_learning_source_ignores_retained_ev_current_when_not_charging(hass):
+    """Match the pilot's explicit charging-state qualification."""
+    hass.states.async_set("sensor.test_ev_charging", "stopped")
+    hass.states.async_set(
+        "sensor.test_ev_actual_current", "16", {"unit_of_measurement": "A"}
+    )
+    now = hass.states.get("sensor.test_ev_actual_current").last_updated
+    coordinator = EnergyCoordinator(
+        hass,
+        {
+            **ENTRY_DATA,
+            "house_load_includes_ev": True,
+            "ev_charging_state_entity": "sensor.test_ev_charging",
+            "ev_actual_current_entity": "sensor.test_ev_actual_current",
+        },
+        "learning-stopped-ev-test",
+    )
+    coordinator.snapshot = SiteSnapshot(
+        battery_soc=50,
+        battery_capacity_kwh=20,
+        battery_floor_percent=10,
+        reserve_kwh=0,
+        grid_power_kw=0,
+        house_load_kw=3,
+    )
+
+    assert coordinator._protected_house_learning_power_kw(now) == 3
+    coordinator.shutdown()
