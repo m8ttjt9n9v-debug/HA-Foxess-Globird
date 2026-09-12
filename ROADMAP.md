@@ -192,6 +192,25 @@ Working Single Phase Pilot Site parity.
   checkpoint-retention, cancellation, conditional-page, old-entry, and final
   cross-page validation regression coverage.
 
+  Treat electrical-direction confirmation as a first-class commissioning stage,
+  not a checkbox buried among limits and automation options. Put each direction
+  selector beside the source it qualifies on the Battery, Grid, and Solar pages.
+  After those mappings, show a dedicated **Verify Electrical Directions** page
+  with each configured raw value, normalized value, expected physical meaning,
+  and a visible per-channel result. Only that page may present the final
+  **Confirm electrical directions** action. Place Automation and Safety after
+  verification so the operator cannot overlook why enabled requests remain
+  blocked.
+
+  Setup may be completed safely without confirmation, but the Review page must
+  say plainly that HEO will remain unable to issue hardware commands and list
+  the unverified channels. It must link directly back to direction verification
+  and expose the same task on the dashboard after setup. Reconfiguration that
+  changes a normalized source or direction must identify the exact changed
+  channel, clear only the overall confirmation state, preserve every entered
+  value, and take the operator directly to verification instead of returning to
+  the start of the flow.
+
 - [ ] Complete the **Configure EV automation?** capability behavior introduced
   by the multi-page flow. When
   disabled, hide EV telemetry, actuator, capacity, floor, reserve, charger,
