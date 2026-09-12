@@ -11,7 +11,7 @@ My setup:
 - bar heater for heating sleeping areas
 - standard 10A or 15A power point for charging the car
 
-An Australian power company, Globird, offers a product called ZeroHero which essentially gives 50kWh a day of free power over 3 hours, and pays $1 in the evening if you use absolutely zero power between 6-9pm, and then pays 10c / kWh for the first 15kW of power exported during this time. Done right, the effective feed-in rate for this 15kW is 16.7c / kWh: The daily charge for the service is $2.05, so if it’s possible to export just 12.2kWh during the 6-9pm window, your electricity bill goes away. Even with no solar generated, this gives up to 35kWh of usable absolutely free power every day. [Use my link] [https://quote.globirdenergy.com.au/quote?pcode=refer&ref=U8APLT] for a $50 credit when you sign up. I will get $50 also.
+An Australian power company, Globird, offers a product called ZeroHero which essentially gives 50kWh a day of free power over 3 hours, and pays $1 in the evening if you use absolutely zero power between 6-9pm, and then pays 10c / kWh for the first 15kW of power exported during this time. Done right, the effective feed-in rate for this 15kW is 16.7c / kWh: The daily charge for the service is $2.05, so if it’s possible to export just 12.2kWh during the 6-9pm window, your electricity bill goes away. Even with no solar generated, this gives up to 35kWh of usable absolutely free power every day. [Use my link](https://quote.globirdenergy.com.au/quote?pcode=refer&ref=U8APLT) for a $50 credit when you sign up. I will get $50 also.
 
 The challenge was to balance the power out so that enough power could be exported to cancel out the power bill, whilst still allowing enough power for heating / cooling and charging the EV, and most importantly, that requires no human intervention. It’s not fun spending hours a day staring at a screen manually managing power usage, organising driving around free power time, or not having enough power left to do a trip without visiting a supercharger, or running up $10 overnight in power because you exported too much for $2 in feed-in credits. Apart from becoming an obsession, needing to compulsively check that your battery isn’t buying power at 50c/kWh, it becomes impossible to have a normal conversation with other humans about anything other than batteries, electricity, energy, solar, power, kW, kWh, before looping back to batteries again. Even electricians won’t want to talk to you.
 
@@ -28,9 +28,9 @@ There was a LOT of extensions to my original code to make the 3 phase site work;
 So this custom repo is the result. Lots of UI improvements to be made, but right now it’s a verified, fully functioning reliable system that should work as long as you have:
 - Home Assistant
 - FoxEss battery system (tested inverters are KH8, KH10, H3-16kW-Smart)
-- optional Tesla EV with [Tessy integration] [https://share.tessie.com/YVp3vpOVCOj]
+- optional Tesla EV with [Tessy integration](https://share.tessie.com/YVp3vpOVCOj)
 - optional Solar
-- [GloBird ZeroHero] [https://quote.globirdenergy.com.au/quote?pcode=refer&ref=U8APLT] electricity plan. It has to be the ZeroHero, not Four4Free!!!
+- [GloBird ZeroHero](https://quote.globirdenergy.com.au/quote?pcode=refer&ref=U8APLT) electricity plan. It has to be the ZeroHero, not Four4Free!!!
 
 ============
 A Home Assistant custom integration that coordinates FoxESS batteries, GloBird energy plans, and Tesla charging. It provides a site-configured energy ledger,
