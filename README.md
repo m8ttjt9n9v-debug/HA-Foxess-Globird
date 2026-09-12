@@ -1,12 +1,40 @@
 # FoxESS GloBird Tesla Energy Orchestrator
 
-Foxess Globird Tesla charging orchestrator.
+A Home Assistant custom integration ported from my own working home assistant configuration that was put together over many months in order to get my electricity and transport bills to zero (literally, $0 and in fact a small credit every month). Most importantly, zero manual intervention and monitoring.
 
-A Home Assistant custom integration that coordinates FoxESS batteries, GloBird
-energy plans, and Tesla charging. It provides a site-configured energy ledger,
-conservative demand learning, bounded FoxESS diagnostics, the verified Working
-Single Phase Pilot Site ZEROHERO export policy, a faithful direct-EVSE
-free-window port, and a default-off Local Modbus battery-charge extension.
+My setup:
+- single phase 63A electricity service (block of townhouses)
+- 3.5 kW rooftop solar with 3kW inverter
+- 42 kWh Foxess house battery with 10kW inverter
+- 2017 Tesla with 85 kWh usable battery
+- old split system reverse cycle aircon for heating / cooling living areas of house
+- bar heater for heating sleeping areas
+- standard 10A or 15A power point for charging the car
+
+An Australian power company, Globird, offers a product called ZeroHero which essentially gives 50kWh a day of free power over 3 hours, and pays $1 in the evening if you use absolutely zero power between 6-9pm, and then pays 10c / kWh for the first 15kW of power exported during this time. Done right, the effective feed-in rate for this 15kW is 16.7c / kWh: The daily charge for the service is $2.05, so if it’s possible to export just 12.2kWh during the 6-9pm window, your electricity bill goes away. Even with no solar generated, this gives up to 35kWh of usable absolutely free power every day. [Use my link] [https://quote.globirdenergy.com.au/quote?pcode=refer&ref=U8APLT] for a $50 credit when you sign up. I will get $50 also.
+
+The challenge was to balance the power out so that enough power could be exported to cancel out the power bill, whilst still allowing enough power for heating / cooling and charging the EV, and most importantly, that requires no human intervention. It’s not fun spending hours a day staring at a screen manually managing power usage, organising driving around free power time, or not having enough power left to do a trip without visiting a supercharger, or running up $10 overnight in power because you exported too much for $2 in feed-in credits. Apart from becoming an obsession, needing to compulsively check that your battery isn’t buying power at 50c/kWh, it becomes impossible to have a normal conversation with other humans about anything other than batteries, electricity, energy, solar, power, kW, kWh, before looping back to batteries again. Even electricians won’t want to talk to you.
+
+So I got to work with homeassistant and after hundreds and hundreds of hours managed to create a system that successfully achieves my goal. With carefully planned automation and just enough local 'machine learning' to track our house and vehicle energy use locally, the system came together until magically there is a completely hands off automated system that intelligently distributes power at the right time in order to give us literally zero power bills including keeping our EV always charged. I can now sleep, talk about normal things and even think about things other than electricity. And I don’t even need to check the monthly power bill - it’s always in credit.
+
+Of course when a couple of friends and family with similar setups wanted me to help them as well, I couldn’t bear the thought of trying to extract the relevant parts from my 8000 lines of configuration.yaml and my extensive dashboards; So, I got to work carefully porting it into a custom HACS repository, until I could successfully install it on first my own site, and then the other sites. After 6 weeks of reverting to only thinking about power, energy, cents, amps, kW, kWh, phases and FoxEss, the port successfully works on three sites.
+
+Pilot: 42kW Foxess HK10, 3kW AC coupled solar, single phase, 85kW EV with 2.4kW charger
+Site 1: 42kW Foxess H3 15kW, 8kW AC coupled solar, 3 phase power, 65kW EV with 11kW high speed car charger
+Site 2: 42kW Foxess KH8, 8kW AC coupled solar, single phase, no EV
+
+There was a LOT of extensions to my original code to make the 3 phase site work; the 11kW ‘fast’ EV charging really changed the approach because as opposed to my own setup with the standard 10A charging socket, suddenly an 11kW charging outlet combined with normal house use can exceed the inverter limit and start taking expensive power from the grid, ruining the whole concept. Not just of free power, but trying to achieve 100% green power as well, and making full use of smart home automation. The 3 phase site was a multi-house site, multiple air conditioners and used a lot more power in general. This site has gone from $350+ a month to $0 a month, with just the installation of HomeAssistant and a [Tessie subscription] [https://share.tessie.com/YVp3vpOVCOj].
+
+So this custom repo is the result. Lots of UI improvements to be made, but right now it’s a verified, fully functioning reliable system that should work as long as you have:
+- Home Assistant
+- FoxEss battery system (tested inverters are KH8, KH10, H3-16kW-Smart)
+- optional Tesla EV with [Tessy integration] [https://share.tessie.com/YVp3vpOVCOj]
+- optional Solar
+- [GloBird ZeroHero] [https://quote.globirdenergy.com.au/quote?pcode=refer&ref=U8APLT] electricity plan. It has to be the ZeroHero, not Four4Free!!!
+
+============
+A Home Assistant custom integration that coordinates FoxESS batteries, GloBird energy plans, and Tesla charging. It provides a site-configured energy ledger,
+conservative demand learning, bounded FoxESS diagnostics, ZeroHero export and free power the verified Working Single Phase Pilot Site ZEROHERO export policy, a faithful direct-EVSE free-window port, and a default-off Local Modbus battery-charge extension.
 
 The scheduled battery controller includes fixed-window charging without
 restoring the earlier rewritten controller. It reuses the bounded ZEROHERO
