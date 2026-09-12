@@ -139,6 +139,28 @@ Working Single Phase Pilot Site parity.
   EV switches, label all three in plain language, and show their effective gate
   status so an enabled request is not mistaken for authorised hardware control.
 
+- [ ] **NEXT SMALL FIX — add an Electrical Directions calibration panel directly
+  beneath the sign-verification status.** Do not require the operator to use the
+  monolithic reconfigure form merely to correct or reconfirm a direction. Show
+  the configured source entity, live raw value, resulting normalized value, and
+  a plain-language direction selector for each applicable channel: grid power
+  (positive means import/export), battery power (positive means
+  charge/discharge), solar or CT2 power (positive means generation/consumption),
+  and site grid current (positive means import/export). Hide channels configured
+  absent and explain paired unsigned battery charge/discharge magnitudes without
+  pretending that they need a sign selector.
+
+  Changing any source or direction must immediately clear the existing
+  verification, suspend every HEO automatic hardware command, and preserve the
+  new unverified selection. Provide a separate **Confirm electrical directions**
+  action only after the operator has compared the displayed values with known
+  physical import/export, battery charge/discharge, and solar-generation
+  conditions. Display exactly which channels are still unconfirmed and restore
+  the normal gates without restarting or traversing unrelated configuration
+  fields once confirmation succeeds. Add tests for each direction, unavailable
+  telemetry, solar configured absent, paired battery magnitudes, restart, and
+  verification invalidation after a later change.
+
 - [ ] **HIGH PRIORITY — replace the monolithic setup and reconfigure form with
   a shared, multi-page commissioning flow.** Start with a short Site and
   Capabilities page, followed by small logical pages for Battery, Inverter,
