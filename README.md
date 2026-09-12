@@ -33,6 +33,7 @@ So this custom repo is the result. Lots of UI improvements to be made, but right
 - [GloBird ZeroHero](https://quote.globirdenergy.com.au/quote?pcode=refer&ref=U8APLT) electricity plan. It has to be the ZeroHero, not Four4Free!!!
 
 ============
+
 A Home Assistant custom integration that coordinates FoxESS batteries, GloBird energy plans, and Tesla charging. It provides a site-configured energy ledger,
 conservative demand learning, bounded FoxESS diagnostics, ZeroHero export and free power the verified Working Single Phase Pilot Site ZEROHERO export policy, a faithful direct-EVSE free-window port, and a default-off Local Modbus battery-charge extension.
 
