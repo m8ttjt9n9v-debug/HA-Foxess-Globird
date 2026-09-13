@@ -19,6 +19,7 @@ from custom_components.home_energy_orchestrator.const import (
     CONF_EV_BEFORE_EXPORT_ENABLED,
     CONF_EV_BEFORE_EXPORT_SOC_TARGET,
     CONF_EV_CABLE_CONNECTED,
+    CONF_EV_CONTROL_COMMISSIONED,
     CONF_EV_PHASE_COUNT,
     CONF_EV_PROTECTED_BASELINE_A,
     CONF_EV_VOLTAGE,
@@ -430,6 +431,7 @@ async def test_export_protects_only_explicit_connected_ev_baseline(hass):
         hass,
         _coordinator(
             **{
+                CONF_EV_CONTROL_COMMISSIONED: True,
                 CONF_EV_PROTECTED_BASELINE_A: 1.0,
                 CONF_EV_VOLTAGE: 230.0,
                 CONF_EV_PHASE_COUNT: 1,
@@ -446,10 +448,30 @@ async def test_export_protects_only_explicit_connected_ev_baseline(hass):
 
 async def test_nonzero_ev_baseline_fails_closed_without_explicit_evidence(hass):
     controller = ActiveFoxessController(
-        hass, _coordinator(**{CONF_EV_PROTECTED_BASELINE_A: 1.0})
+        hass,
+        _coordinator(
+            **{
+                CONF_EV_CONTROL_COMMISSIONED: True,
+                CONF_EV_PROTECTED_BASELINE_A: 1.0,
+            }
+        ),
     )
 
     assert controller._protected_keepalive_energy_kwh(15) is None
+
+
+async def test_battery_only_site_ignores_retained_ev_baseline(hass):
+    controller = ActiveFoxessController(
+        hass,
+        _coordinator(
+            **{
+                CONF_EV_CONTROL_COMMISSIONED: False,
+                CONF_EV_PROTECTED_BASELINE_A: 1.0,
+            }
+        ),
+    )
+
+    assert controller._protected_keepalive_energy_kwh(15) == 0.0
 
 
 async def test_local_modbus_free_charge_starts_at_noon_boundary(hass, monkeypatch):
