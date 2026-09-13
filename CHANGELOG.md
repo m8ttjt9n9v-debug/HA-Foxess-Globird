@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.12.18 — Make electrical verification visible
+
+- Move **Verify electrical directions** beside FoxESS control ownership and
+  immediately before the Local Modbus master gate in setup and reconfigure.
+  Record the evidence-based direction-calibration design for solar/house
+  invariants and a short, restart-safe discharge observation of signed grid and
+  battery channels.
+
 ## 0.12.17 — Persist diagnostic restoration
 
 - Persist ownership, timing, phase and bounded restoration attempts for a

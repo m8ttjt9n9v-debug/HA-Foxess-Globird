@@ -869,13 +869,6 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     ),
                 ): vol.Coerce(float),
                 vol.Required(
-                    CONF_SIGN_CONVENTIONS_VERIFIED,
-                    default=defaults.get(
-                        CONF_SIGN_CONVENTIONS_VERIFIED,
-                        DEFAULT_SIGN_CONVENTIONS_VERIFIED,
-                    ),
-                ): selector.BooleanSelector(),
-                vol.Required(
                     CONF_BATTERY_FREE_WINDOW_TARGET,
                     default=defaults.get(
                         CONF_BATTERY_FREE_WINDOW_TARGET,
@@ -1024,6 +1017,13 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 ): selector.SelectSelector(
                     selector.SelectSelectorConfig(options=list(FOXESS_CONTROL_OWNERS))
                 ),
+                vol.Required(
+                    CONF_SIGN_CONVENTIONS_VERIFIED,
+                    default=defaults.get(
+                        CONF_SIGN_CONVENTIONS_VERIFIED,
+                        DEFAULT_SIGN_CONVENTIONS_VERIFIED,
+                    ),
+                ): selector.BooleanSelector(),
                 vol.Required(
                     CONF_AUTOMATIC_CONTROL_ENABLED,
                     default=defaults.get(
