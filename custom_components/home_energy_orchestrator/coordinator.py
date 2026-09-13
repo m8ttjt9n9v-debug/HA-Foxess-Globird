@@ -604,7 +604,11 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
             entity_id=entity_id,
             raw_value=state.state,
             raw_unit=state.attributes.get("unit_of_measurement"),
-            updated_at=state.last_updated,
+            # Home Assistant keeps ``last_updated`` unchanged when an
+            # integration reports the same value again.  ``last_reported`` is
+            # the freshness timestamp: a steady zero/current/SoC is still
+            # healthy telemetry when its source continues to report it.
+            updated_at=self._state_reported_at(state),
         )
 
     def _max_telemetry_age(self) -> float:

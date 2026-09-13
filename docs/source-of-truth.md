@@ -70,6 +70,11 @@ layers around the proven algorithm, not replacement algorithms.
   and signed battery flow. Pre-free backfill consumes no more than the local
   protected export plan and the vehicle's wall-energy room, starts as late as
   possible, and persists only its active phase and frozen start.
+- Solar-spill coherence applies to the fast electrical grid and effective
+  battery sources. Rejected inactive-magnitude provenance cannot invalidate a
+  fresh signed-battery fallback. Stable battery SoC and state-qualified Tessie
+  current keep the pilot implementation's value semantics rather than being
+  treated as fast polling clocks.
 - The smart-socket command policy is connected to the independently gated EV
   runtime. It preserves the source ordering: bound/stage current before
   power, accept service-valid staged feedback, settle the configured interval,
@@ -114,6 +119,9 @@ layers around the proven algorithm, not replacement algorithms.
   signed battery-power sensor may recover the canonical value with explicit
   fallback provenance. Invalid magnitudes, disconnected sources and genuine
   telemetry outages remain unavailable.
+- An installation with EV control explicitly uncommissioned has no EV energy
+  reservation. Retained EV defaults or stale mappings cannot withhold its
+  otherwise valid battery export plan.
 - A multiphase EV controller must receive explicit signed current for the
   most-loaded service phase. Aggregate power is not treated as proof that phase
   loading is balanced.
