@@ -268,7 +268,9 @@ class ActiveFoxessController:
         )
         self.charge_power_target_kw = (
             self.charge_session.requested_power_kw
-            if source_available and self.charge_session.phase != "idle"
+            if source_available
+            and self.charge_session.phase
+            in {"starting", "active", "recovering", "stopping"}
             else (0.0 if source_available else None)
         )
         soc = getattr(self.coordinator.snapshot, "battery_soc", None)
@@ -313,7 +315,8 @@ class ActiveFoxessController:
         self.charge_session = transition.state
         self.charge_power_target_kw = (
             self.charge_session.requested_power_kw
-            if self.charge_session.phase != "idle"
+            if self.charge_session.phase
+            in {"starting", "active", "recovering", "stopping"}
             else 0.0
         )
         if self.charge_session != previous_state:
@@ -470,7 +473,12 @@ class ActiveFoxessController:
         return True
 
     async def _async_mark_sessions_source_unavailable(self, now: datetime) -> None:
-        if self.charge_session.phase != "idle":
+        if self.charge_session.phase in {
+            "starting",
+            "active",
+            "stopping",
+            "recovering",
+        }:
             self.charge_session = ChargeSessionState(
                 "recovering",
                 self.charge_session.requested_power_kw,
@@ -498,7 +506,14 @@ class ActiveFoxessController:
             last_raw = payload.get("last_command_at")
             last_at = datetime.fromisoformat(str(last_raw)) if last_raw else None
             restored = ChargeSessionState(phase, power, attempts, last_at)
-            if phase not in {"idle", "starting", "active", "stopping", "recovering"}:
+            if phase not in {
+                "idle",
+                "starting",
+                "active",
+                "completed",
+                "stopping",
+                "recovering",
+            }:
                 raise ValueError
             if power < 0 or attempts < 0:
                 raise ValueError

@@ -61,6 +61,73 @@ def test_matching_feedback_activates_and_target_change_does_not_flap() -> None:
     assert latched.plan.commands == ()
 
 
+def test_active_session_accepts_complete_external_self_use_restoration() -> None:
+    state = ChargeSessionState("active", 10.0, 0, NOW - timedelta(minutes=30))
+
+    result = _advance(state, FoxessObservation("Self Use", 0.0, 0.0))
+
+    assert result.state == ChargeSessionState("completed", 10.0, 0, None)
+    assert result.reason == "completed_for_window"
+    assert result.plan.commands == ()
+
+
+def test_completed_session_cannot_restart_inside_same_window() -> None:
+    state = ChargeSessionState("completed", 10.0, 0, None)
+
+    held = _advance(state, FoxessObservation("Self Use", 0.0, 0.0))
+    assert held.state == state
+    assert held.reason == "completed_for_window"
+    assert held.plan.commands == ()
+
+    rearmed = _advance(
+        state,
+        FoxessObservation("Self Use", 0.0, 0.0),
+        window_active=False,
+        finish_requested=True,
+    )
+    assert rearmed.state == ChargeSessionState()
+    assert rearmed.reason == "completed_window_finished"
+    assert rearmed.plan.commands == ()
+
+
+def test_completed_session_survives_feedback_loss_inside_same_window() -> None:
+    state = ChargeSessionState("completed", 10.0, 0, None)
+
+    result = _advance(
+        state,
+        FoxessObservation("Self Use", 0.0, 0.0),
+        source_available=False,
+    )
+
+    assert result.state == state
+    assert result.reason == "completed_for_window"
+    assert result.plan.commands == ()
+
+
+def test_starting_session_still_retries_clean_self_use_feedback() -> None:
+    state = ChargeSessionState("starting", 10.0, 1, NOW - timedelta(minutes=1))
+
+    result = _advance(state, FoxessObservation("Self Use", 0.0, 0.0))
+
+    assert result.state.phase == "starting"
+    assert result.state.attempts == 2
+    assert result.reason == "start_requested"
+    assert [command.action for command in result.plan.commands] == [
+        "set_charge_power",
+        "select_mode",
+    ]
+
+
+def test_active_session_retries_partial_self_use_restoration() -> None:
+    state = ChargeSessionState("active", 10.0, 0, NOW - timedelta(minutes=1))
+
+    result = _advance(state, FoxessObservation("Self Use", 10.0, 0.0))
+
+    assert result.state.phase == "starting"
+    assert result.reason == "start_requested"
+    assert [command.action for command in result.plan.commands] == ["select_mode"]
+
+
 def test_window_finish_restores_self_use_and_clears_targets() -> None:
     state = ChargeSessionState("active", 10.0, 0, NOW - timedelta(minutes=30))
     result = _advance(

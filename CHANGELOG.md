@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.12.16 — Respect completed battery charging
+
+- When a confirmed active Local Modbus battery-charge session observes Self Use
+  with both force-power targets cleared, treat it as a completed inverter/BMS
+  or operator restoration instead of reasserting Force Charge.
+- Persist the completed state for the rest of the configured window, including
+  across integration reloads, and re-arm automatically after the window ends.
+- Keep genuine starting-feedback failures and non-Self-Use mismatches on the
+  existing bounded retry path.
+
 ## 0.12.15 — Restore solar-spill and battery-only export planning
 
 - Keep normalized sources fresh from Home Assistant's report timestamp rather
