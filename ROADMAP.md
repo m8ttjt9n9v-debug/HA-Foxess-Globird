@@ -116,6 +116,13 @@ Status here describes behavioral parity, not merely the presence of code.
 
 ## Confirmed bugs
 
+- [x] Persist manual diagnostic ownership across integration reload and Home
+  Assistant restart. An interrupted timed Force Charge/Discharge test must not
+  lose its timer and restoration obligation when process memory is discarded.
+  Restore Self Use, clear both force targets, require mapped confirmation, and
+  retain a visible bounded-retry fault that continues blocking automatic
+  inverter control if restoration cannot be confirmed. Completed in v0.12.17.
+
 - [x] Do not reassert Force Charge after a confirmed active battery-charge
   session observes a complete external restoration to Self Use with both force
   targets cleared. Persist a completed-for-window hold so an inverter/BMS

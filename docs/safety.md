@@ -48,7 +48,11 @@ The Diagnostics view is an explicit commissioning surface, not an automatic
 schedule. It refuses charge tests outside the free window, requires Rehearsal
 mode (Safety Lock) off and complete FoxESS mapping, bounds each run to 120 minutes, and
 attempts to clear both force-power targets before restoring Self Use when a
-run ends. Confirm inverter feedback after every test.
+run ends. Test ownership and its restoration obligation survive integration
+reload and Home Assistant restart. HEO retries an unconfirmed restoration no
+more than three times and retains a visible `restore_failed` state rather than
+forgetting the forced mode or allowing automatic inverter control to overlap.
+Confirm inverter feedback after every test.
 
 The integration exposes `switch.home_energy_safety_lock` so the state is
 unambiguous in a dashboard: ON means locked and no hardware writes are
