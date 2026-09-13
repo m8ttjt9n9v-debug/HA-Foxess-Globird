@@ -75,6 +75,19 @@ Status here describes behavioral parity, not merely the presence of code.
 
 ## Confirmed bugs
 
+- [x] Prevent the solar-spill controller from rejecting healthy electrical
+  telemetry because an unchanged state retained an old `last_updated`, or
+  because diagnostic provenance included the stale inactive FoxESS magnitude
+  already rejected by the signed-battery fallback. Stable SoC and
+  state-qualified Tessie current retain the Working Single Phase Pilot Site's
+  value semantics; fast grid and effective battery telemetry remain freshness
+  and coherence gated. Completed in v0.12.15.
+
+- [x] A site explicitly configured without EV control must reserve zero EV
+  keepalive energy even if the configuration still contains a retained/default
+  EV baseline. Missing EV mappings must not turn a valid battery-only export
+  plan into `unknown`. Completed in v0.12.15.
+
 - [x] Preserve every submitted mapping and value when setup or reconfiguration
   validation fails. The form must redisplay the user's complete attempted
   configuration and attach errors to the relevant section; it must not rebuild

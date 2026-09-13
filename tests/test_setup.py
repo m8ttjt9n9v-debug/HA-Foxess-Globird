@@ -882,3 +882,17 @@ async def test_learning_source_ignores_retained_ev_current_when_not_charging(has
 
     assert coordinator._protected_house_learning_power_kw(now) == 3
     coordinator.shutdown()
+
+
+async def test_normalized_source_uses_reported_freshness_timestamp(hass, monkeypatch):
+    """Stable values remain fresh when their integration keeps reporting."""
+    hass.states.async_set("sensor.steady_power", "0", {"unit_of_measurement": "kW"})
+    coordinator = EnergyCoordinator(hass, {}, "reported-source-test")
+    reported_at = datetime(2026, 9, 13, 4, 0, tzinfo=UTC)
+    monkeypatch.setattr(coordinator, "_state_reported_at", lambda _state: reported_at)
+
+    source = coordinator._source("sensor.steady_power")
+
+    assert source is not None
+    assert source.updated_at == reported_at
+    coordinator.shutdown()

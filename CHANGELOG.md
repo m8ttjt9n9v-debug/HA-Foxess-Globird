@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.12.15 — Restore solar-spill and battery-only export planning
+
+- Keep normalized sources fresh from Home Assistant's report timestamp rather
+  than treating an unchanged but repeatedly reported value as stale.
+- When the paired FoxESS battery magnitudes deliberately fall back to the fresh
+  signed battery sensor, validate coherence against that effective source
+  instead of rejected stale magnitude provenance.
+- Match the pilot solar-spill boundary by treating stable battery SoC and
+  state-qualified Tessie current as values rather than fast electrical clocks.
+  A disconnected car now reports `vehicle_not_eligible` instead of retaining a
+  misleading older spill status.
+- Treat EV protection as zero on an explicitly battery-only installation, so
+  retained EV defaults cannot make its otherwise valid ZEROHERO plan unknown.
+
 ## 0.12.14 — Count HACS downloads
 
 - Publish the integration as a named GitHub release ZIP and configure HACS to

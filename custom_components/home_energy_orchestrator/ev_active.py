@@ -372,6 +372,18 @@ class ActiveEvController:
             connected, connection_reason = self._connected_at_home()
             in_window, elapsed_minutes, remaining_hours = self._free_window(now)
             if not connected:
+                self.solar_spill = SolarSpillDecision(
+                    0.0,
+                    0.0,
+                    (
+                        "vehicle_not_eligible"
+                        if self.coordinator.config.get(
+                            CONF_EV_SOLAR_SPILL_ENABLED,
+                            DEFAULT_EV_SOLAR_SPILL_ENABLED,
+                        )
+                        else "disabled"
+                    ),
+                )
                 if self.charge_to_full_started_at is not None:
                     await self._async_clear_charge_to_full()
                     self.charge_to_full_started_at = None
@@ -1896,12 +1908,17 @@ class ActiveEvController:
             source.updated_at
             for sample in (grid, battery)
             if sample is not None
-            for source in sample.sources
+            # A paired-magnitude sample can deliberately fall back to the
+            # independently mapped signed battery sensor when the inactive
+            # zero magnitude is stale.  Keep all three sources as diagnostic
+            # provenance, but only the signed source underpins that value.
+            for source in (
+                sample.sources[-1:]
+                if sample.reason == "signed_fallback_pair_stale"
+                else sample.sources
+            )
             if source.updated_at is not None
         ]
-        timestamps.extend(
-            state.last_updated for state in (actual_state, soc_state) if state is not None
-        )
         max_age = self._float(
             CONF_EV_TELEMETRY_MAX_AGE_SECONDS,
             DEFAULT_EV_TELEMETRY_MAX_AGE_SECONDS,
@@ -1921,8 +1938,16 @@ class ActiveEvController:
             and all(
                 source.updated_at is not None
                 for sample in (grid, battery)
-                for source in sample.sources
+                for source in (
+                    sample.sources[-1:]
+                    if sample.reason == "signed_fallback_pair_stale"
+                    else sample.sources
+                )
             )
+            # Match the pilot port: stable SoC and state-qualified Tessie
+            # current are eligibility/value inputs, not fast electrical
+            # telemetry clocks. FoxESS and Tessie may retain them unchanged
+            # for far longer than the grid/battery freshness window.
             and all(0 <= (now - timestamp).total_seconds() <= max_age for timestamp in timestamps)
             and (max(timestamps) - min(timestamps)).total_seconds() <= max_skew
         )

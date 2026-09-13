@@ -27,6 +27,7 @@ from .const import (
     CONF_EV_BEFORE_EXPORT_ENABLED,
     CONF_EV_BEFORE_EXPORT_SOC_TARGET,
     CONF_EV_CABLE_CONNECTED,
+    CONF_EV_CONTROL_COMMISSIONED,
     CONF_EV_PHASE_COUNT,
     CONF_EV_PROTECTED_BASELINE_A,
     CONF_EV_VOLTAGE,
@@ -51,6 +52,7 @@ from .const import (
     DEFAULT_DISCHARGE_EFFICIENCY_PERCENT,
     DEFAULT_EV_BEFORE_EXPORT_ENABLED,
     DEFAULT_EV_BEFORE_EXPORT_SOC_TARGET,
+    DEFAULT_EV_CONTROL_COMMISSIONED,
     DEFAULT_EV_PHASE_COUNT,
     DEFAULT_EV_PROTECTED_BASELINE_A,
     DEFAULT_EV_VOLTAGE,
@@ -616,6 +618,14 @@ class ActiveFoxessController:
         Presence and cable state are explicitly mapped. Missing evidence blocks
         a new export whenever a non-zero baseline is commissioned.
         """
+        if not self.coordinator.config.get(
+            CONF_EV_CONTROL_COMMISSIONED,
+            DEFAULT_EV_CONTROL_COMMISSIONED,
+        ):
+            # A battery-only installation has no EV demand to protect.  Do not
+            # let retained/default EV fields turn an otherwise valid export
+            # plan into ``unknown``.
+            return 0.0
         baseline_a = self._configured(
             CONF_EV_PROTECTED_BASELINE_A, DEFAULT_EV_PROTECTED_BASELINE_A
         )

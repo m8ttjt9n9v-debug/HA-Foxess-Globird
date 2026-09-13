@@ -591,6 +591,86 @@ async def test_solar_spill_runtime_ports_measured_surplus_to_tessie(
 
 
 @pytest.mark.freeze_time("2026-09-07 00:01:00+00:00")
+async def test_solar_spill_uses_effective_signed_battery_fallback_source(
+    hass: HomeAssistant,
+) -> None:
+    """Rejected stale magnitude provenance must not poison a valid fallback."""
+    _set_ev_states(hass)
+    now = hass.states.get("sensor.site_battery_soc").last_reported
+    stale = now - timedelta(minutes=10)
+    coordinator = _coordinator(
+        _controller_config(
+            foxess_control_owner="local_modbus",
+            ev_solar_spill_enabled=True,
+            bonus_window_start="21:00:00",
+            bonus_window_end="22:00:00",
+        )
+    )
+    coordinator.telemetry = replace(
+        coordinator.telemetry,
+        grid_power=NormalizedSample(
+            -2,
+            "kW",
+            (TelemetrySource("sensor.site_grid", -2, "kW", now),),
+            "positive_import",
+            True,
+            True,
+            "ok",
+        ),
+        battery_power=NormalizedSample(
+            0.5,
+            "kW",
+            (
+                TelemetrySource("sensor.battery_charge", 0, "kW", stale),
+                TelemetrySource("sensor.battery_discharge", 0, "kW", stale),
+                TelemetrySource("sensor.battery_signed", -0.5, "kW", now),
+            ),
+            "positive_charge",
+            True,
+            True,
+            "signed_fallback_pair_stale",
+        ),
+    )
+    coordinator.snapshot = replace(coordinator.snapshot, battery_soc=100)
+    controller = ActiveEvController(hass, coordinator)
+
+    decision = controller._solar_spill_decision(  # noqa: SLF001
+        now,
+        battery_soc=100,
+        vehicle_soc=50,
+        soft_limit=90,
+        ceiling=16,
+        current_minimum=1,
+        current_step=1,
+    )
+
+    assert decision.phase == "solar_spill"
+    assert decision.reconstructed_surplus_kw == 2.5
+    assert decision.current_a == 10
+
+
+async def test_disconnected_vehicle_exposes_solar_spill_ineligibility(
+    hass: HomeAssistant,
+) -> None:
+    _set_ev_states(hass)
+    hass.states.async_set("binary_sensor.car_cable", "off")
+    controller = ActiveEvController(
+        hass,
+        _coordinator(
+            _controller_config(
+                foxess_control_owner="local_modbus",
+                ev_solar_spill_enabled=True,
+            )
+        ),
+    )
+
+    await controller.async_reconcile()
+
+    assert controller.last_reason == "ev_cable_not_connected"
+    assert controller.solar_spill.phase == "vehicle_not_eligible"
+
+
+@pytest.mark.freeze_time("2026-09-07 00:01:00+00:00")
 async def test_opted_in_outside_policy_restores_baseline_after_reconnect(
     hass: HomeAssistant,
 ) -> None:
