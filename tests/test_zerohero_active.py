@@ -798,6 +798,60 @@ async def test_charge_session_latch_round_trips_through_ha_storage(hass):
     assert restored.charge_session == first.charge_session
 
 
+async def test_completed_charge_session_round_trips_through_ha_storage(hass):
+    coordinator = _coordinator()
+    coordinator.entry_id = "persisted-completed-charge-test"
+    first = ActiveFoxessController(hass, coordinator)
+    first.charge_session = ChargeSessionState("completed", 8.0, 0, None)
+    await first._charge_store.async_save(first._charge_state_payload())
+
+    restored = ActiveFoxessController(hass, coordinator)
+    await restored._async_load_charge_session()
+
+    assert restored.charge_session == first.charge_session
+
+
+async def test_active_free_charge_does_not_fight_external_self_use(hass, monkeypatch):
+    calls = []
+    hass.bus.async_listen(EVENT_CALL_SERVICE, calls.append)
+    hass.states.async_set(
+        "select.foxess_mode",
+        "Self Use",
+        {"options": ["Self Use", "Force Discharge", "Force Charge"]},
+    )
+    hass.states.async_set(
+        "number.foxess_charge", "0", {"unit_of_measurement": "kW", "max": 10}
+    )
+    hass.states.async_set(
+        "number.foxess_discharge", "0", {"unit_of_measurement": "kW", "max": 10}
+    )
+    monkeypatch.setattr(
+        "custom_components.home_energy_orchestrator.active.dt_util.now",
+        lambda: datetime(2026, 9, 10, 12, 46, tzinfo=UTC),
+    )
+    coordinator = _coordinator(
+        **{
+            CONF_AUTOMATIC_CONTROL_ENABLED: True,
+            CONF_AUTOMATIC_CHARGE_ENABLED: True,
+            CONF_REHEARSAL_MODE: False,
+            CONF_INVERTER_CHARGE_LIMIT_KW: 10.0,
+        }
+    )
+    coordinator.snapshot.battery_soc = 96.0
+    controller = ActiveFoxessController(hass, coordinator)
+    controller.charge_session = ChargeSessionState("active", 10.0, 0)
+
+    await controller.async_reconcile()
+    await hass.async_block_till_done()
+
+    assert controller.charge_session == ChargeSessionState(
+        "completed", 10.0, 0, None
+    )
+    assert controller.charge_power_target_kw == 0.0
+    assert controller.last_reason == "charge_completed_for_window"
+    assert calls == []
+
+
 async def test_latched_charge_marks_recovering_when_feedback_is_unavailable(hass):
     hass.states.async_set(
         "select.foxess_mode",

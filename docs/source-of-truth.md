@@ -47,7 +47,11 @@ layers around the proven algorithm, not replacement algorithms.
   extension is implemented. It uses the configured 24-hour window, requires
   fresh SoC below target to start, freezes bounded power for the session,
   persists its latch/retry state, and deliberately restores Self Use at the
-  end. It does not program native schedule registers.
+  end. After confirmed active feedback, a complete externally observed Self
+  Use restoration with both force targets cleared becomes a persistent
+  completed-for-window hold; HEO does not reassert Force Charge against an
+  inverter/BMS ceiling or operator intervention. It does not program native
+  schedule registers.
 - Automatic Force Charge additionally requires an explicitly confirmed
   schedule. Setup presents exact 24-hour times, duration, and a visual timeline;
   a crossing-midnight window needs a second acknowledgement. v0.12 entries are

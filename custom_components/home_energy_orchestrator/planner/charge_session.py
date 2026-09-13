@@ -58,7 +58,10 @@ def advance_charge_session(
 
     SoC eligibility is intentionally a start condition only. Once started, the
     session remains latched for the whole window so target-boundary changes do
-    not flap the inverter between Force Charge and Self Use.
+    not flap the inverter between Force Charge and Self Use. If a confirmed
+    active session subsequently observes a complete Self Use restoration, the
+    inverter or operator has ended it; hold that completion for the rest of the
+    window instead of fighting the restoration.
     """
     _validate_inputs(
         state,
@@ -77,6 +80,14 @@ def advance_charge_session(
         and requested_charge_power_kw > 0
     )
     requested = round(min(requested_charge_power_kw, charge_power_max_kw), 3)
+    if state.phase == "completed":
+        if window_active and not finish_requested:
+            return ChargeSessionTransition(
+                state,
+                FoxessCommandPlan((), "completed_for_window"),
+                "completed_for_window",
+            )
+        return _idle("completed_window_finished")
     if (
         state.phase in {"starting", "active", "recovering"}
         and 0 < requested < state.requested_power_kw
@@ -154,6 +165,20 @@ def advance_charge_session(
     if state.phase == "active":
         if not window_active or finish_requested:
             return _stop(state, observation, now, tolerance_kw)
+        restored = ControlDecision(
+            "restore_self_use", 0.0, "charge_ended_externally"
+        )
+        if foxess_response_matches(restored, observation, tolerance_kw=tolerance_kw):
+            return ChargeSessionTransition(
+                replace(
+                    state,
+                    phase="completed",
+                    attempts=0,
+                    last_command_at=None,
+                ),
+                FoxessCommandPlan((), "completed_for_window"),
+                "completed_for_window",
+            )
         decision = ControlDecision(
             "force_charge", state.requested_power_kw, "free_window_ready"
         )
@@ -255,7 +280,14 @@ def _idle(reason: str) -> ChargeSessionTransition:
 
 
 def _validate_inputs(state, now, requested, maximum, acceptance_timeout, retry_after, max_attempts):
-    if state.phase not in {"idle", "starting", "active", "stopping", "recovering"}:
+    if state.phase not in {
+        "idle",
+        "starting",
+        "active",
+        "completed",
+        "stopping",
+        "recovering",
+    }:
         raise ValueError(f"unsupported charge session phase: {state.phase}")
     if now.tzinfo is None or now.utcoffset() is None:
         raise ValueError("now must be timezone-aware")

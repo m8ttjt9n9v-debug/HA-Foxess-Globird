@@ -75,6 +75,13 @@ Status here describes behavioral parity, not merely the presence of code.
 
 ## Confirmed bugs
 
+- [x] Do not reassert Force Charge after a confirmed active battery-charge
+  session observes a complete external restoration to Self Use with both force
+  targets cleared. Persist a completed-for-window hold so an inverter/BMS
+  ceiling or operator intervention cannot be mistaken for failed feedback and
+  fought every 30 seconds. Re-arm only after the configured window ends.
+  Completed in v0.12.16.
+
 - [x] Prevent the solar-spill controller from rejecting healthy electrical
   telemetry because an unchanged state retained an old `last_updated`, or
   because diagnostic provenance included the stale inactive FoxESS magnitude

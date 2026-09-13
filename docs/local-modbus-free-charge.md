@@ -22,7 +22,7 @@ introducing a second FoxESS implementation:
 | Local schedule | Configured 24-hour free-window start and end, including overnight windows |
 | Charge power | Configured inverter charge limit, bounded again by the mapped entity maximum |
 | Start qualification | Fresh normalized battery SoC below the configured free-window target |
-| Stable session | A persistent latch holds the originally requested power for the window |
+| Stable session | A persistent latch holds the originally requested power until the window ends or a complete external Self Use restoration is confirmed |
 | Command order | Clear discharge target, set charge target, wait, then select `Force Charge` |
 | Feedback and retry | Direct mapped mode/power feedback, 30-second reconciliation, at most three attempts |
 | End behavior | Select `Self Use`, wait, then clear both force-power targets |
@@ -42,10 +42,14 @@ Assistant's time selector uses 24-hour values, so `12:01:00` means noon and
 `00:01:00` means one minute after midnight.
 
 Battery SoC qualifies only the start of a session. Once HEO has started a
-session, it remains latched until the configured end or the operator disables
-the independent charge request. This avoids mode flapping around the target
-and matches the requested fixed schedule. The inverter/BMS remains responsible
-for tapering or refusing battery current at its physical limit.
+session, it remains latched until the configured end, the operator disables the
+independent charge request, or mapped feedback confirms that the inverter has
+fully restored Self Use and cleared both force-power targets. That complete
+restoration records a persistent completed-for-window hold and HEO will not
+restart Force Charge during the same window, even if SoC remains below the HEO
+target. This avoids both target-boundary flapping and fighting an inverter/BMS
+ceiling or a direct operator intervention. Tapering or refusal while Force
+Charge remains selected does not meet this completion test.
 
 HEO restores only a session recorded as its own. Discovering an unlatched
 forced or different base mode does not authorize HEO to adopt or overwrite

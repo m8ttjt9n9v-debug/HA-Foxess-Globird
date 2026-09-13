@@ -32,9 +32,12 @@ target after three command attempts rather than flapping indefinitely.
 The battery-charge controller likewise stops after three unconfirmed command
 attempts. Its SoC target qualifies session start only; once HEO owns the
 session, it remains latched until the configured end to prevent threshold
-flapping. Turn off the independent charge switch and confirm Self Use before
-engaging Safety Lock or unloading an active controller, because Safety Lock
-also forbids recovery writes.
+flapping. A complete externally observed Self Use restoration with both force
+targets cleared is accepted as completion and held for the rest of that window;
+HEO does not fight that inverter/BMS or operator action. Turn off the
+independent charge switch and confirm Self Use before engaging Safety Lock or
+unloading an active controller, because Safety Lock also forbids recovery
+writes.
 
 Automatic battery charging additionally requires a persisted schedule
 confirmation. The setup flow displays exact 24-hour times and duration, and
