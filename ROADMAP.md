@@ -2,6 +2,47 @@
 
 Status here describes behavioral parity, not merely the presence of code.
 
+## Next priority — lifecycle and incident regression harness
+
+- [ ] **Build this before further controller expansion.** Add a permanent
+  time-sequenced fault-injection suite around every HEO controller. Pure policy
+  tests remain necessary, but they are not sufficient: the harness must run
+  complete Home Assistant lifecycle scenarios through setup, periodic
+  reconciliation, persistence, reconfiguration, reload, restart, telemetry
+  loss/recovery, tariff boundaries, external mode changes, and operator
+  intervention.
+
+  Convert each confirmed live failure into a sanitized recorder-style replay
+  fixture, beginning with the battery-charge sequence in which confirmed Force
+  Charge is followed by a complete inverter Self Use restoration and an
+  immediate reconfigure/reload. Run reload and restart at every persisted
+  session phase (`idle`, `starting`, `active`, `completed`, `stopping`, and
+  `recovering`) and combine them with ownership, automatic-control, Safety
+  Lock, sign-verification, mapping, and source-availability transitions.
+
+  Add deterministic stale, unavailable, delayed, contradictory, and
+  out-of-order feedback injection for mode, force-power, grid, battery, solar,
+  SoC, house, and EV channels. Exercise exact free-window, export-window,
+  midnight, daily-reset, and ready-by boundaries. Add generated transition
+  sequences once deterministic replay coverage exists; use fixed seeds and
+  retain every discovered counterexample as a named fixture.
+
+  Enforce system invariants rather than checking only individual return values:
+  no new or increased command from stale evidence; no automatic forced-mode
+  start outside its authorised window; no reassertion after a completed hold;
+  no unbounded retry or mode flapping; restart/reload equivalence from the same
+  persisted state; atomic configuration application; no erased ownership of an
+  unfinished HEO session; and an explicit bounded completion or recovery
+  obligation for every HEO-issued forced mode. Safety Lock remains an absolute
+  no-write boundary.
+
+  Run the deterministic lifecycle suite on every pull request and release tag.
+  Run the larger generated sequence corpus on a scheduled workflow and before
+  releases. Document fixture provenance without publishing site names,
+  addresses, credentials, or private recorder evidence. A green calculation
+  suite must no longer be presented as sufficient evidence for lifecycle
+  safety.
+
 ## Completed and retained
 
 - [x] Observer ledger with unit/sign normalization and persisted daily,
