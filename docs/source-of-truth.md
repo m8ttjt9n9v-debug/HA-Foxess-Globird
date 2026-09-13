@@ -122,6 +122,13 @@ layers around the proven algorithm, not replacement algorithms.
   charge-minus-discharge magnitudes are supported. Source/direction changes and
   v1 migration clear an independent sign-verification gate, closing automatic
   FoxESS and EV writes until locally recommissioned.
+- In the current monolithic setup/reconfigure form, the electrical-direction
+  verification control is deliberately adjacent to control ownership and the
+  Local Modbus master gate: owner, verification, then master gate. This is an
+  interim human-factors safeguard pending the roadmap's evidence-based,
+  multi-page commissioning workflow. Automatic sign calibration must use
+  coherent physical evidence and the persisted diagnostic restoration path;
+  it must not infer from entity names or enable an automatic-control request.
 - Paired battery charge/discharge magnitudes remain the canonical pilot source.
   When a steady inactive zero alone becomes stale, a separately mapped fresh
   signed battery-power sensor may recover the canonical value with explicit

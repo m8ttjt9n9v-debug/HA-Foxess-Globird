@@ -8,12 +8,14 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.home_energy_orchestrator.const import (
     CONF_AUTOMATIC_CHARGE_ENABLED,
+    CONF_AUTOMATIC_CONTROL_ENABLED,
     CONF_AUTOMATIC_EXPORT_ENABLED,
     CONF_EV_AUTOMATIC_CONTROL_ENABLED,
     CONF_EV_BEFORE_EXPORT_ENABLED,
     CONF_EV_BEFORE_EXPORT_SOC_TARGET,
     CONF_FOXESS_CONTROL_OWNER,
     CONF_FREE_CHARGE_SCHEDULE_CONFIRMED,
+    CONF_SIGN_CONVENTIONS_VERIFIED,
     DEFAULT_AUTOMATIC_CHARGE_ENABLED,
     DEFAULT_EV_BEFORE_EXPORT_ENABLED,
     DEFAULT_EV_BEFORE_EXPORT_SOC_TARGET,
@@ -151,6 +153,21 @@ async def test_user_form_prefills_unambiguous_foxess_and_tessie_entities(hass):
     assert markers["grid_power_entity"].default() == "sensor.grid_ct"
     assert markers["ev_soc_entity"].default() == "sensor.jns_x_battery_level"
     assert markers["ev_current_limit_entity"].default() == "number.jns_x_charge_current"
+
+
+async def test_direction_verification_is_immediately_before_modbus_master_gate(hass):
+    result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": SOURCE_USER})
+
+    fields = [
+        marker.schema
+        for marker in result["data_schema"].schema
+        if hasattr(marker, "schema")
+    ]
+    owner_index = fields.index(CONF_FOXESS_CONTROL_OWNER)
+    assert fields[owner_index + 1 : owner_index + 3] == [
+        CONF_SIGN_CONVENTIONS_VERIFIED,
+        CONF_AUTOMATIC_CONTROL_ENABLED,
+    ]
 
 
 async def test_user_form_prefills_live_foxess_battery_capacity(hass):

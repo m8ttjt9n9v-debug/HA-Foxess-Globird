@@ -232,6 +232,28 @@ Working Single Phase Pilot Site parity.
   telemetry, solar configured absent, paired battery magnitudes, restart, and
   verification invalidation after a later change.
 
+  Replace the blanket human attestation with assisted, evidence-based
+  commissioning wherever the physics is unambiguous. House load is a
+  non-negative magnitude and must be rejected, not sign-selected, when it is
+  meaningfully negative. With solar configured, a stable meaningful daytime
+  reading may determine whether the mapped source reports generation positive
+  or negative; near-zero, unavailable, or contradictory readings remain
+  unverified rather than being guessed.
+
+  For the genuinely signed grid, battery, and optional service-current
+  channels, offer one explicitly submitted short Local Modbus Force Discharge
+  calibration. Reuse the persisted diagnostic ownership and restoration state
+  machine, request the smaller of the commissioned/native maximum, bound the
+  active observation to about ten seconds, and always confirm Self Use plus
+  both zero force targets afterward. Infer signs only from several fresh,
+  coherent samples with confirmed Force Discharge, meaningful battery
+  discharge, and export greater than noise. If house demand absorbs the test,
+  telemetry is stale, another owner is selected, or any relationship is
+  ambiguous, stop safely and explain which channel still needs manual
+  confirmation. Paired unsigned battery charge/discharge magnitudes require no
+  sign inference. A successful calibration may set the verification state but
+  must never enable the Local Modbus master gate or an automatic policy.
+
 - [ ] **HIGH PRIORITY — replace the monolithic setup and reconfigure form with
   a shared, multi-page commissioning flow.** Start with a short Site and
   Capabilities page, followed by small logical pages for Battery, Inverter,
@@ -281,6 +303,11 @@ Working Single Phase Pilot Site parity.
   channel, clear only the overall confirmation state, preserve every entered
   value, and take the operator directly to verification instead of returning to
   the start of the flow.
+
+  Until that multi-page flow replaces the monolithic form, keep **Verify
+  electrical directions** immediately after **FoxESS control owner** and
+  immediately before **Enable HEO Local Modbus master gate**, so the final
+  interlock cannot be overlooked among telemetry and EV fields.
 
 - [ ] Complete the **Configure EV automation?** capability behavior introduced
   by the multi-page flow. When
