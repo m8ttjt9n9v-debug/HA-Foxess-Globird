@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.12.17 — Persist diagnostic restoration
+
+- Persist ownership, timing, phase and bounded restoration attempts for a
+  running manual FoxESS charge or discharge test.
+- On integration reload or Home Assistant restart, stop the interrupted test
+  and retain its recovery obligation until mapped feedback confirms Self Use
+  with both force-power targets cleared.
+- Retry an unconfirmed restoration at most three times. Keep the diagnostic
+  visibly active with `restore_failed` status if recovery cannot be confirmed,
+  so automatic inverter reconciliation cannot silently take over.
+
 ## 0.12.16 — Respect completed battery charging
 
 - When a confirmed active Local Modbus battery-charge session observes Self Use

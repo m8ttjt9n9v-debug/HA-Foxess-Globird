@@ -91,6 +91,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: EnergyConfigEntry) -> bo
     # Platform entities read controller diagnostics during their first state
     # write, so attach both controllers before forwarding setup.
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    await coordinator.manual_test.async_startup()
     await active.async_start()
     await ev_controller.async_start()
     hass.data.setdefault("home_energy_orchestrator", {})[entry.entry_id] = {
@@ -111,7 +112,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: EnergyConfigEntry) -> b
         await ev_controller.async_stop()
     manual_test = getattr(entry.runtime_data, "manual_test", None)
     if manual_test is not None:
-        await manual_test.async_stop("integration_unloaded")
+        await manual_test.async_unload()
     unloaded = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unloaded:
         entry.runtime_data.shutdown()

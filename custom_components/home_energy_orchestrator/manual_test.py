@@ -13,6 +13,7 @@ from math import isfinite
 
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.event import async_call_later
+from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
 from .const import (
@@ -61,6 +62,8 @@ class ManualTestController:
     """Own one short-lived manual charge or discharge test."""
 
     MAX_DURATION_MINUTES = 120.0
+    MAX_RESTORE_ATTEMPTS = 3
+    RESTORE_RETRY_SECONDS = 30.0
 
     def __init__(self, hass: HomeAssistant, coordinator: EnergyCoordinator) -> None:
         self.hass = hass
@@ -69,11 +72,21 @@ class ManualTestController:
         self.discharge_power_kw = 1.0
         self.duration_minutes = 5.0
         self.active_kind: str | None = None
+        self.phase = "idle"
         self.started_at: datetime | None = None
         self.ends_at: datetime | None = None
+        self.restore_attempts = 0
+        self.last_restore_at: datetime | None = None
         self.last_reason = "idle"
         self._cancel_timer = None
+        self._cancel_restore = None
         self._adapter: FoxessServiceAdapter | None = None
+        self._store: Store[dict[str, object]] = Store(
+            hass,
+            1,
+            f"home_energy_orchestrator.{coordinator.entry_id}.manual_test",
+            private=True,
+        )
 
     @property
     def is_active(self) -> bool:
@@ -81,13 +94,49 @@ class ManualTestController:
 
     @property
     def status(self) -> str:
-        return "idle" if self.active_kind is None else f"active_{self.active_kind}"
+        if self.active_kind is None:
+            return "idle"
+        if self.phase == "running":
+            return f"active_{self.active_kind}"
+        return f"{self.phase}_{self.active_kind}"
 
     @property
     def remaining_minutes(self) -> float:
         if self.ends_at is None:
             return 0.0
         return max(0.0, (self.ends_at - dt_util.now()).total_seconds() / 60)
+
+    async def async_startup(self) -> None:
+        """Restore an unfinished test and make its cleanup obligation durable."""
+        await self._async_load()
+        if not self.is_active:
+            return
+        self.phase = "stopping"
+        self.last_reason = "restart_restore_pending"
+        await self._async_save()
+        try:
+            await self._async_reconcile_restore("integration_restarted")
+        except Exception:
+            # Keep setup available so the visible persisted fault and its
+            # scheduled bounded retry are not replaced by an entry setup error.
+            return
+
+    async def async_unload(self) -> None:
+        """Attempt one restoration and persist any unfinished recovery."""
+        self._cancel_callbacks()
+        if not self.is_active:
+            return
+        self.phase = "stopping"
+        self.last_reason = "integration_unload_restore_pending"
+        await self._async_save()
+        try:
+            await self._async_reconcile_restore(
+                "integration_unloaded", schedule_retry=False
+            )
+        except Exception:
+            # The mapped integration or its services may already be unloading.
+            # Persisted state makes the next setup resume restoration.
+            return
 
     def preview_charge(self) -> ManualTestEstimate:
         now = dt_util.now()
@@ -171,9 +220,13 @@ class ManualTestController:
             discharge_power_max_kw=self._limit(CONF_INVERTER_DISCHARGE_LIMIT_KW),
         )
         self.active_kind = kind
+        self.phase = "starting"
         self.started_at = now
         self.ends_at = now.replace(microsecond=0) + timedelta(minutes=duration)
+        self.restore_attempts = 0
+        self.last_restore_at = None
         self.last_reason = f"starting_{kind}"
+        await self._async_save()
         try:
             await adapter.async_execute(plan)
         except Exception:
@@ -182,19 +235,37 @@ class ManualTestController:
             self.last_reason = f"start_{kind}_failed"
             self.coordinator.async_update_listeners()
             raise
+        self.phase = "running"
         self.last_reason = f"started_{kind}"
+        await self._async_save()
         self._cancel_timer = async_call_later(
             self.hass, duration * 60, self._async_expire
         )
         self.coordinator.async_update_listeners()
 
     async def async_stop(self, reason: str = "stopped_by_user") -> None:
-        """Restore Self Use and clear a running test."""
+        """Request a confirmed, bounded Self Use restoration."""
         if not self.is_active:
             self.last_reason = reason
             self.coordinator.async_update_listeners()
             return
-        adapter = self._get_adapter()
+        if self.phase == "restore_failed":
+            self.restore_attempts = 0
+            self.last_restore_at = None
+        self.phase = "stopping"
+        self.last_reason = f"{reason}_pending"
+        if self._cancel_timer is not None:
+            self._cancel_timer()
+            self._cancel_timer = None
+        await self._async_save()
+        await self._async_reconcile_restore(reason)
+
+    async def _async_reconcile_restore(
+        self, reason: str, *, schedule_retry: bool = True
+    ) -> None:
+        """Confirm restoration or issue one bounded retry."""
+        if not self.is_active:
+            return
         try:
             observation = self._observation()
         except ManualTestError:
@@ -213,25 +284,132 @@ class ManualTestController:
             plan = plan_foxess_commands(
                 decision,
                 observation,
-                charge_power_max_kw=max(self._limit(CONF_INVERTER_CHARGE_LIMIT_KW), 0.0),
-                discharge_power_max_kw=max(self._limit(CONF_INVERTER_DISCHARGE_LIMIT_KW), 0.0),
+                charge_power_max_kw=max(
+                    self._limit(CONF_INVERTER_CHARGE_LIMIT_KW), 0.0
+                ),
+                discharge_power_max_kw=max(
+                    self._limit(CONF_INVERTER_DISCHARGE_LIMIT_KW), 0.0
+                ),
             )
-        await adapter.async_execute(plan)
+            if not plan.commands:
+                await self._async_clear(reason)
+                return
+        if self.restore_attempts >= self.MAX_RESTORE_ATTEMPTS:
+            self.phase = "restore_failed"
+            self.last_reason = "restore_max_attempts_exceeded"
+            await self._async_save()
+            self.coordinator.async_update_listeners()
+            return
+        self.restore_attempts += 1
+        self.last_restore_at = dt_util.now()
+        self.phase = "stopping"
+        self.last_reason = f"{reason}_attempt_{self.restore_attempts}"
+        await self._async_save()
+        try:
+            await self._get_adapter().async_execute(plan)
+        except Exception:
+            self.last_reason = f"{reason}_attempt_failed"
+            await self._async_save()
+            self.coordinator.async_update_listeners()
+            if schedule_retry:
+                self._schedule_restore(reason)
+            raise
+        self.coordinator.async_update_listeners()
+        if schedule_retry:
+            self._schedule_restore(reason)
+
+    async def _async_clear(self, reason: str) -> None:
+        self._cancel_callbacks()
+        self.active_kind = None
+        self.phase = "idle"
+        self.started_at = None
+        self.ends_at = None
+        self.restore_attempts = 0
+        self.last_restore_at = None
+        self.last_reason = reason
+        await self._async_save()
+        self.coordinator.async_update_listeners()
+
+    def _schedule_restore(self, reason: str) -> None:
+        if self._cancel_restore is not None:
+            self._cancel_restore()
+        self._cancel_restore = async_call_later(
+            self.hass,
+            self.RESTORE_RETRY_SECONDS,
+            lambda _now: self._async_retry_restore(reason),
+        )
+
+    async def _async_retry_restore(self, reason: str) -> None:
+        self._cancel_restore = None
+        try:
+            await self._async_reconcile_restore(reason)
+        except Exception:  # pragma: no cover - surfaced through persistent status
+            return
+
+    def _cancel_callbacks(self) -> None:
         if self._cancel_timer is not None:
             self._cancel_timer()
             self._cancel_timer = None
-        self.active_kind = None
-        self.started_at = None
-        self.ends_at = None
-        self.last_reason = reason
-        self.coordinator.async_update_listeners()
+        if self._cancel_restore is not None:
+            self._cancel_restore()
+            self._cancel_restore = None
 
     async def _async_expire(self, _now) -> None:
         try:
             await self.async_stop("timer_expired")
         except Exception:  # pragma: no cover - surfaced in HA logs
             self.last_reason = "timer_expiry_stop_failed"
+            await self._async_save()
             self.coordinator.async_update_listeners()
+
+    async def _async_load(self) -> None:
+        payload = await self._store.async_load()
+        if not isinstance(payload, dict) or payload.get("active_kind") is None:
+            return
+        try:
+            kind = str(payload["active_kind"])
+            phase = str(payload["phase"])
+            started_at = datetime.fromisoformat(str(payload["started_at"]))
+            ends_at = datetime.fromisoformat(str(payload["ends_at"]))
+            attempts = int(payload.get("restore_attempts", 0))
+            last_raw = payload.get("last_restore_at")
+            last_restore_at = datetime.fromisoformat(str(last_raw)) if last_raw else None
+            if (
+                kind not in {"charge", "discharge"}
+                or phase
+                not in {"starting", "running", "stopping", "restore_failed"}
+                or started_at.tzinfo is None
+                or ends_at.tzinfo is None
+                or ends_at < started_at
+                or attempts < 0
+                or attempts > self.MAX_RESTORE_ATTEMPTS
+                or last_restore_at is not None
+                and last_restore_at.tzinfo is None
+            ):
+                raise ValueError
+        except (KeyError, TypeError, ValueError):
+            await self._async_save()
+            return
+        self.active_kind = kind
+        self.phase = phase
+        self.started_at = started_at
+        self.ends_at = ends_at
+        self.restore_attempts = attempts
+        self.last_restore_at = last_restore_at
+
+    async def _async_save(self) -> None:
+        await self._store.async_save(
+            {
+                "active_kind": self.active_kind,
+                "phase": self.phase,
+                "started_at": self.started_at.isoformat() if self.started_at else None,
+                "ends_at": self.ends_at.isoformat() if self.ends_at else None,
+                "restore_attempts": self.restore_attempts,
+                "last_restore_at": (
+                    self.last_restore_at.isoformat() if self.last_restore_at else None
+                ),
+            }
+        )
 
     def _require_gate(self) -> None:
         owner = self.coordinator.config.get(

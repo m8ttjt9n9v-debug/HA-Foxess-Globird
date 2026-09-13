@@ -42,7 +42,11 @@ layers around the proven algorithm, not replacement algorithms.
   its own ZEROHERO export. The ready-to-ready ledger, confirmed wall-energy
   accumulator, active-session target and start latch survive restart.
 - Bounded, explicitly submitted FoxESS diagnostics remain available behind
-  their guards. They are not schedules.
+  their guards. They are not schedules. Test ownership, timing and restoration
+  attempts persist across reload/restart. An interrupted test immediately
+  enters bounded Self Use restoration on setup and remains visibly active until
+  mapped mode plus both force targets confirm completion; an unconfirmed
+  restoration cannot silently release automatic inverter control.
 - A separately gated, default-off Local Modbus free-window Force Charge
   extension is implemented. It uses the configured 24-hour window, requires
   fresh SoC below target to start, freezes bounded power for the session,
