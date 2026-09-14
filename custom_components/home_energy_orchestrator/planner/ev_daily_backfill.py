@@ -17,6 +17,7 @@ class DailyBackfillInputs:
     next_free_start: datetime
     available_ac_after_reserve_kwh: float
     protected_house_kwh: float
+    sellable_energy_kwh: float
     protected_ev_allocation_kwh: float
     delivered_this_cycle_kwh: float
     vehicle_wall_room_kwh: float
@@ -70,7 +71,16 @@ def calculate_daily_backfill_plan(inputs: DailyBackfillInputs) -> DailyBackfillP
     hours_to_free = max((inputs.next_free_start - inputs.now).total_seconds() / 3600, 0.0)
     share = min(hours_to_ready / hours_to_free, 1.0) if hours_to_free > 0 else 0.0
     proportional = discretionary * share
-    requested = min(remaining + proportional, after_house, inputs.vehicle_wall_room_kwh)
+    # A ready-by allocation may reserve energy from an earlier export, but it
+    # must never manufacture a new charging budget.  The pilot's pre-free
+    # controller only spends energy which the live ZEROHERO export ledger still
+    # regards as genuinely sellable.  Keep that same boundary here.
+    requested = min(
+        remaining + proportional,
+        after_house,
+        inputs.sellable_energy_kwh,
+        inputs.vehicle_wall_room_kwh,
+    )
 
     raw_power_kw = inputs.inverter_output_limit_kw * inputs.outside_inverter_percent / 100
     raw_current_a = raw_power_kw * 1000 / (inputs.voltage_v * inputs.phase_count)
@@ -101,6 +111,8 @@ def calculate_daily_backfill_plan(inputs: DailyBackfillInputs) -> DailyBackfillP
         phase = "allocation_complete"
     elif inputs.vehicle_wall_room_kwh <= 0:
         phase = "vehicle_target_reached"
+    elif inputs.sellable_energy_kwh <= 0:
+        phase = "sellable_energy_unavailable"
     elif after_house <= 0:
         phase = "protected_energy_unavailable"
     elif current_a <= 0:
@@ -130,6 +142,7 @@ def _validate(inputs: DailyBackfillInputs) -> None:
     values = (
         inputs.available_ac_after_reserve_kwh,
         inputs.protected_house_kwh,
+        inputs.sellable_energy_kwh,
         inputs.protected_ev_allocation_kwh,
         inputs.delivered_this_cycle_kwh,
         inputs.vehicle_wall_room_kwh,

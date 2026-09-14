@@ -16,6 +16,7 @@ def _inputs(**changes):
         "next_free_start": datetime(2026, 9, 10, 12, 0, tzinfo=UTC),
         "available_ac_after_reserve_kwh": 14,
         "protected_house_kwh": 3,
+        "sellable_energy_kwh": 11,
         "protected_ev_allocation_kwh": 5,
         "delivered_this_cycle_kwh": 0,
         "vehicle_wall_room_kwh": 20,
@@ -60,6 +61,19 @@ def test_insufficient_live_energy_reports_shortfall_without_assuming_cloud_histo
     assert plan.achievable_by_ready is False
 
 
+def test_no_sellable_energy_means_no_pre_free_charge_even_with_allocation():
+    plan = calculate_daily_backfill_plan(_inputs(sellable_energy_kwh=0))
+
+    assert plan.planned_energy_kwh == 0
+    assert plan.phase == "sellable_energy_unavailable"
+
+
+def test_ready_by_plan_is_capped_by_live_sellable_energy():
+    plan = calculate_daily_backfill_plan(_inputs(sellable_energy_kwh=0.4))
+
+    assert plan.planned_energy_kwh == 0.4
+
+
 def test_delivered_energy_reduces_only_this_ready_cycle_allocation():
     plan = calculate_daily_backfill_plan(_inputs(delivered_this_cycle_kwh=3))
     assert plan.remaining_allocation_kwh == 2
@@ -75,6 +89,7 @@ def test_long_plan_starts_at_midnight_and_marks_target_unachievable():
             protected_ev_allocation_kwh=40,
             available_ac_after_reserve_kwh=50,
             protected_house_kwh=0,
+            sellable_energy_kwh=50,
             outside_inverter_percent=10,
         )
     )

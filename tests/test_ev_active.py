@@ -117,6 +117,10 @@ def _coordinator(config):
             ),
         ),
         free_window_import=SimpleNamespace(last_at=None, imported_kwh=0),
+        active_controller=SimpleNamespace(
+            export_plan=ExportPlan(100, 100, 1, "ready"),
+            export_session=ExportSessionState(),
+        ),
         _configured_time=lambda key, default: time.fromisoformat(str(config.get(key, default))),
         async_update_listeners=lambda: None,
     )
@@ -918,6 +922,139 @@ async def test_daily_policy_stops_its_owned_session_at_frozen_energy_target(
     await controller.async_reconcile(datetime(2026, 9, 7, 6, 30, tzinfo=UTC))
 
     assert controller.daily_backfill_active is False
+    assert controller.last_actions == ("stop_charging",)
+    assert stopped == ["switch.car_charge"]
+
+
+async def test_daily_policy_stops_when_live_sellable_energy_disappears(
+    hass: HomeAssistant,
+) -> None:
+    _set_ev_states(hass)
+    hass.states.async_set("switch.car_charge", "on")
+    stopped = []
+
+    async def stop(call):
+        stopped.append(call.data["entity_id"])
+
+    hass.services.async_register("switch", "turn_off", stop)
+    coordinator = _coordinator(
+        _controller_config(
+            ev_daily_backfill_energy_kwh=2,
+            ev_daily_ready_time="08:00:00",
+            ev_outside_inverter_percent=30,
+            inverter_discharge_limit_kw=15,
+            ev_phase_count=3,
+        )
+    )
+    coordinator.data = SimpleNamespace(available_after_reserve_kwh=14)
+    coordinator.learning_remaining_kwh = 3
+    coordinator.active_controller.export_plan = ExportPlan(0, 0, 0, "no_protected_energy")
+    controller = ActiveEvController(hass, coordinator)
+    controller.daily_backfill_cycle_ready_at = datetime(2026, 9, 7, 8, tzinfo=UTC)
+    controller.daily_backfill_active = True
+    controller.daily_backfill_session_target_kwh = 5
+    controller.daily_backfill_session_start_delivered_kwh = 0
+
+    await controller.async_reconcile(datetime(2026, 9, 7, 6, 30, tzinfo=UTC))
+
+    assert controller.daily_backfill_active is False
+    assert controller.daily_backfill_plan is not None
+    assert controller.daily_backfill_plan.phase == "sellable_energy_unavailable"
+    assert controller.last_actions == ("stop_charging",)
+    assert stopped == ["switch.car_charge"]
+
+
+async def test_daily_active_session_can_only_shrink_with_live_sellable_energy(
+    hass: HomeAssistant,
+) -> None:
+    _set_ev_states(hass)
+    coordinator = _coordinator(
+        _controller_config(
+            ev_daily_backfill_energy_kwh=2,
+            ev_daily_ready_time="08:00:00",
+            ev_outside_inverter_percent=30,
+            inverter_discharge_limit_kw=15,
+            ev_phase_count=3,
+            rehearsal_mode=True,
+        )
+    )
+    coordinator.data = SimpleNamespace(available_after_reserve_kwh=14)
+    coordinator.learning_remaining_kwh = 3
+    coordinator.active_controller.export_plan = ExportPlan(0.4, 0.4, 0.1, "ready")
+    controller = ActiveEvController(hass, coordinator)
+    controller.daily_backfill_cycle_ready_at = datetime(2026, 9, 7, 8, tzinfo=UTC)
+    controller.daily_backfill_active = True
+    controller.daily_backfill_session_target_kwh = 5
+    controller.daily_backfill_session_start_delivered_kwh = 0
+
+    await controller.async_reconcile(datetime(2026, 9, 7, 6, 30, tzinfo=UTC))
+
+    assert controller.daily_backfill_active is True
+    assert controller.daily_backfill_session_target_kwh == 0.4
+    assert controller.target_current_a == 6
+
+
+async def test_outside_policy_stops_owned_free_window_charge_when_baseline_is_zero(
+    hass: HomeAssistant,
+) -> None:
+    _set_ev_states(hass)
+    hass.states.async_set("switch.car_charge", "on")
+    stopped = []
+
+    async def stop(call):
+        stopped.append(call.data["entity_id"])
+
+    hass.services.async_register("switch", "turn_off", stop)
+    coordinator = _coordinator(
+        _controller_config(
+            ev_daily_backfill_energy_kwh=2,
+            ev_daily_ready_time="08:00:00",
+            ev_outside_inverter_percent=30,
+            inverter_discharge_limit_kw=15,
+            ev_protected_baseline_a=0,
+        )
+    )
+    coordinator.data = SimpleNamespace(available_after_reserve_kwh=14)
+    coordinator.learning_remaining_kwh = 3
+    coordinator.active_controller.export_plan = ExportPlan(0, 0, 0, "no_protected_energy")
+    controller = ActiveEvController(hass, coordinator)
+    controller.target_current_a = 16
+
+    await controller.async_reconcile(datetime(2026, 9, 7, 18, 0, tzinfo=UTC))
+
+    assert controller.target_current_a == 0
+    assert controller.last_actions == ("stop_charging",)
+    assert stopped == ["switch.car_charge"]
+
+
+async def test_battery_floor_stops_automatic_outside_charge(
+    hass: HomeAssistant,
+) -> None:
+    _set_ev_states(hass)
+    hass.states.async_set("switch.car_charge", "on")
+    stopped = []
+
+    async def stop(call):
+        stopped.append(call.data["entity_id"])
+
+    hass.services.async_register("switch", "turn_off", stop)
+    coordinator = _coordinator(
+        _controller_config(
+            battery_floor_percent=10,
+            ev_daily_backfill_energy_kwh=2,
+            ev_daily_ready_time="08:00:00",
+            ev_outside_inverter_percent=30,
+            inverter_discharge_limit_kw=15,
+        )
+    )
+    coordinator.snapshot = replace(coordinator.snapshot, battery_soc=10)
+    coordinator.data = SimpleNamespace(available_after_reserve_kwh=0)
+    coordinator.learning_remaining_kwh = 3
+    controller = ActiveEvController(hass, coordinator)
+
+    await controller.async_reconcile(datetime(2026, 9, 7, 6, 30, tzinfo=UTC))
+
+    assert controller.decision_phase == "battery_floor_reached"
     assert controller.last_actions == ("stop_charging",)
     assert stopped == ["switch.car_charge"]
 

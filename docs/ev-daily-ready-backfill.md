@@ -34,14 +34,19 @@ At each decision:
 4. The remaining EV allocation is protected next.
 5. Any energy beyond both protections is discretionary. The policy offers the
    fraction `hours until ready / hours until next free window`, capped at one.
-6. The result is capped by current vehicle room and live available energy.
+6. The result is capped by current vehicle room and the live ZEROHERO export
+   plan. A protected daily allocation reserves energy from earlier export; it
+   does not itself create permission to drain the house battery later.
 7. Current is capped by the configured inverter percentage, connector rating,
    and current service headroom, then rounded down to the actuator step.
 8. Duration determines the latest start. A plan that would have needed to start
    before midnight reports an explicit shortfall/unachievable state.
 
-The active session stops at its frozen energy target, the EV soft limit, the
-ready deadline, loss of safe energy, or disconnect. Only confirmed Tessie
+Only the start time is frozen. The energy authority remains live and may only
+shrink: loss of genuinely sellable energy stops the session immediately. The
+active session also stops at its remaining target, the EV soft limit, the
+ready deadline, the configured house-battery floor, or disconnect. A configured
+0 A protected baseline means stop, not Tessie's minimum current. Only confirmed Tessie
 actual current is integrated into delivered wall energy; gaps beyond the
 configured telemetry age are not guessed.
 

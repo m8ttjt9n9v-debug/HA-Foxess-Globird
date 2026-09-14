@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.12.19 — Keep EV backfill inside sellable energy
+
+- Cap daily ready-by EV charging by the live ZEROHERO export plan. A protected
+  daily allocation no longer creates permission to drain otherwise protected
+  house-battery energy.
+- Re-evaluate an active session's remaining energy continuously and stop it as
+  soon as the sellable budget disappears.
+- Preserve a configured 0 A outside-window baseline instead of silently raising
+  it to the Tessie minimum, stop an HEO-controlled free-window charge when no
+  outside policy remains, and enforce the configured battery floor as a final
+  fail-safe. Paid **Charge to Full** remains the explicit exception.
+
 ## 0.12.18 — Make electrical verification visible
 
 - Move **Verify electrical directions** beside FoxESS control ownership and

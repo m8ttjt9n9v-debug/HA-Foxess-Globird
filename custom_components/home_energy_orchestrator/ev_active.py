@@ -15,6 +15,7 @@ from homeassistant.util import dt as dt_util
 
 from .const import (
     CONF_BATTERY_CHARGE_EFFICIENCY,
+    CONF_BATTERY_FLOOR,
     CONF_BATTERY_FREE_WINDOW_TARGET,
     CONF_BATTERY_SOC,
     CONF_BONUS_WINDOW_END,
@@ -82,6 +83,7 @@ from .const import (
     CONF_SITE_GRID_HEADROOM_CURRENT,
     CONF_SITE_PHASE_COUNT,
     DEFAULT_BATTERY_CHARGE_EFFICIENCY,
+    DEFAULT_BATTERY_FLOOR,
     DEFAULT_BATTERY_FREE_WINDOW_TARGET,
     DEFAULT_BONUS_WINDOW_END,
     DEFAULT_BONUS_WINDOW_START,
@@ -482,12 +484,6 @@ class ActiveEvController:
                     gate=gate,
                 )
                 return
-            if not in_window and outside_enabled:
-                # An opted-in outside-window policy owns the direct current even
-                # when its discretionary target is zero. This preserves the
-                # pilot's protected baseline after reconnects and restarts.
-                self.outside_control_active = True
-
             charge_to_full_requested = self._charge_to_full_requested()
             decision_fingerprint = (
                 vehicle_soc,
@@ -1367,13 +1363,14 @@ class ActiveEvController:
             ceiling,
             current_step=current_step,
         )
-        baseline = min(
-            max(
-                self._float(CONF_EV_PROTECTED_BASELINE_A, DEFAULT_EV_PROTECTED_BASELINE_A),
-                current_minimum,
-                current_step,
-            ),
-            ceiling,
+        configured_baseline = max(
+            self._float(CONF_EV_PROTECTED_BASELINE_A, DEFAULT_EV_PROTECTED_BASELINE_A),
+            0.0,
+        )
+        baseline = (
+            0.0
+            if configured_baseline <= 0
+            else min(max(configured_baseline, current_minimum, current_step), ceiling)
         )
         vehicle_soc = self._entity_number(CONF_EV_SOC)
         if vehicle_soc is None:
@@ -1385,6 +1382,38 @@ class ActiveEvController:
         charge_to_full = self._charge_to_full_requested()
         if charge_to_full and service_ceiling < current_minimum:
             self.last_reason = "charge_to_full_service_headroom_unavailable"
+            return False
+
+        # Paid charging is the explicit exception. Every automatic
+        # outside-window policy otherwise yields immediately at the configured
+        # battery floor, even if stale session state or actuator feedback says
+        # charging is still active.
+        if (
+            not charge_to_full
+            and snapshot is not None
+            and snapshot.battery_soc is not None
+            and snapshot.battery_soc
+            <= self._float(CONF_BATTERY_FLOOR, DEFAULT_BATTERY_FLOOR)
+        ):
+            self.daily_backfill_active = False
+            self.daily_backfill_session_target_kwh = 0.0
+            self.daily_backfill_session_start_delivered_kwh = 0.0
+            self.daily_backfill_frozen_start = None
+            self.pre_free_session = PreFreeSessionState()
+            self.pre_free_phase = "battery_floor_reached"
+            self.target_current_a = 0.0
+            self.target_limit_percent = observation.charge_limit_percent
+            self.decision_phase = "battery_floor_reached"
+            self.allowance_phase = "outside_free_window"
+            self.outside_target_active = False
+            self.outside_stop_requested = observation.charge_switch_on
+            self.outside_control_active = observation.charge_switch_on
+            if observation.charge_switch_on:
+                self.daily_backfill_stop_pending = True
+                self.daily_backfill_stop_attempts = 0
+                self.daily_backfill_last_stop_at = None
+                return True
+            self.last_reason = "battery_floor_reached"
             return False
 
         self.daily_backfill_plan = None
@@ -1413,8 +1442,10 @@ class ActiveEvController:
                             "ready_time_passed",
                             "vehicle_target_reached",
                             "protected_energy_unavailable",
+                            "sellable_energy_unavailable",
                             "outside_power_ceiling_too_low",
                         }
+                        or plan.planned_energy_kwh <= 0
                     ):
                         self.daily_backfill_active = False
                         self.daily_backfill_session_target_kwh = 0.0
@@ -1436,6 +1467,18 @@ class ActiveEvController:
                     self.daily_backfill_stop_attempts = 0
                     self.daily_backfill_last_stop_at = None
                 if self.daily_backfill_active:
+                    # The start time may remain frozen, but the energy authority
+                    # does not. Shrink the remaining session target whenever the
+                    # live sellable budget shrinks.
+                    session_delivered = max(
+                        self.daily_backfill_delivered_kwh
+                        - self.daily_backfill_session_start_delivered_kwh,
+                        0.0,
+                    )
+                    self.daily_backfill_session_target_kwh = min(
+                        self.daily_backfill_session_target_kwh,
+                        session_delivered + plan.planned_energy_kwh,
+                    )
                     daily_current_a = plan.current_ceiling_a
 
         self.solar_spill = SolarSpillDecision(0.0, 0.0, "disabled")
@@ -1557,6 +1600,10 @@ class ActiveEvController:
         )
         if self.outside_target_active:
             self.outside_control_active = True
+        elif baseline > 0:
+            # The pilot's mandatory connected baseline owns current, while the
+            # independently learned general charge limit remains authoritative.
+            self.outside_control_active = True
         elif (
             self.daily_backfill_stop_pending
             and self._float(
@@ -1567,6 +1614,19 @@ class ActiveEvController:
             and not self.pre_free_session.active
             and self.solar_spill.current_a < current_minimum
         ):
+            self.outside_stop_requested = True
+            self.outside_control_active = True
+        elif (
+            baseline < current_minimum
+            and observation.charge_switch_on
+            and self.target_current_a is not None
+            and self.target_current_a >= current_minimum
+        ):
+            # Stop a free-window command that HEO was controlling when no safe
+            # outside-window policy takes ownership after the boundary.
+            self.daily_backfill_stop_pending = True
+            self.daily_backfill_stop_attempts = 0
+            self.daily_backfill_last_stop_at = None
             self.outside_stop_requested = True
             self.outside_control_active = True
         if not self.outside_target_active and not self.outside_control_active:
@@ -1623,11 +1683,14 @@ class ActiveEvController:
         """Apply the approved ready-by extension to current live energy."""
         data = self.coordinator.data
         protected_house = getattr(self.coordinator, "learning_remaining_kwh", None)
+        active_controller = getattr(self.coordinator, "active_controller", None)
+        export_plan = getattr(active_controller, "export_plan", None)
         stored_energy = self._entity_energy(CONF_EV_STORED_ENERGY)
         if (
             data is None
             or data.available_after_reserve_kwh is None
             or protected_house is None
+            or export_plan is None
             or stored_energy is None
         ):
             self.last_reason = "daily_backfill_energy_inputs_unavailable"
@@ -1656,6 +1719,10 @@ class ActiveEvController:
                 )
                 / 100,
                 protected_house_kwh=max(float(protected_house), 0.0),
+                sellable_energy_kwh=max(
+                    float(export_plan.planned_export_energy_kwh),
+                    0.0,
+                ),
                 protected_ev_allocation_kwh=self._float(
                     CONF_EV_DAILY_BACKFILL_ENERGY,
                     DEFAULT_EV_DAILY_BACKFILL_ENERGY,

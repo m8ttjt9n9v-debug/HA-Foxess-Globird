@@ -116,6 +116,14 @@ Status here describes behavioral parity, not merely the presence of code.
 
 ## Confirmed bugs
 
+- [x] Prevent outside-window EV automation from draining the house battery to
+  its floor after the safe export budget disappears. The ready-by extension
+  must be capped by the live ZEROHERO export plan, an active session's energy
+  authority may shrink but never grow, a configured 0 A baseline must remain
+  zero, and HEO must stop its charge at the free-window boundary or battery
+  floor unless the operator has explicitly selected paid Charge to Full.
+  Completed in v0.12.19.
+
 - [x] Persist manual diagnostic ownership across integration reload and Home
   Assistant restart. An interrupted timed Force Charge/Discharge test must not
   lose its timer and restoration obligation when process memory is discarded.

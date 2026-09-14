@@ -39,8 +39,11 @@ layers around the proven algorithm, not replacement algorithms.
   extension around the retained latest-start arithmetic. Its Tessie-only path
   may run with FoxCloud ownership from live post-midnight energy, but only
   Local Modbus ownership allows HEO to protect the following ready cycle from
-  its own ZEROHERO export. The ready-to-ready ledger, confirmed wall-energy
-  accumulator, active-session target and start latch survive restart.
+  its own ZEROHERO export. That protection is not independent permission to
+  charge: the ready-by path is capped by the live ZEROHERO export plan and
+  stops when genuinely sellable energy disappears. The ready-to-ready ledger,
+  confirmed wall-energy accumulator, shrinking active-session target and start
+  latch survive restart.
 - Bounded, explicitly submitted FoxESS diagnostics remain available behind
   their guards. They are not schedules. Test ownership, timing and restoration
   attempts persist across reload/restart. An interrupted test immediately
