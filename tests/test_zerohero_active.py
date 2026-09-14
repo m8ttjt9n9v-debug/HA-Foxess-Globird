@@ -81,7 +81,10 @@ def _coordinator(**config):
     return SimpleNamespace(
         config=values,
         snapshot=SimpleNamespace(battery_soc=60.0),
-        data=SimpleNamespace(available_after_reserve_kwh=0.0),
+        data=SimpleNamespace(
+            available_after_reserve_kwh=0.0,
+            free_energy_remaining_kwh=50.0,
+        ),
         _configured_time=lambda key, default: time.fromisoformat(
             str(values.get(key, default))
         ),
@@ -811,7 +814,68 @@ async def test_completed_charge_session_round_trips_through_ha_storage(hass):
     assert restored.charge_session == first.charge_session
 
 
-async def test_active_free_charge_does_not_fight_external_self_use(hass, monkeypatch):
+async def test_active_free_charge_restarts_from_self_use_while_still_eligible(
+    hass, monkeypatch
+):
+    calls = []
+    hass.bus.async_listen(EVENT_CALL_SERVICE, calls.append)
+
+    async def noop(_call):
+        return None
+
+    async def no_wait(_seconds):
+        return None
+
+    hass.services.async_register("number", "set_value", noop)
+    hass.services.async_register("select", "select_option", noop)
+    hass.states.async_set(
+        "select.foxess_mode",
+        "Self Use",
+        {"options": ["Self Use", "Force Discharge", "Force Charge"]},
+    )
+    hass.states.async_set(
+        "number.foxess_charge", "0", {"unit_of_measurement": "kW", "max": 10}
+    )
+    hass.states.async_set(
+        "number.foxess_discharge", "0", {"unit_of_measurement": "kW", "max": 10}
+    )
+    monkeypatch.setattr(
+        "custom_components.home_energy_orchestrator.active.dt_util.now",
+        lambda: datetime(2026, 9, 10, 12, 46, tzinfo=UTC),
+    )
+    monkeypatch.setattr(
+        "custom_components.home_energy_orchestrator.foxess_adapter.asyncio.sleep",
+        no_wait,
+    )
+    coordinator = _coordinator(
+        **{
+            CONF_AUTOMATIC_CONTROL_ENABLED: True,
+            CONF_AUTOMATIC_CHARGE_ENABLED: True,
+            CONF_REHEARSAL_MODE: False,
+            CONF_INVERTER_CHARGE_LIMIT_KW: 10.0,
+        }
+    )
+    coordinator.snapshot.battery_soc = 96.0
+    controller = ActiveFoxessController(hass, coordinator)
+    controller.charge_session = ChargeSessionState("active", 10.0, 0)
+
+    await controller.async_reconcile()
+    await hass.async_block_till_done()
+
+    assert controller.charge_session == ChargeSessionState(
+        "starting", 10.0, 1, datetime(2026, 9, 10, 12, 46, tzinfo=UTC)
+    )
+    assert controller.charge_power_target_kw == 10.0
+    assert controller.last_reason == "charge_start_requested"
+    assert [(event.data["domain"], event.data["service"]) for event in calls] == [
+        ("number", "set_value"),
+        ("select", "select_option"),
+    ]
+
+
+async def test_free_charge_does_not_start_after_allowance_is_exhausted(
+    hass, monkeypatch
+):
     calls = []
     hass.bus.async_listen(EVENT_CALL_SERVICE, calls.append)
     hass.states.async_set(
@@ -837,19 +901,134 @@ async def test_active_free_charge_does_not_fight_external_self_use(hass, monkeyp
             CONF_INVERTER_CHARGE_LIMIT_KW: 10.0,
         }
     )
-    coordinator.snapshot.battery_soc = 96.0
+    coordinator.snapshot.battery_soc = 20.0
+    coordinator.data.free_energy_remaining_kwh = 0.0
     controller = ActiveFoxessController(hass, coordinator)
-    controller.charge_session = ChargeSessionState("active", 10.0, 0)
+
+    await controller.async_reconcile()
+
+    assert controller.charge_session.phase == "idle"
+    assert controller.last_reason == "charge_allowance_exhausted"
+    assert calls == []
+
+
+async def test_active_free_charge_restores_self_use_when_allowance_is_exhausted(
+    hass, monkeypatch
+):
+    calls = []
+    hass.bus.async_listen(EVENT_CALL_SERVICE, calls.append)
+
+    async def noop(_call):
+        return None
+
+    async def no_wait(_seconds):
+        return None
+
+    hass.services.async_register("number", "set_value", noop)
+    hass.services.async_register("select", "select_option", noop)
+    hass.states.async_set(
+        "select.foxess_mode",
+        "Force Charge",
+        {"options": ["Self Use", "Force Discharge", "Force Charge"]},
+    )
+    hass.states.async_set(
+        "number.foxess_charge", "8", {"unit_of_measurement": "kW", "max": 8}
+    )
+    hass.states.async_set(
+        "number.foxess_discharge", "0", {"unit_of_measurement": "kW", "max": 8}
+    )
+    now = datetime(2026, 9, 10, 13, 31, tzinfo=UTC)
+    monkeypatch.setattr(
+        "custom_components.home_energy_orchestrator.active.dt_util.now", lambda: now
+    )
+    monkeypatch.setattr(
+        "custom_components.home_energy_orchestrator.foxess_adapter.asyncio.sleep",
+        no_wait,
+    )
+    coordinator = _coordinator(
+        **{
+            CONF_AUTOMATIC_CONTROL_ENABLED: True,
+            CONF_AUTOMATIC_CHARGE_ENABLED: True,
+            CONF_REHEARSAL_MODE: False,
+            CONF_INVERTER_CHARGE_LIMIT_KW: 8.0,
+        }
+    )
+    coordinator.snapshot.battery_soc = 96.0
+    coordinator.data.free_energy_remaining_kwh = 0.0
+    controller = ActiveFoxessController(hass, coordinator)
+    controller.charge_session = ChargeSessionState("active", 8.0, 0)
 
     await controller.async_reconcile()
     await hass.async_block_till_done()
 
-    assert controller.charge_session == ChargeSessionState(
-        "completed", 10.0, 0, None
+    assert controller.charge_session == ChargeSessionState("stopping", 8.0, 1, now)
+    assert [(event.data["domain"], event.data["service"]) for event in calls] == [
+        ("select", "select_option"),
+        ("number", "set_value"),
+    ]
+
+
+async def test_persisted_active_charge_restarts_after_ha_restart_feedback_settles(
+    hass, monkeypatch
+):
+    calls = []
+    hass.bus.async_listen(EVENT_CALL_SERVICE, calls.append)
+
+    async def noop(_call):
+        return None
+
+    async def no_wait(_seconds):
+        return None
+
+    hass.services.async_register("number", "set_value", noop)
+    hass.services.async_register("select", "select_option", noop)
+    hass.states.async_set(
+        "select.foxess_mode",
+        "Self Use",
+        {"options": ["Self Use", "Force Discharge", "Force Charge"]},
     )
-    assert controller.charge_power_target_kw == 0.0
-    assert controller.last_reason == "charge_completed_for_window"
-    assert calls == []
+    hass.states.async_set(
+        "number.foxess_charge", "0", {"unit_of_measurement": "kW", "max": 8}
+    )
+    hass.states.async_set(
+        "number.foxess_discharge", "0", {"unit_of_measurement": "kW", "max": 8}
+    )
+    now = datetime(2026, 9, 10, 13, 31, tzinfo=UTC)
+    monkeypatch.setattr(
+        "custom_components.home_energy_orchestrator.active.dt_util.now", lambda: now
+    )
+    monkeypatch.setattr(
+        "custom_components.home_energy_orchestrator.foxess_adapter.asyncio.sleep",
+        no_wait,
+    )
+    coordinator = _coordinator(
+        **{
+            CONF_AUTOMATIC_CONTROL_ENABLED: True,
+            CONF_AUTOMATIC_CHARGE_ENABLED: True,
+            CONF_REHEARSAL_MODE: False,
+            CONF_INVERTER_CHARGE_LIMIT_KW: 8.0,
+        }
+    )
+    coordinator.entry_id = "restart-during-free-window"
+    coordinator.snapshot.battery_soc = 96.0
+    before_restart = ActiveFoxessController(hass, coordinator)
+    before_restart.charge_session = ChargeSessionState(
+        "active", 8.0, 0, now - timedelta(minutes=45)
+    )
+    await before_restart._charge_store.async_save(  # noqa: SLF001
+        before_restart._charge_state_payload()  # noqa: SLF001
+    )
+
+    restored = ActiveFoxessController(hass, coordinator)
+    await restored._async_load_charge_session()  # noqa: SLF001
+    await restored.async_reconcile()
+    await hass.async_block_till_done()
+
+    assert restored.charge_session == ChargeSessionState("starting", 8.0, 1, now)
+    assert [(event.data["domain"], event.data["service"]) for event in calls] == [
+        ("number", "set_value"),
+        ("select", "select_option"),
+    ]
 
 
 async def test_latched_charge_marks_recovering_when_feedback_is_unavailable(hass):

@@ -106,8 +106,10 @@ HEO-managed force-power setpoints.
   Scheduler. Cloud ownership blocks every HEO Modbus write for the entire day.
 - Default-off scheduled house-battery Force Charge under exclusive Local
   Modbus ownership. It starts only inside the configured free window with fresh
-  SoC below the configured target, latches the bounded configured inverter
-  charge power for that window, and deliberately restores Self Use afterward.
+  SoC below the configured target and remaining daily free-import allowance,
+  latches the bounded configured inverter charge power, recovers after Home
+  Assistant restarts, and deliberately restores Self Use afterward or when the
+  allowance is exhausted.
   It does not write native FoxESS schedule periods. See the
   [Local Modbus charge policy](docs/local-modbus-free-charge.md).
 - The proven Working Single Phase Pilot Site ZEROHERO export policy behind independent default-off

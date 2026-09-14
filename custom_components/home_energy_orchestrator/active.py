@@ -279,10 +279,17 @@ class ActiveFoxessController:
             CONF_BATTERY_FREE_WINDOW_TARGET,
             DEFAULT_BATTERY_FREE_WINDOW_TARGET,
         )
+        free_energy_remaining = getattr(
+            self.coordinator.data, "free_energy_remaining_kwh", None
+        )
+        allowance_available = (
+            free_energy_remaining is not None and float(free_energy_remaining) > 0
+        )
         eligible_to_start = (
             soc is not None
             and 0 <= float(soc) < target_soc
             and charge_max > 0
+            and allowance_available
         )
         latched = self.charge_session.phase != "idle"
         if requested_enabled and not schedule_confirmed and not latched:
@@ -299,6 +306,14 @@ class ActiveFoxessController:
             self.last_reason = "charge_start_mode_not_self_use"
             self.last_actions = ()
             return True
+        if not latched and enabled and window_active and not allowance_available:
+            self.last_reason = (
+                "charge_allowance_exhausted"
+                if free_energy_remaining is not None
+                else "charge_allowance_unavailable"
+            )
+            self.last_actions = ()
+            return True
         if not latched and not (enabled and window_active and eligible_to_start):
             return False
         previous_state = self.charge_session
@@ -307,11 +322,13 @@ class ActiveFoxessController:
             observation,
             now=now,
             source_available=source_available,
-            window_active=enabled and window_active,
+            window_active=enabled and window_active and allowance_available,
             eligible_to_start=eligible_to_start,
             requested_charge_power_kw=charge_max,
             charge_power_max_kw=charge_max,
-            finish_requested=not enabled or not window_active,
+            finish_requested=(
+                not enabled or not window_active or not allowance_available
+            ),
         )
         self.charge_session = transition.state
         self.charge_power_target_kw = (

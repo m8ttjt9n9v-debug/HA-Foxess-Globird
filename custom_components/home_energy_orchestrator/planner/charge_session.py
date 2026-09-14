@@ -57,11 +57,9 @@ def advance_charge_session(
     """Advance one fixed-power schedule with bounded restart recovery.
 
     SoC eligibility is intentionally a start condition only. Once started, the
-    session remains latched for the whole window so target-boundary changes do
-    not flap the inverter between Force Charge and Self Use. If a confirmed
-    active session subsequently observes a complete Self Use restoration, the
-    inverter or operator has ended it; hold that completion for the rest of the
-    window instead of fighting the restoration.
+    session remains latched while the free window and allowance remain active.
+    Self Use is re-evaluated against those same current conditions so a Home
+    Assistant restart cannot permanently cancel an otherwise eligible session.
     """
     _validate_inputs(
         state,
@@ -81,6 +79,19 @@ def advance_charge_session(
     )
     requested = round(min(requested_charge_power_kw, charge_power_max_kw), 3)
     if state.phase == "completed":
+        if (
+            new_session_desired
+            and requested > 0
+            and observation.mode == "Self Use"
+        ):
+            return _start(
+                ChargeSessionState(),
+                observation,
+                now,
+                requested,
+                charge_power_max_kw,
+                tolerance_kw,
+            )
         if window_active and not finish_requested:
             return ChargeSessionTransition(
                 state,
@@ -169,6 +180,15 @@ def advance_charge_session(
             "restore_self_use", 0.0, "charge_ended_externally"
         )
         if foxess_response_matches(restored, observation, tolerance_kw=tolerance_kw):
+            if new_session_desired:
+                return _start(
+                    ChargeSessionState(),
+                    observation,
+                    now,
+                    state.requested_power_kw,
+                    charge_power_max_kw,
+                    tolerance_kw,
+                )
             return ChargeSessionTransition(
                 replace(
                     state,

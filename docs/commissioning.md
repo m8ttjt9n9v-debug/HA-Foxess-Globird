@@ -44,6 +44,13 @@ algorithm and its persisted recovery behavior; the
 [Local Modbus charge policy](local-modbus-free-charge.md) defines the separate
 charge extension.
 
+An unexpected Home Assistant restart during an owned free-window charge does
+not cancel the remaining window. After telemetry returns, HEO re-evaluates the
+configured window, current SoC, remaining daily free-import allowance, and all
+normal gates. If still eligible and FoxESS reports Self Use, it reissues the
+same bounded Force Charge path. Turn off Automatic Battery Free Charge or
+enable Safety Lock when resumption is not wanted.
+
 In the FoxESS Modbus integration itself, verify **Export Power Limit**, **Force
 Charge Power**, **Force Discharge Power**, and **Import Power Limit** against the
 commissioned site before testing. Do not interpret a successful work-mode

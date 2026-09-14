@@ -52,13 +52,14 @@ layers around the proven algorithm, not replacement algorithms.
   restoration cannot silently release automatic inverter control.
 - A separately gated, default-off Local Modbus free-window Force Charge
   extension is implemented. It uses the configured 24-hour window, requires
-  fresh SoC below target to start, freezes bounded power for the session,
-  persists its latch/retry state, and deliberately restores Self Use at the
-  end. After confirmed active feedback, a complete externally observed Self
-  Use restoration with both force targets cleared becomes a persistent
-  completed-for-window hold; HEO does not reassert Force Charge against an
-  inverter/BMS ceiling or operator intervention. It does not program native
-  schedule registers.
+  fresh SoC below target and remaining daily free-import allowance to start,
+  freezes bounded power for the session, persists its latch/retry state, and
+  deliberately restores Self Use at the end or when the allowance is exhausted.
+  After restart, current window, SoC, allowance, and control gates are
+  authoritative: transient Self Use feedback and an older persisted completed
+  phase cannot suppress an otherwise eligible current-window charge. Turning
+  off the independent charge request or enabling Safety Lock is the deliberate
+  operator override. It does not program native schedule registers.
 - Automatic Force Charge additionally requires an explicitly confirmed
   schedule. Setup presents exact 24-hour times, duration, and a visual timeline;
   a crossing-midnight window needs a second acknowledgement. v0.12 entries are

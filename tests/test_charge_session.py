@@ -61,23 +61,29 @@ def test_matching_feedback_activates_and_target_change_does_not_flap() -> None:
     assert latched.plan.commands == ()
 
 
-def test_active_session_accepts_complete_external_self_use_restoration() -> None:
+def test_active_session_restarts_from_self_use_when_current_window_is_eligible() -> None:
     state = ChargeSessionState("active", 10.0, 0, NOW - timedelta(minutes=30))
 
     result = _advance(state, FoxessObservation("Self Use", 0.0, 0.0))
 
-    assert result.state == ChargeSessionState("completed", 10.0, 0, None)
-    assert result.reason == "completed_for_window"
-    assert result.plan.commands == ()
+    assert result.state == ChargeSessionState("starting", 10.0, 1, NOW)
+    assert result.reason == "start_requested"
+    assert [command.action for command in result.plan.commands] == [
+        "set_charge_power",
+        "select_mode",
+    ]
 
 
-def test_completed_session_cannot_restart_inside_same_window() -> None:
+def test_completed_session_restarts_inside_same_window_when_eligible() -> None:
     state = ChargeSessionState("completed", 10.0, 0, None)
 
-    held = _advance(state, FoxessObservation("Self Use", 0.0, 0.0))
-    assert held.state == state
-    assert held.reason == "completed_for_window"
-    assert held.plan.commands == ()
+    resumed = _advance(state, FoxessObservation("Self Use", 0.0, 0.0))
+    assert resumed.state == ChargeSessionState("starting", 10.0, 1, NOW)
+    assert resumed.reason == "start_requested"
+    assert [command.action for command in resumed.plan.commands] == [
+        "set_charge_power",
+        "select_mode",
+    ]
 
     rearmed = _advance(
         state,
@@ -88,6 +94,16 @@ def test_completed_session_cannot_restart_inside_same_window() -> None:
     assert rearmed.state == ChargeSessionState()
     assert rearmed.reason == "completed_window_finished"
     assert rearmed.plan.commands == ()
+
+
+def test_completed_session_does_not_adopt_another_forced_mode() -> None:
+    state = ChargeSessionState("completed", 10.0, 0, None)
+
+    held = _advance(state, FoxessObservation("Force Discharge", 0.0, 10.0))
+
+    assert held.state == state
+    assert held.reason == "completed_for_window"
+    assert held.plan.commands == ()
 
 
 def test_completed_session_survives_feedback_loss_inside_same_window() -> None:

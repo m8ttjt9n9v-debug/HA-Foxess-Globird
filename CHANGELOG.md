@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.12.21 — Recover free charging after restart
+
+- Re-evaluate Local Modbus battery charging from the current configured free
+  window, battery SoC target, and remaining daily free-import allowance after
+  Home Assistant restarts.
+- When a valid current-window session observes transient Self Use feedback,
+  restart the bounded Force Charge request instead of suppressing charging for
+  the rest of the window. A persisted `completed` state from an earlier release
+  is re-armed by the same live eligibility checks.
+- Stop or withhold battery charging when the free-import allowance is exhausted
+  or unavailable. Retain the existing ownership, Safety Lock, sign, mapping,
+  schedule-confirmation, command-order, feedback, retry, and end-of-window
+  restoration boundaries.
+- Add regression coverage for persisted-session restart recovery and exhausted
+  allowance behavior.
+
 ## 0.12.20 — Guided commissioning workflow
 
 - Replace the overwhelming setup form with logical pages for Site and

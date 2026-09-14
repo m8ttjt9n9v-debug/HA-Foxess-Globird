@@ -67,9 +67,12 @@ write the FoxESS Modbus Import Power Limit or Export Power Limit entities.
 Automatic Local Modbus battery charging additionally requires the work-mode
 entity to advertise `Self Use` and `Force Charge`, a positive commissioned
 inverter charge limit, a positive live maximum on the force-charge number, a
-fresh battery SoC below the configured target at session start, and non-
-overlapping charge/export control windows. It uses the inverter limit as its
-fixed requested power for the window and remains default-off after installation.
+fresh battery SoC below the configured target, positive remaining daily free-
+import allowance, and non-overlapping charge/export control windows. It uses
+the inverter limit as its fixed requested power while those current conditions
+permit charging and remains default-off after installation. After a Home
+Assistant restart it re-evaluates the same conditions; use the independent
+Automatic Battery Free Charge switch or Safety Lock to prevent resumption.
 
 ### Modbus TCP connection ownership
 

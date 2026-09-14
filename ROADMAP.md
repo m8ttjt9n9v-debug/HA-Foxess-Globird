@@ -20,6 +20,11 @@ Status here describes behavioral parity, not merely the presence of code.
   `recovering`) and combine them with ownership, automatic-control, Safety
   Lock, sign-verification, mapping, and source-availability transitions.
 
+  v0.12.21 adds the first narrow restart regression: a persisted active or
+  completed battery-charge session receiving transient Self Use after startup
+  must re-evaluate the current window, SoC, allowance, and gates and resume when
+  eligible. The complete lifecycle/incident harness remains outstanding.
+
   Add deterministic stale, unavailable, delayed, contradictory, and
   out-of-order feedback injection for mode, force-power, grid, battery, solar,
   SoC, house, and EV channels. Exercise exact free-window, export-window,
@@ -55,9 +60,10 @@ Status here describes behavioral parity, not merely the presence of code.
   and timing inputs without site entity IDs in control code.
 - [x] Explicit FoxESS ownership: Observer, Local Modbus, or FoxCloud Scheduler.
 - [x] Separately identified, default-off Local Modbus free-window battery
-  charging extension: configured 24-hour window and SoC start qualification,
-  fixed bounded power, persistent session latch, finite feedback retries,
-  noon/midnight regression coverage, and deliberate Self Use restoration.
+  charging extension: configured 24-hour window, SoC and remaining-allowance
+  start qualification, fixed bounded power, restart-aware persistent session
+  latch, finite feedback retries, noon/midnight regression coverage, and
+  deliberate Self Use restoration.
 - [x] Safety Lock, rehearsal behavior, redacted diagnostics, and bounded manual
   FoxESS tests with Self Use restoration.
 - [x] Faithful Working Single Phase Pilot Site ZEROHERO export core: protected-energy calculation,
