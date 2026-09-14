@@ -39,12 +39,16 @@ jobs:
           unzip -Z1 home_energy_orchestrator.zip | grep -Fxq 'manifest.json'
           unzip -Z1 home_energy_orchestrator.zip | grep -Fxq '__init__.py'
 
-      - name: Create GitHub release with counted asset
+      - name: Create or repair GitHub release with counted asset
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
-          gh release create "$GITHUB_REF_NAME" home_energy_orchestrator.zip \
-            --verify-tag \
-            --title "$GITHUB_REF_NAME" \
-            --generate-notes
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" home_energy_orchestrator.zip --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" home_energy_orchestrator.zip \
+              --verify-tag \
+              --title "$GITHUB_REF_NAME" \
+              --generate-notes
+          fi
