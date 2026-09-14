@@ -20,6 +20,7 @@ from .const import (
     CONF_BATTERY_SOC,
     CONF_BONUS_WINDOW_END,
     CONF_BONUS_WINDOW_START,
+    CONF_CONFIGURE_SOLAR,
     CONF_DAILY_FREE_ALLOWANCE_KWH,
     CONF_DISCHARGE_EFFICIENCY_PERCENT,
     CONF_EV_ACTUAL_CURRENT,
@@ -1482,7 +1483,10 @@ class ActiveEvController:
                     daily_current_a = plan.current_ceiling_a
 
         self.solar_spill = SolarSpillDecision(0.0, 0.0, "disabled")
-        if self.coordinator.config.get(CONF_EV_SOLAR_SPILL_ENABLED, DEFAULT_EV_SOLAR_SPILL_ENABLED):
+        solar_configured = self.coordinator.config.get(CONF_CONFIGURE_SOLAR) is not False
+        if solar_configured and self.coordinator.config.get(
+            CONF_EV_SOLAR_SPILL_ENABLED, DEFAULT_EV_SOLAR_SPILL_ENABLED
+        ):
             if snapshot is None or snapshot.battery_soc is None:
                 self.solar_spill = SolarSpillDecision(0.0, 0.0, "site_snapshot_unavailable")
             else:

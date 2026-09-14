@@ -199,6 +199,32 @@ async def test_reversed_foxess_signs_expose_one_canonical_surface(hass):
     assert hass.states.get("binary_sensor.home_energy_sign_conventions_verified").state == "on"
 
 
+async def test_solar_configured_absent_exposes_fresh_canonical_zero(hass):
+    hass.states.async_set("sensor.test_battery_soc", "60", {"unit_of_measurement": "%"})
+    hass.states.async_set("sensor.test_grid_power", "1", {"unit_of_measurement": "kW"})
+    hass.states.async_set("sensor.test_solar", "8", {"unit_of_measurement": "kW"})
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="No solar site",
+        data={
+            **ENTRY_DATA,
+            "configure_solar": False,
+            "solar_power_entity": "sensor.test_solar",
+        },
+    )
+    entry.add_to_hass(hass)
+
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    solar = hass.states.get("sensor.home_energy_solar_power")
+    assert solar.state == "0.0"
+    assert solar.attributes["reason"] == "configured_absent"
+    assert solar.attributes["valid"] is True
+    assert solar.attributes["fresh"] is True
+    assert solar.attributes["sources"] == []
+
+
 async def test_single_phase_invalid_current_mapping_uses_grid_power_fallback(hass):
     hass.states.async_set("sensor.test_battery_soc", "60", {"unit_of_measurement": "%"})
     hass.states.async_set("sensor.test_grid_power", "2.3", {"unit_of_measurement": "kW"})

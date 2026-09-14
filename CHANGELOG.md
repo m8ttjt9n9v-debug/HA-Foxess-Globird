@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.12.20 — Guided commissioning workflow
+
+- Replace the overwhelming setup form with logical pages for Site and
+  Equipment, Battery, Inverter, Grid, Tariff, optional Solar, House, optional
+  Vehicle/Charger/Policies, Electrical Verification, Automation and Safety,
+  then Review and Apply.
+- Give reconfiguration a section menu so one area can be edited without
+  traversing every field. Page submissions remain in a draft and cannot alter
+  the live config entry before final Apply; invalid values remain visible for
+  correction.
+- Add explicit Solar and EV capability choices. Absent sections are skipped,
+  no-EV sites receive inert electrical defaults, and configured-absent solar is
+  represented as a valid fresh 0 kW rather than unavailable telemetry.
+- Preserve the legacy programmatic full-payload path and pre-capability entry
+  behavior. Add regression coverage for navigation, draft retention, commit
+  boundaries, optional equipment, canonical absent-solar telemetry, and gates.
+
 ## 0.12.19 — Keep EV backfill inside sellable energy
 
 - Cap daily ready-by EV charging by the live ZEROHERO export plan. A protected

@@ -27,6 +27,7 @@ from .const import (
     CONF_BATTERY_SOC,
     CONF_BONUS_WINDOW_END,
     CONF_BONUS_WINDOW_START,
+    CONF_CONFIGURE_SOLAR,
     CONF_DAILY_CHARGE,
     CONF_DAILY_FREE_ALLOWANCE_KWH,
     CONF_DAILY_IMPORT_ENTITY,
@@ -722,15 +723,29 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
         else:
             battery = signed_battery
 
-        solar_direction = self._direction(
-            CONF_SOLAR_POWER_DIRECTION, DEFAULT_SOLAR_POWER_DIRECTION
-        )
-        solar = self._power_sample(
-            CONF_SOLAR_POWER,
-            now=now,
-            direction=solar_direction,
-            positive_direction=SOLAR_GENERATION_POSITIVE,
-        )
+        # Missing is a pre-capability entry and retains its historical sensor
+        # behavior. Only an explicit choice means deliberate absence.
+        solar_configured = self.config.get(CONF_CONFIGURE_SOLAR) is not False
+        if solar_configured:
+            solar_direction = self._direction(
+                CONF_SOLAR_POWER_DIRECTION, DEFAULT_SOLAR_POWER_DIRECTION
+            )
+            solar = self._power_sample(
+                CONF_SOLAR_POWER,
+                now=now,
+                direction=solar_direction,
+                positive_direction=SOLAR_GENERATION_POSITIVE,
+            )
+        else:
+            solar = NormalizedSample(
+                value=0.0,
+                unit="kW",
+                sources=(),
+                positive_direction=SOLAR_GENERATION_POSITIVE,
+                valid=True,
+                fresh=True,
+                reason="configured_absent",
+            )
         house = self._power_sample(
             CONF_HOUSE_LOAD,
             now=now,

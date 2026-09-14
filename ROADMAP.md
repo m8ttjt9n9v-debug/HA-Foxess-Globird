@@ -270,6 +270,17 @@ Working Single Phase Pilot Site parity.
   provide a section menu so an operator can revisit one area without traversing
   or re-entering every unrelated field.
 
+  **Implemented for the next release:** setup is now a conditional multi-page
+  flow; reconfigure opens a section menu; both reuse one canonical field schema;
+  validated pages are held in an in-memory draft; invalid submissions retain
+  the entered values; optional Solar and EV pages are omitted; no live entry is
+  changed before Review and Apply; and a configured-no-solar site exposes a
+  fresh canonical zero with `configured_absent` provenance. Regression coverage
+  proves page order, optional-page skipping, retained invalid values, the
+  reconfigure commit boundary, canonical absent-solar telemetry, and EV gating.
+  Remaining under this roadmap item: richer per-field cross-page error routing
+  and the live raw/normalized evidence display on Electrical Verification.
+
   Validate each page independently. A successful Next action must merge that
   page into an in-flow working draft; returning to the page must show the
   validated values, and an error on any later page must never discard completed
@@ -312,10 +323,9 @@ Working Single Phase Pilot Site parity.
   value, and take the operator directly to verification instead of returning to
   the start of the flow.
 
-  Until that multi-page flow replaces the monolithic form, keep **Verify
-  electrical directions** immediately after **FoxESS control owner** and
-  immediately before **Enable HEO Local Modbus master gate**, so the final
-  interlock cannot be overlooked among telemetry and EV fields.
+  The multi-page flow now places **Verify Electrical Directions** immediately
+  before **Automation and Safety**, so the final interlock is no longer buried
+  among telemetry and EV fields.
 
 - [ ] Complete the **Configure EV automation?** capability behavior introduced
   by the multi-page flow. When

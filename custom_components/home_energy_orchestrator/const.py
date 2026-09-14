@@ -5,6 +5,8 @@ from __future__ import annotations
 DOMAIN = "home_energy_orchestrator"
 PLATFORMS = ["sensor", "binary_sensor", "number", "button", "switch", "select"]
 
+CONF_CONFIGURE_SOLAR = "configure_solar"
+CONF_CONFIGURE_EV = "configure_ev"
 CONF_BATTERY_SOC = "battery_soc_entity"
 CONF_BATTERY_POWER = "battery_power_entity"
 # Preferred pilot-faithful mapping. When both magnitude sensors are supplied,

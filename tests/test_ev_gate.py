@@ -33,6 +33,9 @@ def test_gate_priority_is_explicit_and_fail_closed():
         ev_control_gate_status(commissioned_config(), adapter_connected=True) == "ready"
     )
 
+    explicitly_absent = commissioned_config(configure_ev=False)
+    assert ev_control_gate_status(explicitly_absent, adapter_connected=True) == "disabled"
+
 
 def test_multiphase_control_requires_explicit_most_loaded_phase_current():
     config = commissioned_config(site_phase_count=3)

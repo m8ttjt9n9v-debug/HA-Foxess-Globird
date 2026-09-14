@@ -22,6 +22,7 @@ from .const import (
     CONF_AUTOMATIC_EXPORT_ENABLED,
     CONF_BATTERY_FREE_WINDOW_TARGET,
     CONF_BONUS_WINDOW_START,
+    CONF_CONFIGURE_EV,
     CONF_DISCHARGE_EFFICIENCY_PERCENT,
     CONF_EV_AT_HOME,
     CONF_EV_BEFORE_EXPORT_ENABLED,
@@ -634,6 +635,12 @@ class ActiveFoxessController:
         a new export whenever a non-zero baseline is commissioned.
         """
         if not self.coordinator.config.get(
+            CONF_CONFIGURE_EV,
+            self.coordinator.config.get(
+                CONF_EV_CONTROL_COMMISSIONED,
+                DEFAULT_EV_CONTROL_COMMISSIONED,
+            ),
+        ) or not self.coordinator.config.get(
             CONF_EV_CONTROL_COMMISSIONED,
             DEFAULT_EV_CONTROL_COMMISSIONED,
         ):

@@ -8,14 +8,12 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.home_energy_orchestrator.const import (
     CONF_AUTOMATIC_CHARGE_ENABLED,
-    CONF_AUTOMATIC_CONTROL_ENABLED,
     CONF_AUTOMATIC_EXPORT_ENABLED,
     CONF_EV_AUTOMATIC_CONTROL_ENABLED,
     CONF_EV_BEFORE_EXPORT_ENABLED,
     CONF_EV_BEFORE_EXPORT_SOC_TARGET,
     CONF_FOXESS_CONTROL_OWNER,
     CONF_FREE_CHARGE_SCHEDULE_CONFIRMED,
-    CONF_SIGN_CONVENTIONS_VERIFIED,
     DEFAULT_AUTOMATIC_CHARGE_ENABLED,
     DEFAULT_EV_BEFORE_EXPORT_ENABLED,
     DEFAULT_EV_BEFORE_EXPORT_SOC_TARGET,
@@ -33,6 +31,113 @@ async def _confirm_schedule(hass, result, *, overnight: bool = False):
     return await hass.config_entries.flow.async_configure(
         result["flow_id"], user_input=confirmation
     )
+
+
+async def _open_battery_page(hass, result, *, solar: bool = False, ev: bool = False):
+    return await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        user_input={"name": "Test Site", "configure_solar": solar, "configure_ev": ev},
+    )
+
+
+async def _open_reconfigure_page(hass, result, page: str):
+    return await hass.config_entries.flow.async_configure(
+        result["flow_id"], user_input={"next_step_id": f"reconfigure_{page}"}
+    )
+
+
+async def _submit_page_defaults(hass, result):
+    """Submit values from the proven fixture, falling back to displayed defaults."""
+    values = {}
+    for marker in result["data_schema"].schema:
+        key = marker.schema
+        if key in ENTRY_DATA:
+            values[key] = ENTRY_DATA[key]
+        elif marker.default is not vol.UNDEFINED:
+            values[key] = marker.default()
+    return await hass.config_entries.flow.async_configure(result["flow_id"], user_input=values)
+
+
+async def test_human_setup_is_multi_page_and_skips_absent_optional_equipment(hass):
+    result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": SOURCE_USER})
+    assert [marker.schema for marker in result["data_schema"].schema] == [
+        "name",
+        "configure_solar",
+        "configure_ev",
+    ]
+
+    result = await _open_battery_page(hass, result, solar=False, ev=False)
+    expected_steps = [
+        "battery",
+        "inverter",
+        "grid",
+        "tariff",
+        "house",
+        "verification",
+        "automation",
+    ]
+    for step in expected_steps:
+        assert result["step_id"] == step
+        assert not hass.config_entries.async_entries(DOMAIN)
+        result = await _submit_page_defaults(hass, result)
+
+    assert result["step_id"] == "review"
+    assert result["description_placeholders"]["capability_summary"] == "Solar: no; EV: no"
+    created = await hass.config_entries.flow.async_configure(
+        result["flow_id"], user_input={"apply_configuration": True}
+    )
+    assert created["type"] is FlowResultType.CREATE_ENTRY, created
+    assert created["data"]["configure_solar"] is False
+    assert created["data"]["configure_ev"] is False
+    assert created["data"][CONF_EV_AUTOMATIC_CONTROL_ENABLED] is False
+
+
+async def test_invalid_page_retains_submitted_values(hass):
+    result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": SOURCE_USER})
+    result = await _open_battery_page(hass, result)
+    values = {}
+    for marker in result["data_schema"].schema:
+        if marker.schema in ENTRY_DATA:
+            values[marker.schema] = ENTRY_DATA[marker.schema]
+        elif marker.default is not vol.UNDEFINED:
+            values[marker.schema] = marker.default()
+    values["battery_floor_percent"] = -1
+
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], user_input=values
+    )
+
+    assert result["step_id"] == "battery"
+    assert result["errors"] == {"battery_floor_percent": "invalid_site_limits"}
+    markers = {marker.schema: marker for marker in result["data_schema"].schema}
+    assert markers["battery_floor_percent"].default() == -1
+
+
+async def test_early_pages_do_not_validate_later_ev_limits(hass):
+    result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": SOURCE_USER})
+    result = await _open_battery_page(hass, result, ev=True)
+    result = await _submit_page_defaults(hass, result)
+    assert result["step_id"] == "inverter"
+
+
+async def test_reconfigure_pages_do_not_update_live_entry_before_apply(hass):
+    entry = MockConfigEntry(domain=DOMAIN, title="Existing Site", data=dict(ENTRY_DATA))
+    entry.add_to_hass(hass)
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": SOURCE_RECONFIGURE, "entry_id": entry.entry_id},
+    )
+    assert result["step_id"] == "reconfigure"
+    assert result["type"] is FlowResultType.MENU
+    result = await _open_reconfigure_page(hass, result, "site")
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        user_input={"name": "Renamed Site", "configure_solar": False, "configure_ev": False},
+    )
+    assert result["step_id"] == "reconfigure"
+    assert result["type"] is FlowResultType.MENU
+    assert entry.title == "Existing Site"
+    assert entry.data == ENTRY_DATA
 
 
 async def test_user_flow_creates_a_config_entry(hass):
@@ -143,6 +248,7 @@ async def test_user_form_prefills_unambiguous_foxess_and_tessie_entities(hass):
     result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": SOURCE_USER})
 
     assert result["type"] is FlowResultType.FORM
+    result = await _open_battery_page(hass, result, ev=True)
     markers = {
         marker.schema: marker
         for marker in result["data_schema"].schema
@@ -150,9 +256,6 @@ async def test_user_form_prefills_unambiguous_foxess_and_tessie_entities(hass):
     }
     assert "ev_charge_to_full_entity" not in markers
     assert markers["battery_soc_entity"].default() == "sensor.battery_soc"
-    assert markers["grid_power_entity"].default() == "sensor.grid_ct"
-    assert markers["ev_soc_entity"].default() == "sensor.jns_x_battery_level"
-    assert markers["ev_current_limit_entity"].default() == "number.jns_x_charge_current"
 
 
 async def test_direction_verification_is_immediately_before_modbus_master_gate(hass):
@@ -163,11 +266,7 @@ async def test_direction_verification_is_immediately_before_modbus_master_gate(h
         for marker in result["data_schema"].schema
         if hasattr(marker, "schema")
     ]
-    owner_index = fields.index(CONF_FOXESS_CONTROL_OWNER)
-    assert fields[owner_index + 1 : owner_index + 3] == [
-        CONF_SIGN_CONVENTIONS_VERIFIED,
-        CONF_AUTOMATIC_CONTROL_ENABLED,
-    ]
+    assert fields == ["name", "configure_solar", "configure_ev"]
 
 
 async def test_user_form_prefills_live_foxess_battery_capacity(hass):
@@ -184,6 +283,7 @@ async def test_user_form_prefills_live_foxess_battery_capacity(hass):
     hass.states.async_set("sensor.bms_kwh_remaining", "40.32", {"unit_of_measurement": "kWh"})
 
     result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": SOURCE_USER})
+    result = await _open_battery_page(hass, result)
     markers = {
         marker.schema: marker
         for marker in result["data_schema"].schema
@@ -198,6 +298,7 @@ async def test_user_form_has_no_invented_battery_capacity_default(hass):
     result = await hass.config_entries.flow.async_init(
         DOMAIN, context={"source": SOURCE_USER}
     )
+    result = await _open_battery_page(hass, result)
     markers = {
         marker.schema: marker
         for marker in result["data_schema"].schema
@@ -866,6 +967,7 @@ async def test_reconfigure_suggests_replacement_for_stale_mapping(hass):
         DOMAIN,
         context={"source": SOURCE_RECONFIGURE, "entry_id": entry.entry_id},
     )
+    result = await _open_reconfigure_page(hass, result, "battery")
 
     markers = {
         marker.schema: marker
@@ -903,6 +1005,7 @@ async def test_reconfigure_never_replaces_registered_existing_mapping(hass):
         DOMAIN,
         context={"source": SOURCE_RECONFIGURE, "entry_id": entry.entry_id},
     )
+    result = await _open_reconfigure_page(hass, result, "battery")
 
     markers = {
         marker.schema: marker

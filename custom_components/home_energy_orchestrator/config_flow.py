@@ -31,6 +31,8 @@ from .const import (
     CONF_BATTERY_SOC,
     CONF_BONUS_WINDOW_END,
     CONF_BONUS_WINDOW_START,
+    CONF_CONFIGURE_EV,
+    CONF_CONFIGURE_SOLAR,
     CONF_DAILY_CHARGE,
     CONF_DAILY_FREE_ALLOWANCE_KWH,
     CONF_DAILY_IMPORT_ENTITY,
@@ -317,6 +319,93 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     _pending_input: dict[str, object] | None = None
     _pending_reconfigure = False
+    _draft_input: dict[str, object] | None = None
+
+    # Capability choices deliberately live in the entry.  They let the flow hide
+    # irrelevant equipment without deleting previously commissioned mappings.
+    _CONF_CONFIGURE_SOLAR = CONF_CONFIGURE_SOLAR
+    _CONF_CONFIGURE_EV = CONF_CONFIGURE_EV
+
+    _PAGE_FIELDS = {
+        "site": (CONF_NAME, _CONF_CONFIGURE_SOLAR, _CONF_CONFIGURE_EV),
+        "battery": (
+            CONF_BATTERY_SOC, CONF_BATTERY_POWER, CONF_BATTERY_CHARGE_POWER,
+            CONF_BATTERY_DISCHARGE_POWER, CONF_BATTERY_POWER_DIRECTION,
+            CONF_BATTERY_CAPACITY_ENTITY, CONF_BATTERY_CAPACITY,
+            CONF_BATTERY_FLOOR, CONF_RESERVE, CONF_BATTERY_FREE_WINDOW_TARGET,
+            CONF_BATTERY_CHARGE_EFFICIENCY, CONF_DISCHARGE_EFFICIENCY_PERCENT,
+        ),
+        "inverter": (
+            CONF_FOXESS_WORK_MODE, CONF_FOXESS_FORCE_CHARGE_POWER,
+            CONF_FOXESS_FORCE_DISCHARGE_POWER, CONF_INVERTER_CHARGE_LIMIT_KW,
+            CONF_INVERTER_DISCHARGE_LIMIT_KW, CONF_EXPORT_LIMIT_KW,
+        ),
+        "grid": (
+            CONF_GRID_POWER, CONF_GRID_POWER_DIRECTION, CONF_SITE_PHASE_COUNT,
+            CONF_SERVICE_IMPORT_LIMIT_A, CONF_SITE_GRID_CURRENT,
+            CONF_SITE_GRID_CURRENT_DIRECTION, CONF_SITE_GRID_HEADROOM_CURRENT,
+            CONF_TELEMETRY_MAX_AGE_SECONDS, CONF_ZERO_IMPORT_THRESHOLD_KW,
+            CONF_ZERO_IMPORT_CONFIRM_MINUTES,
+        ),
+        "tariff": (
+            CONF_DAILY_IMPORT_ENTITY, CONF_DAILY_FREE_ALLOWANCE_KWH,
+            CONF_DAILY_CHARGE, CONF_FREE_CHARGE_START, CONF_FREE_CHARGE_END,
+            CONF_PEAK_WINDOW_START, CONF_PEAK_WINDOW_END, CONF_PEAK_RATE,
+            CONF_OFFPEAK_RATE, CONF_OFFPEAK_BALANCE_RATE, CONF_SHOULDER_RATE,
+            CONF_EXPORT_RATE, CONF_SUPER_EXPORT_RATE, CONF_BONUS_WINDOW_START,
+            CONF_BONUS_WINDOW_END, CONF_FORCE_DISCHARGE_FINISH,
+            CONF_EXPORT_ALLOWANCE_KWH, CONF_EXPORT_DISCHARGE_POWER_KW,
+        ),
+        "solar": (CONF_SOLAR_POWER, CONF_SOLAR_POWER_DIRECTION),
+        "house": (
+            CONF_HOUSE_LOAD, CONF_HOUSE_LOAD_INCLUDES_EV, CONF_HEATER_POWER,
+            CONF_HOUSE_LEARNING_FALLBACK, CONF_HOUSE_AWAY_FALLBACK,
+            CONF_HOUSE_AWAY_CONFIRMATION_HOURS, CONF_HOUSE_OCCUPANCY_MODE,
+        ),
+        "car": (
+            CONF_EV_SOC, CONF_EV_AT_HOME, CONF_EV_CABLE_CONNECTED,
+            CONF_EV_CHARGING_STATE, CONF_EV_ACTUAL_CURRENT,
+            CONF_EV_STORED_ENERGY, CONF_EV_LIFETIME_ENERGY,
+        ),
+        "charger": (
+            CONF_EV_CURRENT_LIMIT, CONF_EV_CHARGE_LIMIT, CONF_EV_CHARGE_SWITCH,
+            CONF_EV_CHARGE_PATH, CONF_EV_SMART_SOCKET,
+            CONF_EV_SMART_SOCKET_CURRENT_LIMIT, CONF_EV_SMART_SOCKET_SETTLE_SECONDS,
+            CONF_EV_SMART_SOCKET_RETRY_SECONDS, CONF_EV_SMART_SOCKET_POWER_SWITCHING,
+            CONF_EV_VOLTAGE, CONF_EV_PHASE_COUNT, CONF_EV_MIN_CURRENT,
+            CONF_EV_MAX_CURRENT, CONF_EV_CONTROL_COMMISSIONED,
+        ),
+        "ev_policies": (
+            CONF_EV_LOCATION_MODE, CONF_EV_FREE_WINDOW_PRIORITY,
+            CONF_EV_FREE_WINDOW_CHARGE_LIMIT, CONF_EV_FREE_WINDOW_MINIMUM_CURRENT,
+            CONF_EV_FREE_WINDOW_SETTLE_MINUTES, CONF_EV_DIRECT_LIMIT_HEADROOM,
+            CONF_EV_CHARGE_TO_FULL_MAX_HOURS, CONF_EV_CHARGE_EFFICIENCY,
+            CONF_EV_ARRIVAL_RESERVE_SOC, CONF_EV_LEARNING_MINIMUM_SAMPLES,
+            CONF_EV_ALLOWANCE_GUARD_ENABLED, CONF_EV_ALLOWANCE_SAFETY_MARGIN,
+            CONF_EV_SOLAR_SPILL_ENABLED, CONF_EV_SOLAR_SPILL_BATTERY_SOC,
+            CONF_EV_PRE_FREE_ENABLED, CONF_EV_DAILY_BACKFILL_ENERGY,
+            CONF_EV_DAILY_READY_TIME, CONF_EV_OUTSIDE_INVERTER_PERCENT,
+            CONF_EV_BACKFILL_BUFFER_MINUTES, CONF_EV_TELEMETRY_MAX_AGE_SECONDS,
+            CONF_EV_TELEMETRY_MAX_SKEW_SECONDS, CONF_EV_PROTECTED_BASELINE_A,
+            CONF_EV_BEFORE_EXPORT_ENABLED, CONF_EV_BEFORE_EXPORT_SOC_TARGET,
+        ),
+        "recovery": (
+            CONF_EV_SMART_RECOVERY_NO_POWER_SECONDS,
+            CONF_EV_SMART_RECOVERY_CURRENT_CONFIRM_SECONDS,
+            CONF_EV_SMART_RECOVERY_SOCKET_CONFIRM_SECONDS,
+            CONF_EV_SMART_RECOVERY_POWER_OFF_SECONDS,
+            CONF_EV_SMART_RECOVERY_POST_POWER_SECONDS,
+            CONF_EV_SMART_RECOVERY_CHARGING_CONFIRM_SECONDS,
+            CONF_EV_SMART_RECOVERY_REARM_SECONDS,
+            CONF_EV_SMART_RECOVERY_IDLE_CURRENT_A,
+        ),
+        "verification": (CONF_SIGN_CONVENTIONS_VERIFIED,),
+        "automation": (
+            CONF_FOXESS_CONTROL_OWNER, CONF_AUTOMATIC_CONTROL_ENABLED,
+            CONF_AUTOMATIC_CHARGE_ENABLED, CONF_AUTOMATIC_EXPORT_ENABLED,
+            CONF_EV_AUTOMATIC_CONTROL_ENABLED, CONF_REHEARSAL_MODE,
+        ),
+    }
 
     _NORMALIZATION_KEYS = frozenset(
         {
@@ -336,6 +425,20 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     async def async_step_user(self, user_input: dict[str, object] | None = None):
         """Collect the mappings and site limits required by the observer."""
+        # Keep the direct full-payload path for imports and existing automated
+        # clients.  The human UI always enters through the short site page.
+        if user_input is None or CONF_BATTERY_SOC not in user_input:
+            if self._draft_input is None:
+                discovered = self._discovery_defaults()
+                self._draft_input = self._apply_defaults({CONF_NAME: "Home Energy", **discovered})
+                self._draft_input[self._CONF_CONFIGURE_SOLAR] = bool(
+                    discovered.get(CONF_SOLAR_POWER)
+                )
+                self._draft_input[self._CONF_CONFIGURE_EV] = any(
+                    discovered.get(key)
+                    for key in (CONF_EV_SOC, CONF_EV_CURRENT_LIMIT, CONF_EV_CHARGE_SWITCH)
+                )
+            return await self._async_page("site", user_input, reconfigure=False)
         if user_input is not None:
             user_input = self._apply_defaults(user_input)
             errors = self._validate_input(user_input)
@@ -356,6 +459,22 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def async_step_reconfigure(self, user_input: dict[str, object] | None = None):
         """Update mappings and commissioned limits without reinstalling."""
         entry = self._get_reconfigure_entry()
+        if user_input is None:
+            if self._draft_input is None:
+                self._draft_input = self._apply_defaults(self._reconfigure_defaults(entry))
+                self._draft_input.setdefault(
+                    self._CONF_CONFIGURE_SOLAR, bool(self._draft_input.get(CONF_SOLAR_POWER))
+                )
+                self._draft_input.setdefault(
+                    self._CONF_CONFIGURE_EV,
+                    any(
+                        self._draft_input.get(key)
+                        for key in (CONF_EV_SOC, CONF_EV_CURRENT_LIMIT, CONF_EV_CHARGE_SWITCH)
+                    ),
+                )
+            return self._show_reconfigure_menu()
+        if CONF_BATTERY_SOC not in user_input:
+            return await self._async_page("site", user_input, reconfigure=True)
         if user_input is not None:
             if CONF_EV_CHARGE_TO_FULL_ENABLED in entry.data:
                 user_input[CONF_EV_CHARGE_TO_FULL_ENABLED] = entry.data[
@@ -387,6 +506,415 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             step_id="reconfigure",
             data_schema=self._schema(self._reconfigure_defaults(entry)),
         )
+
+    async def _async_page(
+        self, page: str, user_input: dict[str, object] | None, *, reconfigure: bool
+    ):
+        """Save one page into the in-memory draft and advance without touching live config."""
+        assert self._draft_input is not None
+        errors: dict[str, str] = {}
+        displayed = self._draft_input
+        if user_input is not None:
+            candidate = {**self._draft_input, **user_input}
+            errors = self._validate_page(page, candidate)
+            if not errors:
+                self._draft_input = candidate
+                if reconfigure:
+                    return self._show_reconfigure_menu()
+                next_page = self._next_page(page)
+                if next_page == "review":
+                    return self._show_review(reconfigure=reconfigure)
+                return self.async_show_form(
+                    step_id=(f"reconfigure_{next_page}" if reconfigure else next_page),
+                    data_schema=self._page_schema(next_page, self._draft_input),
+                )
+            displayed = candidate
+        return self.async_show_form(
+            step_id=("reconfigure" if reconfigure and page == "site" else
+                     f"reconfigure_{page}" if reconfigure else "user" if page == "site" else page),
+            data_schema=self._page_schema(page, displayed),
+            errors=errors,
+        )
+
+    @callback
+    def _show_reconfigure_menu(self):
+        """Let an operator revisit one section without traversing unrelated pages."""
+        assert self._draft_input is not None
+        options = [
+            "reconfigure_site", "reconfigure_battery", "reconfigure_inverter",
+            "reconfigure_grid", "reconfigure_tariff",
+        ]
+        if self._draft_input.get(self._CONF_CONFIGURE_SOLAR):
+            options.append("reconfigure_solar")
+        options.append("reconfigure_house")
+        if self._draft_input.get(self._CONF_CONFIGURE_EV):
+            options.extend(
+                (
+                    "reconfigure_car", "reconfigure_charger",
+                    "reconfigure_ev_policies", "reconfigure_recovery",
+                )
+            )
+        options.extend(
+            ("reconfigure_verification", "reconfigure_automation", "reconfigure_review")
+        )
+        return self.async_show_menu(step_id="reconfigure", menu_options=options)
+
+    def _next_page(self, page: str) -> str:
+        pages = ["site", "battery", "inverter", "grid", "tariff"]
+        if self._draft_input and self._draft_input.get(self._CONF_CONFIGURE_SOLAR):
+            pages.append("solar")
+        pages.append("house")
+        if self._draft_input and self._draft_input.get(self._CONF_CONFIGURE_EV):
+            pages.extend(("car", "charger", "ev_policies", "recovery"))
+        pages.extend(("verification", "automation", "review"))
+        return pages[pages.index(page) + 1]
+
+    def _validate_page(self, page: str, data: dict[str, object]) -> dict[str, str]:
+        """Return only validation failures belonging to the page being submitted."""
+        candidate = self._capability_safe_data(self._apply_defaults(data))
+        limit_error = self._page_limit_error(page, candidate)
+        if limit_error:
+            return limit_error
+        errors = self._validate_input(candidate)
+        if not errors:
+            return {}
+        key = next(iter(errors))
+        if key in self._PAGE_FIELDS[page]:
+            return errors
+        # Pair completeness is best explained where the pair is edited.
+        base_page = {
+            "incomplete_split_battery_mapping": "battery",
+            "battery_capacity_required": "battery",
+            "incomplete_foxess_mapping": "inverter",
+            "incomplete_ev_mapping": "charger",
+            "incomplete_smart_socket_mapping": "charger",
+            "multiphase_current_mapping_required": "charger",
+            "invalid_schedule": "tariff",
+            "invalid_daily_ev_backfill": "ev_policies",
+            "solar_spill_battery_power_mapping_required": "ev_policies",
+            "outside_ev_policy_requires_local_modbus": "automation",
+        }.get(errors.get(key))
+        if base_page == page:
+            return errors
+        return {}
+
+    def _page_limit_error(
+        self, page: str, data: dict[str, object]
+    ) -> dict[str, str]:
+        """Validate only physical values visible on this page."""
+        def number(key: str) -> float:
+            return float(data[key])
+
+        def invalid(key: str) -> dict[str, str]:
+            return {key: "invalid_site_limits"}
+
+        try:
+            if page == "battery":
+                if data.get(CONF_BATTERY_CAPACITY) is None and not data.get(
+                    CONF_BATTERY_CAPACITY_ENTITY
+                ):
+                    return {CONF_BATTERY_CAPACITY: "battery_capacity_required"}
+                checks = {
+                    CONF_BATTERY_FLOOR: 0 <= number(CONF_BATTERY_FLOOR) <= 100,
+                    CONF_RESERVE: number(CONF_RESERVE) >= 0,
+                    CONF_BATTERY_FREE_WINDOW_TARGET:
+                        0 <= number(CONF_BATTERY_FREE_WINDOW_TARGET) <= 100,
+                    CONF_BATTERY_CHARGE_EFFICIENCY:
+                        0 < number(CONF_BATTERY_CHARGE_EFFICIENCY) <= 100,
+                    CONF_DISCHARGE_EFFICIENCY_PERCENT:
+                        50 <= number(CONF_DISCHARGE_EFFICIENCY_PERCENT) <= 100,
+                }
+                if data.get(CONF_BATTERY_CAPACITY) is not None:
+                    checks[CONF_BATTERY_CAPACITY] = number(CONF_BATTERY_CAPACITY) > 0
+            elif page == "inverter":
+                checks = {
+                    key: number(key) >= 0
+                    for key in (
+                        CONF_INVERTER_CHARGE_LIMIT_KW,
+                        CONF_INVERTER_DISCHARGE_LIMIT_KW,
+                        CONF_EXPORT_LIMIT_KW,
+                    )
+                }
+            elif page == "grid":
+                phases = number(CONF_SITE_PHASE_COUNT)
+                service = number(CONF_SERVICE_IMPORT_LIMIT_A)
+                headroom = number(CONF_SITE_GRID_HEADROOM_CURRENT)
+                checks = {
+                    CONF_SITE_PHASE_COUNT: phases >= 1 and phases.is_integer(),
+                    CONF_SERVICE_IMPORT_LIMIT_A: service >= 0,
+                    CONF_SITE_GRID_HEADROOM_CURRENT:
+                        headroom >= 0 and (service <= 0 or headroom <= service),
+                    CONF_TELEMETRY_MAX_AGE_SECONDS:
+                        number(CONF_TELEMETRY_MAX_AGE_SECONDS) > 0,
+                    CONF_ZERO_IMPORT_THRESHOLD_KW:
+                        number(CONF_ZERO_IMPORT_THRESHOLD_KW) >= 0,
+                    CONF_ZERO_IMPORT_CONFIRM_MINUTES:
+                        number(CONF_ZERO_IMPORT_CONFIRM_MINUTES) >= 0,
+                }
+            elif page == "tariff":
+                checks = {
+                    key: number(key) >= 0
+                    for key in (
+                        CONF_DAILY_FREE_ALLOWANCE_KWH, CONF_DAILY_CHARGE,
+                        CONF_PEAK_RATE, CONF_OFFPEAK_RATE, CONF_OFFPEAK_BALANCE_RATE,
+                        CONF_SHOULDER_RATE, CONF_EXPORT_RATE, CONF_SUPER_EXPORT_RATE,
+                        CONF_EXPORT_ALLOWANCE_KWH, CONF_EXPORT_DISCHARGE_POWER_KW,
+                    )
+                }
+                schedule_pairs = (
+                    (CONF_FREE_CHARGE_START, CONF_FREE_CHARGE_END),
+                    (CONF_PEAK_WINDOW_START, CONF_PEAK_WINDOW_END),
+                    (CONF_BONUS_WINDOW_START, CONF_BONUS_WINDOW_END),
+                )
+                for start_key, end_key in schedule_pairs:
+                    if time.fromisoformat(str(data[start_key])) == time.fromisoformat(
+                        str(data[end_key])
+                    ):
+                        return {start_key: "invalid_schedule"}
+            elif page == "house":
+                checks = {
+                    key: number(key) >= 0
+                    for key in (
+                        CONF_HOUSE_LEARNING_FALLBACK, CONF_HOUSE_AWAY_FALLBACK,
+                        CONF_HOUSE_AWAY_CONFIRMATION_HOURS,
+                    )
+                }
+            elif page == "charger":
+                minimum = number(CONF_EV_MIN_CURRENT)
+                maximum = number(CONF_EV_MAX_CURRENT)
+                phases = number(CONF_EV_PHASE_COUNT)
+                checks = {
+                    CONF_EV_MIN_CURRENT: minimum >= 0,
+                    CONF_EV_MAX_CURRENT: maximum >= minimum,
+                    CONF_EV_VOLTAGE: number(CONF_EV_VOLTAGE) > 0,
+                    CONF_EV_PHASE_COUNT: phases >= 1 and phases.is_integer(),
+                    CONF_EV_SMART_SOCKET_CURRENT_LIMIT:
+                        number(CONF_EV_SMART_SOCKET_CURRENT_LIMIT) >= 0,
+                    CONF_EV_SMART_SOCKET_SETTLE_SECONDS:
+                        number(CONF_EV_SMART_SOCKET_SETTLE_SECONDS) >= 0,
+                    CONF_EV_SMART_SOCKET_RETRY_SECONDS:
+                        number(CONF_EV_SMART_SOCKET_RETRY_SECONDS) > 0,
+                }
+            elif page == "ev_policies":
+                checks = {
+                    CONF_EV_FREE_WINDOW_CHARGE_LIMIT:
+                        0 <= number(CONF_EV_FREE_WINDOW_CHARGE_LIMIT) <= 100,
+                    CONF_EV_FREE_WINDOW_MINIMUM_CURRENT:
+                        0 <= number(CONF_EV_FREE_WINDOW_MINIMUM_CURRENT)
+                        <= number(CONF_EV_MAX_CURRENT),
+                    CONF_EV_FREE_WINDOW_SETTLE_MINUTES:
+                        number(CONF_EV_FREE_WINDOW_SETTLE_MINUTES) >= 0,
+                    CONF_EV_DIRECT_LIMIT_HEADROOM:
+                        number(CONF_EV_DIRECT_LIMIT_HEADROOM) >= 0,
+                    CONF_EV_CHARGE_TO_FULL_MAX_HOURS:
+                        number(CONF_EV_CHARGE_TO_FULL_MAX_HOURS) > 0,
+                    CONF_EV_CHARGE_EFFICIENCY:
+                        0 < number(CONF_EV_CHARGE_EFFICIENCY) <= 100,
+                    CONF_EV_ARRIVAL_RESERVE_SOC:
+                        0 <= number(CONF_EV_ARRIVAL_RESERVE_SOC) <= 100,
+                    CONF_EV_BEFORE_EXPORT_SOC_TARGET:
+                        0 <= number(CONF_EV_BEFORE_EXPORT_SOC_TARGET) <= 100,
+                    CONF_EV_DAILY_BACKFILL_ENERGY:
+                        number(CONF_EV_DAILY_BACKFILL_ENERGY) >= 0,
+                    CONF_EV_OUTSIDE_INVERTER_PERCENT:
+                        0 <= number(CONF_EV_OUTSIDE_INVERTER_PERCENT) <= 100,
+                    CONF_EV_BACKFILL_BUFFER_MINUTES:
+                        number(CONF_EV_BACKFILL_BUFFER_MINUTES) >= 0,
+                    CONF_EV_TELEMETRY_MAX_AGE_SECONDS:
+                        number(CONF_EV_TELEMETRY_MAX_AGE_SECONDS) > 0,
+                    CONF_EV_TELEMETRY_MAX_SKEW_SECONDS:
+                        number(CONF_EV_TELEMETRY_MAX_SKEW_SECONDS) >= 0,
+                    CONF_EV_PROTECTED_BASELINE_A:
+                        number(CONF_EV_PROTECTED_BASELINE_A) >= 0,
+                }
+            elif page == "recovery":
+                positive = (
+                    CONF_EV_SMART_RECOVERY_NO_POWER_SECONDS,
+                    CONF_EV_SMART_RECOVERY_CURRENT_CONFIRM_SECONDS,
+                    CONF_EV_SMART_RECOVERY_SOCKET_CONFIRM_SECONDS,
+                    CONF_EV_SMART_RECOVERY_POWER_OFF_SECONDS,
+                    CONF_EV_SMART_RECOVERY_POST_POWER_SECONDS,
+                    CONF_EV_SMART_RECOVERY_CHARGING_CONFIRM_SECONDS,
+                    CONF_EV_SMART_RECOVERY_REARM_SECONDS,
+                )
+                checks = {key: number(key) > 0 for key in positive}
+                checks[CONF_EV_SMART_RECOVERY_IDLE_CURRENT_A] = (
+                    number(CONF_EV_SMART_RECOVERY_IDLE_CURRENT_A) >= 0
+                )
+            else:
+                return {}
+        except (KeyError, TypeError, ValueError):
+            return {"base": "invalid_site_limits"}
+        for key, valid in checks.items():
+            if not valid or not math.isfinite(number(key)):
+                return invalid(key)
+        return {}
+
+    def _capability_safe_data(self, data: dict[str, object]) -> dict[str, object]:
+        """Make absent optional equipment inert before cross-field validation."""
+        data = dict(data)
+        if not data.get(self._CONF_CONFIGURE_EV):
+            data[CONF_EV_AUTOMATIC_CONTROL_ENABLED] = False
+            data[CONF_EV_CONTROL_COMMISSIONED] = False
+            data[CONF_EV_PRE_FREE_ENABLED] = False
+            data[CONF_EV_BEFORE_EXPORT_ENABLED] = False
+            data[CONF_EV_SOLAR_SPILL_ENABLED] = False
+            data[CONF_EV_MIN_CURRENT] = 0.0
+            data[CONF_EV_MAX_CURRENT] = 0.0
+            data[CONF_EV_FREE_WINDOW_MINIMUM_CURRENT] = 0.0
+            data[CONF_EV_PROTECTED_BASELINE_A] = 0.0
+        if not data.get(self._CONF_CONFIGURE_SOLAR):
+            data[CONF_EV_SOLAR_SPILL_ENABLED] = False
+        return data
+
+    @callback
+    def _show_review(self, *, reconfigure: bool, errors: dict[str, str] | None = None):
+        """Show the small, explicit commit boundary."""
+        assert self._draft_input is not None
+        start = time.fromisoformat(str(self._draft_input[CONF_FREE_CHARGE_START]))
+        end = time.fromisoformat(str(self._draft_input[CONF_FREE_CHARGE_END]))
+        placeholders = _schedule_confirmation(start, end)
+        placeholders.update(
+            {
+                "site_summary": str(self._draft_input.get(CONF_NAME, "")),
+                "capability_summary": (
+                    "Solar: "
+                    f"{'yes' if self._draft_input.get(self._CONF_CONFIGURE_SOLAR) else 'no'}; "
+                    f"EV: {'yes' if self._draft_input.get(self._CONF_CONFIGURE_EV) else 'no'}"
+                ),
+                "safety_summary": (
+                    "Hardware writes blocked"
+                    if self._draft_input.get(CONF_REHEARSAL_MODE)
+                    else "Hardware writes allowed by Safety Lock"
+                ),
+            }
+        )
+        return self.async_show_form(
+            step_id="reconfigure_review" if reconfigure else "review",
+            data_schema=vol.Schema(
+                {vol.Required("apply_configuration", default=False): selector.BooleanSelector()}
+            ),
+            errors=errors or {},
+            description_placeholders=placeholders,
+        )
+
+    async def _async_finish_review(
+        self, user_input: dict[str, object] | None, *, reconfigure: bool
+    ):
+        assert self._draft_input is not None
+        if not user_input or not user_input.get("apply_configuration"):
+            return self._show_review(
+                reconfigure=reconfigure,
+                errors={"apply_configuration": "apply_confirmation_required"},
+            )
+        # Capability choices are retained, but inactive optional systems cannot
+        # request automation while absent.
+        pending = self._capability_safe_data(
+            self._apply_defaults(dict(self._draft_input))
+        )
+        if reconfigure:
+            old = self._apply_defaults(dict(self._get_reconfigure_entry().data))
+            if any(pending.get(key) != old.get(key) for key in self._NORMALIZATION_KEYS):
+                pending[CONF_SIGN_CONVENTIONS_VERIFIED] = False
+        errors = self._validate_input(pending)
+        if errors:
+            self._draft_input = pending
+            return self._show_review(reconfigure=reconfigure, errors=errors)
+        self._draft_input = None
+        if pending.get(CONF_AUTOMATIC_CHARGE_ENABLED):
+            return self._show_schedule_confirmation(pending, reconfigure=reconfigure)
+        title = str(pending.pop(CONF_NAME))
+        if reconfigure:
+            return self.async_update_reload_and_abort(
+                self._get_reconfigure_entry(), title=title, data_updates=pending,
+                reason="reconfigure_successful",
+            )
+        await self.async_set_unique_id(title.strip().casefold())
+        self._abort_if_unique_id_configured()
+        return self.async_create_entry(title=title, data=pending)
+
+    async def async_step_review(self, user_input=None):
+        return await self._async_finish_review(user_input, reconfigure=False)
+
+    async def async_step_reconfigure_review(self, user_input=None):
+        if user_input is None:
+            return self._show_review(reconfigure=True)
+        return await self._async_finish_review(user_input, reconfigure=True)
+
+    async def async_step_reconfigure_site(self, user_input=None):
+        return await self._async_page("site", user_input, reconfigure=True)
+
+    async def async_step_battery(self, user_input=None):
+        return await self._async_page("battery", user_input, reconfigure=False)
+
+    async def async_step_inverter(self, user_input=None):
+        return await self._async_page("inverter", user_input, reconfigure=False)
+
+    async def async_step_grid(self, user_input=None):
+        return await self._async_page("grid", user_input, reconfigure=False)
+
+    async def async_step_tariff(self, user_input=None):
+        return await self._async_page("tariff", user_input, reconfigure=False)
+
+    async def async_step_solar(self, user_input=None):
+        return await self._async_page("solar", user_input, reconfigure=False)
+
+    async def async_step_house(self, user_input=None):
+        return await self._async_page("house", user_input, reconfigure=False)
+
+    async def async_step_car(self, user_input=None):
+        return await self._async_page("car", user_input, reconfigure=False)
+
+    async def async_step_charger(self, user_input=None):
+        return await self._async_page("charger", user_input, reconfigure=False)
+
+    async def async_step_ev_policies(self, user_input=None):
+        return await self._async_page("ev_policies", user_input, reconfigure=False)
+
+    async def async_step_recovery(self, user_input=None):
+        return await self._async_page("recovery", user_input, reconfigure=False)
+
+    async def async_step_verification(self, user_input=None):
+        return await self._async_page("verification", user_input, reconfigure=False)
+
+    async def async_step_automation(self, user_input=None):
+        return await self._async_page("automation", user_input, reconfigure=False)
+
+    async def async_step_reconfigure_battery(self, user_input=None):
+        return await self._async_page("battery", user_input, reconfigure=True)
+
+    async def async_step_reconfigure_inverter(self, user_input=None):
+        return await self._async_page("inverter", user_input, reconfigure=True)
+
+    async def async_step_reconfigure_grid(self, user_input=None):
+        return await self._async_page("grid", user_input, reconfigure=True)
+
+    async def async_step_reconfigure_tariff(self, user_input=None):
+        return await self._async_page("tariff", user_input, reconfigure=True)
+
+    async def async_step_reconfigure_solar(self, user_input=None):
+        return await self._async_page("solar", user_input, reconfigure=True)
+
+    async def async_step_reconfigure_house(self, user_input=None):
+        return await self._async_page("house", user_input, reconfigure=True)
+
+    async def async_step_reconfigure_car(self, user_input=None):
+        return await self._async_page("car", user_input, reconfigure=True)
+
+    async def async_step_reconfigure_charger(self, user_input=None):
+        return await self._async_page("charger", user_input, reconfigure=True)
+
+    async def async_step_reconfigure_ev_policies(self, user_input=None):
+        return await self._async_page("ev_policies", user_input, reconfigure=True)
+
+    async def async_step_reconfigure_recovery(self, user_input=None):
+        return await self._async_page("recovery", user_input, reconfigure=True)
+
+    async def async_step_reconfigure_verification(self, user_input=None):
+        return await self._async_page("verification", user_input, reconfigure=True)
+
+    async def async_step_reconfigure_automation(self, user_input=None):
+        return await self._async_page("automation", user_input, reconfigure=True)
 
     async def async_step_confirm_schedule(self, user_input: dict[str, object] | None = None):
         """Require explicit review of the exact 24-hour free-power window."""
@@ -1074,6 +1602,33 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             }
         )
 
+    @callback
+    def _page_schema(self, page: str, defaults: dict[str, object]) -> vol.Schema:
+        """Select one logical page from the single canonical field definition."""
+        if page == "site":
+            return vol.Schema(
+                {
+                    vol.Required(CONF_NAME, default=defaults.get(CONF_NAME, "Home Energy")):
+                        selector.TextSelector(),
+                    vol.Required(
+                        self._CONF_CONFIGURE_SOLAR,
+                        default=bool(defaults.get(self._CONF_CONFIGURE_SOLAR, False)),
+                    ): selector.BooleanSelector(),
+                    vol.Required(
+                        self._CONF_CONFIGURE_EV,
+                        default=bool(defaults.get(self._CONF_CONFIGURE_EV, False)),
+                    ): selector.BooleanSelector(),
+                }
+            )
+        wanted = set(self._PAGE_FIELDS[page])
+        return vol.Schema(
+            {
+                marker: validator
+                for marker, validator in self._schema(defaults).schema.items()
+                if marker.schema in wanted
+            }
+        )
+
     @staticmethod
     def _apply_defaults(data: dict[str, object]) -> dict[str, object]:
         """Backfill options for entries created before learning was exposed."""
@@ -1170,7 +1725,9 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             CONF_HOUSE_OCCUPANCY_MODE: data.get(
                 CONF_HOUSE_OCCUPANCY_MODE, DEFAULT_HOUSE_OCCUPANCY_MODE
             ),
+            CONF_EV_VOLTAGE: data.get(CONF_EV_VOLTAGE, DEFAULT_EV_VOLTAGE),
             CONF_EV_PHASE_COUNT: data.get(CONF_EV_PHASE_COUNT, DEFAULT_EV_PHASE_COUNT),
+            CONF_EV_MIN_CURRENT: data.get(CONF_EV_MIN_CURRENT, DEFAULT_EV_MIN_CURRENT),
             CONF_EV_MAX_CURRENT: data.get(CONF_EV_MAX_CURRENT, DEFAULT_EV_MAX_CURRENT),
             CONF_EV_CHARGE_PATH: data.get(CONF_EV_CHARGE_PATH, DEFAULT_EV_CHARGE_PATH),
             CONF_EV_SMART_SOCKET_CURRENT_LIMIT: data.get(

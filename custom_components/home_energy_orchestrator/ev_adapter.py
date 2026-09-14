@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from homeassistant.core import HomeAssistant
 
 from .const import (
+    CONF_CONFIGURE_EV,
     CONF_EV_AUTOMATIC_CONTROL_ENABLED,
     CONF_EV_CHARGE_PATH,
     CONF_EV_CONTROL_COMMISSIONED,
@@ -140,6 +141,10 @@ def ev_control_gate_status(
     config: dict[str, object], *, adapter_connected: bool = False
 ) -> str:
     """Return an honest, ordered EV authorization status."""
+    # Missing means a pre-capability entry and must retain its historical gate
+    # ordering.  Only an explicit user choice disables the EV subsystem.
+    if config.get(CONF_CONFIGURE_EV) is False:
+        return "disabled"
     if not config.get(CONF_EV_AUTOMATIC_CONTROL_ENABLED, False):
         return "disabled"
     if config.get(CONF_REHEARSAL_MODE, True):
