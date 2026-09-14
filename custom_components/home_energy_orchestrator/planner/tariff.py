@@ -22,6 +22,51 @@ class TariffGuardDecision:
     reason: str
 
 
+@dataclass(frozen=True, slots=True)
+class DailyFinancialSummary:
+    """Separate import charges, export earnings, and the resulting net cost."""
+
+    import_energy_cost: float
+    supply_charge: float
+    gross_cost: float
+    standard_export_kwh: float
+    boosted_export_kwh: float
+    export_revenue: float
+    zerohero_credit: float
+    net_cost: float
+
+
+@dataclass(frozen=True, slots=True)
+class ZeroHeroCreditDecision:
+    """Completed-window eligibility for one daily ZEROHERO credit."""
+
+    credit: float
+    status: str
+
+
+def calculate_zerohero_credit(
+    *,
+    hourly_import_kwh: tuple[float, ...],
+    expected_hour_count: int,
+    threshold_kwh_per_hour: float,
+    configured_credit: float,
+    window_complete: bool,
+) -> ZeroHeroCreditDecision:
+    """Award one configured credit only after every expected hour qualifies."""
+    values = (*hourly_import_kwh, threshold_kwh_per_hour, configured_credit)
+    if not all(isfinite(value) and value >= 0 for value in values):
+        raise ValueError("ZEROHERO credit inputs must be finite and non-negative")
+    if expected_hour_count < 1:
+        raise ValueError("expected_hour_count must be positive")
+    if not window_complete:
+        return ZeroHeroCreditDecision(0.0, "pending_window_completion")
+    if len(hourly_import_kwh) != expected_hour_count:
+        return ZeroHeroCreditDecision(0.0, "window_evidence_incomplete")
+    if any(value > threshold_kwh_per_hour for value in hourly_import_kwh):
+        return ZeroHeroCreditDecision(0.0, "threshold_exceeded")
+    return ZeroHeroCreditDecision(configured_credit, "earned")
+
+
 def calculate_daily_energy_cost(
     *,
     total_import_kwh: float,
@@ -61,6 +106,78 @@ def calculate_daily_energy_cost(
         + min(free_window_import_kwh, free_allowance_kwh) * offpeak_rate
         + chargeable_free * offpeak_balance_rate
         + shoulder * shoulder_rate
+    )
+
+
+def calculate_daily_financials(
+    *,
+    total_import_kwh: float,
+    free_window_import_kwh: float,
+    peak_import_kwh: float,
+    free_allowance_kwh: float,
+    peak_rate: float,
+    offpeak_rate: float,
+    offpeak_balance_rate: float,
+    shoulder_rate: float,
+    daily_charge: float,
+    total_export_kwh: float,
+    boosted_window_export_kwh: float,
+    boosted_export_allowance_kwh: float,
+    export_rate: float,
+    boosted_export_rate: float,
+    zerohero_credit: float = 0.0,
+) -> DailyFinancialSummary:
+    """Return a non-double-counted daily import/export financial summary.
+
+    The boosted rate replaces the standard rate for the eligible portion of
+    export inside the configured bonus window. Window energy above the daily
+    boosted allowance, and all export outside the window, receives the standard
+    rate. A window counter can briefly exceed the daily counter after recovery;
+    clamping to measured daily export prevents invented revenue.
+    """
+    export_values = (
+        total_export_kwh,
+        boosted_window_export_kwh,
+        boosted_export_allowance_kwh,
+        export_rate,
+        boosted_export_rate,
+        zerohero_credit,
+    )
+    if not all(isfinite(value) for value in export_values) or any(
+        value < 0 for value in export_values
+    ):
+        raise ValueError("export financial inputs must be finite and non-negative")
+
+    gross_cost = calculate_daily_energy_cost(
+        total_import_kwh=total_import_kwh,
+        free_window_import_kwh=free_window_import_kwh,
+        peak_import_kwh=peak_import_kwh,
+        free_allowance_kwh=free_allowance_kwh,
+        peak_rate=peak_rate,
+        offpeak_rate=offpeak_rate,
+        offpeak_balance_rate=offpeak_balance_rate,
+        shoulder_rate=shoulder_rate,
+        daily_charge=daily_charge,
+    )
+    boosted_export = min(
+        total_export_kwh,
+        boosted_window_export_kwh,
+        boosted_export_allowance_kwh,
+    )
+    standard_export = max(total_export_kwh - boosted_export, 0.0)
+    export_revenue = (
+        boosted_export * boosted_export_rate + standard_export * export_rate
+    )
+    import_energy_cost = max(gross_cost - daily_charge, 0.0)
+    return DailyFinancialSummary(
+        import_energy_cost=import_energy_cost,
+        supply_charge=daily_charge,
+        gross_cost=gross_cost,
+        standard_export_kwh=standard_export,
+        boosted_export_kwh=boosted_export,
+        export_revenue=export_revenue,
+        zerohero_credit=zerohero_credit,
+        net_cost=gross_cost - export_revenue - zerohero_credit,
     )
 
 

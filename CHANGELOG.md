@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.12.22 — Accurate daily financial accounting
+
+- Persist the transition from positive grid flow to zero import immediately,
+  even when the accumulated energy has not advanced far enough for the normal
+  write threshold.
+- Prevent a reload or restart during continuous export from restoring an old
+  positive-flow anchor and fabricating up to the bounded telemetry-gap interval
+  as paid grid import.
+- Apply the same checkpoint rule to the daily, free-window, peak, ZEROHERO
+  import, and boosted-export accumulators. Add unit and integration regression
+  coverage for the import-to-export reload sequence.
+- Calculate the estimate from the commissioned cumulative daily-import sensor
+  when one is mapped, matching the source exposed by the ledger instead of an
+  incomplete parallel internal daily total.
+- Add a persisted daily grid-export meter and separate estimated import energy
+  cost, supply charge, export revenue, gross cost, and net cost sensors. Apply
+  the configured boosted rate once to eligible bonus-window export up to the
+  configured allowance; all remaining export uses the standard rate.
+- Add a configurable ZEROHERO daily credit, defaulting to $1.00. Apply it once,
+  and only after the complete configured window has the expected number of
+  hourly buckets and every bucket is at or below the configured threshold.
+  Expose pending, incomplete, exceeded, and earned status separately.
+
 ## 0.12.21 — Recover free charging after restart
 
 - Re-evaluate Local Modbus battery charging from the current configured free

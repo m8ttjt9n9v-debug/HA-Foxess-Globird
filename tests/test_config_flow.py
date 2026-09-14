@@ -14,10 +14,12 @@ from custom_components.home_energy_orchestrator.const import (
     CONF_EV_BEFORE_EXPORT_SOC_TARGET,
     CONF_FOXESS_CONTROL_OWNER,
     CONF_FREE_CHARGE_SCHEDULE_CONFIRMED,
+    CONF_ZEROHERO_DAILY_CREDIT,
     DEFAULT_AUTOMATIC_CHARGE_ENABLED,
     DEFAULT_EV_BEFORE_EXPORT_ENABLED,
     DEFAULT_EV_BEFORE_EXPORT_SOC_TARGET,
     DEFAULT_FOXESS_CONTROL_OWNER,
+    DEFAULT_ZEROHERO_DAILY_CREDIT,
     DOMAIN,
 )
 
@@ -111,6 +113,28 @@ async def test_invalid_page_retains_submitted_values(hass):
     assert result["errors"] == {"battery_floor_percent": "invalid_site_limits"}
     markers = {marker.schema: marker for marker in result["data_schema"].schema}
     assert markers["battery_floor_percent"].default() == -1
+
+
+async def test_tariff_page_exposes_and_validates_zerohero_daily_credit(hass):
+    result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": SOURCE_USER})
+    result = await _open_battery_page(hass, result)
+    for step in ("battery", "inverter", "grid"):
+        assert result["step_id"] == step
+        result = await _submit_page_defaults(hass, result)
+
+    assert result["step_id"] == "tariff"
+    markers = {marker.schema: marker for marker in result["data_schema"].schema}
+    assert markers[CONF_ZEROHERO_DAILY_CREDIT].default() == DEFAULT_ZEROHERO_DAILY_CREDIT
+    values = {}
+    for marker in result["data_schema"].schema:
+        if marker.schema in ENTRY_DATA:
+            values[marker.schema] = ENTRY_DATA[marker.schema]
+        elif marker.default is not vol.UNDEFINED:
+            values[marker.schema] = marker.default()
+    values[CONF_ZEROHERO_DAILY_CREDIT] = -1
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], user_input=values)
+    assert result["step_id"] == "tariff"
+    assert result["errors"] == {CONF_ZEROHERO_DAILY_CREDIT: "invalid_site_limits"}
 
 
 async def test_early_pages_do_not_validate_later_ev_limits(hass):

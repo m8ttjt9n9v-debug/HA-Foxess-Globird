@@ -37,6 +37,25 @@ def test_accumulator_resets_on_local_midnight_and_restores_same_day() -> None:
     assert restored.imported_kwh == 0.0
 
 
+def test_accumulator_requests_checkpoint_when_import_ends() -> None:
+    """Persist the zero-flow anchor so a reload cannot invent later import."""
+    meter = DailyImportAccumulator(max_gap_hours=0.25)
+    importing = datetime(2026, 9, 10, 13, 58, tzinfo=TZ)
+    exporting = datetime(2026, 9, 10, 14, 0, tzinfo=TZ)
+
+    meter.observe(5.5, importing)
+    assert meter.checkpoint_required is False
+
+    meter.observe(-0.05, exporting)
+    assert meter.checkpoint_required is True
+
+    restored = DailyImportAccumulator(max_gap_hours=0.25)
+    restored.restore(meter.to_payload(), exporting)
+    before_reload = restored.imported_kwh
+    restored.observe(-0.05, datetime(2026, 9, 10, 15, 20, tzinfo=TZ))
+    assert restored.imported_kwh == before_reload
+
+
 def test_window_accumulator_counts_only_window_overlap() -> None:
     meter = WindowImportAccumulator(
         max_gap_hours=3.0,

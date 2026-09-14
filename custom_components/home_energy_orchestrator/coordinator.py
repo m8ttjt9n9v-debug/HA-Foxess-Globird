@@ -38,7 +38,9 @@ from .const import (
     CONF_EV_PHASE_COUNT,
     CONF_EV_SOC,
     CONF_EV_VOLTAGE,
+    CONF_EXPORT_ALLOWANCE_KWH,
     CONF_EXPORT_LIMIT_KW,
+    CONF_EXPORT_RATE,
     CONF_FREE_CHARGE_END,
     CONF_FREE_CHARGE_START,
     CONF_GRID_POWER,
@@ -65,16 +67,20 @@ from .const import (
     CONF_SITE_PHASE_COUNT,
     CONF_SOLAR_POWER,
     CONF_SOLAR_POWER_DIRECTION,
+    CONF_SUPER_EXPORT_RATE,
     CONF_TELEMETRY_MAX_AGE_SECONDS,
     CONF_ZERO_IMPORT_CONFIRM_MINUTES,
     CONF_ZERO_IMPORT_THRESHOLD_KW,
+    CONF_ZEROHERO_DAILY_CREDIT,
     DEFAULT_BATTERY_CHARGE_POSITIVE,
     DEFAULT_BONUS_WINDOW_END,
     DEFAULT_BONUS_WINDOW_START,
     DEFAULT_DAILY_CHARGE,
     DEFAULT_DAILY_FREE_ALLOWANCE_KWH,
     DEFAULT_EV_PHASE_COUNT,
+    DEFAULT_EXPORT_ALLOWANCE_KWH,
     DEFAULT_EXPORT_LIMIT_KW,
+    DEFAULT_EXPORT_RATE,
     DEFAULT_FREE_CHARGE_END,
     DEFAULT_FREE_CHARGE_START,
     DEFAULT_HOUSE_AWAY_CONFIRMATION_HOURS,
@@ -93,9 +99,11 @@ from .const import (
     DEFAULT_SITE_GRID_CURRENT_DIRECTION,
     DEFAULT_SITE_PHASE_COUNT,
     DEFAULT_SOLAR_POWER_DIRECTION,
+    DEFAULT_SUPER_EXPORT_RATE,
     DEFAULT_TELEMETRY_MAX_AGE_SECONDS,
     DEFAULT_ZERO_IMPORT_CONFIRM_MINUTES,
     DEFAULT_ZERO_IMPORT_THRESHOLD_KW,
+    DEFAULT_ZEROHERO_DAILY_CREDIT,
     DOMAIN,
     GRID_POSITIVE_EXPORT,
     GRID_POSITIVE_IMPORT,
@@ -123,7 +131,11 @@ from .planner.learning import (
     select_house_cycle_budget,
 )
 from .planner.ledger import calculate_ledger
-from .planner.tariff import calculate_daily_energy_cost, calculate_tariff_guard
+from .planner.tariff import (
+    calculate_daily_financials,
+    calculate_tariff_guard,
+    calculate_zerohero_credit,
+)
 from .telemetry import (
     NormalizedSample,
     NormalizedTelemetry,
@@ -154,6 +166,7 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
         self.heater_sampler = self._create_heater_sampler(config)
         self._zero_import_since: datetime | None = None
         self.daily_import = DailyImportAccumulator()
+        self.daily_export = DailyImportAccumulator()
         self.free_window_import = WindowImportAccumulator(
             window_start=self._configured_time(CONF_FREE_CHARGE_START, DEFAULT_FREE_CHARGE_START),
             window_end=self._configured_time(CONF_FREE_CHARGE_END, DEFAULT_FREE_CHARGE_END),
@@ -174,6 +187,10 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
             hass, 1, f"{DOMAIN}.{entry_id}.daily_import", private=True
         )
         self._daily_import_last_saved: float | None = None
+        self._daily_export_store: Store[dict[str, object]] = Store(
+            hass, 1, f"{DOMAIN}.{entry_id}.daily_export", private=True
+        )
+        self._daily_export_last_saved: float | None = None
         self._free_import_store: Store[dict[str, object]] = Store(
             hass, 1, f"{DOMAIN}.{entry_id}.free_window_import", private=True
         )
@@ -235,9 +252,10 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
                 )
 
     async def async_load_daily_import(self) -> None:
-        """Load the persisted same-day import accumulator."""
+        """Load the persisted same-day tariff accumulators."""
         self.daily_import.restore(await self._daily_import_store.async_load(), dt_util.now())
         now = dt_util.now()
+        self.daily_export.restore(await self._daily_export_store.async_load(), now)
         self.free_window_import.restore(await self._free_import_store.async_load(), now)
         self.peak_import.restore(await self._peak_import_store.async_load(), now)
         self.zerohero_import.restore(await self._zerohero_import_store.async_load(), now)
@@ -493,6 +511,30 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
             start_at -= timedelta(days=1)
         return max(0.0, (now - start_at).total_seconds() / 3600)
 
+    def _zerohero_credit_window_state(self, now: datetime) -> tuple[bool, int]:
+        """Return completion and clock-hour count for today's credit window."""
+        start = self._configured_time(CONF_BONUS_WINDOW_START, DEFAULT_BONUS_WINDOW_START)
+        end = self._configured_time(CONF_BONUS_WINDOW_END, DEFAULT_BONUS_WINDOW_END)
+        if start == end:
+            return False, 0
+        current = now.timetz().replace(tzinfo=None)
+        start_at = datetime.combine(now.date(), start, tzinfo=now.tzinfo)
+        end_at = datetime.combine(now.date(), end, tzinfo=now.tzinfo)
+        if end <= start:
+            if current < end:
+                start_at -= timedelta(days=1)
+            else:
+                end_at += timedelta(days=1)
+            if end <= current < start:
+                start_at -= timedelta(days=1)
+                end_at -= timedelta(days=1)
+        cursor = start_at.replace(minute=0, second=0, microsecond=0)
+        expected_hours = 0
+        while cursor < end_at:
+            expected_hours += 1
+            cursor += timedelta(hours=1)
+        return now >= end_at, expected_hours
+
     def _zero_import_duration_minutes(self, grid_import_kw: float | None, now: datetime) -> float:
         """Track only continuous qualified zero-import time for the bonus guard."""
         threshold = self._configured_nonnegative(
@@ -522,6 +564,11 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
         free_import = (
             self.free_window_import.imported_kwh if self.free_window_import.last_at else None
         )
+        daily_export = self.daily_export.imported_kwh if self.daily_export.last_at else None
+        boosted_export = (
+            self.zerohero_export.imported_kwh if self.zerohero_export.last_at else None
+        )
+        export_accounting_available = daily_export is not None and boosted_export is not None
         if daily_import is None or free_import is None:
             return replace(
                 ledger,
@@ -529,6 +576,8 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
                 daily_import_kwh=daily_import,
                 daily_import_source=daily_source if daily_import is not None else "unavailable",
                 free_window_import_kwh=free_import,
+                daily_export_kwh=daily_export,
+                boosted_window_export_kwh=boosted_export,
             )
         try:
             allowance = self._configured_nonnegative(
@@ -555,19 +604,20 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
                 zerohero_hourly_import_kwh=tuple(self.zerohero_import.hourly_import_kwh.values()),
                 zerohero_window_elapsed_hours=self._bonus_window_elapsed_hours(now),
             )
-        except (TypeError, ValueError):
-            return replace(ledger, tariff_reason="tariff_configuration_invalid")
-        return replace(
-            ledger,
-            free_energy_remaining_kwh=decision.free_energy_remaining_kwh,
-            free_charge_allowed_kwh=decision.free_charge_energy_kwh,
-            bonus_zero_import_allowed=decision.bonus_zero_import_allowed,
-            tariff_reason=decision.reason,
-            daily_import_kwh=daily_import,
-            daily_import_source=daily_source,
-            free_window_import_kwh=free_import,
-            estimated_energy_cost=calculate_daily_energy_cost(
-                total_import_kwh=self.daily_import.imported_kwh,
+            window_complete, expected_hours = self._zerohero_credit_window_state(now)
+            credit = calculate_zerohero_credit(
+                hourly_import_kwh=tuple(self.zerohero_import.hourly_import_kwh.values()),
+                expected_hour_count=expected_hours,
+                threshold_kwh_per_hour=self._configured_nonnegative(
+                    CONF_ZERO_IMPORT_THRESHOLD_KW, DEFAULT_ZERO_IMPORT_THRESHOLD_KW
+                ),
+                configured_credit=self._configured_nonnegative(
+                    CONF_ZEROHERO_DAILY_CREDIT, DEFAULT_ZEROHERO_DAILY_CREDIT
+                ),
+                window_complete=window_complete,
+            )
+            financials = calculate_daily_financials(
+                total_import_kwh=daily_import,
                 free_window_import_kwh=free_import,
                 peak_import_kwh=self.peak_import.imported_kwh,
                 free_allowance_kwh=allowance,
@@ -579,8 +629,52 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
                 shoulder_rate=self._configured_nonnegative(
                     CONF_SHOULDER_RATE, DEFAULT_SHOULDER_RATE
                 ),
-                daily_charge=self._configured_nonnegative(CONF_DAILY_CHARGE, DEFAULT_DAILY_CHARGE),
+                daily_charge=self._configured_nonnegative(
+                    CONF_DAILY_CHARGE, DEFAULT_DAILY_CHARGE
+                ),
+                total_export_kwh=daily_export if daily_export is not None else 0.0,
+                boosted_window_export_kwh=(
+                    boosted_export if boosted_export is not None else 0.0
+                ),
+                boosted_export_allowance_kwh=self._configured_nonnegative(
+                    CONF_EXPORT_ALLOWANCE_KWH, DEFAULT_EXPORT_ALLOWANCE_KWH
+                ),
+                export_rate=self._configured_nonnegative(
+                    CONF_EXPORT_RATE, DEFAULT_EXPORT_RATE
+                ),
+                boosted_export_rate=self._configured_nonnegative(
+                    CONF_SUPER_EXPORT_RATE, DEFAULT_SUPER_EXPORT_RATE
+                ),
+                zerohero_credit=credit.credit,
+            )
+        except (TypeError, ValueError):
+            return replace(ledger, tariff_reason="tariff_configuration_invalid")
+        return replace(
+            ledger,
+            free_energy_remaining_kwh=decision.free_energy_remaining_kwh,
+            free_charge_allowed_kwh=decision.free_charge_energy_kwh,
+            bonus_zero_import_allowed=decision.bonus_zero_import_allowed,
+            tariff_reason=decision.reason,
+            daily_import_kwh=daily_import,
+            daily_import_source=daily_source,
+            free_window_import_kwh=free_import,
+            daily_export_kwh=daily_export,
+            boosted_window_export_kwh=boosted_export,
+            standard_rate_export_kwh=(
+                financials.standard_export_kwh if export_accounting_available else None
             ),
+            boosted_rate_export_kwh=(
+                financials.boosted_export_kwh if export_accounting_available else None
+            ),
+            estimated_energy_cost=financials.gross_cost,
+            estimated_import_energy_cost=financials.import_energy_cost,
+            daily_supply_charge=financials.supply_charge,
+            estimated_export_revenue=(
+                financials.export_revenue if export_accounting_available else None
+            ),
+            zerohero_credit=credit.credit,
+            zerohero_credit_status=credit.status,
+            estimated_net_cost=financials.net_cost if export_accounting_available else None,
         )
 
     def _power(self, entity_id: str | None) -> float | None:
@@ -827,6 +921,7 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
         now = dt_util.now()
         self.telemetry = self._normalized_telemetry(now)
         grid = self.telemetry.grid_power.value
+        export_kw = None if grid is None else max(-grid, 0.0)
         if self.daily_import.observe(grid, now):
             # Persist at useful increments rather than writing HA storage on
             # every 30-second coordinator refresh.
@@ -834,14 +929,25 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
                 self._daily_import_last_saved is None
                 or self.daily_import.imported_kwh < self._daily_import_last_saved
                 or self.daily_import.imported_kwh - self._daily_import_last_saved >= 0.05
+                or self.daily_import.checkpoint_required
             ):
                 await self._daily_import_store.async_save(self.daily_import.to_payload())
                 self._daily_import_last_saved = self.daily_import.imported_kwh
+        if self.daily_export.observe(export_kw, now):
+            if (
+                self._daily_export_last_saved is None
+                or self.daily_export.imported_kwh < self._daily_export_last_saved
+                or self.daily_export.imported_kwh - self._daily_export_last_saved >= 0.05
+                or self.daily_export.checkpoint_required
+            ):
+                await self._daily_export_store.async_save(self.daily_export.to_payload())
+                self._daily_export_last_saved = self.daily_export.imported_kwh
         if self.free_window_import.observe(grid, now):
             if (
                 self._free_import_last_saved is None
                 or self.free_window_import.imported_kwh < self._free_import_last_saved
                 or self.free_window_import.imported_kwh - self._free_import_last_saved >= 0.05
+                or self.free_window_import.checkpoint_required
             ):
                 await self._free_import_store.async_save(self.free_window_import.to_payload())
                 self._free_import_last_saved = self.free_window_import.imported_kwh
@@ -850,6 +956,7 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
                 self._peak_import_last_saved is None
                 or self.peak_import.imported_kwh < self._peak_import_last_saved
                 or self.peak_import.imported_kwh - self._peak_import_last_saved >= 0.05
+                or self.peak_import.checkpoint_required
             ):
                 await self._peak_import_store.async_save(self.peak_import.to_payload())
                 self._peak_import_last_saved = self.peak_import.imported_kwh
@@ -860,16 +967,17 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
                 self._zerohero_import_last_saved is None
                 or zerohero_total < last_zerohero_total
                 or zerohero_total - last_zerohero_total >= 0.01
+                or self.zerohero_import.checkpoint_required
             ):
                 await self._zerohero_import_store.async_save(self.zerohero_import.to_payload())
                 self._zerohero_import_last_saved = zerohero_total
-        export_kw = None if grid is None else max(-grid, 0.0)
         if self.zerohero_export.observe(export_kw, now):
             exported = self.zerohero_export.imported_kwh
             if (
                 self._zerohero_export_last_saved is None
                 or exported < self._zerohero_export_last_saved
                 or exported - self._zerohero_export_last_saved >= 0.01
+                or self.zerohero_export.checkpoint_required
             ):
                 await self._zerohero_export_store.async_save(
                     self.zerohero_export.to_payload()

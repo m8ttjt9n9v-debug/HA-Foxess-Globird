@@ -28,6 +28,25 @@ layers around the proven algorithm, not replacement algorithms.
 
 ## Current software truth
 
+- Persisted energy meters immediately checkpoint a positive-flow-to-zero
+  transition. Energy-delta write thresholds may reduce routine storage writes,
+  but must never leave a positive import/export anchor behind after the
+  canonical flow has stopped; otherwise a reload can manufacture energy from
+  the bounded gap integration interval. When a native cumulative daily-import
+  sensor is commissioned, both the exposed ledger total and cost estimate use
+  it; the local accumulator is only the fallback daily total.
+- Daily financial reporting keeps import charges, the supply charge, and export
+  earnings separate. Boosted-window export receives the configured ZEROHERO
+  rate only up to the lesser of measured window export, measured daily export,
+  and the configured daily allowance. All other export receives the configured
+  standard rate. Net cost is gross cost minus export revenue; it is an HEO
+  telemetry estimate, not the retailer's final bill.
+- The configurable ZEROHERO daily credit defaults to $1.00 and is deducted once
+  from estimated net cost only after the full configured window is complete,
+  all expected clock-hour buckets were observed, and no bucket exceeds the
+  configured per-hour import threshold. It is never multiplied by the number
+  of qualifying hours and is not awarded early from the live debounce guard.
+
 - HEO is observer-by-default.
 - The verified Working Single Phase Pilot Site ZEROHERO export port is behind Local Modbus ownership,
   the FoxESS automatic gate, the independent export toggle, and the Safety

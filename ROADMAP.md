@@ -51,7 +51,13 @@ Status here describes behavioral parity, not merely the presence of code.
 ## Completed and retained
 
 - [x] Observer ledger with unit/sign normalization and persisted daily,
-  free-window, and ZEROHERO interval meters.
+  free-window, and ZEROHERO interval meters. Positive-flow-to-zero transitions
+  are checkpointed independently of energy-delta write thresholds so a reload
+  during export cannot restore a stale import anchor and fabricate energy.
+  Daily export, standard/boosted revenue, import energy cost, supply charge,
+  gross cost, and net cost are exposed as separate auditable values. The
+  configurable ZEROHERO daily credit is applied once only after complete
+  per-hour window evidence qualifies.
 - [x] Bounded canonical telemetry layer with explicit grid, battery, solar, and
   service-current directions; W/kW/MW conversion; timestamp freshness and
   provenance; pilot paired battery magnitudes; migration lock; shared automatic

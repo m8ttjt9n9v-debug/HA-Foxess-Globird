@@ -56,8 +56,20 @@ views:
             entity: sensor.home_energy_daily_import
             name: Grid import today
           - type: tile
+            entity: sensor.home_energy_daily_export
+            name: Grid export today
+          - type: tile
             entity: sensor.home_energy_estimated_energy_cost
-            name: Estimated cost today
+            name: Gross cost today
+          - type: tile
+            entity: sensor.home_energy_estimated_export_revenue
+            name: Export revenue today
+          - type: tile
+            entity: sensor.home_energy_zerohero_credit
+            name: ZEROHERO credit today
+          - type: tile
+            entity: sensor.home_energy_estimated_net_cost
+            name: Net cost today
       - type: grid
         cards:
           - type: heading
@@ -518,7 +530,28 @@ views:
             name: ZEROHERO guard
           - type: tile
             entity: sensor.home_energy_estimated_energy_cost
-            name: Estimated cost today
+            name: Gross cost today
+          - type: tile
+            entity: sensor.home_energy_estimated_import_energy_cost
+            name: Import energy cost
+          - type: tile
+            entity: sensor.home_energy_daily_supply_charge
+            name: Daily supply charge
+          - type: tile
+            entity: sensor.home_energy_daily_export
+            name: Grid export today
+          - type: tile
+            entity: sensor.home_energy_estimated_export_revenue
+            name: Export revenue today
+          - type: tile
+            entity: sensor.home_energy_zerohero_credit_status
+            name: ZEROHERO credit status
+          - type: tile
+            entity: sensor.home_energy_zerohero_credit
+            name: ZEROHERO credit today
+          - type: tile
+            entity: sensor.home_energy_estimated_net_cost
+            name: Net cost today
 
   - type: sections
     max_columns: 2

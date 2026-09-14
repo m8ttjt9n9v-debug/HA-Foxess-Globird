@@ -22,6 +22,7 @@ class DailyImportAccumulator:
     imported_kwh: float = 0.0
     last_at: datetime | None = None
     last_import_kw: float | None = None
+    checkpoint_required: bool = False
 
     def restore(self, payload: dict[str, object] | None, now: datetime) -> None:
         """Restore same-day state; discard stale or malformed data safely."""
@@ -29,6 +30,7 @@ class DailyImportAccumulator:
         self.imported_kwh = 0.0
         self.last_at = None
         self.last_import_kw = None
+        self.checkpoint_required = False
         if not isinstance(payload, dict) or payload.get("date") != now.date().isoformat():
             return
         try:
@@ -50,6 +52,7 @@ class DailyImportAccumulator:
 
     def observe(self, import_kw: float | None, now: datetime) -> bool:
         """Add one reading and return whether the state changed."""
+        self.checkpoint_required = False
         if import_kw is None or not isfinite(import_kw):
             return False
         import_kw = max(0.0, import_kw)
@@ -58,6 +61,7 @@ class DailyImportAccumulator:
             self.imported_kwh = 0.0
             self.last_at = None
             self.last_import_kw = None
+        previous_import_kw = self.last_import_kw
         if self.last_at is not None and self.last_import_kw is not None:
             elapsed_hours = (now - self.last_at).total_seconds() / 3600
             if elapsed_hours > 0:
@@ -65,6 +69,9 @@ class DailyImportAccumulator:
                 self.imported_kwh += (self.last_import_kw + import_kw) / 2 * elapsed_hours
         self.last_at = now
         self.last_import_kw = import_kw
+        self.checkpoint_required = (
+            previous_import_kw is not None and previous_import_kw > 0 and import_kw == 0
+        )
         return True
 
     def to_payload(self) -> dict[str, object]:
@@ -86,6 +93,7 @@ class WindowImportAccumulator(DailyImportAccumulator):
 
     def observe(self, import_kw: float | None, now: datetime) -> bool:
         """Integrate only the overlap between the sample interval and the window."""
+        self.checkpoint_required = False
         if import_kw is None or not isfinite(import_kw):
             return False
         import_kw = max(0.0, import_kw)
@@ -94,6 +102,7 @@ class WindowImportAccumulator(DailyImportAccumulator):
             self.imported_kwh = 0.0
             self.last_at = None
             self.last_import_kw = None
+        previous_import_kw = self.last_import_kw
         if self.last_at is not None and self.last_import_kw is not None:
             elapsed_seconds = (now - self.last_at).total_seconds()
             if elapsed_seconds > 0:
@@ -110,6 +119,9 @@ class WindowImportAccumulator(DailyImportAccumulator):
                     self.imported_kwh += (self.last_import_kw + import_kw) / 2 * overlap_hours
         self.last_at = now
         self.last_import_kw = import_kw
+        self.checkpoint_required = (
+            previous_import_kw is not None and previous_import_kw > 0 and import_kw == 0
+        )
         return True
 
 
@@ -124,6 +136,7 @@ class HourlyWindowImportAccumulator:
     hourly_import_kwh: dict[str, float] | None = None
     last_at: datetime | None = None
     last_import_kw: float | None = None
+    checkpoint_required: bool = False
 
     def __post_init__(self) -> None:
         if self.hourly_import_kwh is None:
@@ -135,6 +148,7 @@ class HourlyWindowImportAccumulator:
         self.hourly_import_kwh = {}
         self.last_at = None
         self.last_import_kw = None
+        self.checkpoint_required = False
         if not isinstance(payload, dict) or payload.get("date") != now.date().isoformat():
             return
         try:
@@ -158,6 +172,7 @@ class HourlyWindowImportAccumulator:
 
     def observe(self, import_kw: float | None, now: datetime) -> bool:
         """Integrate one reading into the affected local hourly buckets."""
+        self.checkpoint_required = False
         if import_kw is None or not isfinite(import_kw):
             return False
         import_kw = max(0.0, import_kw)
@@ -166,6 +181,7 @@ class HourlyWindowImportAccumulator:
             self.hourly_import_kwh = {}
             self.last_at = None
             self.last_import_kw = None
+        previous_import_kw = self.last_import_kw
         if self.last_at is not None and self.last_import_kw is not None:
             elapsed_seconds = (now - self.last_at).total_seconds()
             if elapsed_seconds > 0:
@@ -180,6 +196,9 @@ class HourlyWindowImportAccumulator:
                     )
         self.last_at = now
         self.last_import_kw = import_kw
+        self.checkpoint_required = (
+            previous_import_kw is not None and previous_import_kw > 0 and import_kw == 0
+        )
         return True
 
     def to_payload(self) -> dict[str, object]:

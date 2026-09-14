@@ -40,9 +40,30 @@ The default rate profile is configurable during setup:
 | Shoulder | all remaining time | $0.528/kWh |
 | Daily supply charge | every day | $2.035/day |
 
-The integration exposes an estimated daily import cost from these counters. It
-is an estimate until a complete local day has been observed; it is not a copy
-of the retailer's bill or a claim about export credit.
+The integration exposes separate estimated financial values:
+
+- import energy cost, excluding the daily supply charge;
+- daily supply charge;
+- gross cost, which is the preceding two values added together;
+- grid export today and estimated export revenue; and
+- the ZEROHERO daily credit and its qualification status; and
+- net cost, which is gross cost minus export revenue and any earned credit.
+
+The daily export meter integrates canonical positive export from local
+midnight. Within the configured boosted window, the ZEROHERO rate replaces the
+standard export rate for no more than the configured daily boosted allowance.
+Export beyond that allowance and export outside the window receive the standard
+rate. The meter is persisted across reloads and restarts, but starts at zero
+when this feature is first installed and cannot reconstruct export from earlier
+that day. These values are estimates until a complete local day has been
+observed; they are not copies of the retailer's final bill.
+
+The ZEROHERO daily credit defaults to $1.00 and is configurable. HEO applies it
+once per day only after the complete configured bonus window has been observed,
+the expected number of clock-hour buckets is present, and every bucket is at or
+below the configured import-energy threshold. Before then its status is
+`pending_window_completion`; missing hour evidence and an exceeded threshold
+remain explicit and receive no estimated credit.
 
 ## ZEROHERO versus the engineering guard
 

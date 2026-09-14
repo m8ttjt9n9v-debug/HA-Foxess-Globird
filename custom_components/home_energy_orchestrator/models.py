@@ -48,4 +48,14 @@ class EnergyLedger:
     daily_import_kwh: float | None = None
     daily_import_source: str = "unavailable"
     free_window_import_kwh: float | None = None
+    daily_export_kwh: float | None = None
+    boosted_window_export_kwh: float | None = None
+    standard_rate_export_kwh: float | None = None
+    boosted_rate_export_kwh: float | None = None
     estimated_energy_cost: float | None = None
+    estimated_import_energy_cost: float | None = None
+    daily_supply_charge: float | None = None
+    estimated_export_revenue: float | None = None
+    zerohero_credit: float | None = None
+    zerohero_credit_status: str = "pending_window_completion"
+    estimated_net_cost: float | None = None

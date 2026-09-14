@@ -347,9 +347,52 @@ DESCRIPTIONS = (
         suggested_display_precision=2,
     ),
     SensorEntityDescription(
+        key="daily_export",
+        name="Grid Export Today",
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        device_class="energy",
+        state_class="total_increasing",
+        suggested_display_precision=2,
+    ),
+    SensorEntityDescription(
         key="estimated_energy_cost",
-        name="Estimated Energy Cost Today",
+        name="Estimated Gross Cost Today",
         icon="mdi:cash",
+        suggested_display_precision=2,
+    ),
+    SensorEntityDescription(
+        key="estimated_import_energy_cost",
+        name="Estimated Import Energy Cost Today",
+        icon="mdi:transmission-tower-import",
+        suggested_display_precision=2,
+    ),
+    SensorEntityDescription(
+        key="daily_supply_charge",
+        name="Daily Supply Charge",
+        icon="mdi:currency-usd",
+        suggested_display_precision=2,
+    ),
+    SensorEntityDescription(
+        key="estimated_export_revenue",
+        name="Estimated Export Revenue Today",
+        icon="mdi:transmission-tower-export",
+        suggested_display_precision=2,
+    ),
+    SensorEntityDescription(
+        key="zerohero_credit",
+        name="ZEROHERO Credit Today",
+        icon="mdi:cash-plus",
+        suggested_display_precision=2,
+    ),
+    SensorEntityDescription(
+        key="zerohero_credit_status",
+        name="ZEROHERO Credit Status",
+        icon="mdi:cash-check",
+    ),
+    SensorEntityDescription(
+        key="estimated_net_cost",
+        name="Estimated Net Cost Today",
+        icon="mdi:cash-sync",
         suggested_display_precision=2,
     ),
     SensorEntityDescription(
@@ -747,12 +790,37 @@ class EnergySensor(CoordinatorEntity[EnergyCoordinator], SensorEntity):
             "free_energy_remaining": ledger.free_energy_remaining_kwh,
             "daily_import": ledger.daily_import_kwh,
             "free_window_import": ledger.free_window_import_kwh,
+            "daily_export": ledger.daily_export_kwh,
             # Cost has no Home Assistant unit (it is site-currency specific),
             # so round the state itself rather than relying on display hints.
             "estimated_energy_cost": (
                 None
                 if ledger.estimated_energy_cost is None
                 else round(ledger.estimated_energy_cost, 2)
+            ),
+            "estimated_import_energy_cost": (
+                None
+                if ledger.estimated_import_energy_cost is None
+                else round(ledger.estimated_import_energy_cost, 2)
+            ),
+            "daily_supply_charge": (
+                None
+                if ledger.daily_supply_charge is None
+                else round(ledger.daily_supply_charge, 2)
+            ),
+            "estimated_export_revenue": (
+                None
+                if ledger.estimated_export_revenue is None
+                else round(ledger.estimated_export_revenue, 2)
+            ),
+            "zerohero_credit": (
+                None if ledger.zerohero_credit is None else round(ledger.zerohero_credit, 2)
+            ),
+            "zerohero_credit_status": ledger.zerohero_credit_status,
+            "estimated_net_cost": (
+                None
+                if ledger.estimated_net_cost is None
+                else round(ledger.estimated_net_cost, 2)
             ),
             "free_charge_allowed": ledger.free_charge_allowed_kwh,
             "free_charge_power_target": (
@@ -864,6 +932,20 @@ class EnergySensor(CoordinatorEntity[EnergyCoordinator], SensorEntity):
                 "threshold_kwh_per_hour": self.coordinator.config.get(
                     CONF_ZERO_IMPORT_THRESHOLD_KW, DEFAULT_ZERO_IMPORT_THRESHOLD_KW
                 ),
+            }
+        if self.entity_description.key == "estimated_export_revenue":
+            ledger = self.coordinator.data
+            return {
+                "standard_rate_export_kwh": ledger.standard_rate_export_kwh,
+                "boosted_rate_export_kwh": ledger.boosted_rate_export_kwh,
+                "boosted_window_export_kwh": ledger.boosted_window_export_kwh,
+            }
+        if self.entity_description.key == "estimated_net_cost":
+            ledger = self.coordinator.data
+            return {
+                "gross_cost": ledger.estimated_energy_cost,
+                "export_revenue": ledger.estimated_export_revenue,
+                "zerohero_credit": ledger.zerohero_credit,
             }
         if self.entity_description.key == "ev_control_status":
             controller = self.coordinator.ev_controller

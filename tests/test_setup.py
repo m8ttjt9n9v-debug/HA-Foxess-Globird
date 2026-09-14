@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, time, timedelta
+from unittest.mock import AsyncMock
 from zoneinfo import ZoneInfo
 
 import pytest
@@ -33,6 +34,7 @@ ENTRY_DATA = {
     "telemetry_max_age_seconds": 90.0,
     "daily_free_allowance_kwh": 50.0,
     "daily_charge": 2.035,
+    "zerohero_daily_credit": 1.0,
     "peak_window_start": "16:00:00",
     "peak_window_end": "23:00:00",
     "peak_rate_per_kwh": 0.594,
@@ -122,6 +124,17 @@ def _entity_id(hass: HomeAssistant, entry: MockConfigEntry, key: str) -> str:
     entity_id = er.async_get(hass).async_get_entity_id("sensor", DOMAIN, f"{entry.entry_id}_{key}")
     assert entity_id is not None
     return entity_id
+
+
+def test_zerohero_credit_waits_for_exact_window_completion(hass):
+    coordinator = EnergyCoordinator(hass, ENTRY_DATA, "credit-window-test")
+    zone = ZoneInfo("Australia/Sydney")
+    assert coordinator._zerohero_credit_window_state(
+        datetime(2026, 9, 14, 20, 59, 59, tzinfo=zone)
+    ) == (False, 3)
+    assert coordinator._zerohero_credit_window_state(
+        datetime(2026, 9, 14, 21, 0, 0, tzinfo=zone)
+    ) == (True, 3)
 
 
 async def test_setup_observes_normalised_values_and_never_calls_services(hass):
@@ -608,6 +621,46 @@ async def test_mapped_telemetry_is_exposed_for_portable_dashboard(hass):
     assert hass.states.get(_entity_id(hass, entry, "ev_soc")).state == "70.0"
 
 
+async def test_import_to_export_transition_is_checkpointed(hass):
+    """A reload during export must not restore an old positive import anchor."""
+    hass.states.async_set("sensor.test_battery_soc", "60", {"unit_of_measurement": "%"})
+    hass.states.async_set("sensor.test_grid_power", "5500", {"unit_of_measurement": "W"})
+    entry = MockConfigEntry(domain=DOMAIN, title="Meter checkpoint site", data=ENTRY_DATA)
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    coordinator = entry.runtime_data
+    save = AsyncMock()
+    coordinator._daily_import_store.async_save = save
+
+    hass.states.async_set("sensor.test_grid_power", "-50", {"unit_of_measurement": "W"})
+    await hass.async_block_till_done()
+
+    save.assert_awaited()
+    assert save.await_args.args[0]["last_import_kw"] == 0.0
+
+
+async def test_export_to_import_transition_is_checkpointed(hass):
+    """Daily export persistence must clear its positive-flow anchor too."""
+    hass.states.async_set("sensor.test_battery_soc", "60", {"unit_of_measurement": "%"})
+    hass.states.async_set("sensor.test_grid_power", "-5500", {"unit_of_measurement": "W"})
+    entry = MockConfigEntry(domain=DOMAIN, title="Export checkpoint site", data=ENTRY_DATA)
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    coordinator = entry.runtime_data
+    save = AsyncMock()
+    coordinator._daily_export_store.async_save = save
+
+    hass.states.async_set("sensor.test_grid_power", "50", {"unit_of_measurement": "W"})
+    await hass.async_block_till_done()
+
+    save.assert_awaited()
+    assert save.await_args.args[0]["last_import_kw"] == 0.0
+
+
 async def test_zerohero_hourly_accumulator_is_exposed(hass):
     hass.states.async_set("sensor.test_battery_soc", "60", {"unit_of_measurement": "%"})
     hass.states.async_set("sensor.test_grid_power", "0", {"unit_of_measurement": "kW"})
@@ -678,9 +731,13 @@ async def test_tariff_allowance_uses_a_mapped_cumulative_meter_when_available(ha
 
     remaining = _entity_id(hass, entry, "free_energy_remaining")
     tariff_status = _entity_id(hass, entry, "tariff_status")
+    estimated_cost = _entity_id(hass, entry, "estimated_energy_cost")
     # The mapped meter is all-day accounting; the free allowance is tracked
     # separately from imports observed inside the configured free window.
     assert hass.states.get(remaining).state == "50.0"
+    # Cost accounting must use the same commissioned cumulative import source
+    # exposed by the ledger, not a separate incomplete internal total.
+    assert hass.states.get(estimated_cost).state == "27.12"
     assert hass.states.get(tariff_status).state in {
         "bonus_window_inactive",
         "zero_import_not_sustained",
@@ -700,6 +757,52 @@ async def test_tariff_allowance_uses_internal_daily_meter_on_greenfield_site(has
     assert hass.states.get(daily_import).state == "0.0"
     assert hass.states.get(remaining).state == "50.0"
     assert entry.runtime_data.data.daily_import_source == "internal_accumulator"
+
+
+async def test_daily_export_revenue_and_net_cost_are_exposed_without_double_counting(
+    hass, monkeypatch
+):
+    hass.states.async_set("sensor.test_battery_soc", "60", {"unit_of_measurement": "%"})
+    hass.states.async_set("sensor.test_grid_power", "0", {"unit_of_measurement": "kW"})
+    entry = MockConfigEntry(domain=DOMAIN, title="Financial summary site", data=ENTRY_DATA)
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    coordinator = entry.runtime_data
+    now = datetime(2026, 9, 14, 21, 1, tzinfo=ZoneInfo("Australia/Sydney"))
+    monkeypatch.setattr(
+        "custom_components.home_energy_orchestrator.coordinator.dt_util.now",
+        lambda: now,
+    )
+    coordinator.daily_export.local_date = now.date()
+    coordinator.daily_export.last_at = now
+    coordinator.daily_export.imported_kwh = 20.0
+    coordinator.zerohero_export.local_date = now.date()
+    coordinator.zerohero_export.last_at = now
+    coordinator.zerohero_export.imported_kwh = 18.0
+    coordinator.zerohero_import.local_date = now.date()
+    coordinator.zerohero_import.last_at = now
+    coordinator.zerohero_import.hourly_import_kwh = {
+        "2026-09-14T18:00:00+10:00": 0.01,
+        "2026-09-14T19:00:00+10:00": 0.02,
+        "2026-09-14T20:00:00+10:00": 0.03,
+    }
+    coordinator.data = coordinator._apply_tariff_guard(coordinator.data)
+    coordinator.async_update_listeners()
+    await hass.async_block_till_done()
+
+    assert hass.states.get(_entity_id(hass, entry, "daily_export")).state == "20.0"
+    assert hass.states.get(_entity_id(hass, entry, "estimated_import_energy_cost")).state == "0.0"
+    assert hass.states.get(_entity_id(hass, entry, "daily_supply_charge")).state == "2.04"
+    revenue = hass.states.get(_entity_id(hass, entry, "estimated_export_revenue"))
+    assert revenue.state == "1.5"
+    assert revenue.attributes["boosted_rate_export_kwh"] == 15.0
+    assert revenue.attributes["standard_rate_export_kwh"] == 5.0
+    assert revenue.attributes["boosted_window_export_kwh"] == 18.0
+    assert hass.states.get(_entity_id(hass, entry, "zerohero_credit")).state == "1.0"
+    assert hass.states.get(_entity_id(hass, entry, "zerohero_credit_status")).state == "earned"
+    assert hass.states.get(_entity_id(hass, entry, "estimated_net_cost")).state == "-0.46"
 
 
 async def test_learning_history_is_persisted_and_exposed(hass):

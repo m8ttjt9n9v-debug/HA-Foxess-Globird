@@ -137,6 +137,7 @@ from .const import (
     CONF_TELEMETRY_MAX_AGE_SECONDS,
     CONF_ZERO_IMPORT_CONFIRM_MINUTES,
     CONF_ZERO_IMPORT_THRESHOLD_KW,
+    CONF_ZEROHERO_DAILY_CREDIT,
     DEFAULT_AUTOMATIC_CHARGE_ENABLED,
     DEFAULT_AUTOMATIC_CONTROL_ENABLED,
     DEFAULT_AUTOMATIC_EXPORT_ENABLED,
@@ -228,6 +229,7 @@ from .const import (
     DEFAULT_TELEMETRY_MAX_AGE_SECONDS,
     DEFAULT_ZERO_IMPORT_CONFIRM_MINUTES,
     DEFAULT_ZERO_IMPORT_THRESHOLD_KW,
+    DEFAULT_ZEROHERO_DAILY_CREDIT,
     DOMAIN,
     EV_CHARGE_PATH_SMART_SOCKET,
     EV_CHARGE_PATHS,
@@ -353,6 +355,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             CONF_PEAK_WINDOW_START, CONF_PEAK_WINDOW_END, CONF_PEAK_RATE,
             CONF_OFFPEAK_RATE, CONF_OFFPEAK_BALANCE_RATE, CONF_SHOULDER_RATE,
             CONF_EXPORT_RATE, CONF_SUPER_EXPORT_RATE, CONF_BONUS_WINDOW_START,
+            CONF_ZEROHERO_DAILY_CREDIT,
             CONF_BONUS_WINDOW_END, CONF_FORCE_DISCHARGE_FINISH,
             CONF_EXPORT_ALLOWANCE_KWH, CONF_EXPORT_DISCHARGE_POWER_KW,
         ),
@@ -658,6 +661,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         CONF_DAILY_FREE_ALLOWANCE_KWH, CONF_DAILY_CHARGE,
                         CONF_PEAK_RATE, CONF_OFFPEAK_RATE, CONF_OFFPEAK_BALANCE_RATE,
                         CONF_SHOULDER_RATE, CONF_EXPORT_RATE, CONF_SUPER_EXPORT_RATE,
+                        CONF_ZEROHERO_DAILY_CREDIT,
                         CONF_EXPORT_ALLOWANCE_KWH, CONF_EXPORT_DISCHARGE_POWER_KW,
                     )
                 }
@@ -1110,6 +1114,12 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 vol.Required(
                     CONF_SUPER_EXPORT_RATE,
                     default=defaults.get(CONF_SUPER_EXPORT_RATE, DEFAULT_SUPER_EXPORT_RATE),
+                ): vol.Coerce(float),
+                vol.Required(
+                    CONF_ZEROHERO_DAILY_CREDIT,
+                    default=defaults.get(
+                        CONF_ZEROHERO_DAILY_CREDIT, DEFAULT_ZEROHERO_DAILY_CREDIT
+                    ),
                 ): vol.Coerce(float),
                 vol.Required(
                     CONF_SITE_PHASE_COUNT,
@@ -1699,6 +1709,9 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             CONF_SHOULDER_RATE: data.get(CONF_SHOULDER_RATE, DEFAULT_SHOULDER_RATE),
             CONF_EXPORT_RATE: data.get(CONF_EXPORT_RATE, DEFAULT_EXPORT_RATE),
             CONF_SUPER_EXPORT_RATE: data.get(CONF_SUPER_EXPORT_RATE, DEFAULT_SUPER_EXPORT_RATE),
+            CONF_ZEROHERO_DAILY_CREDIT: data.get(
+                CONF_ZEROHERO_DAILY_CREDIT, DEFAULT_ZEROHERO_DAILY_CREDIT
+            ),
             CONF_SERVICE_IMPORT_LIMIT_A: data.get(
                 CONF_SERVICE_IMPORT_LIMIT_A, DEFAULT_SERVICE_IMPORT_LIMIT_A
             ),
@@ -2060,6 +2073,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             shoulder_rate = float(data[CONF_SHOULDER_RATE])
             export_rate = float(data[CONF_EXPORT_RATE])
             super_export_rate = float(data[CONF_SUPER_EXPORT_RATE])
+            zerohero_daily_credit = float(data[CONF_ZEROHERO_DAILY_CREDIT])
             export_allowance = float(data[CONF_EXPORT_ALLOWANCE_KWH])
             export_discharge_power = float(data[CONF_EXPORT_DISCHARGE_POWER_KW])
             discharge_efficiency = float(data[CONF_DISCHARGE_EFFICIENCY_PERCENT])
@@ -2160,6 +2174,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             shoulder_rate,
             export_rate,
             super_export_rate,
+            zerohero_daily_credit,
             export_allowance,
             export_discharge_power,
             discharge_efficiency,
@@ -2213,6 +2228,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             or not phase_count.is_integer()
             or export_rate < 0
             or super_export_rate < 0
+            or zerohero_daily_credit < 0
             or export_allowance < 0
             or export_discharge_power < 0
             or not 50 <= discharge_efficiency <= 100
