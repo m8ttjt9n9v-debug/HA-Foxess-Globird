@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased — Separate export control and tariff limits
+## 0.12.23 — Separate export control and tariff limits
 
 - Add an independent maximum automatic export per day. Existing installations
   migrate their former export allowance into the new controller cap so upgrade
