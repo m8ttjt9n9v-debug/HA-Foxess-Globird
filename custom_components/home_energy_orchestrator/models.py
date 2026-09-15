@@ -52,6 +52,7 @@ class EnergyLedger:
     standard_window_export_kwh: float | None = None
     boosted_window_export_kwh: float | None = None
     standard_rate_export_kwh: float | None = None
+    offpeak_rate_export_kwh: float | None = None
     boosted_rate_export_kwh: float | None = None
     estimated_energy_cost: float | None = None
     estimated_import_energy_cost: float | None = None

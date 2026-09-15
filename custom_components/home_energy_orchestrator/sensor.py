@@ -21,6 +21,7 @@ from .const import (
     CONF_EXPORT_RATE,
     CONF_FOXESS_CONTROL_OWNER,
     CONF_FREE_CHARGE_SCHEDULE_CONFIRMED,
+    CONF_OFFPEAK_EXPORT_RATE,
     CONF_REHEARSAL_MODE,
     CONF_SIGN_CONVENTIONS_VERIFIED,
     CONF_SUPER_EXPORT_RATE,
@@ -28,6 +29,7 @@ from .const import (
     DEFAULT_AUTOMATIC_CHARGE_ENABLED,
     DEFAULT_EXPORT_RATE,
     DEFAULT_FOXESS_CONTROL_OWNER,
+    DEFAULT_OFFPEAK_EXPORT_RATE,
     DEFAULT_SIGN_CONVENTIONS_VERIFIED,
     DEFAULT_SUPER_EXPORT_RATE,
     DEFAULT_ZERO_IMPORT_THRESHOLD_KW,
@@ -360,7 +362,15 @@ DESCRIPTIONS = (
     ),
     SensorEntityDescription(
         key="standard_export_window",
-        name="Standard-Rate Export This Window",
+        name="Peak Feed-in Export Today",
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        device_class="energy",
+        state_class="total_increasing",
+        suggested_display_precision=2,
+    ),
+    SensorEntityDescription(
+        key="offpeak_export",
+        name="Off-peak Feed-in Export Today",
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
         device_class="energy",
         state_class="total_increasing",
@@ -804,6 +814,7 @@ class EnergySensor(CoordinatorEntity[EnergyCoordinator], SensorEntity):
             "free_window_import": ledger.free_window_import_kwh,
             "daily_export": ledger.daily_export_kwh,
             "standard_export_window": ledger.standard_window_export_kwh,
+            "offpeak_export": ledger.offpeak_rate_export_kwh,
             # Cost has no Home Assistant unit (it is site-currency specific),
             # so round the state itself rather than relying on display hints.
             "estimated_energy_cost": (
@@ -954,17 +965,29 @@ class EnergySensor(CoordinatorEntity[EnergyCoordinator], SensorEntity):
             boost_rate = float(
                 self.coordinator.config.get(CONF_SUPER_EXPORT_RATE, DEFAULT_SUPER_EXPORT_RATE)
             )
+            offpeak_rate = float(
+                self.coordinator.config.get(
+                    CONF_OFFPEAK_EXPORT_RATE, DEFAULT_OFFPEAK_EXPORT_RATE
+                )
+            )
             return {
                 "standard_rate_export_kwh": ledger.standard_rate_export_kwh,
+                "offpeak_rate_export_kwh": ledger.offpeak_rate_export_kwh,
                 "standard_window_export_kwh": ledger.standard_window_export_kwh,
                 "boosted_rate_export_kwh": ledger.boosted_rate_export_kwh,
                 "boosted_window_export_kwh": ledger.boosted_window_export_kwh,
                 "standard_rate_per_kwh": standard_rate,
+                "offpeak_rate_per_kwh": offpeak_rate,
                 "additional_boost_rate_per_kwh": boost_rate,
                 "standard_export_revenue": (
                     None
                     if ledger.standard_rate_export_kwh is None
                     else round(ledger.standard_rate_export_kwh * standard_rate, 4)
+                ),
+                "offpeak_export_revenue": (
+                    None
+                    if ledger.offpeak_rate_export_kwh is None
+                    else round(ledger.offpeak_rate_export_kwh * offpeak_rate, 4)
                 ),
                 "boosted_bonus_revenue": (
                     None

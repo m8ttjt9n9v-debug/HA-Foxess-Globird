@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.12.24 — GloBird tariff terminology and complete feed-in accounting
+
+- Reorder tariff configuration into meter, charge, credit, allowance,
+  preference, and time-window groups and use GloBird ZEROCHARGE, ZEROHERO,
+  Solar/GenerationFeedin, and Super Export labels with in-flow explanations.
+- Add a configurable Off-peak Solar/GenerationFeedin rate. Account for every
+  exported kWh using either the Peak or complementary Off-peak base rate, then
+  apply the Super Export top-up independently to eligible energy.
+- Add an Off-peak Feed-in Export Today sensor and expand estimated export
+  revenue attributes with Peak, Off-peak, and top-up energy and earnings.
+- Replace the absolute force-discharge finish with an offset from the ZEROHERO
+  window end. Remove the fixed discharge-power preference from configuration;
+  automatic export requests the inverter/actuator maximum while energy limits
+  continue to determine duration.
+
 ## 0.12.23 — Separate export control and tariff limits
 
 - Add an independent maximum automatic export per day. Existing installations

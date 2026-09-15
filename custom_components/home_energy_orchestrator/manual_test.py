@@ -29,6 +29,7 @@ from .const import (
     CONF_INVERTER_CHARGE_LIMIT_KW,
     CONF_INVERTER_DISCHARGE_LIMIT_KW,
     CONF_OFFPEAK_BALANCE_RATE,
+    CONF_OFFPEAK_EXPORT_RATE,
     CONF_OFFPEAK_RATE,
     CONF_PEAK_RATE,
     CONF_PEAK_WINDOW_END,
@@ -42,6 +43,7 @@ from .const import (
     DEFAULT_EXPORT_RATE_WINDOW_END,
     DEFAULT_EXPORT_RATE_WINDOW_START,
     DEFAULT_FOXESS_CONTROL_OWNER,
+    DEFAULT_OFFPEAK_EXPORT_RATE,
     DEFAULT_SUPER_EXPORT_RATE,
     FOXESS_CONTROL_OWNER_MODBUS,
 )
@@ -171,7 +173,7 @@ class ManualTestController:
         standard_rate = (
             self._rate(CONF_EXPORT_RATE, DEFAULT_EXPORT_RATE)
             if self._standard_export_window_active(now)
-            else 0.0
+            else self._rate(CONF_OFFPEAK_EXPORT_RATE, DEFAULT_OFFPEAK_EXPORT_RATE)
         )
         if self._bonus_window_active(now):
             return standard_rate + self._rate(

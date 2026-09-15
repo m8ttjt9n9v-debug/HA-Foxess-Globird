@@ -41,8 +41,8 @@ Automatic ZEROHERO export is a third, default-off behavior toggle beneath the
 FoxESS gate. It operates only when **Local Modbus** is the selected FoxESS
 owner, automatic FoxESS control is enabled, the complete Modbus actuator map
 is valid, and Safety Lock is OFF. Do not enable it while FoxCloud Mode
-Scheduler is enabled. Configure the boosted window, 21:01 restoration time,
-daily export cap, fixed discharge power, efficiency, and any physically
+Scheduler is enabled. Configure the ZEROHERO window and finish offset,
+daily automatic-export cap, Super Export top-up allowance, efficiency, and any physically
 mandatory connected-EV baseline during setup or reconfiguration. The full
 ported behavior is recorded in the
 [ZEROHERO export policy](zerohero-export-policy.md).

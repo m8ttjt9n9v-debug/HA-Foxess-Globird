@@ -293,11 +293,15 @@ def test_daily_financials_apply_each_export_rate_only_to_its_window() -> None:
         boosted_export_allowance_kwh=15,
         export_rate=0.05,
         boosted_export_rate=0.10,
+        offpeak_export_rate=0.02,
     )
 
     assert summary.standard_export_kwh == pytest.approx(4)
+    assert summary.offpeak_export_kwh == pytest.approx(6)
     assert summary.boosted_export_kwh == pytest.approx(3)
-    assert summary.export_revenue == pytest.approx(4 * 0.05 + 3 * 0.10)
+    assert summary.export_revenue == pytest.approx(
+        4 * 0.05 + 6 * 0.02 + 3 * 0.10
+    )
 
 
 def test_zerohero_credit_is_applied_once_only_after_complete_qualified_window() -> None:

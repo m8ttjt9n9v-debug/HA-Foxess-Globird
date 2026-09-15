@@ -14,6 +14,7 @@ from custom_components.home_energy_orchestrator.const import (
     CONF_AUTOMATIC_EXPORT_ENABLED,
     CONF_AUTOMATIC_EXPORT_LIMIT_KWH,
     CONF_BATTERY_FREE_WINDOW_TARGET,
+    CONF_BONUS_WINDOW_END,
     CONF_BONUS_WINDOW_START,
     CONF_DISCHARGE_EFFICIENCY_PERCENT,
     CONF_EV_AT_HOME,
@@ -27,6 +28,7 @@ from custom_components.home_energy_orchestrator.const import (
     CONF_EXPORT_ALLOWANCE_KWH,
     CONF_EXPORT_DISCHARGE_POWER_KW,
     CONF_FORCE_DISCHARGE_FINISH,
+    CONF_FORCE_DISCHARGE_OFFSET_MINUTES,
     CONF_FOXESS_CONTROL_OWNER,
     CONF_FOXESS_FORCE_CHARGE_POWER,
     CONF_FOXESS_FORCE_DISCHARGE_POWER,
@@ -262,7 +264,7 @@ async def test_pilot_site_export_starts_at_latest_start_and_latches(hass, monkey
     hass.states.async_set(
         "number.foxess_discharge", "0", {"unit_of_measurement": "kW", "max": 15}
     )
-    now = datetime(2026, 9, 5, 19, 31, tzinfo=UTC)
+    now = datetime(2026, 9, 5, 20, 2, tzinfo=UTC)
     monkeypatch.setattr(
         "custom_components.home_energy_orchestrator.active.dt_util.now", lambda: now
     )
@@ -274,7 +276,7 @@ async def test_pilot_site_export_starts_at_latest_start_and_latches(hass, monkey
             CONF_AUTOMATIC_CONTROL_ENABLED: True,
             CONF_AUTOMATIC_EXPORT_ENABLED: True,
             CONF_REHEARSAL_MODE: False,
-            CONF_INVERTER_DISCHARGE_LIMIT_KW: 15.0,
+            CONF_INVERTER_DISCHARGE_LIMIT_KW: 20.0,
             CONF_EXPORT_DISCHARGE_POWER_KW: 10.0,
             CONF_AUTOMATIC_EXPORT_LIMIT_KWH: 15.0,
             CONF_EXPORT_ALLOWANCE_KWH: 15.0,
@@ -290,10 +292,15 @@ async def test_pilot_site_export_starts_at_latest_start_and_latches(hass, monkey
     await controller.async_reconcile()
     await hass.async_block_till_done()
 
-    assert controller.export_planned_start == now
+    assert controller.export_planned_start == datetime(2026, 9, 5, 20, 1, tzinfo=UTC)
     assert controller.export_session.phase == "starting"
-    assert controller.export_session.requested_power_kw == 10.0
-    assert [(event.data["domain"], event.data["service"]) for event in calls] == [
+    # The legacy 10 kW preference is intentionally ignored. The controller
+    # requests the commissioned inverter/actuator maximum so house load cannot
+    # consume artificially reserved discharge headroom.
+    assert controller.export_session.requested_power_kw == 15.0
+    assert sorted(
+        (event.data["domain"], event.data["service"]) for event in calls
+    ) == [
         ("number", "set_value"),
         ("select", "select_option"),
     ]
@@ -304,13 +311,36 @@ async def test_pilot_site_export_starts_at_latest_start_and_latches(hass, monkey
         {"options": ["Self Use", "Force Discharge"]},
     )
     hass.states.async_set(
-        "number.foxess_discharge", "10", {"unit_of_measurement": "kW", "max": 15}
+        "number.foxess_discharge", "15", {"unit_of_measurement": "kW", "max": 15}
     )
     coordinator.data.available_after_reserve_kwh = 0.0
     coordinator.learning_remaining_kwh = 99.0
     await controller.async_reconcile()
     assert controller.export_session.phase == "active"
     assert len(calls) == 2
+
+
+def test_zerohero_finish_offset_wraps_midnight(hass):
+    coordinator = _coordinator(
+        **{
+            CONF_BONUS_WINDOW_START: "22:00:00",
+            CONF_BONUS_WINDOW_END: "23:59:00",
+            CONF_FORCE_DISCHARGE_OFFSET_MINUTES: 5.0,
+        }
+    )
+    controller = ActiveFoxessController(hass, coordinator)
+
+    start, finish = controller._export_bounds(  # noqa: SLF001
+        datetime(2026, 9, 5, 23, 0, tzinfo=UTC)
+    )
+    assert start == datetime(2026, 9, 5, 22, 0, tzinfo=UTC)
+    assert finish == datetime(2026, 9, 6, 0, 4, tzinfo=UTC)
+
+    start, finish = controller._export_bounds(  # noqa: SLF001
+        datetime(2026, 9, 6, 0, 2, tzinfo=UTC)
+    )
+    assert start == datetime(2026, 9, 5, 22, 0, tzinfo=UTC)
+    assert finish == datetime(2026, 9, 6, 0, 4, tzinfo=UTC)
 
 
 async def test_automatic_export_cap_is_independent_of_boosted_tariff_cap(
@@ -336,7 +366,7 @@ async def test_automatic_export_cap_is_independent_of_boosted_tariff_cap(
     hass.states.async_set(
         "number.foxess_discharge", "0", {"unit_of_measurement": "kW", "max": 15}
     )
-    now = datetime(2026, 9, 5, 19, 1, tzinfo=UTC)
+    now = datetime(2026, 9, 5, 19, 45, tzinfo=UTC)
     monkeypatch.setattr(
         "custom_components.home_energy_orchestrator.active.dt_util.now", lambda: now
     )
@@ -368,10 +398,14 @@ async def test_automatic_export_cap_is_independent_of_boosted_tariff_cap(
     assert controller.export_plan is not None
     assert controller.export_plan.sellable_energy_kwh == 26.0
     assert controller.export_plan.planned_export_energy_kwh == 20.0
-    assert controller.export_plan.planned_duration_h == 2.0
-    assert controller.export_planned_start == now
+    assert controller.export_plan.planned_duration_h == 1.333
+    assert controller.export_planned_start == datetime(
+        2026, 9, 5, 19, 41, 1, 200000, tzinfo=UTC
+    )
     assert controller.export_session.phase == "starting"
-    assert [(event.data["domain"], event.data["service"]) for event in calls] == [
+    assert sorted(
+        (event.data["domain"], event.data["service"]) for event in calls
+    ) == [
         ("number", "set_value"),
         ("select", "select_option"),
     ]

@@ -21,6 +21,7 @@ from custom_components.home_energy_orchestrator.const import (
     CONF_FOXESS_WORK_MODE,
     CONF_INVERTER_CHARGE_LIMIT_KW,
     CONF_INVERTER_DISCHARGE_LIMIT_KW,
+    CONF_OFFPEAK_EXPORT_RATE,
     CONF_REHEARSAL_MODE,
     CONF_SUPER_EXPORT_RATE,
     FOXESS_CONTROL_OWNER_CLOUD,
@@ -69,6 +70,7 @@ def test_manual_discharge_preview_adds_standard_and_bonus_export_rates(
     coordinator = _coordinator(
         **{
             CONF_EXPORT_RATE: 0.02,
+            CONF_OFFPEAK_EXPORT_RATE: 0.01,
             CONF_SUPER_EXPORT_RATE: 0.08,
             CONF_BONUS_WINDOW_START: "18:00:00",
             CONF_BONUS_WINDOW_END: "21:00:00",
@@ -94,6 +96,7 @@ def test_manual_discharge_preview_treats_tariff_windows_independently(
     coordinator = _coordinator(
         **{
             CONF_EXPORT_RATE: 0.02,
+            CONF_OFFPEAK_EXPORT_RATE: 0.01,
             CONF_SUPER_EXPORT_RATE: 0.08,
             CONF_EXPORT_RATE_WINDOW_START: "16:00:00",
             CONF_EXPORT_RATE_WINDOW_END: "17:00:00",
@@ -107,7 +110,7 @@ def test_manual_discharge_preview_treats_tariff_windows_independently(
         lambda: datetime(2026, 9, 14, 19, 0, tzinfo=UTC),
     )
 
-    assert controller.current_export_rate() == pytest.approx(0.08)
+    assert controller.current_export_rate() == pytest.approx(0.09)
 
 
 def _coordinator(**config):

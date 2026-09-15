@@ -9,7 +9,7 @@ complete FoxESS actuator mapping.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, time, timedelta
 
 from homeassistant.core import CALLBACK_TYPE, HomeAssistant
 from homeassistant.helpers.event import async_track_time_interval
@@ -22,6 +22,7 @@ from .const import (
     CONF_AUTOMATIC_EXPORT_ENABLED,
     CONF_AUTOMATIC_EXPORT_LIMIT_KWH,
     CONF_BATTERY_FREE_WINDOW_TARGET,
+    CONF_BONUS_WINDOW_END,
     CONF_BONUS_WINDOW_START,
     CONF_CONFIGURE_EV,
     CONF_DISCHARGE_EFFICIENCY_PERCENT,
@@ -33,8 +34,8 @@ from .const import (
     CONF_EV_PHASE_COUNT,
     CONF_EV_PROTECTED_BASELINE_A,
     CONF_EV_VOLTAGE,
-    CONF_EXPORT_DISCHARGE_POWER_KW,
     CONF_FORCE_DISCHARGE_FINISH,
+    CONF_FORCE_DISCHARGE_OFFSET_MINUTES,
     CONF_FOXESS_CONTROL_OWNER,
     CONF_FOXESS_FORCE_CHARGE_POWER,
     CONF_FOXESS_FORCE_DISCHARGE_POWER,
@@ -50,6 +51,7 @@ from .const import (
     DEFAULT_AUTOMATIC_EXPORT_ENABLED,
     DEFAULT_AUTOMATIC_EXPORT_LIMIT_KWH,
     DEFAULT_BATTERY_FREE_WINDOW_TARGET,
+    DEFAULT_BONUS_WINDOW_END,
     DEFAULT_BONUS_WINDOW_START,
     DEFAULT_DISCHARGE_EFFICIENCY_PERCENT,
     DEFAULT_EV_BEFORE_EXPORT_ENABLED,
@@ -58,8 +60,8 @@ from .const import (
     DEFAULT_EV_PHASE_COUNT,
     DEFAULT_EV_PROTECTED_BASELINE_A,
     DEFAULT_EV_VOLTAGE,
-    DEFAULT_EXPORT_DISCHARGE_POWER_KW,
     DEFAULT_FORCE_DISCHARGE_FINISH,
+    DEFAULT_FORCE_DISCHARGE_OFFSET_MINUTES,
     DEFAULT_FOXESS_CONTROL_OWNER,
     DEFAULT_FREE_CHARGE_END,
     DEFAULT_FREE_CHARGE_START,
@@ -394,12 +396,12 @@ class ActiveFoxessController:
             ),
             self._entity_power_max(str(mapping[2])),
         )
-        requested = min(
-            self._configured(
-                CONF_EXPORT_DISCHARGE_POWER_KW, DEFAULT_EXPORT_DISCHARGE_POWER_KW
-            ),
-            discharge_max,
-        )
+        # Energy and time limits govern how long the session runs.  Requesting
+        # the maximum available inverter discharge preserves headroom for
+        # simultaneous house load and minimises the risk of a brief grid import
+        # invalidating the ZEROHERO credit. The inverter enforces its own grid
+        # export limit; that limit must not reduce this battery-side request.
+        requested = discharge_max
         eligible = False
         self.export_plan = None
         self.export_planned_start = None
@@ -587,10 +589,8 @@ class ActiveFoxessController:
         start = self.coordinator._configured_time(  # noqa: SLF001
             CONF_BONUS_WINDOW_START, DEFAULT_BONUS_WINDOW_START
         )
-        finish = self.coordinator._configured_time(  # noqa: SLF001
-            CONF_FORCE_DISCHARGE_FINISH, DEFAULT_FORCE_DISCHARGE_FINISH
-        )
         start_at = datetime.combine(now.date(), start, tzinfo=now.tzinfo)
+        finish = self._force_discharge_finish_time()
         finish_at = datetime.combine(now.date(), finish, tzinfo=now.tzinfo)
         if finish <= start:
             finish_at += timedelta(days=1)
@@ -598,6 +598,27 @@ class ActiveFoxessController:
                 start_at -= timedelta(days=1)
                 finish_at -= timedelta(days=1)
         return start_at, finish_at
+
+    def _force_discharge_finish_time(self) -> time:
+        """Derive finish from ZEROHERO end, retaining pre-v5 compatibility."""
+        if CONF_FORCE_DISCHARGE_OFFSET_MINUTES not in self.coordinator.config:
+            return self.coordinator._configured_time(  # noqa: SLF001
+                CONF_FORCE_DISCHARGE_FINISH, DEFAULT_FORCE_DISCHARGE_FINISH
+            )
+        bonus_end = self.coordinator._configured_time(  # noqa: SLF001
+            CONF_BONUS_WINDOW_END, DEFAULT_BONUS_WINDOW_END
+        )
+        anchor = datetime.combine(datetime.min.date(), bonus_end)
+        derived = anchor + timedelta(
+            minutes=max(
+                self._configured(
+                    CONF_FORCE_DISCHARGE_OFFSET_MINUTES,
+                    DEFAULT_FORCE_DISCHARGE_OFFSET_MINUTES,
+                ),
+                0.0,
+            )
+        )
+        return derived.time()
 
     def _hours_until_next_free(self, now: datetime) -> float:
         free_start = self.coordinator._configured_time(  # noqa: SLF001
@@ -629,9 +650,7 @@ class ActiveFoxessController:
         export_start = self.coordinator._configured_time(  # noqa: SLF001
             CONF_BONUS_WINDOW_START, DEFAULT_BONUS_WINDOW_START
         )
-        export_end = self.coordinator._configured_time(  # noqa: SLF001
-            CONF_FORCE_DISCHARGE_FINISH, DEFAULT_FORCE_DISCHARGE_FINISH
-        )
+        export_end = self._force_discharge_finish_time()
 
         def segments(start, end):
             start_s = start.hour * 3600 + start.minute * 60 + start.second

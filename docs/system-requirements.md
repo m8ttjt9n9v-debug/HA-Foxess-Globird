@@ -156,9 +156,11 @@ Portable code maps roles and never embeds that vehicle's entity IDs. See the
 Every installation must supply its own values. Never copy a reference site's
 service rating or a target site's multi-phase rating as a default control fact.
 Configure phase count, per-phase or aggregate limits as the model requires,
-EV phases/current/voltage, inverter and battery limits,
-tariff allowance/windows/rates, export cap/power/finish, reserve, and
-efficiency.
+EV phases/current/voltage, inverter and battery limits, tariff
+allowances/windows/rates, automatic export-energy cap, ZEROHERO finish
+offset, reserve, and efficiency. HEO derives automatic discharge power from the
+commissioned inverter limit and actuator maximum rather than asking for a
+separate operator estimate.
 
 Multi-sensor controls must use temporally coherent samples and fail closed when
 freshness, units, signs, presence, connection, or ownership cannot be proven.

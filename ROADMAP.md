@@ -136,6 +136,14 @@ Status here describes behavioral parity, not merely the presence of code.
   the next release with controller, persisted window accounting, migration,
   and configuration regression coverage.
 
+- [x] Align tariff configuration and accounting with GloBird ZEROHERO language:
+  human-order the form, derive Shoulder as all remaining usage time, add an
+  Off-peak Solar/GenerationFeedin base rate, keep Super Export as an additive
+  top-up, expose Peak/Off-peak export evidence, and derive the force-discharge
+  finish from the ZEROHERO window end plus an offset. Remove the user-selected
+  discharge-power opinion and request the inverter/actuator maximum so house
+  load cannot consume deliberately withheld discharge headroom.
+
 - [x] Prevent outside-window EV automation from draining the house battery to
   its floor after the safe export budget disappears. The ready-by extension
   must be capped by the live ZEROHERO export plan, an active session's energy

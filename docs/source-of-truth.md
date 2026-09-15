@@ -36,8 +36,9 @@ layers around the proven algorithm, not replacement algorithms.
   sensor is commissioned, both the exposed ledger total and cost estimate use
   it; the local accumulator is only the fallback daily total.
 - Daily financial reporting keeps import charges, the supply charge, and export
-  earnings separate. Export inside the configured Solar/Generation feed-in
-  window receives the standard rate; boosted-window export independently
+  earnings separate. Export inside the configured Peak Solar/GenerationFeedin
+  window receives its base rate and all remaining export receives the configured
+  Off-peak base rate; boosted-window export independently
   receives the configured additional ZEROHERO boost up to the lesser of
   measured window export, measured daily export, and the boosted daily
   allowance. The independently configured automatic-export cap
@@ -45,6 +46,10 @@ layers around the proven algorithm, not replacement algorithms.
   entries migrate the old shared allowance into that cap to preserve behavior.
   Net cost is gross cost minus export revenue; it is an HEO telemetry estimate,
   not the retailer's final bill.
+- ZEROHERO automatic export requests the configured inverter discharge maximum,
+  capped only by the mapped actuator maximum. The inverter enforces its own grid
+  export limit. A lower legacy user-entered discharge preference is ignored so
+  ordinary house load cannot consume artificially withheld discharge headroom.
 - The configurable ZEROHERO daily credit defaults to $1.00 and is deducted once
   from estimated net cost only after the full configured window is complete,
   all expected clock-hour buckets were observed, and no bucket exceeds the

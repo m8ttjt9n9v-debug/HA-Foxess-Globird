@@ -57,6 +57,7 @@ from .const import (
     CONF_INVERTER_CHARGE_LIMIT_KW,
     CONF_INVERTER_DISCHARGE_LIMIT_KW,
     CONF_OFFPEAK_BALANCE_RATE,
+    CONF_OFFPEAK_EXPORT_RATE,
     CONF_OFFPEAK_RATE,
     CONF_PEAK_RATE,
     CONF_PEAK_WINDOW_END,
@@ -94,6 +95,7 @@ from .const import (
     DEFAULT_INVERTER_CHARGE_LIMIT_KW,
     DEFAULT_INVERTER_DISCHARGE_LIMIT_KW,
     DEFAULT_OFFPEAK_BALANCE_RATE,
+    DEFAULT_OFFPEAK_EXPORT_RATE,
     DEFAULT_OFFPEAK_RATE,
     DEFAULT_PEAK_RATE,
     DEFAULT_PEAK_WINDOW_END,
@@ -674,6 +676,9 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
                 export_rate=self._configured_nonnegative(
                     CONF_EXPORT_RATE, DEFAULT_EXPORT_RATE
                 ),
+                offpeak_export_rate=self._configured_nonnegative(
+                    CONF_OFFPEAK_EXPORT_RATE, DEFAULT_OFFPEAK_EXPORT_RATE
+                ),
                 boosted_export_rate=self._configured_nonnegative(
                     CONF_SUPER_EXPORT_RATE, DEFAULT_SUPER_EXPORT_RATE
                 ),
@@ -695,6 +700,9 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
             boosted_window_export_kwh=boosted_export,
             standard_rate_export_kwh=(
                 financials.standard_export_kwh if export_accounting_available else None
+            ),
+            offpeak_rate_export_kwh=(
+                financials.offpeak_export_kwh if export_accounting_available else None
             ),
             boosted_rate_export_kwh=(
                 financials.boosted_export_kwh if export_accounting_available else None

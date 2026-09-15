@@ -101,6 +101,7 @@ from .const import (
     CONF_EXPORT_RATE_WINDOW_END,
     CONF_EXPORT_RATE_WINDOW_START,
     CONF_FORCE_DISCHARGE_FINISH,
+    CONF_FORCE_DISCHARGE_OFFSET_MINUTES,
     CONF_FOXESS_CONTROL_OWNER,
     CONF_FOXESS_FORCE_CHARGE_POWER,
     CONF_FOXESS_FORCE_DISCHARGE_POWER,
@@ -121,6 +122,7 @@ from .const import (
     CONF_INVERTER_CHARGE_LIMIT_KW,
     CONF_INVERTER_DISCHARGE_LIMIT_KW,
     CONF_OFFPEAK_BALANCE_RATE,
+    CONF_OFFPEAK_EXPORT_RATE,
     CONF_OFFPEAK_RATE,
     CONF_PEAK_RATE,
     CONF_PEAK_WINDOW_END,
@@ -206,6 +208,7 @@ from .const import (
     DEFAULT_EXPORT_RATE_WINDOW_END,
     DEFAULT_EXPORT_RATE_WINDOW_START,
     DEFAULT_FORCE_DISCHARGE_FINISH,
+    DEFAULT_FORCE_DISCHARGE_OFFSET_MINUTES,
     DEFAULT_FOXESS_CONTROL_OWNER,
     DEFAULT_FREE_CHARGE_END,
     DEFAULT_FREE_CHARGE_START,
@@ -218,6 +221,7 @@ from .const import (
     DEFAULT_INVERTER_CHARGE_LIMIT_KW,
     DEFAULT_INVERTER_DISCHARGE_LIMIT_KW,
     DEFAULT_OFFPEAK_BALANCE_RATE,
+    DEFAULT_OFFPEAK_EXPORT_RATE,
     DEFAULT_OFFPEAK_RATE,
     DEFAULT_PEAK_RATE,
     DEFAULT_PEAK_WINDOW_END,
@@ -291,6 +295,19 @@ def _window_duration_minutes(start: time, end: time) -> int:
     return (end_minutes - start_minutes) % (24 * 60)
 
 
+def _time_after_minutes(start: time, offset_minutes: float) -> time:
+    """Return a wall-clock time offset from ``start``, wrapping at midnight."""
+    total_seconds = (
+        start.hour * 3600
+        + start.minute * 60
+        + start.second
+        + round(offset_minutes * 60)
+    ) % 86400
+    hours, remainder = divmod(total_seconds, 3600)
+    minutes, seconds = divmod(remainder, 60)
+    return time(hours, minutes, seconds)
+
+
 def _schedule_confirmation(start: time, end: time) -> dict[str, str]:
     """Build an unambiguous 24-hour summary and compact visual timeline."""
     duration = _window_duration_minutes(start, end)
@@ -323,7 +340,7 @@ def _schedule_confirmation(start: time, end: time) -> dict[str, str]:
 class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Create and maintain one observer per independently configured site."""
 
-    VERSION = 4
+    VERSION = 5
 
     _pending_input: dict[str, object] | None = None
     _pending_reconfigure = False
@@ -356,16 +373,30 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             CONF_ZERO_IMPORT_CONFIRM_MINUTES,
         ),
         "tariff": (
-            CONF_DAILY_IMPORT_ENTITY, CONF_DAILY_FREE_ALLOWANCE_KWH,
-            CONF_DAILY_CHARGE, CONF_FREE_CHARGE_START, CONF_FREE_CHARGE_END,
-            CONF_PEAK_WINDOW_START, CONF_PEAK_WINDOW_END, CONF_PEAK_RATE,
-            CONF_OFFPEAK_RATE, CONF_OFFPEAK_BALANCE_RATE, CONF_SHOULDER_RATE,
-            CONF_EXPORT_RATE, CONF_EXPORT_RATE_WINDOW_START,
-            CONF_EXPORT_RATE_WINDOW_END, CONF_SUPER_EXPORT_RATE, CONF_BONUS_WINDOW_START,
+            # Meter mapping, then rates, allowances, preferences and windows.
+            # `_page_schema` deliberately preserves this order in the UI.
+            CONF_DAILY_IMPORT_ENTITY,
+            CONF_DAILY_CHARGE,
+            CONF_PEAK_RATE,
+            CONF_OFFPEAK_RATE,
+            CONF_OFFPEAK_BALANCE_RATE,
+            CONF_SHOULDER_RATE,
+            CONF_EXPORT_RATE,
+            CONF_OFFPEAK_EXPORT_RATE,
+            CONF_SUPER_EXPORT_RATE,
             CONF_ZEROHERO_DAILY_CREDIT,
-            CONF_BONUS_WINDOW_END, CONF_FORCE_DISCHARGE_FINISH,
-            CONF_AUTOMATIC_EXPORT_LIMIT_KWH, CONF_EXPORT_ALLOWANCE_KWH,
-            CONF_EXPORT_DISCHARGE_POWER_KW,
+            CONF_DAILY_FREE_ALLOWANCE_KWH,
+            CONF_EXPORT_ALLOWANCE_KWH,
+            CONF_AUTOMATIC_EXPORT_LIMIT_KWH,
+            CONF_PEAK_WINDOW_START,
+            CONF_PEAK_WINDOW_END,
+            CONF_FREE_CHARGE_START,
+            CONF_FREE_CHARGE_END,
+            CONF_BONUS_WINDOW_START,
+            CONF_BONUS_WINDOW_END,
+            CONF_FORCE_DISCHARGE_OFFSET_MINUTES,
+            CONF_EXPORT_RATE_WINDOW_START,
+            CONF_EXPORT_RATE_WINDOW_END,
         ),
         "solar": (CONF_SOLAR_POWER, CONF_SOLAR_POWER_DIRECTION),
         "house": (
@@ -668,10 +699,11 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     for key in (
                         CONF_DAILY_FREE_ALLOWANCE_KWH, CONF_DAILY_CHARGE,
                         CONF_PEAK_RATE, CONF_OFFPEAK_RATE, CONF_OFFPEAK_BALANCE_RATE,
-                        CONF_SHOULDER_RATE, CONF_EXPORT_RATE, CONF_SUPER_EXPORT_RATE,
+                        CONF_SHOULDER_RATE, CONF_EXPORT_RATE, CONF_OFFPEAK_EXPORT_RATE,
+                        CONF_SUPER_EXPORT_RATE,
                         CONF_ZEROHERO_DAILY_CREDIT,
                         CONF_AUTOMATIC_EXPORT_LIMIT_KWH,
-                        CONF_EXPORT_ALLOWANCE_KWH, CONF_EXPORT_DISCHARGE_POWER_KW,
+                        CONF_EXPORT_ALLOWANCE_KWH, CONF_FORCE_DISCHARGE_OFFSET_MINUTES,
                     )
                 }
                 schedule_pairs = (
@@ -1122,6 +1154,12 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     default=defaults.get(CONF_EXPORT_RATE, DEFAULT_EXPORT_RATE),
                 ): vol.Coerce(float),
                 vol.Required(
+                    CONF_OFFPEAK_EXPORT_RATE,
+                    default=defaults.get(
+                        CONF_OFFPEAK_EXPORT_RATE, DEFAULT_OFFPEAK_EXPORT_RATE
+                    ),
+                ): vol.Coerce(float),
+                vol.Required(
                     CONF_EXPORT_RATE_WINDOW_START,
                     default=defaults.get(
                         CONF_EXPORT_RATE_WINDOW_START,
@@ -1538,6 +1576,13 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     ),
                 ): selector.TimeSelector(),
                 vol.Required(
+                    CONF_FORCE_DISCHARGE_OFFSET_MINUTES,
+                    default=defaults.get(
+                        CONF_FORCE_DISCHARGE_OFFSET_MINUTES,
+                        DEFAULT_FORCE_DISCHARGE_OFFSET_MINUTES,
+                    ),
+                ): vol.Coerce(float),
+                vol.Required(
                     CONF_AUTOMATIC_EXPORT_LIMIT_KWH,
                     default=defaults.get(
                         CONF_AUTOMATIC_EXPORT_LIMIT_KWH,
@@ -1664,12 +1709,14 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     ): selector.BooleanSelector(),
                 }
             )
-        wanted = set(self._PAGE_FIELDS[page])
+        canonical = {
+            marker.schema: (marker, validator)
+            for marker, validator in self._schema(defaults).schema.items()
+        }
         return vol.Schema(
             {
-                marker: validator
-                for marker, validator in self._schema(defaults).schema.items()
-                if marker.schema in wanted
+                canonical[key][0]: canonical[key][1]
+                for key in self._PAGE_FIELDS[page]
             }
         )
 
@@ -1742,6 +1789,9 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             ),
             CONF_SHOULDER_RATE: data.get(CONF_SHOULDER_RATE, DEFAULT_SHOULDER_RATE),
             CONF_EXPORT_RATE: data.get(CONF_EXPORT_RATE, DEFAULT_EXPORT_RATE),
+            CONF_OFFPEAK_EXPORT_RATE: data.get(
+                CONF_OFFPEAK_EXPORT_RATE, DEFAULT_OFFPEAK_EXPORT_RATE
+            ),
             CONF_EXPORT_RATE_WINDOW_START: data.get(
                 CONF_EXPORT_RATE_WINDOW_START, DEFAULT_EXPORT_RATE_WINDOW_START
             ),
@@ -1927,6 +1977,10 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             CONF_BONUS_WINDOW_END: data.get(CONF_BONUS_WINDOW_END, DEFAULT_BONUS_WINDOW_END),
             CONF_FORCE_DISCHARGE_FINISH: data.get(
                 CONF_FORCE_DISCHARGE_FINISH, DEFAULT_FORCE_DISCHARGE_FINISH
+            ),
+            CONF_FORCE_DISCHARGE_OFFSET_MINUTES: data.get(
+                CONF_FORCE_DISCHARGE_OFFSET_MINUTES,
+                DEFAULT_FORCE_DISCHARGE_OFFSET_MINUTES,
             ),
             CONF_AUTOMATIC_EXPORT_LIMIT_KWH: data.get(
                 CONF_AUTOMATIC_EXPORT_LIMIT_KWH,
@@ -2116,11 +2170,12 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             offpeak_balance_rate = float(data[CONF_OFFPEAK_BALANCE_RATE])
             shoulder_rate = float(data[CONF_SHOULDER_RATE])
             export_rate = float(data[CONF_EXPORT_RATE])
+            offpeak_export_rate = float(data[CONF_OFFPEAK_EXPORT_RATE])
             super_export_rate = float(data[CONF_SUPER_EXPORT_RATE])
             zerohero_daily_credit = float(data[CONF_ZEROHERO_DAILY_CREDIT])
             automatic_export_limit = float(data[CONF_AUTOMATIC_EXPORT_LIMIT_KWH])
             export_allowance = float(data[CONF_EXPORT_ALLOWANCE_KWH])
-            export_discharge_power = float(data[CONF_EXPORT_DISCHARGE_POWER_KW])
+            force_discharge_offset = float(data[CONF_FORCE_DISCHARGE_OFFSET_MINUTES])
             discharge_efficiency = float(data[CONF_DISCHARGE_EFFICIENCY_PERCENT])
             protected_ev_baseline = float(data[CONF_EV_PROTECTED_BASELINE_A])
             daily_backfill_energy = float(data[CONF_EV_DAILY_BACKFILL_ENERGY])
@@ -2173,7 +2228,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             end = time.fromisoformat(str(data[CONF_FREE_CHARGE_END]))
             bonus_start = time.fromisoformat(str(data[CONF_BONUS_WINDOW_START]))
             bonus_end = time.fromisoformat(str(data[CONF_BONUS_WINDOW_END]))
-            discharge_finish = time.fromisoformat(str(data[CONF_FORCE_DISCHARGE_FINISH]))
+            discharge_finish = _time_after_minutes(bonus_end, force_discharge_offset)
             daily_ready = time.fromisoformat(str(data[CONF_EV_DAILY_READY_TIME]))
             peak_start = time.fromisoformat(str(data[CONF_PEAK_WINDOW_START]))
             peak_end = time.fromisoformat(str(data[CONF_PEAK_WINDOW_END]))
@@ -2223,11 +2278,12 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             offpeak_balance_rate,
             shoulder_rate,
             export_rate,
+            offpeak_export_rate,
             super_export_rate,
             zerohero_daily_credit,
             automatic_export_limit,
             export_allowance,
-            export_discharge_power,
+            force_discharge_offset,
             discharge_efficiency,
             protected_ev_baseline,
             daily_backfill_energy,
@@ -2278,11 +2334,12 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             or phase_count < 1
             or not phase_count.is_integer()
             or export_rate < 0
+            or offpeak_export_rate < 0
             or super_export_rate < 0
             or zerohero_daily_credit < 0
             or automatic_export_limit < 0
             or export_allowance < 0
-            or export_discharge_power < 0
+            or force_discharge_offset < 0
             or not 50 <= discharge_efficiency <= 100
             or protected_ev_baseline < 0
             or daily_backfill_energy < 0

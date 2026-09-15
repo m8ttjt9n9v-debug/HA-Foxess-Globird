@@ -51,12 +51,13 @@ The integration exposes separate estimated financial values:
 
 The daily export meter integrates canonical positive export from local
 midnight. A separate persisted meter counts export inside the configurable
-Solar/Generation feed-in window; only that energy receives the configured
-standard rate. Within the independently configured boosted window, eligible
-export also receives the additional ZEROHERO boost for no more than the daily
-boosted allowance. For example, if all 20 kWh is exported inside a 2 c/kWh
-standard window and the first 15 kWh also receives an 8 c/kWh boost, earnings
-are `20 × $0.02 + 15 × $0.08 = $1.60`. Export outside both windows earns zero.
+Peak Solar/GenerationFeedin window. Its complement is Off-peak
+Solar/GenerationFeedin; no additional time pair is required. Each period has
+its own base rate. Within the independently configured Super Export window,
+eligible export also receives the additional top-up for no more than the daily
+top-up allowance. For example, if all 20 kWh is exported inside a 2 c/kWh base
+window and the first 15 kWh also receives an 8 c/kWh top-up, earnings are
+`20 × $0.02 + 15 × $0.08 = $1.60`.
 
 The automatic controller has a separate daily export cap. A 20 kWh automatic
 cap and 15 kWh boosted allowance lets HEO plan a fixed-power session for no
@@ -70,9 +71,9 @@ and cannot reconstruct export from earlier that day. These values are estimates
 until a complete local day has been observed; they are not copies of the
 retailer's final bill.
 
-After upgrading, verify that the standard rate field contains the base rate
-and its correct start/end times, and that the boost field contains only the
-additional bonus, not the combined rate.
+After upgrading, verify both Peak and Off-peak base feed-in rates, the Peak
+feed-in start/end times, and that Super Export contains only the additional
+top-up, not the combined rate.
 
 The ZEROHERO daily credit defaults to $1.00 and is configurable. HEO applies it
 once per day only after the complete configured bonus window has been observed,

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import time
+
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
@@ -13,12 +15,16 @@ from .const import (
     CONF_AUTOMATIC_EXPORT_LIMIT_KWH,
     CONF_BATTERY_CHARGE_POSITIVE,
     CONF_BATTERY_POWER_DIRECTION,
+    CONF_BONUS_WINDOW_END,
     CONF_EXPORT_ALLOWANCE_KWH,
     CONF_EXPORT_RATE_WINDOW_END,
     CONF_EXPORT_RATE_WINDOW_START,
+    CONF_FORCE_DISCHARGE_FINISH,
+    CONF_FORCE_DISCHARGE_OFFSET_MINUTES,
     CONF_FREE_CHARGE_SCHEDULE_CONFIRMED,
     CONF_GRID_IMPORT_POSITIVE,
     CONF_GRID_POWER_DIRECTION,
+    CONF_OFFPEAK_EXPORT_RATE,
     CONF_SIGN_CONVENTIONS_VERIFIED,
     CONF_SITE_GRID_CURRENT_DIRECTION,
     CONF_SOLAR_POWER_DIRECTION,
@@ -26,6 +32,9 @@ from .const import (
     DEFAULT_AUTOMATIC_EXPORT_LIMIT_KWH,
     DEFAULT_EXPORT_RATE_WINDOW_END,
     DEFAULT_EXPORT_RATE_WINDOW_START,
+    DEFAULT_FORCE_DISCHARGE_FINISH,
+    DEFAULT_FORCE_DISCHARGE_OFFSET_MINUTES,
+    DEFAULT_OFFPEAK_EXPORT_RATE,
     DEFAULT_SIGN_CONVENTIONS_VERIFIED,
     DEFAULT_SITE_GRID_CURRENT_DIRECTION,
     DEFAULT_SOLAR_POWER_DIRECTION,
@@ -44,7 +53,7 @@ type EnergyConfigEntry = ConfigEntry[EnergyCoordinator]
 
 async def async_migrate_entry(hass: HomeAssistant, entry: EnergyConfigEntry) -> bool:
     """Migrate ambiguous legacy booleans to explicit, locked conventions."""
-    if entry.version > 4:
+    if entry.version > 5:
         return False
     if entry.version == 1:
         data = dict(entry.data)
@@ -92,6 +101,25 @@ async def async_migrate_entry(hass: HomeAssistant, entry: EnergyConfigEntry) -> 
         data.setdefault(CONF_EXPORT_RATE_WINDOW_START, DEFAULT_EXPORT_RATE_WINDOW_START)
         data.setdefault(CONF_EXPORT_RATE_WINDOW_END, DEFAULT_EXPORT_RATE_WINDOW_END)
         hass.config_entries.async_update_entry(entry, data=data, version=4)
+    if entry.version == 4:
+        data = dict(entry.data)
+        data.setdefault(CONF_OFFPEAK_EXPORT_RATE, DEFAULT_OFFPEAK_EXPORT_RATE)
+        try:
+            bonus_end = time.fromisoformat(str(data[CONF_BONUS_WINDOW_END]))
+            old_finish = time.fromisoformat(
+                str(data.get(CONF_FORCE_DISCHARGE_FINISH, DEFAULT_FORCE_DISCHARGE_FINISH))
+            )
+            end_seconds = bonus_end.hour * 3600 + bonus_end.minute * 60 + bonus_end.second
+            finish_seconds = (
+                old_finish.hour * 3600 + old_finish.minute * 60 + old_finish.second
+            )
+            offset_minutes = ((finish_seconds - end_seconds) % 86400) / 60
+            if offset_minutes <= 0:
+                offset_minutes = DEFAULT_FORCE_DISCHARGE_OFFSET_MINUTES
+        except (TypeError, ValueError):
+            offset_minutes = DEFAULT_FORCE_DISCHARGE_OFFSET_MINUTES
+        data.setdefault(CONF_FORCE_DISCHARGE_OFFSET_MINUTES, offset_minutes)
+        hass.config_entries.async_update_entry(entry, data=data, version=5)
     return True
 
 

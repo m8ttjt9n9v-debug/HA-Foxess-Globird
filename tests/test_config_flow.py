@@ -13,14 +13,18 @@ from custom_components.home_energy_orchestrator.const import (
     CONF_EV_AUTOMATIC_CONTROL_ENABLED,
     CONF_EV_BEFORE_EXPORT_ENABLED,
     CONF_EV_BEFORE_EXPORT_SOC_TARGET,
+    CONF_FORCE_DISCHARGE_OFFSET_MINUTES,
     CONF_FOXESS_CONTROL_OWNER,
     CONF_FREE_CHARGE_SCHEDULE_CONFIRMED,
+    CONF_OFFPEAK_EXPORT_RATE,
     CONF_ZEROHERO_DAILY_CREDIT,
     DEFAULT_AUTOMATIC_CHARGE_ENABLED,
     DEFAULT_AUTOMATIC_EXPORT_LIMIT_KWH,
     DEFAULT_EV_BEFORE_EXPORT_ENABLED,
     DEFAULT_EV_BEFORE_EXPORT_SOC_TARGET,
+    DEFAULT_FORCE_DISCHARGE_OFFSET_MINUTES,
     DEFAULT_FOXESS_CONTROL_OWNER,
+    DEFAULT_OFFPEAK_EXPORT_RATE,
     DEFAULT_ZEROHERO_DAILY_CREDIT,
     DOMAIN,
 )
@@ -125,8 +129,36 @@ async def test_tariff_page_exposes_and_validates_zerohero_daily_credit(hass):
         result = await _submit_page_defaults(hass, result)
 
     assert result["step_id"] == "tariff"
+    assert [marker.schema for marker in result["data_schema"].schema] == [
+        "daily_import_entity",
+        "daily_charge",
+        "peak_rate_per_kwh",
+        "offpeak_rate_per_kwh",
+        "offpeak_balance_rate_per_kwh",
+        "shoulder_rate_per_kwh",
+        "export_rate_per_kwh",
+        "offpeak_export_rate_per_kwh",
+        "super_export_rate_per_kwh",
+        "zerohero_daily_credit",
+        "daily_free_allowance_kwh",
+        "export_allowance_kwh",
+        "automatic_export_limit_kwh",
+        "peak_window_start",
+        "peak_window_end",
+        "free_charge_window_start",
+        "free_charge_window_end",
+        "bonus_window_start",
+        "bonus_window_end",
+        "force_discharge_offset_minutes",
+        "export_rate_window_start",
+        "export_rate_window_end",
+    ]
     markers = {marker.schema: marker for marker in result["data_schema"].schema}
     assert markers[CONF_ZEROHERO_DAILY_CREDIT].default() == DEFAULT_ZEROHERO_DAILY_CREDIT
+    assert markers[CONF_OFFPEAK_EXPORT_RATE].default() == DEFAULT_OFFPEAK_EXPORT_RATE
+    assert markers[CONF_FORCE_DISCHARGE_OFFSET_MINUTES].default() == (
+        DEFAULT_FORCE_DISCHARGE_OFFSET_MINUTES
+    )
     values = {}
     for marker in result["data_schema"].schema:
         if marker.schema in ENTRY_DATA:
@@ -210,7 +242,11 @@ async def test_user_flow_creates_a_config_entry(hass):
 
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["title"] == "Test Site"
-    assert result["data"] == ENTRY_DATA
+    assert result["data"] == {
+        **ENTRY_DATA,
+        "offpeak_export_rate_per_kwh": 0.0,
+        "force_discharge_offset_minutes": 1.0,
+    }
 
 
 async def test_enabled_battery_schedule_requires_unambiguous_confirmation(hass):
@@ -917,7 +953,11 @@ async def test_reconfigure_updates_and_reloads_an_entry(hass):
     assert result["reason"] == "reconfigure_successful"
     await hass.async_block_till_done()
     assert entry.title == "Updated Site"
-    assert entry.data == updated_data
+    assert entry.data == {
+        **updated_data,
+        "offpeak_export_rate_per_kwh": 0.0,
+        "force_discharge_offset_minutes": 1.0,
+    }
     assert await hass.config_entries.async_unload(entry.entry_id)
 
 

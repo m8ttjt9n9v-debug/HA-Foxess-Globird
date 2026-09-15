@@ -58,15 +58,17 @@ minus:
   confirmed home and connected.
 
 It deliberately does not reserve an optional EV charge-limit gap. The planned
-sale is the minimum of that sellable energy, the remaining daily boosted-export
-allowance, and what the fixed discharge power can deliver between the export
-window start and configured Force Discharge finish.
+sale is the minimum of that sellable energy and the remaining independent daily
+automatic-export allowance.
 
-Power is fixed for the session. Energy changes duration, and the latest start
-is `finish - duration`, bounded no earlier than the export-window start. The
-defaults are 18:00, 10 kW, 15 kWh, 95% efficiency, and a 21:01 finish. The
-21:01 boundary is deliberate: restoration occurs after the 18:00–21:00 tariff
-assessment window.
+HEO requests the lesser of the commissioned inverter discharge maximum and the
+mapped actuator's advertised maximum. Energy changes duration, and the latest
+start is `finish - duration`, bounded no earlier than the export-window start.
+The finish is derived from the ZEROHERO window end plus a configurable offset,
+defaulting to one minute. The inverter's own regulated grid-export limit remains
+the hardware authority and deliberately does not reduce this battery-side
+request: preserving maximum discharge headroom helps cover simultaneous house
+load without importing during the ZEROHERO assessment window.
 
 ## Session and recovery behavior
 
