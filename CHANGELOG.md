@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased — Separate export control and tariff limits
+
+- Add an independent maximum automatic export per day. Existing installations
+  migrate their former export allowance into the new controller cap so upgrade
+  behavior is unchanged until deliberately reconfigured.
+- Retain the existing allowance as the amount eligible for the additional
+  boosted export payment. Export above that allowance can still be controlled
+  up to the independent automatic cap.
+- Add an independent configurable Solar/Generation feed-in start/end window.
+  Export in that window receives the standard rate; eligible boosted-window
+  energy also receives the configured additional boost. Clarify these fields
+  in setup and reconfigure.
+
 ## 0.12.22 — Accurate daily financial accounting
 
 - Persist the transition from positive grid flow to zero import immediately,

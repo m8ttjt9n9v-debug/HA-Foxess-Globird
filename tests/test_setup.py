@@ -42,6 +42,8 @@ ENTRY_DATA = {
     "offpeak_balance_rate_per_kwh": 0.308,
     "shoulder_rate_per_kwh": 0.528,
     "export_rate_per_kwh": 0.0,
+    "export_rate_window_start": "16:00:00",
+    "export_rate_window_end": "23:00:00",
     "super_export_rate_per_kwh": 0.10,
     "site_phase_count": 1,
     "service_import_limit_a": 0.0,
@@ -60,6 +62,7 @@ ENTRY_DATA = {
     "automatic_control_enabled": False,
     "automatic_charge_enabled": False,
     "automatic_export_enabled": False,
+    "automatic_export_limit_kwh": 15.0,
     "ev_before_export_enabled": False,
     "ev_before_export_soc_target_percent": 40.0,
     "ev_automatic_control_enabled": False,
@@ -352,12 +355,15 @@ async def test_version_one_sign_booleans_migrate_locked(hass):
 
     assert await async_migrate_entry(hass, entry)
 
-    assert entry.version == 3
+    assert entry.version == 4
     assert entry.data["grid_power_positive_direction"] == "positive_export"
     assert entry.data["battery_power_positive_direction"] == "positive_discharge"
     assert entry.data["sign_conventions_verified"] is False
     assert entry.data["free_charge_schedule_confirmed"] is False
     assert entry.data["automatic_charge_enabled"] is False
+    assert entry.data["automatic_export_limit_kwh"] == 15.0
+    assert entry.data["export_rate_window_start"] == "16:00:00"
+    assert entry.data["export_rate_window_end"] == "23:00:00"
     assert "grid_import_positive" not in entry.data
     assert "battery_charge_positive" not in entry.data
 
@@ -465,9 +471,35 @@ async def test_version_two_migration_disables_unconfirmed_automatic_charge(hass)
 
     assert await async_migrate_entry(hass, entry)
 
-    assert entry.version == 3
+    assert entry.version == 4
     assert entry.data["automatic_charge_enabled"] is False
     assert entry.data["free_charge_schedule_confirmed"] is False
+    assert entry.data["automatic_export_limit_kwh"] == 15.0
+    assert entry.data["export_rate_window_start"] == "16:00:00"
+    assert entry.data["export_rate_window_end"] == "23:00:00"
+
+
+async def test_version_three_migration_preserves_old_export_control_cap(hass):
+    legacy = {
+        **ENTRY_DATA,
+        "export_allowance_kwh": 20.0,
+    }
+    legacy.pop("automatic_export_limit_kwh")
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Version three export cap",
+        version=3,
+        data=legacy,
+    )
+    entry.add_to_hass(hass)
+
+    assert await async_migrate_entry(hass, entry)
+
+    assert entry.version == 4
+    assert entry.data["export_allowance_kwh"] == 20.0
+    assert entry.data["automatic_export_limit_kwh"] == 20.0
+    assert entry.data["export_rate_window_start"] == "16:00:00"
+    assert entry.data["export_rate_window_end"] == "23:00:00"
 
 
 async def test_ev_before_export_controls_are_integration_owned_and_persist(hass):
@@ -651,14 +683,18 @@ async def test_export_to_import_transition_is_checkpointed(hass):
     await hass.async_block_till_done()
 
     coordinator = entry.runtime_data
-    save = AsyncMock()
-    coordinator._daily_export_store.async_save = save
+    daily_save = AsyncMock()
+    standard_window_save = AsyncMock()
+    coordinator._daily_export_store.async_save = daily_save
+    coordinator._standard_rate_export_store.async_save = standard_window_save
 
     hass.states.async_set("sensor.test_grid_power", "50", {"unit_of_measurement": "W"})
     await hass.async_block_till_done()
 
-    save.assert_awaited()
-    assert save.await_args.args[0]["last_import_kw"] == 0.0
+    daily_save.assert_awaited()
+    standard_window_save.assert_awaited()
+    assert daily_save.await_args.args[0]["last_import_kw"] == 0.0
+    assert standard_window_save.await_args.args[0]["last_import_kw"] == 0.0
 
 
 async def test_zerohero_hourly_accumulator_is_exposed(hass):
@@ -778,6 +814,9 @@ async def test_daily_export_revenue_and_net_cost_are_exposed_without_double_coun
     coordinator.daily_export.local_date = now.date()
     coordinator.daily_export.last_at = now
     coordinator.daily_export.imported_kwh = 20.0
+    coordinator.standard_rate_export.local_date = now.date()
+    coordinator.standard_rate_export.last_at = now
+    coordinator.standard_rate_export.imported_kwh = 20.0
     coordinator.zerohero_export.local_date = now.date()
     coordinator.zerohero_export.last_at = now
     coordinator.zerohero_export.imported_kwh = 18.0
@@ -798,7 +837,9 @@ async def test_daily_export_revenue_and_net_cost_are_exposed_without_double_coun
     revenue = hass.states.get(_entity_id(hass, entry, "estimated_export_revenue"))
     assert revenue.state == "1.5"
     assert revenue.attributes["boosted_rate_export_kwh"] == 15.0
-    assert revenue.attributes["standard_rate_export_kwh"] == 5.0
+    assert revenue.attributes["standard_rate_export_kwh"] == 20.0
+    assert revenue.attributes["standard_export_revenue"] == 0.0
+    assert revenue.attributes["boosted_bonus_revenue"] == 1.5
     assert revenue.attributes["boosted_window_export_kwh"] == 18.0
     assert hass.states.get(_entity_id(hass, entry, "zerohero_credit")).state == "1.0"
     assert hass.states.get(_entity_id(hass, entry, "zerohero_credit_status")).state == "earned"

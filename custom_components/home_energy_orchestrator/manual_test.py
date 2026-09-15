@@ -20,6 +20,8 @@ from .const import (
     CONF_BONUS_WINDOW_END,
     CONF_BONUS_WINDOW_START,
     CONF_EXPORT_RATE,
+    CONF_EXPORT_RATE_WINDOW_END,
+    CONF_EXPORT_RATE_WINDOW_START,
     CONF_FOXESS_CONTROL_OWNER,
     CONF_FOXESS_FORCE_CHARGE_POWER,
     CONF_FOXESS_FORCE_DISCHARGE_POWER,
@@ -37,6 +39,8 @@ from .const import (
     DEFAULT_BONUS_WINDOW_END,
     DEFAULT_BONUS_WINDOW_START,
     DEFAULT_EXPORT_RATE,
+    DEFAULT_EXPORT_RATE_WINDOW_END,
+    DEFAULT_EXPORT_RATE_WINDOW_START,
     DEFAULT_FOXESS_CONTROL_OWNER,
     DEFAULT_SUPER_EXPORT_RATE,
     FOXESS_CONTROL_OWNER_MODBUS,
@@ -164,9 +168,16 @@ class ManualTestController:
     def current_export_rate(self, now: datetime | None = None) -> float:
         """Return the configured export rate for the current local time."""
         now = now or dt_util.now()
+        standard_rate = (
+            self._rate(CONF_EXPORT_RATE, DEFAULT_EXPORT_RATE)
+            if self._standard_export_window_active(now)
+            else 0.0
+        )
         if self._bonus_window_active(now):
-            return self._rate(CONF_SUPER_EXPORT_RATE, DEFAULT_SUPER_EXPORT_RATE)
-        return self._rate(CONF_EXPORT_RATE, DEFAULT_EXPORT_RATE)
+            return standard_rate + self._rate(
+                CONF_SUPER_EXPORT_RATE, DEFAULT_SUPER_EXPORT_RATE
+            )
+        return standard_rate
 
     def current_import_rate(self, now: datetime | None = None) -> float:
         """Return the configured import rate at the current local time."""
@@ -526,6 +537,17 @@ class ManualTestController:
         )
         end = self.coordinator._configured_time(
             CONF_BONUS_WINDOW_END, DEFAULT_BONUS_WINDOW_END
+        )
+        current = now.timetz().replace(tzinfo=None)
+        return (start <= current < end) if start < end else (current >= start or current < end)
+
+    def _standard_export_window_active(self, now: datetime) -> bool:
+        """Evaluate the configured standard feed-in tariff window."""
+        start = self.coordinator._configured_time(
+            CONF_EXPORT_RATE_WINDOW_START, DEFAULT_EXPORT_RATE_WINDOW_START
+        )
+        end = self.coordinator._configured_time(
+            CONF_EXPORT_RATE_WINDOW_END, DEFAULT_EXPORT_RATE_WINDOW_END
         )
         current = now.timetz().replace(tzinfo=None)
         return (start <= current < end) if start < end else (current >= start or current < end)

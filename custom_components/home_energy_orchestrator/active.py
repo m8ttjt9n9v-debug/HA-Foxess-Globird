@@ -20,6 +20,7 @@ from .const import (
     CONF_AUTOMATIC_CHARGE_ENABLED,
     CONF_AUTOMATIC_CONTROL_ENABLED,
     CONF_AUTOMATIC_EXPORT_ENABLED,
+    CONF_AUTOMATIC_EXPORT_LIMIT_KWH,
     CONF_BATTERY_FREE_WINDOW_TARGET,
     CONF_BONUS_WINDOW_START,
     CONF_CONFIGURE_EV,
@@ -32,7 +33,6 @@ from .const import (
     CONF_EV_PHASE_COUNT,
     CONF_EV_PROTECTED_BASELINE_A,
     CONF_EV_VOLTAGE,
-    CONF_EXPORT_ALLOWANCE_KWH,
     CONF_EXPORT_DISCHARGE_POWER_KW,
     CONF_FORCE_DISCHARGE_FINISH,
     CONF_FOXESS_CONTROL_OWNER,
@@ -48,6 +48,7 @@ from .const import (
     CONF_SIGN_CONVENTIONS_VERIFIED,
     DEFAULT_AUTOMATIC_CHARGE_ENABLED,
     DEFAULT_AUTOMATIC_EXPORT_ENABLED,
+    DEFAULT_AUTOMATIC_EXPORT_LIMIT_KWH,
     DEFAULT_BATTERY_FREE_WINDOW_TARGET,
     DEFAULT_BONUS_WINDOW_START,
     DEFAULT_DISCHARGE_EFFICIENCY_PERCENT,
@@ -57,7 +58,6 @@ from .const import (
     DEFAULT_EV_PHASE_COUNT,
     DEFAULT_EV_PROTECTED_BASELINE_A,
     DEFAULT_EV_VOLTAGE,
-    DEFAULT_EXPORT_ALLOWANCE_KWH,
     DEFAULT_EXPORT_DISCHARGE_POWER_KW,
     DEFAULT_FORCE_DISCHARGE_FINISH,
     DEFAULT_FOXESS_CONTROL_OWNER,
@@ -104,7 +104,7 @@ class ActiveFoxessController:
         self.export_session = ExportSessionState()
         self.export_plan: ExportPlan | None = None
         self.export_planned_start: datetime | None = None
-        self.export_allowance_remaining_kwh: float | None = None
+        self.automatic_export_remaining_kwh: float | None = None
         self.export_protected_ev_kwh: float | None = None
         self.ev_before_export_decision = EvBeforeExportDecision(True, "disabled")
         self.export_effective_enabled = False
@@ -408,9 +408,10 @@ class ActiveFoxessController:
         )
         try:
             allowance = self._configured(
-                CONF_EXPORT_ALLOWANCE_KWH, DEFAULT_EXPORT_ALLOWANCE_KWH
+                CONF_AUTOMATIC_EXPORT_LIMIT_KWH,
+                DEFAULT_AUTOMATIC_EXPORT_LIMIT_KWH,
             )
-            self.export_allowance_remaining_kwh = (
+            self.automatic_export_remaining_kwh = (
                 max(allowance - float(exported), 0.0) if exported is not None else None
             )
             protected_house = getattr(
@@ -428,7 +429,7 @@ class ActiveFoxessController:
                 available is not None
                 and protected_house is not None
                 and protected_ev is not None
-                and self.export_allowance_remaining_kwh is not None
+                and self.automatic_export_remaining_kwh is not None
                 and discharge_max > 0
             ):
                 efficiency = self._configured(
@@ -440,7 +441,7 @@ class ActiveFoxessController:
                     max(float(available), 0.0) * efficiency,
                     protected_house,
                     protected_ev,
-                    self.export_allowance_remaining_kwh,
+                    self.automatic_export_remaining_kwh,
                     requested,
                     window_hours,
                 )

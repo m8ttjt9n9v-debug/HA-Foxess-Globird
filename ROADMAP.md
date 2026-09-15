@@ -128,6 +128,14 @@ Status here describes behavioral parity, not merely the presence of code.
 
 ## Confirmed bugs
 
+- [x] Separate the automatic export-energy cap from the tariff's boosted-energy
+  allowance. Preserve the old shared value as the new automatic cap during
+  migration, allow deliberate configurations such as 20 kWh automatic with
+  only 15 kWh boosted, and calculate export revenue using independent standard
+  Solar/Generation feed-in and additional-boost time windows. Implemented for
+  the next release with controller, persisted window accounting, migration,
+  and configuration regression coverage.
+
 - [x] Prevent outside-window EV automation from draining the house battery to
   its floor after the safe export budget disappears. The ready-by extension
   must be capped by the live ZEROHERO export plan, an active session's energy

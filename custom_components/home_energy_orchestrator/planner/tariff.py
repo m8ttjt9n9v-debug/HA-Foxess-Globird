@@ -121,6 +121,7 @@ def calculate_daily_financials(
     shoulder_rate: float,
     daily_charge: float,
     total_export_kwh: float,
+    standard_window_export_kwh: float,
     boosted_window_export_kwh: float,
     boosted_export_allowance_kwh: float,
     export_rate: float,
@@ -129,14 +130,15 @@ def calculate_daily_financials(
 ) -> DailyFinancialSummary:
     """Return a non-double-counted daily import/export financial summary.
 
-    The boosted rate replaces the standard rate for the eligible portion of
-    export inside the configured bonus window. Window energy above the daily
-    boosted allowance, and all export outside the window, receives the standard
-    rate. A window counter can briefly exceed the daily counter after recovery;
-    clamping to measured daily export prevents invented revenue.
+    Export inside the configured standard-rate window receives the standard
+    rate. Eligible export inside the configured bonus window also receives the
+    additional boosted rate, up to the daily boosted allowance. Window counters
+    can briefly exceed the daily counter after recovery; clamping to measured
+    daily export prevents invented revenue.
     """
     export_values = (
         total_export_kwh,
+        standard_window_export_kwh,
         boosted_window_export_kwh,
         boosted_export_allowance_kwh,
         export_rate,
@@ -164,7 +166,7 @@ def calculate_daily_financials(
         boosted_window_export_kwh,
         boosted_export_allowance_kwh,
     )
-    standard_export = max(total_export_kwh - boosted_export, 0.0)
+    standard_export = min(total_export_kwh, standard_window_export_kwh)
     export_revenue = (
         boosted_export * boosted_export_rate + standard_export * export_rate
     )

@@ -50,13 +50,29 @@ The integration exposes separate estimated financial values:
 - net cost, which is gross cost minus export revenue and any earned credit.
 
 The daily export meter integrates canonical positive export from local
-midnight. Within the configured boosted window, the ZEROHERO rate replaces the
-standard export rate for no more than the configured daily boosted allowance.
-Export beyond that allowance and export outside the window receive the standard
-rate. The meter is persisted across reloads and restarts, but starts at zero
-when this feature is first installed and cannot reconstruct export from earlier
-that day. These values are estimates until a complete local day has been
-observed; they are not copies of the retailer's final bill.
+midnight. A separate persisted meter counts export inside the configurable
+Solar/Generation feed-in window; only that energy receives the configured
+standard rate. Within the independently configured boosted window, eligible
+export also receives the additional ZEROHERO boost for no more than the daily
+boosted allowance. For example, if all 20 kWh is exported inside a 2 c/kWh
+standard window and the first 15 kWh also receives an 8 c/kWh boost, earnings
+are `20 × $0.02 + 15 × $0.08 = $1.60`. Export outside both windows earns zero.
+
+The automatic controller has a separate daily export cap. A 20 kWh automatic
+cap and 15 kWh boosted allowance lets HEO plan a fixed-power session for no
+more than 20 kWh while applying the boost only to the eligible first 15 kWh.
+The plan remains latched until its calculated finish so transient telemetry
+cannot cause unsafe command flapping. Existing installations initially
+migrate their old shared allowance into the new controller cap, so an upgrade
+does not silently increase exported energy. The meter is persisted across
+reloads and restarts, but starts at zero when this feature is first installed
+and cannot reconstruct export from earlier that day. These values are estimates
+until a complete local day has been observed; they are not copies of the
+retailer's final bill.
+
+After upgrading, verify that the standard rate field contains the base rate
+and its correct start/end times, and that the boost field contains only the
+additional bonus, not the combined rate.
 
 The ZEROHERO daily credit defaults to $1.00 and is configurable. HEO applies it
 once per day only after the complete configured bonus window has been observed,

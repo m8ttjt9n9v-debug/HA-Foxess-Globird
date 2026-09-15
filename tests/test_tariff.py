@@ -164,6 +164,7 @@ def test_daily_financials_count_boosted_export_once_and_report_net_cost() -> Non
         shoulder_rate=0.528,
         daily_charge=2.035,
         total_export_kwh=20,
+        standard_window_export_kwh=20,
         boosted_window_export_kwh=18,
         boosted_export_allowance_kwh=15,
         export_rate=0.05,
@@ -171,10 +172,10 @@ def test_daily_financials_count_boosted_export_once_and_report_net_cost() -> Non
     )
 
     import_energy_cost = 10 * 0.594 + 5 * 0.308 + 5 * 0.528
-    export_revenue = 15 * 0.10 + 5 * 0.05
+    export_revenue = 20 * 0.05 + 15 * 0.10
     assert summary.import_energy_cost == pytest.approx(import_energy_cost)
     assert summary.gross_cost == pytest.approx(2.035 + import_energy_cost)
-    assert summary.standard_export_kwh == pytest.approx(5)
+    assert summary.standard_export_kwh == pytest.approx(20)
     assert summary.boosted_export_kwh == pytest.approx(15)
     assert summary.export_revenue == pytest.approx(export_revenue)
     assert summary.net_cost == pytest.approx(2.035 + import_energy_cost - export_revenue)
@@ -192,6 +193,7 @@ def test_daily_financials_clamp_window_export_to_measured_daily_total() -> None:
         shoulder_rate=0.528,
         daily_charge=2.035,
         total_export_kwh=4,
+        standard_window_export_kwh=15,
         boosted_window_export_kwh=15,
         boosted_export_allowance_kwh=15,
         export_rate=0.05,
@@ -199,9 +201,34 @@ def test_daily_financials_clamp_window_export_to_measured_daily_total() -> None:
     )
 
     assert summary.boosted_export_kwh == pytest.approx(4)
-    assert summary.standard_export_kwh == pytest.approx(0)
-    assert summary.export_revenue == pytest.approx(0.4)
-    assert summary.net_cost == pytest.approx(1.635)
+    assert summary.standard_export_kwh == pytest.approx(4)
+    assert summary.export_revenue == pytest.approx(0.6)
+    assert summary.net_cost == pytest.approx(1.435)
+
+
+def test_daily_financials_add_standard_and_first_fifteen_kwh_boost() -> None:
+    summary = calculate_daily_financials(
+        total_import_kwh=0,
+        free_window_import_kwh=0,
+        peak_import_kwh=0,
+        free_allowance_kwh=50,
+        peak_rate=0.594,
+        offpeak_rate=0.0,
+        offpeak_balance_rate=0.308,
+        shoulder_rate=0.528,
+        daily_charge=2.035,
+        total_export_kwh=20,
+        standard_window_export_kwh=20,
+        boosted_window_export_kwh=20,
+        boosted_export_allowance_kwh=15,
+        export_rate=0.02,
+        boosted_export_rate=0.08,
+    )
+
+    assert summary.standard_export_kwh == pytest.approx(20)
+    assert summary.boosted_export_kwh == pytest.approx(15)
+    assert summary.export_revenue == pytest.approx(20 * 0.02 + 15 * 0.08)
+    assert summary.net_cost == pytest.approx(2.035 - 1.6)
 
 
 def test_daily_financials_apply_standard_rate_outside_boosted_window() -> None:
@@ -216,6 +243,7 @@ def test_daily_financials_apply_standard_rate_outside_boosted_window() -> None:
         shoulder_rate=0.528,
         daily_charge=2.035,
         total_export_kwh=10,
+        standard_window_export_kwh=10,
         boosted_window_export_kwh=0,
         boosted_export_allowance_kwh=15,
         export_rate=0.05,
@@ -240,11 +268,36 @@ def test_daily_financials_reject_invalid_export_inputs() -> None:
             shoulder_rate=0.528,
             daily_charge=2.035,
             total_export_kwh=-1,
+            standard_window_export_kwh=0,
             boosted_window_export_kwh=0,
             boosted_export_allowance_kwh=15,
             export_rate=0.05,
             boosted_export_rate=0.10,
         )
+
+
+def test_daily_financials_apply_each_export_rate_only_to_its_window() -> None:
+    summary = calculate_daily_financials(
+        total_import_kwh=0,
+        free_window_import_kwh=0,
+        peak_import_kwh=0,
+        free_allowance_kwh=50,
+        peak_rate=0.594,
+        offpeak_rate=0.0,
+        offpeak_balance_rate=0.308,
+        shoulder_rate=0.528,
+        daily_charge=2.035,
+        total_export_kwh=10,
+        standard_window_export_kwh=4,
+        boosted_window_export_kwh=3,
+        boosted_export_allowance_kwh=15,
+        export_rate=0.05,
+        boosted_export_rate=0.10,
+    )
+
+    assert summary.standard_export_kwh == pytest.approx(4)
+    assert summary.boosted_export_kwh == pytest.approx(3)
+    assert summary.export_revenue == pytest.approx(4 * 0.05 + 3 * 0.10)
 
 
 def test_zerohero_credit_is_applied_once_only_after_complete_qualified_window() -> None:

@@ -10,8 +10,12 @@ from .const import (
     BATTERY_POSITIVE_CHARGE,
     BATTERY_POSITIVE_DISCHARGE,
     CONF_AUTOMATIC_CHARGE_ENABLED,
+    CONF_AUTOMATIC_EXPORT_LIMIT_KWH,
     CONF_BATTERY_CHARGE_POSITIVE,
     CONF_BATTERY_POWER_DIRECTION,
+    CONF_EXPORT_ALLOWANCE_KWH,
+    CONF_EXPORT_RATE_WINDOW_END,
+    CONF_EXPORT_RATE_WINDOW_START,
     CONF_FREE_CHARGE_SCHEDULE_CONFIRMED,
     CONF_GRID_IMPORT_POSITIVE,
     CONF_GRID_POWER_DIRECTION,
@@ -19,6 +23,9 @@ from .const import (
     CONF_SITE_GRID_CURRENT_DIRECTION,
     CONF_SOLAR_POWER_DIRECTION,
     CONF_TELEMETRY_MAX_AGE_SECONDS,
+    DEFAULT_AUTOMATIC_EXPORT_LIMIT_KWH,
+    DEFAULT_EXPORT_RATE_WINDOW_END,
+    DEFAULT_EXPORT_RATE_WINDOW_START,
     DEFAULT_SIGN_CONVENTIONS_VERIFIED,
     DEFAULT_SITE_GRID_CURRENT_DIRECTION,
     DEFAULT_SOLAR_POWER_DIRECTION,
@@ -37,7 +44,7 @@ type EnergyConfigEntry = ConfigEntry[EnergyCoordinator]
 
 async def async_migrate_entry(hass: HomeAssistant, entry: EnergyConfigEntry) -> bool:
     """Migrate ambiguous legacy booleans to explicit, locked conventions."""
-    if entry.version > 3:
+    if entry.version > 4:
         return False
     if entry.version == 1:
         data = dict(entry.data)
@@ -73,6 +80,18 @@ async def async_migrate_entry(hass: HomeAssistant, entry: EnergyConfigEntry) -> 
         data[CONF_FREE_CHARGE_SCHEDULE_CONFIRMED] = False
         data[CONF_AUTOMATIC_CHARGE_ENABLED] = False
         hass.config_entries.async_update_entry(entry, data=data, version=3)
+    if entry.version == 3:
+        data = dict(entry.data)
+        # The old boosted-export allowance also capped the automatic export
+        # session. Preserve that exact cap during migration; operators can then
+        # configure control and tariff limits independently.
+        data.setdefault(
+            CONF_AUTOMATIC_EXPORT_LIMIT_KWH,
+            data.get(CONF_EXPORT_ALLOWANCE_KWH, DEFAULT_AUTOMATIC_EXPORT_LIMIT_KWH),
+        )
+        data.setdefault(CONF_EXPORT_RATE_WINDOW_START, DEFAULT_EXPORT_RATE_WINDOW_START)
+        data.setdefault(CONF_EXPORT_RATE_WINDOW_END, DEFAULT_EXPORT_RATE_WINDOW_END)
+        hass.config_entries.async_update_entry(entry, data=data, version=4)
     return True
 
 

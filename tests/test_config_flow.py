@@ -9,6 +9,7 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 from custom_components.home_energy_orchestrator.const import (
     CONF_AUTOMATIC_CHARGE_ENABLED,
     CONF_AUTOMATIC_EXPORT_ENABLED,
+    CONF_AUTOMATIC_EXPORT_LIMIT_KWH,
     CONF_EV_AUTOMATIC_CONTROL_ENABLED,
     CONF_EV_BEFORE_EXPORT_ENABLED,
     CONF_EV_BEFORE_EXPORT_SOC_TARGET,
@@ -16,6 +17,7 @@ from custom_components.home_energy_orchestrator.const import (
     CONF_FREE_CHARGE_SCHEDULE_CONFIRMED,
     CONF_ZEROHERO_DAILY_CREDIT,
     DEFAULT_AUTOMATIC_CHARGE_ENABLED,
+    DEFAULT_AUTOMATIC_EXPORT_LIMIT_KWH,
     DEFAULT_EV_BEFORE_EXPORT_ENABLED,
     DEFAULT_EV_BEFORE_EXPORT_SOC_TARGET,
     DEFAULT_FOXESS_CONTROL_OWNER,
@@ -135,6 +137,41 @@ async def test_tariff_page_exposes_and_validates_zerohero_daily_credit(hass):
     result = await hass.config_entries.flow.async_configure(result["flow_id"], user_input=values)
     assert result["step_id"] == "tariff"
     assert result["errors"] == {CONF_ZEROHERO_DAILY_CREDIT: "invalid_site_limits"}
+
+
+async def test_tariff_page_separates_automatic_and_boosted_export_limits(hass):
+    result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": SOURCE_USER})
+    result = await _open_battery_page(hass, result)
+    for step in ("battery", "inverter", "grid"):
+        assert result["step_id"] == step
+        result = await _submit_page_defaults(hass, result)
+
+    assert result["step_id"] == "tariff"
+    markers = {marker.schema: marker for marker in result["data_schema"].schema}
+    assert markers[CONF_AUTOMATIC_EXPORT_LIMIT_KWH].default() == (
+        DEFAULT_AUTOMATIC_EXPORT_LIMIT_KWH
+    )
+    assert markers["export_rate_window_start"].default() == "16:00:00"
+    assert markers["export_rate_window_end"].default() == "23:00:00"
+    assert markers["export_allowance_kwh"].default() == 15.0
+
+    values = {}
+    for marker in result["data_schema"].schema:
+        if marker.schema in ENTRY_DATA:
+            values[marker.schema] = ENTRY_DATA[marker.schema]
+        elif marker.default is not vol.UNDEFINED:
+            values[marker.schema] = marker.default()
+    values[CONF_AUTOMATIC_EXPORT_LIMIT_KWH] = -1
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], user_input=values)
+    assert result["step_id"] == "tariff"
+    assert result["errors"] == {CONF_AUTOMATIC_EXPORT_LIMIT_KWH: "invalid_site_limits"}
+
+    values[CONF_AUTOMATIC_EXPORT_LIMIT_KWH] = 20
+    values["export_rate_window_start"] = "16:00:00"
+    values["export_rate_window_end"] = "16:00:00"
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], user_input=values)
+    assert result["step_id"] == "tariff"
+    assert result["errors"] == {"export_rate_window_start": "invalid_schedule"}
 
 
 async def test_early_pages_do_not_validate_later_ev_limits(hass):

@@ -36,11 +36,15 @@ layers around the proven algorithm, not replacement algorithms.
   sensor is commissioned, both the exposed ledger total and cost estimate use
   it; the local accumulator is only the fallback daily total.
 - Daily financial reporting keeps import charges, the supply charge, and export
-  earnings separate. Boosted-window export receives the configured ZEROHERO
-  rate only up to the lesser of measured window export, measured daily export,
-  and the configured daily allowance. All other export receives the configured
-  standard rate. Net cost is gross cost minus export revenue; it is an HEO
-  telemetry estimate, not the retailer's final bill.
+  earnings separate. Export inside the configured Solar/Generation feed-in
+  window receives the standard rate; boosted-window export independently
+  receives the configured additional ZEROHERO boost up to the lesser of
+  measured window export, measured daily export, and the boosted daily
+  allowance. The independently configured automatic-export cap
+  limits controller energy without changing tariff eligibility. Existing
+  entries migrate the old shared allowance into that cap to preserve behavior.
+  Net cost is gross cost minus export revenue; it is an HEO telemetry estimate,
+  not the retailer's final bill.
 - The configurable ZEROHERO daily credit defaults to $1.00 and is deducted once
   from estimated net cost only after the full configured window is complete,
   all expected clock-hour buckets were observed, and no bucket exceeds the
@@ -235,9 +239,10 @@ energy conversion.
 
 Its export policy protects learned house demand and mandatory connected-EV
 energy, computes sellable energy and latest start, latches a fixed-power
-session, observes the export allowance, and deliberately restores Self Use at
-the configured finish. The retained HEO ZEROHERO path represents this policy;
-its detailed mapping is in `docs/zerohero-export-policy.md`.
+session, observes the independent automatic-export cap, and deliberately
+restores Self Use at the configured finish. The retained HEO ZEROHERO path
+represents this policy; its detailed mapping is in
+`docs/zerohero-export-policy.md`.
 
 The default-off EV-before-export threshold is a separately identified
 extension, not pilot parity. Its first stage changes only effective export

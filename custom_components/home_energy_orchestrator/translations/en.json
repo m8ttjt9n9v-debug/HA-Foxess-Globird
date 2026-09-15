@@ -28,7 +28,9 @@
           "offpeak_balance_rate_per_kwh": "Off-peak rate above allowance ($/kWh)",
           "shoulder_rate_per_kwh": "Shoulder import rate ($/kWh)",
           "export_rate_per_kwh": "Standard export rate ($/kWh)",
-          "super_export_rate_per_kwh": "ZEROHERO export rate during bonus window ($/kWh)",
+          "export_rate_window_start": "Standard Solar/Generation feed-in rate start",
+          "export_rate_window_end": "Standard Solar/Generation feed-in rate end",
+          "super_export_rate_per_kwh": "Additional ZEROHERO boost rate ($/kWh)",
           "zerohero_daily_credit": "ZEROHERO daily credit ($)",
           "grid_power_positive_direction": "Grid power sensor positive direction",
           "site_phase_count": "Site supply phase count",
@@ -91,7 +93,7 @@
           "sign_conventions_verified": "Verify electrical directions",
           "battery_free_window_target_percent": "Expected free-window home-battery target (%)",
           "battery_charge_efficiency_percent": "Home-battery charging efficiency (%)",
-          "ev_allowance_guard_enabled": "Protect the configured whole-site free-energy allowance",
+          "ev_allowance_guard_enabled": "Keep free-window EV charging within the free-energy allowance",
           "ev_allowance_safety_margin_kwh": "Free-energy allowance safety margin (kWh)",
           "ev_solar_spill_enabled": "Enable measured solar-spill EV charging",
           "ev_solar_spill_battery_soc_percent": "Battery SoC required for solar-spill charging (%)",
@@ -110,7 +112,8 @@
           "bonus_window_start": "Bonus zero-import window start",
           "bonus_window_end": "Bonus zero-import window end",
           "force_discharge_finish": "Force Discharge finish (normally one minute after bonus window)",
-          "export_allowance_kwh": "Maximum boosted export per day (kWh)",
+          "automatic_export_limit_kwh": "Maximum automatic export per day (kWh)",
+          "export_allowance_kwh": "Maximum export eligible for additional boost per day (kWh)",
           "export_discharge_power_kw": "Fixed ZEROHERO discharge power (kW)",
           "discharge_efficiency_percent": "Battery discharge efficiency (%)",
           "ev_protected_baseline_a": "Mandatory connected-EV baseline until free power (A; 0 if none)",
@@ -169,7 +172,9 @@
           "offpeak_balance_rate_per_kwh": "Off-peak rate above allowance ($/kWh)",
           "shoulder_rate_per_kwh": "Shoulder import rate ($/kWh)",
           "export_rate_per_kwh": "Standard export rate ($/kWh)",
-          "super_export_rate_per_kwh": "ZEROHERO export rate during bonus window ($/kWh)",
+          "export_rate_window_start": "Standard Solar/Generation feed-in rate start",
+          "export_rate_window_end": "Standard Solar/Generation feed-in rate end",
+          "super_export_rate_per_kwh": "Additional ZEROHERO boost rate ($/kWh)",
           "zerohero_daily_credit": "ZEROHERO daily credit ($)",
           "grid_power_positive_direction": "Grid power sensor positive direction",
           "site_phase_count": "Site supply phase count",
@@ -232,7 +237,7 @@
           "sign_conventions_verified": "Verify electrical directions",
           "battery_free_window_target_percent": "Expected free-window home-battery target (%)",
           "battery_charge_efficiency_percent": "Home-battery charging efficiency (%)",
-          "ev_allowance_guard_enabled": "Protect the configured whole-site free-energy allowance",
+          "ev_allowance_guard_enabled": "Keep free-window EV charging within the free-energy allowance",
           "ev_allowance_safety_margin_kwh": "Free-energy allowance safety margin (kWh)",
           "ev_solar_spill_enabled": "Enable measured solar-spill EV charging",
           "ev_solar_spill_battery_soc_percent": "Battery SoC required for solar-spill charging (%)",
@@ -251,7 +256,8 @@
           "bonus_window_start": "Bonus zero-import window start",
           "bonus_window_end": "Bonus zero-import window end",
           "force_discharge_finish": "Force Discharge finish (normally one minute after bonus window)",
-          "export_allowance_kwh": "Maximum boosted export per day (kWh)",
+          "automatic_export_limit_kwh": "Maximum automatic export per day (kWh)",
+          "export_allowance_kwh": "Maximum export eligible for additional boost per day (kWh)",
           "export_discharge_power_kw": "Fixed ZEROHERO discharge power (kW)",
           "discharge_efficiency_percent": "Battery discharge efficiency (%)",
           "ev_protected_baseline_a": "Mandatory connected-EV baseline until free power (A; 0 if none)",
@@ -338,13 +344,22 @@
             "offpeak_balance_rate_per_kwh": "Off-peak rate above allowance ($/kWh)",
             "shoulder_rate_per_kwh": "Shoulder import rate ($/kWh)",
             "export_rate_per_kwh": "Standard export rate ($/kWh)",
-            "super_export_rate_per_kwh": "ZEROHERO export rate during bonus window ($/kWh)",
+            "export_rate_window_start": "Standard Solar/Generation feed-in rate start",
+            "export_rate_window_end": "Standard Solar/Generation feed-in rate end",
+            "super_export_rate_per_kwh": "Additional ZEROHERO boost rate ($/kWh)",
             "zerohero_daily_credit": "ZEROHERO daily credit ($)",
             "bonus_window_start": "Bonus zero-import window start",
             "bonus_window_end": "Bonus zero-import window end",
             "force_discharge_finish": "Force Discharge finish (normally one minute after bonus window)",
-            "export_allowance_kwh": "Maximum boosted export per day (kWh)",
+            "automatic_export_limit_kwh": "Maximum automatic export per day (kWh)",
+            "export_allowance_kwh": "Maximum export eligible for additional boost per day (kWh)",
             "export_discharge_power_kw": "Fixed ZEROHERO discharge power (kW)"
+          },
+          "data_description": {
+            "export_rate_per_kwh": "This rate applies only to export measured inside the configured standard feed-in window. Export outside it receives no standard feed-in payment.",
+            "super_export_rate_per_kwh": "Enter only the additional boost above the standard export rate. For 2 c/kWh standard plus an 8 c/kWh boost, enter 0.02 for the standard rate and 0.08 here.",
+            "automatic_export_limit_kwh": "The maximum planned automatic export energy. HEO uses this with the fixed discharge power to calculate the duration of its latched ZEROHERO session, including energy above the boosted allowance.",
+            "export_allowance_kwh": "Only this much export receives the additional boost. Export above this amount still receives the configured standard rate."
           }
         },
       "solar": {
@@ -415,7 +430,7 @@
             "ev_charge_efficiency_percent": "EV wall-to-battery charging efficiency (%)",
             "ev_arrival_reserve_soc_percent": "EV learned-policy arrival reserve (%)",
             "ev_learning_minimum_samples": "EV driving samples required for P85 learning",
-            "ev_allowance_guard_enabled": "Protect the configured whole-site free-energy allowance",
+            "ev_allowance_guard_enabled": "Keep free-window EV charging within the free-energy allowance",
             "ev_allowance_safety_margin_kwh": "Free-energy allowance safety margin (kWh)",
             "ev_solar_spill_enabled": "Enable measured solar-spill EV charging",
             "ev_solar_spill_battery_soc_percent": "Battery SoC required for solar-spill charging (%)",
@@ -429,6 +444,9 @@
             "ev_protected_baseline_a": "Mandatory connected-EV baseline until free power (A; 0 if none)",
             "ev_before_export_enabled": "Prioritise EV before automatic export",
             "ev_before_export_soc_target_percent": "Withhold export while EV SoC is below (%)"
+          },
+          "data_description": {
+            "ev_allowance_guard_enabled": "When enabled, HEO reduces or stops EV charging when the daily free grid-import allowance is exhausted. Solar may continue supplying the EV. When disabled, EV charging may continue using normally priced grid power."
           }
         },
       "recovery": {
@@ -535,13 +553,22 @@
             "offpeak_balance_rate_per_kwh": "Off-peak rate above allowance ($/kWh)",
             "shoulder_rate_per_kwh": "Shoulder import rate ($/kWh)",
             "export_rate_per_kwh": "Standard export rate ($/kWh)",
-            "super_export_rate_per_kwh": "ZEROHERO export rate during bonus window ($/kWh)",
+            "export_rate_window_start": "Standard Solar/Generation feed-in rate start",
+            "export_rate_window_end": "Standard Solar/Generation feed-in rate end",
+            "super_export_rate_per_kwh": "Additional ZEROHERO boost rate ($/kWh)",
             "zerohero_daily_credit": "ZEROHERO daily credit ($)",
             "bonus_window_start": "Bonus zero-import window start",
             "bonus_window_end": "Bonus zero-import window end",
             "force_discharge_finish": "Force Discharge finish (normally one minute after bonus window)",
-            "export_allowance_kwh": "Maximum boosted export per day (kWh)",
+            "automatic_export_limit_kwh": "Maximum automatic export per day (kWh)",
+            "export_allowance_kwh": "Maximum export eligible for additional boost per day (kWh)",
             "export_discharge_power_kw": "Fixed ZEROHERO discharge power (kW)"
+          },
+          "data_description": {
+            "export_rate_per_kwh": "This rate applies only to export measured inside the configured standard feed-in window. Export outside it receives no standard feed-in payment.",
+            "super_export_rate_per_kwh": "Enter only the additional boost above the standard export rate. For 2 c/kWh standard plus an 8 c/kWh boost, enter 0.02 for the standard rate and 0.08 here.",
+            "automatic_export_limit_kwh": "The maximum planned automatic export energy. HEO uses this with the fixed discharge power to calculate the duration of its latched ZEROHERO session, including energy above the boosted allowance.",
+            "export_allowance_kwh": "Only this much export receives the additional boost. Export above this amount still receives the configured standard rate."
           }
         },
       "reconfigure_solar": {
@@ -612,7 +639,7 @@
             "ev_charge_efficiency_percent": "EV wall-to-battery charging efficiency (%)",
             "ev_arrival_reserve_soc_percent": "EV learned-policy arrival reserve (%)",
             "ev_learning_minimum_samples": "EV driving samples required for P85 learning",
-            "ev_allowance_guard_enabled": "Protect the configured whole-site free-energy allowance",
+            "ev_allowance_guard_enabled": "Keep free-window EV charging within the free-energy allowance",
             "ev_allowance_safety_margin_kwh": "Free-energy allowance safety margin (kWh)",
             "ev_solar_spill_enabled": "Enable measured solar-spill EV charging",
             "ev_solar_spill_battery_soc_percent": "Battery SoC required for solar-spill charging (%)",
@@ -626,6 +653,9 @@
             "ev_protected_baseline_a": "Mandatory connected-EV baseline until free power (A; 0 if none)",
             "ev_before_export_enabled": "Prioritise EV before automatic export",
             "ev_before_export_soc_target_percent": "Withhold export while EV SoC is below (%)"
+          },
+          "data_description": {
+            "ev_allowance_guard_enabled": "When enabled, HEO reduces or stops EV charging when the daily free grid-import allowance is exhausted. Solar may continue supplying the EV. When disabled, EV charging may continue using normally priced grid power."
           }
         },
       "reconfigure_recovery": {

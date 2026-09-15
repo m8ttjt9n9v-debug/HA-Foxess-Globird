@@ -10,6 +10,11 @@ from homeassistant.const import EVENT_CALL_SERVICE
 
 from custom_components.home_energy_orchestrator.const import (
     CONF_AUTOMATIC_CONTROL_ENABLED,
+    CONF_BONUS_WINDOW_END,
+    CONF_BONUS_WINDOW_START,
+    CONF_EXPORT_RATE,
+    CONF_EXPORT_RATE_WINDOW_END,
+    CONF_EXPORT_RATE_WINDOW_START,
     CONF_FOXESS_CONTROL_OWNER,
     CONF_FOXESS_FORCE_CHARGE_POWER,
     CONF_FOXESS_FORCE_DISCHARGE_POWER,
@@ -17,6 +22,7 @@ from custom_components.home_energy_orchestrator.const import (
     CONF_INVERTER_CHARGE_LIMIT_KW,
     CONF_INVERTER_DISCHARGE_LIMIT_KW,
     CONF_REHEARSAL_MODE,
+    CONF_SUPER_EXPORT_RATE,
     FOXESS_CONTROL_OWNER_CLOUD,
     FOXESS_CONTROL_OWNER_MODBUS,
 )
@@ -57,6 +63,53 @@ def test_discharge_preview_reports_explicit_export_earning() -> None:
     assert estimate.direction == "earning"
 
 
+def test_manual_discharge_preview_adds_standard_and_bonus_export_rates(
+    hass, monkeypatch
+) -> None:
+    coordinator = _coordinator(
+        **{
+            CONF_EXPORT_RATE: 0.02,
+            CONF_SUPER_EXPORT_RATE: 0.08,
+            CONF_BONUS_WINDOW_START: "18:00:00",
+            CONF_BONUS_WINDOW_END: "21:00:00",
+        }
+    )
+    controller = ManualTestController(hass, coordinator)
+    controller.discharge_power_kw = 10.0
+    controller.duration_minutes = 60.0
+    monkeypatch.setattr(
+        "custom_components.home_energy_orchestrator.manual_test.dt_util.now",
+        lambda: datetime(2026, 9, 14, 19, 0, tzinfo=UTC),
+    )
+
+    estimate = controller.preview_discharge()
+
+    assert controller.current_export_rate() == pytest.approx(0.10)
+    assert estimate.amount == pytest.approx(1.0)
+
+
+def test_manual_discharge_preview_treats_tariff_windows_independently(
+    hass, monkeypatch
+) -> None:
+    coordinator = _coordinator(
+        **{
+            CONF_EXPORT_RATE: 0.02,
+            CONF_SUPER_EXPORT_RATE: 0.08,
+            CONF_EXPORT_RATE_WINDOW_START: "16:00:00",
+            CONF_EXPORT_RATE_WINDOW_END: "17:00:00",
+            CONF_BONUS_WINDOW_START: "18:00:00",
+            CONF_BONUS_WINDOW_END: "21:00:00",
+        }
+    )
+    controller = ManualTestController(hass, coordinator)
+    monkeypatch.setattr(
+        "custom_components.home_energy_orchestrator.manual_test.dt_util.now",
+        lambda: datetime(2026, 9, 14, 19, 0, tzinfo=UTC),
+    )
+
+    assert controller.current_export_rate() == pytest.approx(0.08)
+
+
 def _coordinator(**config):
     free_window_hours = config.pop("free_window_hours", 1.0)
     values = {
@@ -76,7 +129,9 @@ def _coordinator(**config):
         snapshot=SimpleNamespace(battery_soc=70.0, battery_floor_percent=10.0),
         data=SimpleNamespace(free_energy_remaining_kwh=49.0),
         _free_window_hours_remaining=lambda _now: free_window_hours,
-        _configured_time=lambda _key, default: __import__("datetime").time.fromisoformat(default),
+        _configured_time=lambda key, default: __import__("datetime").time.fromisoformat(
+            str(values.get(key, default))
+        ),
         async_update_listeners=lambda: None,
     )
 

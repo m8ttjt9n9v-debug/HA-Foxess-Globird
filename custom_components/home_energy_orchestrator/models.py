@@ -49,6 +49,7 @@ class EnergyLedger:
     daily_import_source: str = "unavailable"
     free_window_import_kwh: float | None = None
     daily_export_kwh: float | None = None
+    standard_window_export_kwh: float | None = None
     boosted_window_export_kwh: float | None = None
     standard_rate_export_kwh: float | None = None
     boosted_rate_export_kwh: float | None = None
