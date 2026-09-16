@@ -27,7 +27,7 @@ There was a LOT of extensions to my original code to make the 3 phase site work;
 
 So this custom repo is the result. Lots of UI improvements to be made, but right now it’s a verified, fully functioning reliable system that should work as long as you have:
 - Home Assistant
-- FoxEss battery system (tested inverters are KH8, KH10, H3-16kW-Smart)
+- FoxEss battery system (tested inverters are KH8, KH10, H3-15-Smart, but because it's using the FoxESS Modbus integration, any inverters compatible with that should work)
 - optional Tesla EV with [Tessy integration](https://share.tessie.com/YVp3vpOVCOj)
 - optional Solar
 - [GloBird ZeroHero](https://quote.globirdenergy.com.au/quote?pcode=refer&ref=U8APLT) electricity plan. It has to be the ZeroHero, not Four4Free!!!
