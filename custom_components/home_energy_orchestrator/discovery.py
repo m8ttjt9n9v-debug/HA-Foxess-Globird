@@ -23,6 +23,8 @@ from .const import (
     CONF_FOXESS_FORCE_CHARGE_POWER,
     CONF_FOXESS_FORCE_DISCHARGE_POWER,
     CONF_FOXESS_WORK_MODE,
+    CONF_GLOBIRD_LATEST_DAILY_COST,
+    CONF_GLOBIRD_ZEROHERO_STATUS,
     CONF_GRID_POWER,
     CONF_HOUSE_LOAD,
     CONF_SOLAR_POWER,
@@ -89,6 +91,16 @@ _ROLE_SUFFIXES: dict[str, tuple[str, tuple[str, ...], tuple[str, ...]]] = {
     CONF_EV_CURRENT_LIMIT: ("tessie", ("number",), ("charge_current",)),
     CONF_EV_CHARGE_LIMIT: ("tessie", ("number",), ("charge_limit",)),
     CONF_EV_CHARGE_SWITCH: ("tessie", ("switch",), ("charge",)),
+    CONF_GLOBIRD_LATEST_DAILY_COST: (
+        "globird_ha",
+        ("sensor",),
+        ("latest_daily_cost",),
+    ),
+    CONF_GLOBIRD_ZEROHERO_STATUS: (
+        "globird_ha",
+        ("sensor",),
+        ("zerohero_status",),
+    ),
 }
 
 
@@ -96,7 +108,7 @@ def discover_entity_defaults(entities: list[DiscoveryEntity]) -> dict[str, str]:
     """Return only unambiguous suggestions from one cohort per integration."""
     enabled = [entity for entity in entities if not entity.disabled]
     result: dict[str, str] = {}
-    for platform in ("foxess_modbus", "tessie"):
+    for platform in ("foxess_modbus", "tessie", "globird_ha"):
         cohort = _select_cohort(enabled, platform)
         if cohort is None:
             continue

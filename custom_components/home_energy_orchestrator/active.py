@@ -160,6 +160,7 @@ class ActiveFoxessController:
                 self.hass, self._async_tick, timedelta(seconds=30)
             )
         await self.async_reconcile()
+        await self.coordinator.async_update_forecast()
 
     async def async_stop(self) -> None:
         """Stop the timer without changing inverter state."""
@@ -170,6 +171,7 @@ class ActiveFoxessController:
     async def _async_tick(self, _now) -> None:
         await self.coordinator.async_request_refresh()
         await self.async_reconcile()
+        await self.coordinator.async_update_forecast()
         self.coordinator.async_update_listeners()
 
     async def async_reconcile(self) -> None:

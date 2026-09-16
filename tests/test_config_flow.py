@@ -131,6 +131,8 @@ async def test_tariff_page_exposes_and_validates_zerohero_daily_credit(hass):
     assert result["step_id"] == "tariff"
     assert [marker.schema for marker in result["data_schema"].schema] == [
         "daily_import_entity",
+        "globird_latest_daily_cost_entity",
+        "globird_zerohero_status_entity",
         "daily_charge",
         "peak_rate_per_kwh",
         "offpeak_rate_per_kwh",

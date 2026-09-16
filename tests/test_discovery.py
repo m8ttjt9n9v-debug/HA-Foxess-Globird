@@ -54,3 +54,25 @@ def test_disabled_and_near_name_entities_are_not_suggested():
         ]
     )
     assert result == {}
+
+
+def test_discovers_unambiguous_globird_scorecard_roles():
+    result = discover_entity_defaults(
+        [
+            _entity(
+                "sensor.globird_energy_latest_daily_cost", "globird_ha", "account"
+            ),
+            _entity(
+                "sensor.globird_energy_zerohero_status", "globird_ha", "account"
+            ),
+        ]
+    )
+
+    assert (
+        result["globird_latest_daily_cost_entity"]
+        == "sensor.globird_energy_latest_daily_cost"
+    )
+    assert (
+        result["globird_zerohero_status_entity"]
+        == "sensor.globird_energy_zerohero_status"
+    )

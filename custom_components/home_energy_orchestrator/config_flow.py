@@ -109,6 +109,8 @@ from .const import (
     CONF_FREE_CHARGE_END,
     CONF_FREE_CHARGE_SCHEDULE_CONFIRMED,
     CONF_FREE_CHARGE_START,
+    CONF_GLOBIRD_LATEST_DAILY_COST,
+    CONF_GLOBIRD_ZEROHERO_STATUS,
     CONF_GRID_IMPORT_POSITIVE,
     CONF_GRID_POWER,
     CONF_GRID_POWER_DIRECTION,
@@ -376,6 +378,8 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             # Meter mapping, then rates, allowances, preferences and windows.
             # `_page_schema` deliberately preserves this order in the UI.
             CONF_DAILY_IMPORT_ENTITY,
+            CONF_GLOBIRD_LATEST_DAILY_COST,
+            CONF_GLOBIRD_ZEROHERO_STATUS,
             CONF_DAILY_CHARGE,
             CONF_PEAK_RATE,
             CONF_OFFPEAK_RATE,
@@ -1034,7 +1038,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     disabled=entry.disabled_by is not None,
                 )
                 for entry in registry.entities.values()
-                if entry.platform in {"foxess_modbus", "tessie"}
+                if entry.platform in {"foxess_modbus", "tessie", "globird_ha"}
             ]
         )
         capacity_entity = defaults.get(CONF_BATTERY_CAPACITY_ENTITY)
@@ -1117,6 +1121,8 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     selector.SelectSelectorConfig(options=list(GRID_POWER_DIRECTIONS))
                 ),
                 optional_entity(CONF_DAILY_IMPORT_ENTITY): ENTITY,
+                optional_entity(CONF_GLOBIRD_LATEST_DAILY_COST): ENTITY,
+                optional_entity(CONF_GLOBIRD_ZEROHERO_STATUS): ENTITY,
                 vol.Required(
                     CONF_DAILY_FREE_ALLOWANCE_KWH,
                     default=defaults.get(
@@ -2057,6 +2063,8 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             CONF_BATTERY_CHARGE_POWER,
             CONF_BATTERY_DISCHARGE_POWER,
             CONF_DAILY_IMPORT_ENTITY,
+            CONF_GLOBIRD_LATEST_DAILY_COST,
+            CONF_GLOBIRD_ZEROHERO_STATUS,
             CONF_GRID_POWER,
             CONF_HEATER_POWER,
             CONF_HOUSE_LOAD,

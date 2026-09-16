@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import replace
-from datetime import datetime, time, timedelta
+from datetime import date, datetime, time, timedelta
 from math import isfinite
 
 from homeassistant.core import CALLBACK_TYPE, Event, HomeAssistant, State, callback
@@ -45,6 +45,8 @@ from .const import (
     CONF_EXPORT_RATE_WINDOW_START,
     CONF_FREE_CHARGE_END,
     CONF_FREE_CHARGE_START,
+    CONF_GLOBIRD_LATEST_DAILY_COST,
+    CONF_GLOBIRD_ZEROHERO_STATUS,
     CONF_GRID_POWER,
     CONF_GRID_POWER_DIRECTION,
     CONF_HEATER_POWER,
@@ -86,6 +88,7 @@ from .const import (
     DEFAULT_EXPORT_RATE,
     DEFAULT_EXPORT_RATE_WINDOW_END,
     DEFAULT_EXPORT_RATE_WINDOW_START,
+    DEFAULT_FORECAST_EXPORT_REALISATION,
     DEFAULT_FREE_CHARGE_END,
     DEFAULT_FREE_CHARGE_START,
     DEFAULT_HOUSE_AWAY_CONFIRMATION_HOURS,
@@ -122,6 +125,12 @@ from .planner.daily_meter import (
     DailyImportAccumulator,
     HourlyWindowImportAccumulator,
     WindowImportAccumulator,
+)
+from .planner.forecast import (
+    ForecastFeedbackState,
+    OptimisticCostForecast,
+    calculate_optimistic_cost_forecast,
+    window_overlap_fraction,
 )
 from .planner.learning import (
     DailyDemandCycleSampler,
@@ -228,6 +237,18 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
         self._demand_store: Store[dict[str, object]] = Store(
             hass, 1, f"{DOMAIN}.{entry_id}.demand_history", private=True
         )
+        self._forecast_store: Store[dict[str, object]] = Store(
+            hass, 1, f"{DOMAIN}.{entry_id}.forecast_feedback", private=True
+        )
+        self.forecast_feedback = ForecastFeedbackState.restore(
+            None,
+            today=dt_util.now().date(),
+            default_fraction=DEFAULT_FORECAST_EXPORT_REALISATION,
+        )
+        self.optimistic_forecast: OptimisticCostForecast | None = None
+        self.forecast_scorecard_status = "not_configured"
+        self.forecast_scorecard_date: date | None = None
+        self._forecast_last_saved_signature: tuple[object, ...] | None = None
         self._demand_sampler_last_saved_at: datetime | None = None
         self._unsub_source_updates: CALLBACK_TYPE | None = async_track_state_change_event(
             hass,
@@ -241,6 +262,8 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
                     CONF_BATTERY_DISCHARGE_POWER,
                     CONF_GRID_POWER,
                     CONF_DAILY_IMPORT_ENTITY,
+                    CONF_GLOBIRD_LATEST_DAILY_COST,
+                    CONF_GLOBIRD_ZEROHERO_STATUS,
                     CONF_HOUSE_LOAD,
                     CONF_HEATER_POWER,
                     CONF_SOLAR_POWER,
@@ -281,6 +304,16 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
         self.peak_import.restore(await self._peak_import_store.async_load(), now)
         self.zerohero_import.restore(await self._zerohero_import_store.async_load(), now)
         self.zerohero_export.restore(await self._zerohero_export_store.async_load(), now)
+
+    async def async_load_forecast_feedback(self) -> None:
+        """Load forecast-only calibration and comparison history."""
+        self.forecast_feedback = ForecastFeedbackState.restore(
+            await self._forecast_store.async_load(),
+            today=dt_util.now().date(),
+            default_fraction=DEFAULT_FORECAST_EXPORT_REALISATION,
+        )
+        if self.forecast_feedback.roll_to(dt_util.now().date()):
+            await self._async_save_forecast_feedback(force=True)
 
     async def async_record_demand_cycle(
         self, energy_kwh: float, observed_at: datetime | None = None
@@ -718,6 +751,248 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
             estimated_net_cost=financials.net_cost if export_accounting_available else None,
         )
 
+    async def async_update_forecast(self, now: datetime | None = None) -> None:
+        """Update the read-only optimistic forecast and retailer scorecard."""
+        now = now or dt_util.now()
+        rolled = self.forecast_feedback.roll_to(now.date())
+        controller = self.active_controller
+        export_plan = (
+            controller.export_plan
+            if controller is not None
+            and controller.export_effective_enabled
+            and controller.export_plan is not None
+            else None
+        )
+        realised = max(float(self.zerohero_export.imported_kwh), 0.0)
+        planned_remaining = (
+            max(float(export_plan.planned_export_energy_kwh), 0.0)
+            if export_plan is not None
+            else 0.0
+        )
+        self.forecast_feedback.observe_export(
+            planned_total_kwh=realised + planned_remaining,
+            realised_kwh=realised,
+        )
+        self.optimistic_forecast = self._calculate_optimistic_forecast(
+            planned_remaining, now
+        )
+        if self.optimistic_forecast is not None:
+            freeze_at = datetime.combine(
+                now.date(),
+                self._configured_time(CONF_BONUS_WINDOW_START, DEFAULT_BONUS_WINDOW_START),
+                tzinfo=now.tzinfo,
+            )
+            if now >= freeze_at:
+                self.forecast_feedback.freeze(self.optimistic_forecast)
+        self._match_retailer_scorecard()
+        # The storage signature below already coalesces normal plan/export movement.
+        # Only a day rollover must bypass it; otherwise a 30-second controller tick
+        # could turn a small amount of telemetry noise into needless disk writes.
+        await self._async_save_forecast_feedback(force=rolled)
+
+    def _calculate_optimistic_forecast(
+        self, planned_remaining_kwh: float, now: datetime
+    ) -> OptimisticCostForecast | None:
+        """Apply the existing tariff engine to 75%-initial planned export."""
+        ledger = self.data
+        required = (
+            ledger.daily_import_kwh,
+            ledger.free_window_import_kwh,
+            ledger.daily_export_kwh,
+            ledger.standard_window_export_kwh,
+            ledger.boosted_window_export_kwh,
+            ledger.estimated_energy_cost,
+            ledger.estimated_export_revenue,
+        )
+        if any(value is None for value in required):
+            return None
+        fraction = self.forecast_feedback.export_realisation_fraction
+        additional_export = planned_remaining_kwh * fraction
+        standard_fraction = self._forecast_standard_rate_fraction(now)
+        try:
+            hypothetical = calculate_daily_financials(
+                total_import_kwh=float(ledger.daily_import_kwh),
+                free_window_import_kwh=float(ledger.free_window_import_kwh),
+                peak_import_kwh=float(self.peak_import.imported_kwh),
+                free_allowance_kwh=self._configured_nonnegative(
+                    CONF_DAILY_FREE_ALLOWANCE_KWH, DEFAULT_DAILY_FREE_ALLOWANCE_KWH
+                ),
+                peak_rate=self._configured_nonnegative(CONF_PEAK_RATE, DEFAULT_PEAK_RATE),
+                offpeak_rate=self._configured_nonnegative(
+                    CONF_OFFPEAK_RATE, DEFAULT_OFFPEAK_RATE
+                ),
+                offpeak_balance_rate=self._configured_nonnegative(
+                    CONF_OFFPEAK_BALANCE_RATE, DEFAULT_OFFPEAK_BALANCE_RATE
+                ),
+                shoulder_rate=self._configured_nonnegative(
+                    CONF_SHOULDER_RATE, DEFAULT_SHOULDER_RATE
+                ),
+                daily_charge=self._configured_nonnegative(
+                    CONF_DAILY_CHARGE, DEFAULT_DAILY_CHARGE
+                ),
+                total_export_kwh=float(ledger.daily_export_kwh) + additional_export,
+                standard_window_export_kwh=(
+                    float(ledger.standard_window_export_kwh)
+                    + additional_export * standard_fraction
+                ),
+                boosted_window_export_kwh=(
+                    float(ledger.boosted_window_export_kwh) + additional_export
+                ),
+                boosted_export_allowance_kwh=self._configured_nonnegative(
+                    CONF_EXPORT_ALLOWANCE_KWH, DEFAULT_EXPORT_ALLOWANCE_KWH
+                ),
+                export_rate=self._configured_nonnegative(
+                    CONF_EXPORT_RATE, DEFAULT_EXPORT_RATE
+                ),
+                offpeak_export_rate=self._configured_nonnegative(
+                    CONF_OFFPEAK_EXPORT_RATE, DEFAULT_OFFPEAK_EXPORT_RATE
+                ),
+                boosted_export_rate=self._configured_nonnegative(
+                    CONF_SUPER_EXPORT_RATE, DEFAULT_SUPER_EXPORT_RATE
+                ),
+                zerohero_credit=self._configured_nonnegative(
+                    CONF_ZEROHERO_DAILY_CREDIT, DEFAULT_ZEROHERO_DAILY_CREDIT
+                ),
+            )
+            additional_revenue = max(
+                hypothetical.export_revenue - float(ledger.estimated_export_revenue),
+                0.0,
+            )
+            return calculate_optimistic_cost_forecast(
+                measured_gross_cost=float(ledger.estimated_energy_cost),
+                measured_export_revenue=float(ledger.estimated_export_revenue),
+                assumed_zerohero_credit=self._configured_nonnegative(
+                    CONF_ZEROHERO_DAILY_CREDIT, DEFAULT_ZEROHERO_DAILY_CREDIT
+                ),
+                planned_remaining_export_kwh=planned_remaining_kwh,
+                export_realisation_fraction=fraction,
+                forecast_additional_export_revenue=additional_revenue,
+                learned_cost_bias=self.forecast_feedback.learned_cost_bias,
+            )
+        except (TypeError, ValueError):
+            return None
+
+    def _forecast_standard_rate_fraction(self, now: datetime) -> float:
+        """Allocate forecast export across the configured base-rate window."""
+        controller = self.active_controller
+        if (
+            controller is not None
+            and controller.export_plan is not None
+            and controller.export_planned_start is not None
+            and controller.export_plan.planned_duration_h > 0
+        ):
+            start = controller.export_planned_start
+            finish = start + timedelta(hours=controller.export_plan.planned_duration_h)
+        else:
+            start_time = self._configured_time(
+                CONF_BONUS_WINDOW_START, DEFAULT_BONUS_WINDOW_START
+            )
+            end_time = self._configured_time(
+                CONF_BONUS_WINDOW_END, DEFAULT_BONUS_WINDOW_END
+            )
+            start = datetime.combine(now.date(), start_time, tzinfo=now.tzinfo)
+            finish = datetime.combine(now.date(), end_time, tzinfo=now.tzinfo)
+            if end_time <= start_time:
+                finish += timedelta(days=1)
+        return window_overlap_fraction(
+            start,
+            finish,
+            self._configured_time(
+                CONF_EXPORT_RATE_WINDOW_START, DEFAULT_EXPORT_RATE_WINDOW_START
+            ),
+            self._configured_time(
+                CONF_EXPORT_RATE_WINDOW_END, DEFAULT_EXPORT_RATE_WINDOW_END
+            ),
+        )
+
+    def _match_retailer_scorecard(self) -> bool:
+        """Match only complete, same-date GloBird results to retained forecasts."""
+        cost_entity = self.config.get(CONF_GLOBIRD_LATEST_DAILY_COST)
+        status_entity = self.config.get(CONF_GLOBIRD_ZEROHERO_STATUS)
+        self.forecast_scorecard_date = None
+        if not cost_entity and not status_entity:
+            self.forecast_scorecard_status = "not_configured"
+            return False
+        if not cost_entity or not status_entity:
+            self.forecast_scorecard_status = "incomplete_mapping"
+            return False
+        cost_state = self.hass.states.get(str(cost_entity))
+        status_state = self.hass.states.get(str(status_entity))
+        if cost_state is None or status_state is None:
+            self.forecast_scorecard_status = "retailer_data_unavailable"
+            return False
+        cost_complete = bool(
+            cost_state.attributes.get("latest_available_day_complete", False)
+        )
+        status_complete = bool(
+            status_state.attributes.get("latest_available_day_complete", False)
+        )
+        if not cost_complete or not status_complete:
+            self.forecast_scorecard_status = "retailer_day_incomplete"
+            return False
+        cost_date = self._retailer_result_date(cost_state)
+        status_date = self._retailer_result_date(status_state)
+        if cost_date is None or status_date is None or cost_date != status_date:
+            self.forecast_scorecard_status = "retailer_date_mismatch"
+            return False
+        try:
+            actual_cost = float(cost_state.state)
+        except (TypeError, ValueError):
+            self.forecast_scorecard_status = "retailer_cost_invalid"
+            return False
+        zerohero_status = str(status_state.state).casefold()
+        if zerohero_status not in {"achieved", "not_achieved"}:
+            self.forecast_scorecard_status = "retailer_status_unrecognized"
+            return False
+        previous = self.forecast_feedback.record_for(cost_date)
+        previous_payload = previous.to_payload() if previous is not None else None
+        previous_bias = self.forecast_feedback.learned_cost_bias
+        self.forecast_scorecard_status = self.forecast_feedback.match_retailer(
+            result_date=cost_date,
+            actual_cost=actual_cost,
+            zerohero_status=zerohero_status,
+        )
+        self.forecast_scorecard_date = cost_date
+        current = self.forecast_feedback.record_for(cost_date)
+        return (
+            previous_payload != (current.to_payload() if current is not None else None)
+            or previous_bias != self.forecast_feedback.learned_cost_bias
+        )
+
+    @staticmethod
+    def _retailer_result_date(state: State) -> date | None:
+        value = state.attributes.get("latest_available_day") or state.attributes.get(
+            "latest_day"
+        )
+        if not value:
+            return None
+        try:
+            return date.fromisoformat(str(value).replace("/", "-"))
+        except ValueError:
+            return None
+
+    async def _async_save_forecast_feedback(self, *, force: bool = False) -> None:
+        """Checkpoint forecast evidence without writing on every 30-second tick."""
+        current = self.forecast_feedback.current
+        latest = (
+            self.forecast_feedback.history[-1]
+            if self.forecast_feedback.history
+            else None
+        )
+        signature = (
+            current.local_date,
+            current.frozen_forecast_cost,
+            round(current.planned_export_kwh, 1),
+            round(current.realised_export_kwh, 1),
+            self.forecast_feedback.export_realisation_fraction,
+            self.forecast_feedback.learned_cost_bias,
+            None if latest is None else latest.to_payload().__repr__(),
+        )
+        if not force and signature == self._forecast_last_saved_signature:
+            return
+        await self._forecast_store.async_save(self.forecast_feedback.to_payload())
+        self._forecast_last_saved_signature = signature
+
     def _power(self, entity_id: str | None) -> float | None:
         value = self._number(entity_id)
         if value is None or not entity_id:
@@ -960,6 +1235,8 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
             except ValueError:
                 battery_soc = None
         now = dt_util.now()
+        if self.forecast_feedback.roll_to(now.date()):
+            await self._async_save_forecast_feedback(force=True)
         self.telemetry = self._normalized_telemetry(now)
         grid = self.telemetry.grid_power.value
         export_kw = None if grid is None else max(-grid, 0.0)

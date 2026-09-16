@@ -43,6 +43,11 @@ from .planner.ev import DIRECT_EVSE_MAX_ATTEMPTS
 DESCRIPTIONS = (
     SensorEntityDescription(key="status", name="Status", icon="mdi:eye-outline"),
     SensorEntityDescription(
+        key="fleet_summary",
+        name="Fleet Summary",
+        icon="mdi:home-group",
+    ),
+    SensorEntityDescription(
         key="battery_soc",
         name="Battery State of Charge",
         native_unit_of_measurement="%",
@@ -413,9 +418,45 @@ DESCRIPTIONS = (
     ),
     SensorEntityDescription(
         key="estimated_net_cost",
-        name="Estimated Net Cost Today",
+        name="Forecast Net Cost Today",
         icon="mdi:cash-sync",
         suggested_display_precision=2,
+    ),
+    SensorEntityDescription(
+        key="measured_net_cost",
+        name="Measured Net Cost Today",
+        icon="mdi:cash-check",
+        suggested_display_precision=2,
+    ),
+    SensorEntityDescription(
+        key="forecast_export_realisation",
+        name="Forecast Export Realisation",
+        native_unit_of_measurement="%",
+        icon="mdi:percent-box-outline",
+        suggested_display_precision=1,
+    ),
+    SensorEntityDescription(
+        key="forecast_yesterday_cost",
+        name="Forecast Cost for Latest GloBird Day",
+        icon="mdi:calendar-clock",
+        suggested_display_precision=2,
+    ),
+    SensorEntityDescription(
+        key="globird_yesterday_actual_cost",
+        name="Actual Cost for Latest GloBird Day",
+        icon="mdi:calendar-check",
+        suggested_display_precision=2,
+    ),
+    SensorEntityDescription(
+        key="forecast_error_yesterday",
+        name="Forecast Error for Latest GloBird Day",
+        icon="mdi:delta",
+        suggested_display_precision=2,
+    ),
+    SensorEntityDescription(
+        key="forecast_scorecard_status",
+        name="Forecast Scorecard Status",
+        icon="mdi:scoreboard-outline",
     ),
     SensorEntityDescription(
         key="free_charge_allowed",
@@ -660,6 +701,90 @@ class EnergySensor(CoordinatorEntity[EnergyCoordinator], SensorEntity):
             return f"withheld_{decision.reason}"
         return controller.export_session.phase
 
+    def _fleet_summary_attributes(self) -> dict[str, object]:
+        """Return one compact, read-only payload for a monitoring hub."""
+        coordinator = self.coordinator
+        ledger = coordinator.data
+        snapshot = coordinator.snapshot
+        telemetry = coordinator.telemetry
+        controller = coordinator.active_controller
+        ev_controller = coordinator.ev_controller
+        forecast = coordinator.optimistic_forecast
+        export_plan = self._effective_export_plan()
+        candidate_export_plan = (
+            controller.export_plan if controller is not None else None
+        )
+        scorecard = (
+            coordinator.forecast_feedback.record_for(
+                coordinator.forecast_scorecard_date
+            )
+            if coordinator.forecast_scorecard_date is not None
+            else None
+        )
+
+        def rounded(value: float | None, digits: int = 3) -> float | None:
+            return None if value is None else round(float(value), digits)
+
+        return {
+            "summary_schema_version": 1,
+            "battery_soc": rounded(
+                None if snapshot is None else snapshot.battery_soc, 2
+            ),
+            "battery_power_kw": rounded(
+                None if telemetry is None else telemetry.battery_power.value
+            ),
+            "grid_power_kw": rounded(
+                None if telemetry is None else telemetry.grid_power.value
+            ),
+            "solar_power_kw": rounded(
+                None if telemetry is None else telemetry.solar_power.value
+            ),
+            "house_load_kw": rounded(
+                None if snapshot is None else snapshot.house_load_kw
+            ),
+            "sellable_energy_kwh": rounded(
+                None
+                if candidate_export_plan is None
+                else candidate_export_plan.sellable_energy_kwh
+            ),
+            "planned_export_kwh": rounded(
+                None if export_plan is None else export_plan.planned_export_energy_kwh
+            ),
+            "orchestrator_status": self._control_mode(),
+            "foxess_control_gate": (
+                "unavailable" if controller is None else controller.gate_status
+            ),
+            "charging_status": (
+                "unavailable" if controller is None else controller.charge_session.phase
+            ),
+            "export_status": self._export_status(),
+            "ev_control_status": (
+                "unavailable" if ev_controller is None else ev_controller.last_reason
+            ),
+            "forecast_cost": rounded(
+                None if forecast is None else forecast.calibrated_net_cost, 2
+            ),
+            "measured_cost": rounded(ledger.estimated_net_cost, 2),
+            "latest_actual_cost": rounded(
+                None if scorecard is None else scorecard.retailer_actual_cost, 2
+            ),
+            "forecast_error": rounded(
+                None if scorecard is None else scorecard.forecast_error, 2
+            ),
+            "zerohero_status": ledger.zerohero_credit_status,
+            "latest_zerohero_status": (
+                None if scorecard is None else scorecard.retailer_zerohero_status
+            ),
+            "forecast_scorecard_status": coordinator.forecast_scorecard_status,
+            "house_learning_samples": coordinator.learning_result.sample_count,
+            "ev_learning_samples": (
+                0 if ev_controller is None else len(ev_controller.driving_history.samples)
+            ),
+            "ledger_status": ledger.reason,
+            "tariff_status": ledger.tariff_reason,
+            "last_update": dt_util.now().isoformat(),
+        }
+
     @property
     def native_value(self):
         ledger = self.coordinator.data
@@ -678,9 +803,18 @@ class EnergySensor(CoordinatorEntity[EnergyCoordinator], SensorEntity):
         )
         ev_learning = ev_controller.learned_charge_limit if ev_controller is not None else None
         telemetry = self.coordinator.telemetry
+        forecast = self.coordinator.optimistic_forecast
+        scorecard_record = (
+            self.coordinator.forecast_feedback.record_for(
+                self.coordinator.forecast_scorecard_date
+            )
+            if self.coordinator.forecast_scorecard_date is not None
+            else None
+        )
         export_plan = self._effective_export_plan()
         values = {
             "status": self._control_mode(),
+            "fleet_summary": self._control_mode(),
             "battery_soc": None if snapshot is None else snapshot.battery_soc,
             "battery_potential_capacity": ledger.battery_potential_capacity_kwh,
             "battery_energy": ledger.battery_energy_kwh,
@@ -842,10 +976,31 @@ class EnergySensor(CoordinatorEntity[EnergyCoordinator], SensorEntity):
             ),
             "zerohero_credit_status": ledger.zerohero_credit_status,
             "estimated_net_cost": (
+                None if forecast is None else round(forecast.calibrated_net_cost, 2)
+            ),
+            "measured_net_cost": (
                 None
                 if ledger.estimated_net_cost is None
                 else round(ledger.estimated_net_cost, 2)
             ),
+            "forecast_export_realisation": round(
+                self.coordinator.forecast_feedback.export_realisation_fraction * 100,
+                1,
+            ),
+            "forecast_yesterday_cost": (
+                None
+                if scorecard_record is None
+                else scorecard_record.frozen_forecast_cost
+            ),
+            "globird_yesterday_actual_cost": (
+                None
+                if scorecard_record is None
+                else scorecard_record.retailer_actual_cost
+            ),
+            "forecast_error_yesterday": (
+                None if scorecard_record is None else scorecard_record.forecast_error
+            ),
+            "forecast_scorecard_status": self.coordinator.forecast_scorecard_status,
             "free_charge_allowed": ledger.free_charge_allowed_kwh,
             "free_charge_power_target": (
                 None
@@ -911,6 +1066,8 @@ class EnergySensor(CoordinatorEntity[EnergyCoordinator], SensorEntity):
 
     @property
     def extra_state_attributes(self):
+        if self.entity_description.key == "fleet_summary":
+            return self._fleet_summary_attributes()
         telemetry_samples = (
             {
                 "grid_power": self.coordinator.telemetry.grid_power,
@@ -997,10 +1154,79 @@ class EnergySensor(CoordinatorEntity[EnergyCoordinator], SensorEntity):
             }
         if self.entity_description.key == "estimated_net_cost":
             ledger = self.coordinator.data
+            forecast = self.coordinator.optimistic_forecast
             return {
                 "gross_cost": ledger.estimated_energy_cost,
-                "export_revenue": ledger.estimated_export_revenue,
-                "zerohero_credit": ledger.zerohero_credit,
+                "measured_export_revenue": ledger.estimated_export_revenue,
+                "measured_zerohero_credit": ledger.zerohero_credit,
+                "measured_net_cost": ledger.estimated_net_cost,
+                "assumed_zerohero_credit": (
+                    None if forecast is None else forecast.assumed_zerohero_credit
+                ),
+                "export_realisation_percent": (
+                    None
+                    if forecast is None
+                    else round(forecast.export_realisation_fraction * 100, 1)
+                ),
+                "forecast_remaining_export_kwh": (
+                    None if forecast is None else forecast.forecast_remaining_export_kwh
+                ),
+                "forecast_additional_export_revenue": (
+                    None
+                    if forecast is None
+                    else forecast.forecast_additional_export_revenue
+                ),
+                "raw_optimistic_forecast": (
+                    None if forecast is None else forecast.raw_net_cost
+                ),
+                "learned_cost_bias": (
+                    None if forecast is None else forecast.learned_cost_bias
+                ),
+            }
+        if self.entity_description.key in {
+            "forecast_yesterday_cost",
+            "globird_yesterday_actual_cost",
+            "forecast_error_yesterday",
+            "forecast_scorecard_status",
+        }:
+            result_date = self.coordinator.forecast_scorecard_date
+            record = (
+                self.coordinator.forecast_feedback.record_for(result_date)
+                if result_date is not None
+                else None
+            )
+            return {
+                "result_date": None if result_date is None else result_date.isoformat(),
+                "forecast_cost": (
+                    None if record is None else record.frozen_forecast_cost
+                ),
+                "raw_forecast_cost": (
+                    None if record is None else record.frozen_raw_forecast_cost
+                ),
+                "actual_cost": (
+                    None if record is None else record.retailer_actual_cost
+                ),
+                "forecast_error": None if record is None else record.forecast_error,
+                "zerohero_status": (
+                    None if record is None else record.retailer_zerohero_status
+                ),
+                "planned_export_kwh": (
+                    None if record is None else record.planned_export_kwh
+                ),
+                "realised_export_kwh": (
+                    None if record is None else record.realised_export_kwh
+                ),
+                "export_realisation_ratio": (
+                    None if record is None else record.export_realisation_ratio
+                ),
+                "forecast_feedback_applied": (
+                    False if record is None else record.feedback_applied
+                ),
+                "learned_export_realisation_percent": round(
+                    self.coordinator.forecast_feedback.export_realisation_fraction * 100,
+                    1,
+                ),
+                "learned_cost_bias": self.coordinator.forecast_feedback.learned_cost_bias,
             }
         if self.entity_description.key == "ev_control_status":
             controller = self.coordinator.ev_controller

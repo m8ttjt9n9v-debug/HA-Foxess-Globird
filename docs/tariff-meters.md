@@ -46,8 +46,20 @@ The integration exposes separate estimated financial values:
 - daily supply charge;
 - gross cost, which is the preceding two values added together;
 - grid export today and estimated export revenue; and
-- the ZEROHERO daily credit and its qualification status; and
-- net cost, which is gross cost minus export revenue and any earned credit.
+- the ZEROHERO daily credit and its qualification status;
+- measured net cost, which is gross cost minus measured export revenue and any
+  credit already qualified from HEO's own evidence; and
+- forecast net cost, which assumes the configured ZEROHERO credit and initially
+  assumes 75% of the remaining planned export will be realised.
+
+If the optional GloBird integration is installed, map **Latest Daily Cost** and
+**ZEROHERO Status** on the tariff page. HEO freezes the forecast at the start of
+the configured ZEROHERO window and matches it to the next complete retailer
+result for that exact local date. The scorecard exposes the frozen forecast,
+actual cost, error, and retailer ZEROHERO result. Export-realisation and cost
+calibration move only by small bounded steps and affect the forecast only;
+they cannot change any hardware command or energy-control decision. Failed
+ZEROHERO days are scored but do not train the cost residual.
 
 The daily export meter integrates canonical positive export from local
 midnight. A separate persisted meter counts export inside the configurable
@@ -69,7 +81,8 @@ does not silently increase exported energy. The meter is persisted across
 reloads and restarts, but starts at zero when this feature is first installed
 and cannot reconstruct export from earlier that day. These values are estimates
 until a complete local day has been observed; they are not copies of the
-retailer's final bill.
+retailer's final bill. The optional GloBird result is retained separately as
+the objective next-day score.
 
 After upgrading, verify both Peak and Off-peak base feed-in rates, the Peak
 feed-in start/end times, and that Super Export contains only the additional

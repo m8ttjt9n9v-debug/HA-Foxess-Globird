@@ -50,6 +50,17 @@ Status here describes behavioral parity, not merely the presence of code.
 
 ## Completed and retained
 
+- [x] Forecast-only GloBird feedback and scorecard: keep factual measured net
+  cost separate from an optimistic forecast, assume the configured ZEROHERO
+  credit and initially 75% of remaining planned export, freeze the daily
+  forecast, match only complete same-date retailer results, and slowly
+  calibrate forecast realisation/error without granting feedback any hardware
+  or control authority.
+- [x] Compact read-only Fleet Summary entity for central monitoring. It exposes
+  a versioned, privacy-minimal status payload and has no services or control
+  authority, allowing a hub to poll remote sites through Home Assistant's
+  standard REST state API.
+
 - [x] Observer ledger with unit/sign normalization and persisted daily,
   free-window, and ZEROHERO interval meters. Positive-flow-to-zero transitions
   are checkpointed independently of energy-delta write thresholds so a reload
@@ -127,6 +138,22 @@ Status here describes behavioral parity, not merely the presence of code.
   suggestions without inferred signs, limits, ownership, or write authority.
 
 ## Confirmed bugs
+
+- [ ] Decouple EV driving and charge-limit learning from the live cable-
+  connection gate. A disconnected vehicle currently causes the EV controller
+  to return before evaluating otherwise valid stored-energy, SoC, actuator
+  capability, free-window, and persisted driving-history evidence. The
+  dashboard consequently reports the learning mode, estimated usable capacity,
+  full-window SoC gain, and learned general limit as unavailable even though
+  valid daily samples remain visible. Calculate this read-only learning result
+  whenever its own inputs are valid, regardless of whether the vehicle is home,
+  plugged in, or charging; connection state must continue to gate actuation
+  only. Below the configured minimum sample count, expose the full-window
+  fallback mode and its calculated capacity/gain while leaving P85 unknown;
+  switch to the learned P85 result only at maturity. Add regression coverage
+  for disconnected startup, unplug/replug, restart, stale source telemetry,
+  missing actuator capabilities, pre-maturity fallback, and the exact maturity
+  boundary without weakening any EV command gate.
 
 - [x] Separate the automatic export-energy cap from the tariff's boosted-energy
   allowance. Preserve the old shared value as the new automatic cap during

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime, time, timedelta
 from unittest.mock import AsyncMock
 from zoneinfo import ZoneInfo
@@ -18,6 +19,7 @@ from custom_components.home_energy_orchestrator.diagnostics import (
     async_get_config_entry_diagnostics,
 )
 from custom_components.home_energy_orchestrator.models import SiteSnapshot
+from custom_components.home_energy_orchestrator.planner.export import ExportPlan
 from custom_components.home_energy_orchestrator.planner.learning import DemandCycleSampler
 
 ENTRY_DATA = {
@@ -166,6 +168,21 @@ async def test_setup_observes_normalised_values_and_never_calls_services(hass):
     assert hass.states.get(status).attributes["automatic_charge_enabled"] is False
     assert hass.states.get(status).attributes["free_charge_schedule_confirmed"] is False
     assert hass.states.get(status).attributes["mode"] == "observe"
+    fleet = hass.states.get("sensor.home_energy_fleet_summary")
+    assert fleet.state == "observe"
+    assert fleet.attributes["summary_schema_version"] == 1
+    assert fleet.attributes["battery_soc"] == 60.0
+    assert fleet.attributes["grid_power_kw"] == 1.2
+    assert fleet.attributes["house_load_kw"] == 0.8
+    assert fleet.attributes["orchestrator_status"] == "observe"
+    assert fleet.attributes["charging_status"] == "idle"
+    assert fleet.attributes["export_status"] == "disabled"
+    assert "forecast_cost" in fleet.attributes
+    assert "measured_cost" in fleet.attributes
+    assert fleet.attributes["house_learning_samples"] == 0
+    assert fleet.attributes["ev_learning_samples"] == 0
+    assert fleet.attributes["last_update"]
+    json.dumps(dict(fleet.attributes))
     assert hass.states.get("switch.home_energy_automatic_charge").state == "off"
     assert hass.states.get("sensor.home_energy_free_charge_completion").state == "idle"
     assert hass.states.get("sensor.home_energy_ev_solar_spill_status").state == "disabled"
@@ -864,6 +881,7 @@ async def test_daily_export_revenue_and_net_cost_are_exposed_without_double_coun
         "2026-09-14T20:00:00+10:00": 0.03,
     }
     coordinator.data = coordinator._apply_tariff_guard(coordinator.data)
+    await coordinator.async_update_forecast(now)
     coordinator.async_update_listeners()
     await hass.async_block_till_done()
 
@@ -884,6 +902,48 @@ async def test_daily_export_revenue_and_net_cost_are_exposed_without_double_coun
     assert hass.states.get(_entity_id(hass, entry, "zerohero_credit")).state == "1.0"
     assert hass.states.get(_entity_id(hass, entry, "zerohero_credit_status")).state == "earned"
     assert hass.states.get(_entity_id(hass, entry, "estimated_net_cost")).state == "-0.98"
+    fleet = hass.states.get(_entity_id(hass, entry, "fleet_summary"))
+    assert fleet.attributes["forecast_cost"] == -0.98
+    assert fleet.attributes["measured_cost"] == -0.98
+    assert fleet.attributes["zerohero_status"] == "earned"
+
+
+async def test_forecast_assumes_credit_and_75_percent_of_planned_export(hass):
+    hass.states.async_set("sensor.test_battery_soc", "60", {"unit_of_measurement": "%"})
+    hass.states.async_set("sensor.test_grid_power", "0", {"unit_of_measurement": "kW"})
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Optimistic forecast site",
+        data={
+            **ENTRY_DATA,
+            "export_rate_per_kwh": 0.05,
+            "offpeak_export_rate_per_kwh": 0.02,
+            "super_export_rate_per_kwh": 0.10,
+        },
+    )
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    coordinator = entry.runtime_data
+    now = datetime(2026, 9, 14, 17, 0, tzinfo=ZoneInfo("Australia/Sydney"))
+    controller = coordinator.active_controller
+    controller.export_effective_enabled = True
+    controller.export_plan = ExportPlan(20.0, 20.0, 2.0, "ready")
+    controller.export_planned_start = now.replace(hour=18)
+
+    await coordinator.async_update_forecast(now)
+    coordinator.async_update_listeners()
+    await hass.async_block_till_done()
+
+    forecast = hass.states.get(_entity_id(hass, entry, "estimated_net_cost"))
+    measured = hass.states.get(_entity_id(hass, entry, "measured_net_cost"))
+    assert forecast.state == "-1.22"
+    assert forecast.attributes["assumed_zerohero_credit"] == 1.0
+    assert forecast.attributes["export_realisation_percent"] == 75.0
+    assert forecast.attributes["forecast_remaining_export_kwh"] == 15.0
+    assert forecast.attributes["forecast_additional_export_revenue"] == 2.25
+    assert measured.state == "2.04"
 
 
 async def test_learning_history_is_persisted_and_exposed(hass):

@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.12.25 — optimistic forecast, scorecard, and fleet summary
+
+- Separate factual measured net cost from an optimistic daily forecast that
+  assumes the configured ZEROHERO credit and initially realises 75% of the
+  remaining planned export using the existing tariff engine.
+- Optionally map GloBird Latest Daily Cost and ZEROHERO Status. Freeze one
+  pre-window forecast, match only complete same-date retailer results, and
+  expose forecast, actual, error, result date, and ZEROHERO outcome.
+- Persist a privacy-minimal 28-day score history and apply only small bounded
+  forecast calibration steps. Feedback has no authority over charging,
+  export, EV, inverter, or Safety Lock decisions.
+- Add a compact read-only Fleet Summary sensor so one Home Assistant instance
+  can monitor selected HEO statistics from several sites through the built-in
+  RESTful Sensor integration without installing remote-control components.
+
 ## 0.12.24 — GloBird tariff terminology and complete feed-in accounting
 
 - Reorder tariff configuration into meter, charge, credit, allowance,

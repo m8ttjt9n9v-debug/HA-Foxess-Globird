@@ -148,6 +148,10 @@ Portable code maps roles and never embeds that vehicle's entity IDs. See the
 - FoxESS cloud telemetry may be used as read-only corroboration. FoxCloud Mode
   Scheduler is an alternative inverter owner, not a fallback transport to mix
   with automatic Modbus writes.
+- The GloBird Home Assistant integration is optional. Its Latest Daily Cost
+  and ZEROHERO Status entities may be mapped to HEO's read-only forecast
+  scorecard. Missing, incomplete, mismatched-date, or unrecognised retailer
+  results remain explicit and never affect control.
 - Tailscale, File Editor, and EMHASS may exist on a site but are not core HEO
   algorithm dependencies.
 
@@ -180,3 +184,8 @@ it is not an HEO master control and is unsafe to present beside the opposite-
 polarity Safety Lock. Safety Lock ON blocks all HEO hardware commands; the
 automatic export and EV switches express independent intent and do not bypass
 that lock or their respective readiness gates.
+
+For a single read-only dashboard covering several installations, use the
+versioned Fleet Summary entity and Home Assistant's standard REST state API as
+described in [fleet monitoring](fleet-monitoring.md). A monitoring hub must
+never become a remote site's control dependency.

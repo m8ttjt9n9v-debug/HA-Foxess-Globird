@@ -44,8 +44,18 @@ layers around the proven algorithm, not replacement algorithms.
   allowance. The independently configured automatic-export cap
   limits controller energy without changing tariff eligibility. Existing
   entries migrate the old shared allowance into that cap to preserve behavior.
-  Net cost is gross cost minus export revenue; it is an HEO telemetry estimate,
-  not the retailer's final bill.
+  Measured net cost is gross cost minus measured export revenue and any credit
+  already qualified by HEO. The separate daily forecast is deliberately
+  optimistic: it assumes the configured ZEROHERO credit and initially assumes
+  75% of the remaining planned export will be realised. Neither value is the
+  retailer's final bill.
+- Forecast calibration is read-only and has no control authority. HEO freezes
+  one daily forecast, matches it only to complete same-date GloBird results,
+  and exposes forecast, actual, error, and ZEROHERO outcome as a scorecard. It
+  slowly calibrates forecast export realisation and a bounded cost residual;
+  it never changes export, charge, EV, inverter, or Safety Lock decisions.
+  Days on which ZEROHERO was not achieved remain visible but do not train the
+  residual because they violate the forecast's explicit optimistic assumption.
 - ZEROHERO automatic export requests the configured inverter discharge maximum,
   capped only by the mapped actuator maximum. The inverter enforces its own grid
   export limit. A lower legacy user-entered discharge preference is ignored so
