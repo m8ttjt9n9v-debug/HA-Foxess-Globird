@@ -22,9 +22,14 @@ from custom_components.home_energy_orchestrator.read_model import build_site_rea
 def _coordinator() -> SimpleNamespace:
     scorecard = SimpleNamespace(
         frozen_forecast_cost=1.234,
+        frozen_raw_forecast_cost=1.111,
         retailer_actual_cost=1.456,
         forecast_error=0.222,
         retailer_zerohero_status="achieved",
+        planned_export_kwh=10.0,
+        realised_export_kwh=8.0,
+        export_realisation_ratio=0.8,
+        feedback_applied=True,
     )
     controller = SimpleNamespace(
         ownership_status="owned",
@@ -53,6 +58,9 @@ def _coordinator() -> SimpleNamespace:
             driving_history=SimpleNamespace(samples=(1, 2, 3)),
         ),
         data=SimpleNamespace(
+            estimated_energy_cost=3.456,
+            estimated_export_revenue=1.112,
+            zerohero_credit=1.0,
             estimated_net_cost=2.344,
             zerohero_credit_status="pending_window_completion",
             reason="ready",
@@ -64,10 +72,22 @@ def _coordinator() -> SimpleNamespace:
             grid_power=SimpleNamespace(value=-1.23456),
             solar_power=SimpleNamespace(value=4.56789),
         ),
-        optimistic_forecast=SimpleNamespace(calibrated_net_cost=2.345),
+        optimistic_forecast=SimpleNamespace(
+            calibrated_net_cost=2.345,
+            raw_net_cost=2.567,
+            assumed_zerohero_credit=1.0,
+            export_realisation_fraction=0.75,
+            forecast_remaining_export_kwh=7.6543,
+            forecast_additional_export_revenue=0.42,
+            learned_cost_bias=-0.05,
+        ),
         forecast_scorecard_date=date(2026, 9, 16),
         forecast_scorecard_status="matched",
-        forecast_feedback=SimpleNamespace(record_for=lambda _day: scorecard),
+        forecast_feedback=SimpleNamespace(
+            record_for=lambda _day: scorecard,
+            export_realisation_fraction=0.8,
+            learned_cost_bias=-0.04,
+        ),
         learning_result=SimpleNamespace(sample_count=7),
     )
 
@@ -125,6 +145,46 @@ def test_site_read_model_projects_existing_sensor_and_fleet_values() -> None:
         "ledger_status": "ready",
         "tariff_status": "ready",
         "last_update": "2026-09-17T10:25:00+00:00",
+    }
+    assert model.cost.sensor_attributes() == {
+        "gross_cost": 3.456,
+        "measured_export_revenue": 1.112,
+        "measured_zerohero_credit": 1.0,
+        "measured_net_cost": 2.344,
+        "assumed_zerohero_credit": 1.0,
+        "export_realisation_percent": 75.0,
+        "forecast_remaining_export_kwh": 7.6543,
+        "forecast_additional_export_revenue": 0.42,
+        "raw_optimistic_forecast": 2.567,
+        "learned_cost_bias": -0.05,
+    }
+    assert model.scorecard.sensor_attributes() == {
+        "result_date": "2026-09-16",
+        "forecast_cost": 1.234,
+        "raw_forecast_cost": 1.111,
+        "actual_cost": 1.456,
+        "forecast_error": 0.222,
+        "zerohero_status": "achieved",
+        "planned_export_kwh": 10.0,
+        "realised_export_kwh": 8.0,
+        "export_realisation_ratio": 0.8,
+        "forecast_feedback_applied": True,
+        "learned_export_realisation_percent": 80.0,
+        "learned_cost_bias": -0.04,
+    }
+    assert model.forecast_diagnostics() == {
+        "net_cost": 2.345,
+        "raw_net_cost": 2.567,
+        "assumed_zerohero_credit": 1.0,
+        "export_realisation_fraction": 0.8,
+        "forecast_remaining_export_kwh": 7.6543,
+        "learned_cost_bias": -0.04,
+        "scorecard_status": "matched",
+        "scorecard_date": "2026-09-16",
+        "scorecard_forecast_cost": 1.234,
+        "scorecard_actual_cost": 1.456,
+        "scorecard_error": 0.222,
+        "scorecard_zerohero_status": "achieved",
     }
 
 

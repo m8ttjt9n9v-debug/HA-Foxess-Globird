@@ -13,6 +13,7 @@ from .const import (
     CONF_FOXESS_WORK_MODE,
 )
 from .ev_adapter import ev_control_gate_status
+from .read_model import build_site_read_model
 
 
 async def async_get_config_entry_diagnostics(
@@ -41,13 +42,7 @@ async def async_get_config_entry_diagnostics(
         else ev_control_gate_status(coordinator.runtime_config)
     )
     telemetry = coordinator.telemetry
-    forecast = coordinator.optimistic_forecast
-    scorecard_date = coordinator.forecast_scorecard_date
-    scorecard = (
-        coordinator.forecast_feedback.record_for(scorecard_date)
-        if scorecard_date is not None
-        else None
-    )
+    read_model = build_site_read_model(coordinator)
     return {
         "entry": {"version": entry.version, "options": {"mode": "observe"}},
         "actuators": {
@@ -203,40 +198,7 @@ async def async_get_config_entry_diagnostics(
             "grid_import_kw": ledger.grid_import_kw,
             "grid_export_kw": ledger.grid_export_kw,
         },
-        "forecast": {
-            "net_cost": (
-                forecast.calibrated_net_cost if forecast is not None else None
-            ),
-            "raw_net_cost": forecast.raw_net_cost if forecast is not None else None,
-            "assumed_zerohero_credit": (
-                forecast.assumed_zerohero_credit if forecast is not None else None
-            ),
-            "export_realisation_fraction": (
-                coordinator.forecast_feedback.export_realisation_fraction
-            ),
-            "forecast_remaining_export_kwh": (
-                forecast.forecast_remaining_export_kwh
-                if forecast is not None
-                else None
-            ),
-            "learned_cost_bias": coordinator.forecast_feedback.learned_cost_bias,
-            "scorecard_status": coordinator.forecast_scorecard_status,
-            "scorecard_date": (
-                scorecard_date.isoformat() if scorecard_date is not None else None
-            ),
-            "scorecard_forecast_cost": (
-                scorecard.frozen_forecast_cost if scorecard is not None else None
-            ),
-            "scorecard_actual_cost": (
-                scorecard.retailer_actual_cost if scorecard is not None else None
-            ),
-            "scorecard_error": (
-                scorecard.forecast_error if scorecard is not None else None
-            ),
-            "scorecard_zerohero_status": (
-                scorecard.retailer_zerohero_status if scorecard is not None else None
-            ),
-        },
+        "forecast": read_model.forecast_diagnostics(),
         "learning": {
             "model": learning.model,
             "cycle_budget_kwh": learning.cycle_budget_kwh,

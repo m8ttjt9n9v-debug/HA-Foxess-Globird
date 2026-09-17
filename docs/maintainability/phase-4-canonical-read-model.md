@@ -28,8 +28,15 @@ forecast/measured cost, prior-day scorecard, ZEROHERO export visibility and EV
 status. Existing Fleet-specific rounding and individual-state precision remain
 deliberately distinct projections of the same raw model values.
 
-The work-item evidence is recorded in
-[core SiteReadModel projection](work-item-core-read-model.md).
+The second seam adds frozen cost and scorecard submodels. Estimated Net Cost
+attributes, all four prior-day scorecard entities and redacted forecast
+diagnostics now share the same facts already used by Fleet Summary; accounting,
+forecast and feedback calculations remain with their existing producers.
+
+Work-item evidence:
+
+- [core SiteReadModel projection](work-item-core-read-model.md)
+- [accounting and scorecard read model](work-item-accounting-read-model.md)
 
 ## Work packages
 

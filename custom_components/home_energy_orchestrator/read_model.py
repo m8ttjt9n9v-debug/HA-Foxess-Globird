@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
 from typing import TYPE_CHECKING
 
 from .const import FOXESS_CONTROL_OWNER_CLOUD
@@ -66,6 +66,87 @@ def _rounded(value: float | None, digits: int = 3) -> float | None:
 
 
 @dataclass(frozen=True, slots=True)
+class CostReadModel:
+    """Canonical measured and forecast cost presentation values."""
+
+    measured_gross_cost: float | None
+    measured_export_revenue: float | None
+    measured_zerohero_credit: float | None
+    measured_net_cost: float | None
+    calibrated_net_cost: float | None
+    raw_net_cost: float | None
+    assumed_zerohero_credit: float | None
+    forecast_export_realisation_fraction: float | None
+    forecast_remaining_export_kwh: float | None
+    forecast_additional_export_revenue: float | None
+    forecast_learned_cost_bias: float | None
+    feedback_export_realisation_fraction: float
+    feedback_learned_cost_bias: float
+
+    def sensor_attributes(self) -> dict[str, object]:
+        """Project the Estimated Net Cost entity's existing attributes."""
+        return {
+            "gross_cost": self.measured_gross_cost,
+            "measured_export_revenue": self.measured_export_revenue,
+            "measured_zerohero_credit": self.measured_zerohero_credit,
+            "measured_net_cost": self.measured_net_cost,
+            "assumed_zerohero_credit": self.assumed_zerohero_credit,
+            "export_realisation_percent": (
+                None
+                if self.forecast_export_realisation_fraction is None
+                else round(self.forecast_export_realisation_fraction * 100, 1)
+            ),
+            "forecast_remaining_export_kwh": self.forecast_remaining_export_kwh,
+            "forecast_additional_export_revenue": (
+                self.forecast_additional_export_revenue
+            ),
+            "raw_optimistic_forecast": self.raw_net_cost,
+            "learned_cost_bias": self.forecast_learned_cost_bias,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class ScorecardReadModel:
+    """Canonical prior-day forecast-versus-retailer result."""
+
+    status: str
+    result_date: date | None
+    forecast_cost: float | None
+    raw_forecast_cost: float | None
+    actual_cost: float | None
+    forecast_error: float | None
+    zerohero_status: str | None
+    planned_export_kwh: float | None
+    realised_export_kwh: float | None
+    export_realisation_ratio: float | None
+    feedback_applied: bool
+    learned_export_realisation_fraction: float
+    learned_cost_bias: float
+
+    def sensor_attributes(self) -> dict[str, object]:
+        """Project the four scorecard entities' shared existing attributes."""
+        return {
+            "result_date": (
+                None if self.result_date is None else self.result_date.isoformat()
+            ),
+            "forecast_cost": self.forecast_cost,
+            "raw_forecast_cost": self.raw_forecast_cost,
+            "actual_cost": self.actual_cost,
+            "forecast_error": self.forecast_error,
+            "zerohero_status": self.zerohero_status,
+            "planned_export_kwh": self.planned_export_kwh,
+            "realised_export_kwh": self.realised_export_kwh,
+            "export_realisation_ratio": self.export_realisation_ratio,
+            "forecast_feedback_applied": self.feedback_applied,
+            "learned_export_realisation_percent": round(
+                self.learned_export_realisation_fraction * 100,
+                1,
+            ),
+            "learned_cost_bias": self.learned_cost_bias,
+        }
+
+
+@dataclass(frozen=True, slots=True)
 class SiteReadModel:
     """One immutable view of values shared by public presentation surfaces."""
 
@@ -83,14 +164,10 @@ class SiteReadModel:
     charging_status: str
     export_status: str
     ev_control_status: str
-    forecast_cost: float | None
-    measured_cost: float | None
-    latest_forecast_cost: float | None
-    latest_actual_cost: float | None
-    forecast_error: float | None
+    cost: CostReadModel
+    scorecard: ScorecardReadModel
     zerohero_status: str
     latest_zerohero_status: str | None
-    forecast_scorecard_status: str
     house_learning_samples: int
     ev_learning_samples: int
     ledger_status: str
@@ -107,12 +184,12 @@ class SiteReadModel:
             "solar_power": self.solar_power_kw,
             "house_load": self.house_load_kw,
             "ev_control_status": self.ev_control_status,
-            "estimated_net_cost": _rounded(self.forecast_cost, 2),
-            "measured_net_cost": _rounded(self.measured_cost, 2),
-            "forecast_yesterday_cost": self.latest_forecast_cost,
-            "globird_yesterday_actual_cost": self.latest_actual_cost,
-            "forecast_error_yesterday": self.forecast_error,
-            "forecast_scorecard_status": self.forecast_scorecard_status,
+            "estimated_net_cost": _rounded(self.cost.calibrated_net_cost, 2),
+            "measured_net_cost": _rounded(self.cost.measured_net_cost, 2),
+            "forecast_yesterday_cost": self.scorecard.forecast_cost,
+            "globird_yesterday_actual_cost": self.scorecard.actual_cost,
+            "forecast_error_yesterday": self.scorecard.forecast_error,
+            "forecast_scorecard_status": self.scorecard.status,
             "zerohero_credit_status": self.zerohero_status,
             "zerohero_sellable_energy": self.sellable_energy_kwh,
             "zerohero_planned_export_energy": self.planned_export_kwh,
@@ -137,18 +214,43 @@ class SiteReadModel:
             "charging_status": self.charging_status,
             "export_status": self.export_status,
             "ev_control_status": self.ev_control_status,
-            "forecast_cost": _rounded(self.forecast_cost, 2),
-            "measured_cost": _rounded(self.measured_cost, 2),
-            "latest_actual_cost": _rounded(self.latest_actual_cost, 2),
-            "forecast_error": _rounded(self.forecast_error, 2),
+            "forecast_cost": _rounded(self.cost.calibrated_net_cost, 2),
+            "measured_cost": _rounded(self.cost.measured_net_cost, 2),
+            "latest_actual_cost": _rounded(self.scorecard.actual_cost, 2),
+            "forecast_error": _rounded(self.scorecard.forecast_error, 2),
             "zerohero_status": self.zerohero_status,
             "latest_zerohero_status": self.latest_zerohero_status,
-            "forecast_scorecard_status": self.forecast_scorecard_status,
+            "forecast_scorecard_status": self.scorecard.status,
             "house_learning_samples": self.house_learning_samples,
             "ev_learning_samples": self.ev_learning_samples,
             "ledger_status": self.ledger_status,
             "tariff_status": self.tariff_status,
             "last_update": updated_at.isoformat(),
+        }
+
+    def forecast_diagnostics(self) -> dict[str, object]:
+        """Project the existing redacted forecast support payload."""
+        return {
+            "net_cost": self.cost.calibrated_net_cost,
+            "raw_net_cost": self.cost.raw_net_cost,
+            "assumed_zerohero_credit": self.cost.assumed_zerohero_credit,
+            "export_realisation_fraction": (
+                self.cost.feedback_export_realisation_fraction
+            ),
+            "forecast_remaining_export_kwh": (
+                self.cost.forecast_remaining_export_kwh
+            ),
+            "learned_cost_bias": self.cost.feedback_learned_cost_bias,
+            "scorecard_status": self.scorecard.status,
+            "scorecard_date": (
+                None
+                if self.scorecard.result_date is None
+                else self.scorecard.result_date.isoformat()
+            ),
+            "scorecard_forecast_cost": self.scorecard.forecast_cost,
+            "scorecard_actual_cost": self.scorecard.actual_cost,
+            "scorecard_error": self.scorecard.forecast_error,
+            "scorecard_zerohero_status": self.scorecard.zerohero_status,
         }
 
 
@@ -166,6 +268,67 @@ def build_site_read_model(coordinator: EnergyCoordinator) -> SiteReadModel:
         coordinator.forecast_feedback.record_for(coordinator.forecast_scorecard_date)
         if coordinator.forecast_scorecard_date is not None
         else None
+    )
+    feedback = coordinator.forecast_feedback
+    cost = CostReadModel(
+        measured_gross_cost=ledger.estimated_energy_cost,
+        measured_export_revenue=ledger.estimated_export_revenue,
+        measured_zerohero_credit=ledger.zerohero_credit,
+        measured_net_cost=ledger.estimated_net_cost,
+        calibrated_net_cost=(
+            None if forecast is None else forecast.calibrated_net_cost
+        ),
+        raw_net_cost=None if forecast is None else forecast.raw_net_cost,
+        assumed_zerohero_credit=(
+            None if forecast is None else forecast.assumed_zerohero_credit
+        ),
+        forecast_export_realisation_fraction=(
+            None if forecast is None else forecast.export_realisation_fraction
+        ),
+        forecast_remaining_export_kwh=(
+            None if forecast is None else forecast.forecast_remaining_export_kwh
+        ),
+        forecast_additional_export_revenue=(
+            None
+            if forecast is None
+            else forecast.forecast_additional_export_revenue
+        ),
+        forecast_learned_cost_bias=(
+            None if forecast is None else forecast.learned_cost_bias
+        ),
+        feedback_export_realisation_fraction=feedback.export_realisation_fraction,
+        feedback_learned_cost_bias=feedback.learned_cost_bias,
+    )
+    scorecard_model = ScorecardReadModel(
+        status=coordinator.forecast_scorecard_status,
+        result_date=coordinator.forecast_scorecard_date,
+        forecast_cost=(
+            None if scorecard is None else scorecard.frozen_forecast_cost
+        ),
+        raw_forecast_cost=(
+            None if scorecard is None else scorecard.frozen_raw_forecast_cost
+        ),
+        actual_cost=(
+            None if scorecard is None else scorecard.retailer_actual_cost
+        ),
+        forecast_error=(
+            None if scorecard is None else scorecard.forecast_error
+        ),
+        zerohero_status=(
+            None if scorecard is None else scorecard.retailer_zerohero_status
+        ),
+        planned_export_kwh=(
+            None if scorecard is None else scorecard.planned_export_kwh
+        ),
+        realised_export_kwh=(
+            None if scorecard is None else scorecard.realised_export_kwh
+        ),
+        export_realisation_ratio=(
+            None if scorecard is None else scorecard.export_realisation_ratio
+        ),
+        feedback_applied=False if scorecard is None else scorecard.feedback_applied,
+        learned_export_realisation_fraction=feedback.export_realisation_fraction,
+        learned_cost_bias=feedback.learned_cost_bias,
     )
     return SiteReadModel(
         orchestrator_status=control_mode(coordinator),
@@ -198,22 +361,12 @@ def build_site_read_model(coordinator: EnergyCoordinator) -> SiteReadModel:
         ev_control_status=(
             "unavailable" if ev_controller is None else ev_controller.last_reason
         ),
-        forecast_cost=(
-            None if forecast is None else forecast.calibrated_net_cost
-        ),
-        measured_cost=ledger.estimated_net_cost,
-        latest_forecast_cost=(
-            None if scorecard is None else scorecard.frozen_forecast_cost
-        ),
-        latest_actual_cost=(
-            None if scorecard is None else scorecard.retailer_actual_cost
-        ),
-        forecast_error=None if scorecard is None else scorecard.forecast_error,
+        cost=cost,
+        scorecard=scorecard_model,
         zerohero_status=ledger.zerohero_credit_status,
         latest_zerohero_status=(
             None if scorecard is None else scorecard.retailer_zerohero_status
         ),
-        forecast_scorecard_status=coordinator.forecast_scorecard_status,
         house_learning_samples=coordinator.learning_result.sample_count,
         ev_learning_samples=(
             0 if ev_controller is None else len(ev_controller.driving_history.samples)

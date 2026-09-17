@@ -376,81 +376,14 @@ class EnergySensor(CoordinatorEntity[EnergyCoordinator], SensorEntity):
                 ),
             }
         if self.entity_description.key == "estimated_net_cost":
-            ledger = self.coordinator.data
-            forecast = self.coordinator.optimistic_forecast
-            return {
-                "gross_cost": ledger.estimated_energy_cost,
-                "measured_export_revenue": ledger.estimated_export_revenue,
-                "measured_zerohero_credit": ledger.zerohero_credit,
-                "measured_net_cost": ledger.estimated_net_cost,
-                "assumed_zerohero_credit": (
-                    None if forecast is None else forecast.assumed_zerohero_credit
-                ),
-                "export_realisation_percent": (
-                    None
-                    if forecast is None
-                    else round(forecast.export_realisation_fraction * 100, 1)
-                ),
-                "forecast_remaining_export_kwh": (
-                    None if forecast is None else forecast.forecast_remaining_export_kwh
-                ),
-                "forecast_additional_export_revenue": (
-                    None
-                    if forecast is None
-                    else forecast.forecast_additional_export_revenue
-                ),
-                "raw_optimistic_forecast": (
-                    None if forecast is None else forecast.raw_net_cost
-                ),
-                "learned_cost_bias": (
-                    None if forecast is None else forecast.learned_cost_bias
-                ),
-            }
+            return build_site_read_model(self.coordinator).cost.sensor_attributes()
         if self.entity_description.key in {
             "forecast_yesterday_cost",
             "globird_yesterday_actual_cost",
             "forecast_error_yesterday",
             "forecast_scorecard_status",
         }:
-            result_date = self.coordinator.forecast_scorecard_date
-            record = (
-                self.coordinator.forecast_feedback.record_for(result_date)
-                if result_date is not None
-                else None
-            )
-            return {
-                "result_date": None if result_date is None else result_date.isoformat(),
-                "forecast_cost": (
-                    None if record is None else record.frozen_forecast_cost
-                ),
-                "raw_forecast_cost": (
-                    None if record is None else record.frozen_raw_forecast_cost
-                ),
-                "actual_cost": (
-                    None if record is None else record.retailer_actual_cost
-                ),
-                "forecast_error": None if record is None else record.forecast_error,
-                "zerohero_status": (
-                    None if record is None else record.retailer_zerohero_status
-                ),
-                "planned_export_kwh": (
-                    None if record is None else record.planned_export_kwh
-                ),
-                "realised_export_kwh": (
-                    None if record is None else record.realised_export_kwh
-                ),
-                "export_realisation_ratio": (
-                    None if record is None else record.export_realisation_ratio
-                ),
-                "forecast_feedback_applied": (
-                    False if record is None else record.feedback_applied
-                ),
-                "learned_export_realisation_percent": round(
-                    self.coordinator.forecast_feedback.export_realisation_fraction * 100,
-                    1,
-                ),
-                "learned_cost_bias": self.coordinator.forecast_feedback.learned_cost_bias,
-            }
+            return build_site_read_model(self.coordinator).scorecard.sensor_attributes()
         if self.entity_description.key == "ev_control_status":
             controller = self.coordinator.ev_controller
             if controller is None:
