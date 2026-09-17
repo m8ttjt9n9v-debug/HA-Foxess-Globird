@@ -19,6 +19,48 @@ class EvBeforeExportDecision:
     reason: str
 
 
+def protected_keepalive_requires_evidence(
+    *,
+    ev_configured: bool,
+    control_commissioned: bool,
+    protected_baseline_a: float,
+) -> bool:
+    """Return whether mapped connection evidence can affect the reservation."""
+    return ev_configured and control_commissioned and protected_baseline_a > 0
+
+
+def calculate_protected_keepalive_energy_kwh(
+    *,
+    ev_configured: bool,
+    control_commissioned: bool,
+    protected_baseline_a: float,
+    home_state: str | None,
+    cable_state: str | None,
+    hours_until_free: float,
+    voltage_v: float,
+    phase_count: int,
+) -> float | None:
+    """Return mandatory connected-EV energy or fail closed without evidence."""
+    if not protected_keepalive_requires_evidence(
+        ev_configured=ev_configured,
+        control_commissioned=control_commissioned,
+        protected_baseline_a=protected_baseline_a,
+    ):
+        return 0.0
+    if home_state is None or cable_state is None:
+        return None
+    if home_state not in {"home", "on"} or cable_state != "on":
+        return 0.0
+    return round(
+        max(hours_until_free, 0.0)
+        * protected_baseline_a
+        * voltage_v
+        * phase_count
+        / 1000,
+        3,
+    )
+
+
 def decide_ev_before_export(
     *,
     enabled: bool,

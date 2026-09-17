@@ -36,7 +36,9 @@ from .planner.control_windows import (
 )
 from .planner.ev_before_export import (
     EvBeforeExportDecision,
+    calculate_protected_keepalive_energy_kwh,
     decide_ev_before_export,
+    protected_keepalive_requires_evidence,
 )
 from .planner.export import ExportPlan
 from .planner.export_session import ExportSessionState, advance_export_session
@@ -579,27 +581,33 @@ class ActiveFoxessController:
         a new export whenever a non-zero baseline is commissioned.
         """
         ev = self.coordinator.runtime_config.ev_connection
-        if not ev.configured or not ev.control_commissioned:
-            # A battery-only installation has no EV demand to protect.  Do not
-            # let retained/default EV fields turn an otherwise valid export
-            # plan into ``unknown``.
-            return 0.0
-        baseline_a = ev.protected_baseline_a
-        if baseline_a <= 0:
-            return 0.0
         home_entity = ev.at_home_entity
         cable_entity = ev.cable_connected_entity
-        if not home_entity or not cable_entity:
-            return None
-        home = self._state(str(home_entity))
-        cable = self._state(str(cable_entity))
-        if home is None or cable is None:
-            return None
-        if home not in {"home", "on"} or cable != "on":
-            return 0.0
-        voltage = ev.voltage_v
-        phases = ev.phase_count
-        return round(max(hours_until_free, 0.0) * baseline_a * voltage * phases / 1000, 3)
+        evidence_required = protected_keepalive_requires_evidence(
+            ev_configured=ev.configured,
+            control_commissioned=ev.control_commissioned,
+            protected_baseline_a=ev.protected_baseline_a,
+        )
+        home = (
+            self._state(str(home_entity))
+            if evidence_required and home_entity
+            else None
+        )
+        cable = (
+            self._state(str(cable_entity))
+            if evidence_required and cable_entity
+            else None
+        )
+        return calculate_protected_keepalive_energy_kwh(
+            ev_configured=ev.configured,
+            control_commissioned=ev.control_commissioned,
+            protected_baseline_a=ev.protected_baseline_a,
+            home_state=home,
+            cable_state=cable,
+            hours_until_free=hours_until_free,
+            voltage_v=ev.voltage_v,
+            phase_count=ev.phase_count,
+        )
 
     @staticmethod
     def _force_mode_command_delays(plan: FoxessCommandPlan) -> FoxessCommandPlan:
