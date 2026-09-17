@@ -13,6 +13,7 @@ from custom_components.home_energy_orchestrator.const import (
     CONF_AUTOMATIC_CONTROL_ENABLED,
     CONF_AUTOMATIC_EXPORT_ENABLED,
     CONF_CONFIGURE_EV,
+    CONF_EV_ACTUAL_CURRENT,
     CONF_EV_AT_HOME,
     CONF_EV_BEFORE_EXPORT_SOC_TARGET,
     CONF_EV_CABLE_CONNECTED,
@@ -20,12 +21,16 @@ from custom_components.home_energy_orchestrator.const import (
     CONF_EV_CHARGE_SWITCH,
     CONF_EV_CHARGE_TO_FULL,
     CONF_EV_CHARGE_TO_FULL_ENABLED,
+    CONF_EV_CHARGING_STATE,
     CONF_EV_CONTROL_COMMISSIONED,
     CONF_EV_CURRENT_LIMIT,
+    CONF_EV_LIFETIME_ENERGY,
     CONF_EV_LOCATION_MODE,
     CONF_EV_PHASE_COUNT,
     CONF_EV_PROTECTED_BASELINE_A,
     CONF_EV_SMART_SOCKET,
+    CONF_EV_SOC,
+    CONF_EV_STORED_ENERGY,
     CONF_EV_VOLTAGE,
     CONF_EXPORT_RATE,
     CONF_FOXESS_CONTROL_OWNER,
@@ -130,6 +135,11 @@ def test_runtime_configuration_uses_established_defaults() -> None:
     assert parsed.ev_connection.phase_count == DEFAULT_EV_PHASE_COUNT
     assert parsed.ev_actuators.direct_entities is None
     assert parsed.ev_actuators.smart_socket_entity is None
+    assert parsed.ev_telemetry.soc_entity is None
+    assert parsed.ev_telemetry.charging_state_entity is None
+    assert parsed.ev_telemetry.actual_current_entity is None
+    assert parsed.ev_telemetry.stored_energy_entity is None
+    assert parsed.ev_telemetry.lifetime_energy_entity is None
     assert parsed.house.occupancy_mode == DEFAULT_HOUSE_OCCUPANCY_MODE
     assert parsed.electrical.verified is False
     assert (
@@ -332,6 +342,69 @@ def test_ev_actuator_snapshot_preserves_mapping_coercion(
     actuators = RuntimeConfiguration.from_mapping(data).ev_actuators
     assert actuators.direct_entities == expected_direct
     assert actuators.smart_socket_entity == expected_socket
+
+
+@pytest.mark.parametrize(
+    ("data", "expected"),
+    [
+        ({}, (None, None, None, None, None)),
+        (
+            {
+                CONF_EV_SOC: "sensor.car_soc",
+                CONF_EV_CHARGING_STATE: "sensor.car_charging",
+                CONF_EV_ACTUAL_CURRENT: "sensor.car_current",
+                CONF_EV_STORED_ENERGY: "sensor.car_energy",
+                CONF_EV_LIFETIME_ENERGY: "sensor.car_lifetime",
+            },
+            (
+                "sensor.car_soc",
+                "sensor.car_charging",
+                "sensor.car_current",
+                "sensor.car_energy",
+                "sensor.car_lifetime",
+            ),
+        ),
+        (
+            {
+                CONF_EV_SOC: 1,
+                CONF_EV_CHARGING_STATE: 2,
+                CONF_EV_ACTUAL_CURRENT: 3,
+                CONF_EV_STORED_ENERGY: 4,
+                CONF_EV_LIFETIME_ENERGY: 5,
+            },
+            ("1", "2", "3", "4", "5"),
+        ),
+        (
+            {
+                CONF_EV_SOC: "",
+                CONF_EV_CHARGING_STATE: False,
+                CONF_EV_ACTUAL_CURRENT: None,
+                CONF_EV_STORED_ENERGY: 0,
+                CONF_EV_LIFETIME_ENERGY: "",
+            },
+            (None, None, None, None, None),
+        ),
+    ],
+)
+def test_ev_telemetry_snapshot_preserves_mapping_coercion(
+    data: dict[str, object],
+    expected: tuple[
+        str | None,
+        str | None,
+        str | None,
+        str | None,
+        str | None,
+    ],
+) -> None:
+    """Truthy telemetry mappings stringify; falsey mappings remain absent."""
+    telemetry = RuntimeConfiguration.from_mapping(data).ev_telemetry
+    assert (
+        telemetry.soc_entity,
+        telemetry.charging_state_entity,
+        telemetry.actual_current_entity,
+        telemetry.stored_energy_entity,
+        telemetry.lifetime_energy_entity,
+    ) == expected
 
 
 @pytest.mark.parametrize(

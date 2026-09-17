@@ -23,7 +23,6 @@ from .const import (
     CONF_CONFIGURE_SOLAR,
     CONF_DAILY_FREE_ALLOWANCE_KWH,
     CONF_DISCHARGE_EFFICIENCY_PERCENT,
-    CONF_EV_ACTUAL_CURRENT,
     CONF_EV_ALLOWANCE_GUARD_ENABLED,
     CONF_EV_ALLOWANCE_SAFETY_MARGIN,
     CONF_EV_ARRIVAL_RESERVE_SOC,
@@ -33,7 +32,6 @@ from .const import (
     CONF_EV_CHARGE_TO_FULL,
     CONF_EV_CHARGE_TO_FULL_ENABLED,
     CONF_EV_CHARGE_TO_FULL_MAX_HOURS,
-    CONF_EV_CHARGING_STATE,
     CONF_EV_DAILY_BACKFILL_ENERGY,
     CONF_EV_DAILY_READY_TIME,
     CONF_EV_DIRECT_LIMIT_HEADROOM,
@@ -42,7 +40,6 @@ from .const import (
     CONF_EV_FREE_WINDOW_PRIORITY,
     CONF_EV_FREE_WINDOW_SETTLE_MINUTES,
     CONF_EV_LEARNING_MINIMUM_SAMPLES,
-    CONF_EV_LIFETIME_ENERGY,
     CONF_EV_MAX_CURRENT,
     CONF_EV_OUTSIDE_INVERTER_PERCENT,
     CONF_EV_PHASE_COUNT,
@@ -60,10 +57,8 @@ from .const import (
     CONF_EV_SMART_SOCKET_POWER_SWITCHING,
     CONF_EV_SMART_SOCKET_RETRY_SECONDS,
     CONF_EV_SMART_SOCKET_SETTLE_SECONDS,
-    CONF_EV_SOC,
     CONF_EV_SOLAR_SPILL_BATTERY_SOC,
     CONF_EV_SOLAR_SPILL_ENABLED,
-    CONF_EV_STORED_ENERGY,
     CONF_EV_TELEMETRY_MAX_AGE_SECONDS,
     CONF_EV_TELEMETRY_MAX_SKEW_SECONDS,
     CONF_EV_VOLTAGE,
@@ -302,7 +297,9 @@ class ActiveEvController:
         self.coordinator.async_update_listeners()
 
     async def _async_snapshot_driving(self, now: datetime) -> None:
-        lifetime = self._entity_energy(CONF_EV_LIFETIME_ENERGY)
+        lifetime = self._mapped_energy(
+            self.coordinator.runtime_config.ev_telemetry.lifetime_energy_entity
+        )
         if lifetime is None or self.driving_snapshot.snapshot_date == now.date():
             return
         transition = snapshot_daily_driving_energy(
@@ -333,7 +330,9 @@ class ActiveEvController:
                 self.requested_current_a = observation.requested_current_a
                 self.applied_limit_percent = observation.charge_limit_percent
                 self.charge_switch_on = observation.charge_switch_on
-            vehicle_soc = self._entity_number(CONF_EV_SOC)
+            vehicle_soc = self._mapped_number(
+                self.coordinator.runtime_config.ev_telemetry.soc_entity
+            )
             if observation is not None and vehicle_soc is not None:
                 self._learned_general_limit(observation, vehicle_soc=vehicle_soc)
             else:
@@ -971,8 +970,9 @@ class ActiveEvController:
         connected_for_planning: bool,
         physical_minimum_a: float,
     ) -> SmartSocketRecoveryObservation:
-        charging_entity = self.coordinator.config.get(CONF_EV_CHARGING_STATE)
-        charging_state = self.hass.states.get(str(charging_entity)) if charging_entity else None
+        ev_telemetry = self.coordinator.runtime_config.ev_telemetry
+        charging_entity = ev_telemetry.charging_state_entity
+        charging_state = self.hass.states.get(charging_entity) if charging_entity else None
         charging_value = (
             charging_state.state.lower()
             if charging_state is not None and charging_state.state.lower() not in _UNKNOWN_STATES
@@ -1018,7 +1018,7 @@ class ActiveEvController:
             and charge_switch_state is not None
             and charge_switch_state.state.lower() in {"on", "off"}
         )
-        vehicle_soc = self._entity_number(CONF_EV_SOC)
+        vehicle_soc = self._mapped_number(ev_telemetry.soc_entity)
         actual_current, actual_valid = self._actual_ev_current_a()
         return SmartSocketRecoveryObservation(
             charging_state=charging_value,
@@ -1162,7 +1162,9 @@ class ActiveEvController:
                 DEFAULT_EV_FREE_WINDOW_CHARGE_LIMIT,
             )
         )
-        vehicle_soc = self._entity_number(CONF_EV_SOC)
+        vehicle_soc = self._mapped_number(
+            self.coordinator.runtime_config.ev_telemetry.soc_entity
+        )
         if vehicle_soc is None:
             self.last_reason = "ev_soc_unavailable"
             return False
@@ -1269,7 +1271,9 @@ class ActiveEvController:
         remaining_hours: float,
         snapshot,
     ):
-        stored = self._entity_energy(CONF_EV_STORED_ENERGY)
+        stored = self._mapped_energy(
+            self.coordinator.runtime_config.ev_telemetry.stored_energy_entity
+        )
         imported = (
             self.coordinator.free_window_import.imported_kwh
             if self.coordinator.free_window_import.last_at is not None
@@ -1380,7 +1384,9 @@ class ActiveEvController:
             if configured_baseline <= 0
             else min(max(configured_baseline, current_minimum, current_step), ceiling)
         )
-        vehicle_soc = self._entity_number(CONF_EV_SOC)
+        vehicle_soc = self._mapped_number(
+            self.coordinator.runtime_config.ev_telemetry.soc_entity
+        )
         if vehicle_soc is None:
             self.last_reason = "ev_soc_unavailable"
             return False
@@ -1513,7 +1519,9 @@ class ActiveEvController:
             free_start, in_pre_free, hours_until_free = self._pre_free_window(now)
             active_controller = getattr(self.coordinator, "active_controller", None)
             export_plan = getattr(active_controller, "export_plan", None)
-            stored_energy = self._entity_energy(CONF_EV_STORED_ENERGY)
+            stored_energy = self._mapped_energy(
+                self.coordinator.runtime_config.ev_telemetry.stored_energy_entity
+            )
             if export_plan is not None and stored_energy is not None:
                 vehicle_room = estimate_vehicle_energy_to_target_kwh(
                     stored_energy_kwh=stored_energy,
@@ -1696,7 +1704,9 @@ class ActiveEvController:
         protected_house = getattr(self.coordinator, "learning_remaining_kwh", None)
         active_controller = getattr(self.coordinator, "active_controller", None)
         export_plan = getattr(active_controller, "export_plan", None)
-        stored_energy = self._entity_energy(CONF_EV_STORED_ENERGY)
+        stored_energy = self._mapped_energy(
+            self.coordinator.runtime_config.ev_telemetry.stored_energy_entity
+        )
         if (
             data is None
             or data.available_after_reserve_kwh is None
@@ -1902,7 +1912,9 @@ class ActiveEvController:
         vehicle_soc: float,
     ) -> LearnedChargeLimitDecision | None:
         """Evaluate the source's P85/fallback general Tesla limit."""
-        stored = self._entity_energy(CONF_EV_STORED_ENERGY)
+        stored = self._mapped_energy(
+            self.coordinator.runtime_config.ev_telemetry.stored_energy_entity
+        )
         minimum = observation.limit_minimum_percent
         maximum = observation.limit_maximum_percent
         step = observation.limit_step_percent
@@ -1977,8 +1989,13 @@ class ActiveEvController:
         telemetry = self.coordinator.telemetry
         grid = None if telemetry is None else telemetry.grid_power
         battery = None if telemetry is None else telemetry.battery_power
-        actual_state = self.hass.states.get(
-            str(self.coordinator.config.get(CONF_EV_ACTUAL_CURRENT, ""))
+        actual_current_entity = (
+            self.coordinator.runtime_config.ev_telemetry.actual_current_entity
+        )
+        actual_state = (
+            self.hass.states.get(actual_current_entity)
+            if actual_current_entity
+            else None
         )
         soc_state = self.hass.states.get(str(self.coordinator.config.get(CONF_BATTERY_SOC, "")))
         ev_current, ev_valid = self._actual_ev_current_a()
@@ -2099,7 +2116,9 @@ class ActiveEvController:
             return False, "ev_location_not_confirmed_home"
         if self._mapped_state(connection.cable_connected_entity) != "on":
             return False, "ev_cable_not_connected"
-        charging = self._entity_state(CONF_EV_CHARGING_STATE)
+        charging = self._mapped_state(
+            self.coordinator.runtime_config.ev_telemetry.charging_state_entity
+        )
         if charging is None or charging == "disconnected":
             return False, "ev_connection_state_unavailable"
         return True, "ev_connected_at_home"
@@ -2120,13 +2139,17 @@ class ActiveEvController:
         return telemetry.site_grid_current.value, True
 
     def _actual_ev_current_a(self) -> tuple[float, bool]:
-        charging = self._entity_state(CONF_EV_CHARGING_STATE)
+        ev_telemetry = self.coordinator.runtime_config.ev_telemetry
+        charging = self._mapped_state(ev_telemetry.charging_state_entity)
         if charging is None:
             return 0.0, False
         if charging != "charging":
             return 0.0, True
-        entity = self.coordinator.config.get(CONF_EV_ACTUAL_CURRENT)
-        state = self.hass.states.get(str(entity)) if entity else None
+        state = (
+            self.hass.states.get(ev_telemetry.actual_current_entity)
+            if ev_telemetry.actual_current_entity
+            else None
+        )
         try:
             value = (
                 current_to_a(float(state.state), state.attributes.get("unit_of_measurement"))
@@ -2214,10 +2237,6 @@ class ActiveEvController:
             write_guard=lambda: self.gate_status == "ready",
         )
 
-    def _entity_state(self, key: str) -> str | None:
-        entity = self.coordinator.config.get(key)
-        return self._mapped_state(str(entity) if entity else None)
-
     def _mapped_state(self, entity_id: str | None) -> str | None:
         """Return one mapped entity state, excluding unreadable values."""
         state = self.hass.states.get(entity_id) if entity_id else None
@@ -2225,18 +2244,16 @@ class ActiveEvController:
             return None
         return state.state.lower()
 
-    def _entity_number(self, key: str) -> float | None:
-        entity = self.coordinator.config.get(key)
-        state = self.hass.states.get(str(entity)) if entity else None
+    def _mapped_number(self, entity_id: str | None) -> float | None:
+        state = self.hass.states.get(entity_id) if entity_id else None
         try:
             value = float(state.state) if state is not None else None
         except (TypeError, ValueError):
             return None
         return value if value is not None and isfinite(value) else None
 
-    def _entity_energy(self, key: str) -> float | None:
-        entity = self.coordinator.config.get(key)
-        state = self.hass.states.get(str(entity)) if entity else None
+    def _mapped_energy(self, entity_id: str | None) -> float | None:
+        state = self.hass.states.get(entity_id) if entity_id else None
         if state is None:
             return None
         try:
@@ -2244,9 +2261,6 @@ class ActiveEvController:
         except (TypeError, ValueError):
             return None
         return value if isfinite(value) and value >= 0 else None
-
-    def _is_on(self, key: str) -> bool:
-        return self._entity_state(key) == "on"
 
     def _charge_to_full_requested(self) -> bool:
         """Use HEO's switch, with the old mapped helper as upgrade fallback."""

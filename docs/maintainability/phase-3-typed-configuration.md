@@ -22,9 +22,9 @@ selectors, validation, migration behavior and the multi-page draft workflow.
   manual plus automatic FoxESS control gates now use typed ownership, Safety
   Lock, actuator mapping, independent request values and automatic-export EV
   protection inputs and legacy-compatible charge-to-full intent. Direct
-  EV Home/Auto/Away mode, home/cable mappings and EV actuator mappings are also
-  consumed through immutable snapshots. Direct AST-visible runtime raw access
-  is now 66.
+  EV Home/Auto/Away mode, home/cable mappings, actuator mappings and telemetry
+  mappings are also consumed through immutable snapshots. Direct AST-visible
+  runtime raw access is now 63.
 
 ## Work packages
 

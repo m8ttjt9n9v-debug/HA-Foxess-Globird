@@ -12,6 +12,7 @@ from .const import (
     CONF_AUTOMATIC_EXPORT_ENABLED,
     CONF_BATTERY_POWER_DIRECTION,
     CONF_CONFIGURE_EV,
+    CONF_EV_ACTUAL_CURRENT,
     CONF_EV_AT_HOME,
     CONF_EV_AUTOMATIC_CONTROL_ENABLED,
     CONF_EV_BEFORE_EXPORT_ENABLED,
@@ -21,12 +22,16 @@ from .const import (
     CONF_EV_CHARGE_SWITCH,
     CONF_EV_CHARGE_TO_FULL,
     CONF_EV_CHARGE_TO_FULL_ENABLED,
+    CONF_EV_CHARGING_STATE,
     CONF_EV_CONTROL_COMMISSIONED,
     CONF_EV_CURRENT_LIMIT,
+    CONF_EV_LIFETIME_ENERGY,
     CONF_EV_LOCATION_MODE,
     CONF_EV_PHASE_COUNT,
     CONF_EV_PROTECTED_BASELINE_A,
     CONF_EV_SMART_SOCKET,
+    CONF_EV_SOC,
+    CONF_EV_STORED_ENERGY,
     CONF_EV_VOLTAGE,
     CONF_EXPORT_RATE,
     CONF_FOXESS_CONTROL_OWNER,
@@ -146,6 +151,17 @@ class EvActuatorSettings:
 
 
 @dataclass(frozen=True, slots=True)
+class EvTelemetrySettings:
+    """Explicit Home Assistant entities used to observe the vehicle."""
+
+    soc_entity: str | None
+    charging_state_entity: str | None
+    actual_current_entity: str | None
+    stored_energy_entity: str | None
+    lifetime_energy_entity: str | None
+
+
+@dataclass(frozen=True, slots=True)
 class HouseSettings:
     """Operator-owned house-energy occupancy selection."""
 
@@ -203,6 +219,7 @@ class RuntimeConfiguration:
     ev_preferences: EvPreferenceSettings
     ev_connection: EvConnectionSettings
     ev_actuators: EvActuatorSettings
+    ev_telemetry: EvTelemetrySettings
     house: HouseSettings
     electrical: ElectricalSettings
     tariff: TariffSettings
@@ -225,6 +242,11 @@ class RuntimeConfiguration:
         ev_charge_limit_entity = data.get(CONF_EV_CHARGE_LIMIT)
         ev_charge_switch_entity = data.get(CONF_EV_CHARGE_SWITCH)
         ev_smart_socket_entity = data.get(CONF_EV_SMART_SOCKET)
+        ev_soc_entity = data.get(CONF_EV_SOC)
+        ev_charging_state_entity = data.get(CONF_EV_CHARGING_STATE)
+        ev_actual_current_entity = data.get(CONF_EV_ACTUAL_CURRENT)
+        ev_stored_energy_entity = data.get(CONF_EV_STORED_ENERGY)
+        ev_lifetime_energy_entity = data.get(CONF_EV_LIFETIME_ENERGY)
         legacy_charge_to_full_entity = data.get(CONF_EV_CHARGE_TO_FULL)
         ev_control_commissioned = bool(
             data.get(
@@ -350,6 +372,27 @@ class RuntimeConfiguration:
                 ),
                 smart_socket_entity=(
                     str(ev_smart_socket_entity) if ev_smart_socket_entity else None
+                ),
+            ),
+            ev_telemetry=EvTelemetrySettings(
+                soc_entity=str(ev_soc_entity) if ev_soc_entity else None,
+                charging_state_entity=(
+                    str(ev_charging_state_entity)
+                    if ev_charging_state_entity
+                    else None
+                ),
+                actual_current_entity=(
+                    str(ev_actual_current_entity)
+                    if ev_actual_current_entity
+                    else None
+                ),
+                stored_energy_entity=(
+                    str(ev_stored_energy_entity) if ev_stored_energy_entity else None
+                ),
+                lifetime_energy_entity=(
+                    str(ev_lifetime_energy_entity)
+                    if ev_lifetime_energy_entity
+                    else None
                 ),
             ),
             house=HouseSettings(occupancy_mode=occupancy),
