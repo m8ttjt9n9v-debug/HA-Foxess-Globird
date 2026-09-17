@@ -1,0 +1,153 @@
+{
+  "schema_version": 1,
+  "name": "sanitized mixed free-charge and evening-export day",
+  "start": "2026-09-17T12:01:00+10:00",
+  "end": "2026-09-18T12:01:00+10:00",
+  "interval_seconds": 300,
+  "segments": [
+    {
+      "start": "2026-09-17T12:01:00+10:00",
+      "end": "2026-09-17T15:01:00+10:00",
+      "grid_kw": 6.0,
+      "solar_kw": 3.0,
+      "battery_kw": 5.0,
+      "house_kw": 1.2,
+      "battery_soc": 50.0
+    },
+    {
+      "start": "2026-09-17T15:01:00+10:00",
+      "end": "2026-09-17T16:01:00+10:00",
+      "grid_kw": 0.0,
+      "solar_kw": 2.0,
+      "battery_kw": 1.0,
+      "house_kw": 1.0,
+      "battery_soc": 100.0
+    },
+    {
+      "start": "2026-09-17T16:01:00+10:00",
+      "end": "2026-09-17T21:01:00+10:00",
+      "grid_kw": -4.0,
+      "solar_kw": 0.0,
+      "battery_kw": -5.5,
+      "house_kw": 1.5,
+      "battery_soc": 90.0
+    },
+    {
+      "start": "2026-09-17T21:01:00+10:00",
+      "end": "2026-09-17T23:01:00+10:00",
+      "grid_kw": 0.0,
+      "solar_kw": 0.0,
+      "battery_kw": -1.0,
+      "house_kw": 1.0,
+      "battery_soc": 65.0
+    },
+    {
+      "start": "2026-09-17T23:01:00+10:00",
+      "end": "2026-09-18T12:01:01+10:00",
+      "grid_kw": 0.0,
+      "solar_kw": 0.0,
+      "battery_kw": -0.7,
+      "house_kw": 0.7,
+      "battery_soc": 40.0
+    }
+  ],
+  "checkpoints": [
+    "2026-09-17T12:01:00+10:00",
+    "2026-09-17T15:01:00+10:00",
+    "2026-09-17T18:01:00+10:00",
+    "2026-09-17T21:01:00+10:00",
+    "2026-09-18T00:01:00+10:00",
+    "2026-09-18T12:01:00+10:00"
+  ],
+  "expected": {
+    "hardware_service_calls": 0,
+    "learning_history_kwh": [
+      19.64
+    ],
+    "persistence_writes": {
+      "daily_export": 63,
+      "daily_import": 38,
+      "demand": 289,
+      "forecast": 39,
+      "free_window_import": 38,
+      "peak_import": 2,
+      "standard_rate_export": 63,
+      "zerohero_export": 39,
+      "zerohero_import": 2
+    },
+    "trace": [
+      {
+        "at": "2026-09-17T12:01:00+10:00",
+        "boosted_export_kwh": 0.0,
+        "daily_export_kwh": 0.0,
+        "daily_import_kwh": 0.0,
+        "forecast_cost": 1.035,
+        "free_window_import_kwh": 0.0,
+        "gross_cost": 2.035,
+        "learning_samples": 0,
+        "net_cost": 2.035,
+        "standard_export_kwh": 0.0
+      },
+      {
+        "at": "2026-09-17T15:01:00+10:00",
+        "boosted_export_kwh": 0.0,
+        "daily_export_kwh": 0.0,
+        "daily_import_kwh": 17.75,
+        "forecast_cost": 1.0878,
+        "free_window_import_kwh": 17.65,
+        "gross_cost": 2.0878,
+        "learning_samples": 0,
+        "net_cost": 2.0878,
+        "standard_export_kwh": 0.0
+      },
+      {
+        "at": "2026-09-17T18:01:00+10:00",
+        "boosted_export_kwh": 0.0667,
+        "daily_export_kwh": 8.1667,
+        "daily_import_kwh": 17.75,
+        "forecast_cost": 1.0811,
+        "free_window_import_kwh": 17.65,
+        "gross_cost": 2.0878,
+        "learning_samples": 0,
+        "net_cost": 2.0811,
+        "standard_export_kwh": 8.0333
+      },
+      {
+        "at": "2026-09-17T21:01:00+10:00",
+        "boosted_export_kwh": 11.8667,
+        "daily_export_kwh": 20.0,
+        "daily_import_kwh": 17.75,
+        "forecast_cost": -0.0989,
+        "free_window_import_kwh": 17.65,
+        "gross_cost": 2.0878,
+        "learning_samples": 0,
+        "net_cost": -0.0989,
+        "standard_export_kwh": 19.8667
+      },
+      {
+        "at": "2026-09-18T00:01:00+10:00",
+        "boosted_export_kwh": 0.0,
+        "daily_export_kwh": 0.0,
+        "daily_import_kwh": 0.0,
+        "forecast_cost": 1.035,
+        "free_window_import_kwh": 0.0,
+        "gross_cost": 2.035,
+        "learning_samples": 0,
+        "net_cost": 2.035,
+        "standard_export_kwh": 0.0
+      },
+      {
+        "at": "2026-09-18T12:01:00+10:00",
+        "boosted_export_kwh": 0.0,
+        "daily_export_kwh": 0.0,
+        "daily_import_kwh": 0.0,
+        "forecast_cost": 1.035,
+        "free_window_import_kwh": 0.0,
+        "gross_cost": 2.035,
+        "learning_samples": 1,
+        "net_cost": 2.035,
+        "standard_export_kwh": 0.0
+      }
+    ]
+  }
+}

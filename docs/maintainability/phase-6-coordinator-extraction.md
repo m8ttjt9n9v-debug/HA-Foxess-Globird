@@ -74,3 +74,21 @@ Phase 6 is complete only when:
 - recorded-day ledger, forecast and learning traces match the pre-extraction
   fixtures; and
 - persistence-write and hardware-call counts do not increase.
+
+## Completion evidence
+
+The technical Phase 6 exit gate was satisfied on 2026-09-18. The extracted
+seams were committed separately so each remains independently reversible:
+
+- `5752bf4` — tariffed forecast calculation;
+- `a3be8f7` — daily accounting projection;
+- `b5b9ee0` — accounting meter cycle;
+- `177d8b9` — house learning cycle;
+- `35b1c77` — telemetry acquisition boundary;
+- `77b3b06` — retailer scorecard matching;
+- `8e92d36` — coordinator state-read isolation; and
+- `102d3eb` — accounting window state.
+
+The [Phase 6 exit audit](phase-6-exit-audit.md) records the recorded-day replay,
+frozen write counts, zero hardware calls, boundary contracts and release
+compatibility evidence.

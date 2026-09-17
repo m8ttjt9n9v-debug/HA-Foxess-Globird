@@ -251,6 +251,9 @@ no increase in persistence or hardware writes.
 
 Current work package and extraction order:
 [Phase 6 accounting and coordinator extraction](maintainability/phase-6-coordinator-extraction.md).
+The technical Phase 6 exit gate was satisfied on 2026-09-18; the
+[Phase 6 exit audit](maintainability/phase-6-exit-audit.md) records the
+recorded-day replay, frozen side-effect counts and compatibility evidence.
 
 ### Phase 7 — controller decomposition
 
