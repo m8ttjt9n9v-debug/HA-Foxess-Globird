@@ -120,6 +120,19 @@ from .planner.learning import (
     select_house_cycle_budget,
 )
 from .planner.ledger import calculate_ledger
+from .planner.meter_cycle import (
+    DAILY_EXPORT,
+    DAILY_IMPORT,
+    FREE_WINDOW_IMPORT,
+    PEAK_IMPORT,
+    STANDARD_RATE_EXPORT,
+    ZEROHERO_EXPORT,
+    ZEROHERO_IMPORT,
+    AccountingMeterSet,
+    MeterCheckpointRequest,
+    MeterCheckpointState,
+    advance_accounting_meters,
+)
 from .telemetry import (
     NormalizedSample,
     NormalizedTelemetry,
@@ -1184,77 +1197,30 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
         self.telemetry = self._normalized_telemetry(now)
         grid = self.telemetry.grid_power.value
         export_kw = None if grid is None else max(-grid, 0.0)
-        if self.daily_import.observe(grid, now):
-            # Persist at useful increments rather than writing HA storage on
-            # every 30-second coordinator refresh.
-            if (
-                self._daily_import_last_saved is None
-                or self.daily_import.imported_kwh < self._daily_import_last_saved
-                or self.daily_import.imported_kwh - self._daily_import_last_saved >= 0.05
-                or self.daily_import.checkpoint_required
-            ):
-                await self._daily_import_repository.async_save(self.daily_import)
-                self._daily_import_last_saved = self.daily_import.imported_kwh
-        if self.daily_export.observe(export_kw, now):
-            if (
-                self._daily_export_last_saved is None
-                or self.daily_export.imported_kwh < self._daily_export_last_saved
-                or self.daily_export.imported_kwh - self._daily_export_last_saved >= 0.05
-                or self.daily_export.checkpoint_required
-            ):
-                await self._daily_export_repository.async_save(self.daily_export)
-                self._daily_export_last_saved = self.daily_export.imported_kwh
-        if self.standard_rate_export.observe(export_kw, now):
-            standard_exported = self.standard_rate_export.imported_kwh
-            if (
-                self._standard_rate_export_last_saved is None
-                or standard_exported < self._standard_rate_export_last_saved
-                or standard_exported - self._standard_rate_export_last_saved >= 0.01
-                or self.standard_rate_export.checkpoint_required
-            ):
-                await self._standard_rate_export_repository.async_save(
-                    self.standard_rate_export
-                )
-                self._standard_rate_export_last_saved = standard_exported
-        if self.free_window_import.observe(grid, now):
-            if (
-                self._free_import_last_saved is None
-                or self.free_window_import.imported_kwh < self._free_import_last_saved
-                or self.free_window_import.imported_kwh - self._free_import_last_saved >= 0.05
-                or self.free_window_import.checkpoint_required
-            ):
-                await self._free_import_repository.async_save(self.free_window_import)
-                self._free_import_last_saved = self.free_window_import.imported_kwh
-        if self.peak_import.observe(grid, now):
-            if (
-                self._peak_import_last_saved is None
-                or self.peak_import.imported_kwh < self._peak_import_last_saved
-                or self.peak_import.imported_kwh - self._peak_import_last_saved >= 0.05
-                or self.peak_import.checkpoint_required
-            ):
-                await self._peak_import_repository.async_save(self.peak_import)
-                self._peak_import_last_saved = self.peak_import.imported_kwh
-        if self.zerohero_import.observe(grid, now):
-            zerohero_total = self.zerohero_import.imported_kwh
-            last_zerohero_total = self._zerohero_import_last_saved or 0.0
-            if (
-                self._zerohero_import_last_saved is None
-                or zerohero_total < last_zerohero_total
-                or zerohero_total - last_zerohero_total >= 0.01
-                or self.zerohero_import.checkpoint_required
-            ):
-                await self._zerohero_import_repository.async_save(self.zerohero_import)
-                self._zerohero_import_last_saved = zerohero_total
-        if self.zerohero_export.observe(export_kw, now):
-            exported = self.zerohero_export.imported_kwh
-            if (
-                self._zerohero_export_last_saved is None
-                or exported < self._zerohero_export_last_saved
-                or exported - self._zerohero_export_last_saved >= 0.01
-                or self.zerohero_export.checkpoint_required
-            ):
-                await self._zerohero_export_repository.async_save(self.zerohero_export)
-                self._zerohero_export_last_saved = exported
+        await advance_accounting_meters(
+            AccountingMeterSet(
+                daily_import=self.daily_import,
+                daily_export=self.daily_export,
+                standard_rate_export=self.standard_rate_export,
+                free_window_import=self.free_window_import,
+                peak_import=self.peak_import,
+                zerohero_import=self.zerohero_import,
+                zerohero_export=self.zerohero_export,
+            ),
+            grid_power_kw=grid,
+            export_power_kw=export_kw,
+            observed_at=now,
+            checkpoints=MeterCheckpointState(
+                daily_import=self._daily_import_last_saved,
+                daily_export=self._daily_export_last_saved,
+                standard_rate_export=self._standard_rate_export_last_saved,
+                free_window_import=self._free_import_last_saved,
+                peak_import=self._peak_import_last_saved,
+                zerohero_import=self._zerohero_import_last_saved,
+                zerohero_export=self._zerohero_export_last_saved,
+            ),
+            checkpoint=self._async_checkpoint_accounting_meter,
+        )
         try:
             measured_capacity = self._energy(
                 self.runtime_config.battery.capacity_entity
@@ -1305,6 +1271,34 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
         ledger = self._apply_tariff_guard(calculate_ledger(self.snapshot))
         await self._async_sample_house_load()
         return ledger
+
+    async def _async_checkpoint_accounting_meter(
+        self, checkpoint: MeterCheckpointRequest
+    ) -> None:
+        """Persist one ordered meter checkpoint requested by the domain cycle."""
+        if checkpoint.name == DAILY_IMPORT:
+            await self._daily_import_repository.async_save(self.daily_import)
+            self._daily_import_last_saved = checkpoint.total_kwh
+        elif checkpoint.name == DAILY_EXPORT:
+            await self._daily_export_repository.async_save(self.daily_export)
+            self._daily_export_last_saved = checkpoint.total_kwh
+        elif checkpoint.name == STANDARD_RATE_EXPORT:
+            await self._standard_rate_export_repository.async_save(
+                self.standard_rate_export
+            )
+            self._standard_rate_export_last_saved = checkpoint.total_kwh
+        elif checkpoint.name == FREE_WINDOW_IMPORT:
+            await self._free_import_repository.async_save(self.free_window_import)
+            self._free_import_last_saved = checkpoint.total_kwh
+        elif checkpoint.name == PEAK_IMPORT:
+            await self._peak_import_repository.async_save(self.peak_import)
+            self._peak_import_last_saved = checkpoint.total_kwh
+        elif checkpoint.name == ZEROHERO_IMPORT:
+            await self._zerohero_import_repository.async_save(self.zerohero_import)
+            self._zerohero_import_last_saved = checkpoint.total_kwh
+        elif checkpoint.name == ZEROHERO_EXPORT:
+            await self._zerohero_export_repository.async_save(self.zerohero_export)
+            self._zerohero_export_last_saved = checkpoint.total_kwh
 
     async def _async_sample_house_load(self) -> None:
         """Feed qualified house-load readings into the rolling sampler."""
