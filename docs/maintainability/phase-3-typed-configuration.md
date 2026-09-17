@@ -28,7 +28,11 @@ selectors, validation, migration behavior and the multi-page draft workflow.
   no non-mutating direct configuration reads. Direct AST-visible runtime raw
   access is now 35, and the EV authorization adapter has no raw configuration
   reads. Shared coordinator site, battery and EV mappings are now typed as well,
-  reducing direct AST-visible runtime raw access to 26.
+  reducing direct AST-visible runtime raw access to 26. Occupancy, house-learning
+  fallbacks, heater mapping and explicitly configured free-window sampler times
+  are now typed, reducing direct AST-visible runtime raw access to 13. Nine of
+  those are remaining coordinator reads; four are explicit charge-to-full
+  compatibility mutations rather than policy reads.
 
 ## Work packages
 

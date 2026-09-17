@@ -50,12 +50,7 @@ from .const import (
     CONF_GRID_POWER,
     CONF_GRID_POWER_DIRECTION,
     CONF_HEATER_POWER,
-    CONF_HOUSE_AWAY_CONFIRMATION_HOURS,
-    CONF_HOUSE_AWAY_FALLBACK,
-    CONF_HOUSE_LEARNING_FALLBACK,
     CONF_HOUSE_LOAD,
-    CONF_HOUSE_LOAD_INCLUDES_EV,
-    CONF_HOUSE_OCCUPANCY_MODE,
     CONF_INVERTER_CHARGE_LIMIT_KW,
     CONF_INVERTER_DISCHARGE_LIMIT_KW,
     CONF_OFFPEAK_BALANCE_RATE,
@@ -90,10 +85,8 @@ from .const import (
     DEFAULT_FORECAST_EXPORT_REALISATION,
     DEFAULT_FREE_CHARGE_END,
     DEFAULT_FREE_CHARGE_START,
-    DEFAULT_HOUSE_AWAY_CONFIRMATION_HOURS,
     DEFAULT_HOUSE_AWAY_FALLBACK_KWH,
     DEFAULT_HOUSE_LEARNING_FALLBACK_KWH,
-    DEFAULT_HOUSE_OCCUPANCY_MODE,
     DEFAULT_INVERTER_CHARGE_LIMIT_KW,
     DEFAULT_INVERTER_DISCHARGE_LIMIT_KW,
     DEFAULT_OFFPEAK_BALANCE_RATE,
@@ -175,9 +168,9 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
         self.snapshot: SiteSnapshot | None = None
         self.telemetry: NormalizedTelemetry | None = None
         self.demand_history = DemandHistory([])
-        self.demand_sampler = self._create_demand_sampler(config)
+        self.demand_sampler = self._create_demand_sampler()
         self.heater_history = DemandHistory([])
-        self.heater_sampler = self._create_heater_sampler(config)
+        self.heater_sampler = self._create_heater_sampler()
         self._zero_import_since: datetime | None = None
         self.daily_import = DailyImportAccumulator()
         self.daily_export = DailyImportAccumulator()
@@ -330,37 +323,22 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
         if self.data is not None:
             self.async_update_listeners()
 
-    @staticmethod
-    def _create_demand_sampler(config: dict[str, object]) -> DemandCycleSampler | None:
+    def _create_demand_sampler(self) -> DemandCycleSampler | None:
         """Create a sampler only when both commissioned window times are valid."""
-        try:
-            start_value = config[CONF_FREE_CHARGE_START]
-            end_value = config[CONF_FREE_CHARGE_END]
-            start = (
-                start_value
-                if isinstance(start_value, time)
-                else time.fromisoformat(str(start_value))
-            )
-            end = end_value if isinstance(end_value, time) else time.fromisoformat(str(end_value))
-            return DemandCycleSampler(start, end)
-        except (KeyError, TypeError, ValueError):
+        start = self.runtime_config.windows.free_charge_start
+        end = self.runtime_config.windows.free_charge_end
+        if start is None or end is None:
             return None
+        return DemandCycleSampler(start, end)
 
-    @staticmethod
-    def _create_heater_sampler(config: dict[str, object]) -> DailyDemandCycleSampler | None:
+    def _create_heater_sampler(self) -> DailyDemandCycleSampler | None:
         """Create the separate daily heater sampler only when explicitly mapped."""
-        if not config.get(CONF_HEATER_POWER):
+        if not self.runtime_config.house.heater_power_entity:
             return None
-        try:
-            start_value = config[CONF_FREE_CHARGE_START]
-            start = (
-                start_value
-                if isinstance(start_value, time)
-                else time.fromisoformat(str(start_value))
-            )
-            return DailyDemandCycleSampler(start)
-        except (KeyError, TypeError, ValueError):
+        start = self.runtime_config.windows.free_charge_start
+        if start is None:
             return None
+        return DailyDemandCycleSampler(start)
 
     def _configured_time(self, key: str, default: str) -> time:
         """Parse a local-time setting, falling back only for legacy entries."""
@@ -376,38 +354,22 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
             OccupancyPerson(state.state, state.last_changed)
             for state in self.hass.states.async_all("person")
         ]
-        try:
-            confirmation = float(
-                self.config.get(
-                    CONF_HOUSE_AWAY_CONFIRMATION_HOURS,
-                    DEFAULT_HOUSE_AWAY_CONFIRMATION_HOURS,
-                )
-            )
+        house = self.runtime_config.house
+        confirmation = house.away_confirmation_hours
+        if confirmation is not None:
             return classify_energy_occupancy(
-                str(
-                    self.config.get(
-                        CONF_HOUSE_OCCUPANCY_MODE,
-                        DEFAULT_HOUSE_OCCUPANCY_MODE,
-                    )
-                ),
+                house.occupancy_mode_input,
                 people,
                 dt_util.now(),
                 confirmation,
             )
-        except (TypeError, ValueError):
-            return classify_energy_occupancy("home", people, dt_util.now(), 0)
+        return classify_energy_occupancy("home", people, dt_util.now(), 0)
 
     @property
     def base_learning_result(self) -> DemandLearningResult:
         """Return the independent mapped base/whole-house P80 stream."""
-        try:
-            fallback = float(
-                self.config.get(
-                    CONF_HOUSE_LEARNING_FALLBACK,
-                    DEFAULT_HOUSE_LEARNING_FALLBACK_KWH,
-                )
-            )
-        except (TypeError, ValueError):
+        fallback = self.runtime_config.house.learning_fallback_kwh
+        if fallback is None:
             fallback = DEFAULT_HOUSE_LEARNING_FALLBACK_KWH
         if not isfinite(fallback) or fallback < 0:
             fallback = DEFAULT_HOUSE_LEARNING_FALLBACK_KWH
@@ -423,20 +385,10 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
     @property
     def learning_result(self) -> HouseBudgetResult:
         """Return the one occupancy-aware protected-house budget."""
-        try:
-            occupied_fallback = float(
-                self.config.get(
-                    CONF_HOUSE_LEARNING_FALLBACK,
-                    DEFAULT_HOUSE_LEARNING_FALLBACK_KWH,
-                )
-            )
-            away_fallback = float(
-                self.config.get(
-                    CONF_HOUSE_AWAY_FALLBACK,
-                    DEFAULT_HOUSE_AWAY_FALLBACK_KWH,
-                )
-            )
-        except (TypeError, ValueError):
+        house = self.runtime_config.house
+        occupied_fallback = house.learning_fallback_kwh
+        away_fallback = house.away_fallback_kwh
+        if occupied_fallback is None or away_fallback is None:
             occupied_fallback = DEFAULT_HOUSE_LEARNING_FALLBACK_KWH
             away_fallback = DEFAULT_HOUSE_AWAY_FALLBACK_KWH
         if not isfinite(occupied_fallback) or occupied_fallback < 0:
@@ -1393,7 +1345,9 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
         sample = self.demand_sampler.observe(now, house_load_kw)
         heater_sample = None
         if self.heater_sampler is not None:
-            heater_power_kw = self._power(self.config.get(CONF_HEATER_POWER))
+            heater_power_kw = self._power(
+                self.runtime_config.house.heater_power_entity
+            )
             if heater_power_kw is not None:
                 heater_sample = self.heater_sampler.observe(now, heater_power_kw)
         if sample is not None:
@@ -1414,11 +1368,12 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
         """Return the pilot-compatible base-house power used by the learner."""
         if self.snapshot is None or self.snapshot.house_load_kw is None:
             return None
-        includes_ev = bool(self.config.get(CONF_HOUSE_LOAD_INCLUDES_EV, False))
+        house = self.runtime_config.house
+        includes_ev = house.load_includes_ev
         ev_power_kw = self._state_qualified_ev_power_kw(now) if includes_ev else None
-        heater_mapped = bool(self.config.get(CONF_HEATER_POWER))
+        heater_mapped = bool(house.heater_power_entity)
         heater_power_kw = (
-            self._fresh_power(self.config.get(CONF_HEATER_POWER), now)
+            self._fresh_power(house.heater_power_entity, now)
             if heater_mapped
             else None
         )

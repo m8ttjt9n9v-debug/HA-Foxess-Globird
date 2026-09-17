@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import dataclasses
+from datetime import time
 from types import SimpleNamespace
 
 import pytest
@@ -47,8 +48,14 @@ from custom_components.home_energy_orchestrator.const import (
     CONF_FOXESS_FORCE_CHARGE_POWER,
     CONF_FOXESS_FORCE_DISCHARGE_POWER,
     CONF_FOXESS_WORK_MODE,
+    CONF_FREE_CHARGE_END,
     CONF_FREE_CHARGE_SCHEDULE_CONFIRMED,
+    CONF_FREE_CHARGE_START,
     CONF_GRID_POWER_DIRECTION,
+    CONF_HEATER_POWER,
+    CONF_HOUSE_AWAY_CONFIRMATION_HOURS,
+    CONF_HOUSE_AWAY_FALLBACK,
+    CONF_HOUSE_LEARNING_FALLBACK,
     CONF_HOUSE_LOAD_INCLUDES_EV,
     CONF_HOUSE_OCCUPANCY_MODE,
     CONF_INVERTER_CHARGE_LIMIT_KW,
@@ -73,6 +80,9 @@ from custom_components.home_energy_orchestrator.const import (
     DEFAULT_EXPORT_RATE,
     DEFAULT_FOXESS_CONTROL_OWNER,
     DEFAULT_GRID_POWER_DIRECTION,
+    DEFAULT_HOUSE_AWAY_CONFIRMATION_HOURS,
+    DEFAULT_HOUSE_AWAY_FALLBACK_KWH,
+    DEFAULT_HOUSE_LEARNING_FALLBACK_KWH,
     DEFAULT_HOUSE_LOAD_INCLUDES_EV,
     DEFAULT_HOUSE_OCCUPANCY_MODE,
     DEFAULT_INVERTER_CHARGE_LIMIT_KW,
@@ -181,6 +191,16 @@ def test_runtime_configuration_uses_established_defaults() -> None:
         == DEFAULT_EV_SMART_SOCKET_CURRENT_LIMIT
     )
     assert parsed.house.load_includes_ev is DEFAULT_HOUSE_LOAD_INCLUDES_EV
+    assert parsed.house.occupancy_mode_input == DEFAULT_HOUSE_OCCUPANCY_MODE
+    assert (
+        parsed.house.away_confirmation_hours
+        == DEFAULT_HOUSE_AWAY_CONFIRMATION_HOURS
+    )
+    assert parsed.house.learning_fallback_kwh == DEFAULT_HOUSE_LEARNING_FALLBACK_KWH
+    assert parsed.house.away_fallback_kwh == DEFAULT_HOUSE_AWAY_FALLBACK_KWH
+    assert parsed.house.heater_power_entity is None
+    assert parsed.windows.free_charge_start is None
+    assert parsed.windows.free_charge_end is None
     assert parsed.site.solar_configured is True
     assert parsed.site.phase_count == DEFAULT_SITE_PHASE_COUNT
     assert parsed.site.grid_current_entity is None
@@ -575,6 +595,99 @@ def test_ev_phase_snapshot_retains_strict_parse_validity(
         {CONF_EV_PHASE_COUNT: value}
     ).ev_connection
     assert connection.phase_count_valid is expected_valid
+
+
+@pytest.mark.parametrize(
+    ("data", "expected"),
+    [
+        (
+            {},
+            (
+                DEFAULT_HOUSE_OCCUPANCY_MODE,
+                DEFAULT_HOUSE_AWAY_CONFIRMATION_HOURS,
+                DEFAULT_HOUSE_LEARNING_FALLBACK_KWH,
+                DEFAULT_HOUSE_AWAY_FALLBACK_KWH,
+                None,
+                None,
+                None,
+            ),
+        ),
+        (
+            {
+                CONF_HOUSE_OCCUPANCY_MODE: "away",
+                CONF_HOUSE_AWAY_CONFIRMATION_HOURS: "2.5",
+                CONF_HOUSE_LEARNING_FALLBACK: "12",
+                CONF_HOUSE_AWAY_FALLBACK: 4,
+                CONF_HEATER_POWER: "sensor.heater_power",
+                CONF_FREE_CHARGE_START: "12:00:00",
+                CONF_FREE_CHARGE_END: time(15, 0),
+            },
+            ("away", 2.5, 12.0, 4.0, "sensor.heater_power", time(12), time(15)),
+        ),
+        (
+            {
+                CONF_HOUSE_OCCUPANCY_MODE: None,
+                CONF_HOUSE_AWAY_CONFIRMATION_HOURS: "invalid",
+                CONF_HOUSE_LEARNING_FALLBACK: None,
+                CONF_HOUSE_AWAY_FALLBACK: "invalid",
+                CONF_HEATER_POWER: False,
+                CONF_FREE_CHARGE_START: "invalid",
+                CONF_FREE_CHARGE_END: None,
+            },
+            ("None", None, None, None, None, None, None),
+        ),
+    ],
+)
+def test_house_learning_snapshot_preserves_explicit_window_and_raw_inputs(
+    data: dict[str, object],
+    expected: tuple[
+        str,
+        float | None,
+        float | None,
+        float | None,
+        str | None,
+        time | None,
+        time | None,
+    ],
+) -> None:
+    """Characterize raw occupancy, numeric parsing and explicit time presence."""
+    parsed = RuntimeConfiguration.from_mapping(data)
+    assert (
+        parsed.house.occupancy_mode_input,
+        parsed.house.away_confirmation_hours,
+        parsed.house.learning_fallback_kwh,
+        parsed.house.away_fallback_kwh,
+        parsed.house.heater_power_entity,
+        parsed.windows.free_charge_start,
+        parsed.windows.free_charge_end,
+    ) == expected
+
+
+@pytest.mark.parametrize(
+    ("invalid_key", "valid_key", "valid_value"),
+    [
+        (CONF_HOUSE_LEARNING_FALLBACK, CONF_HOUSE_AWAY_FALLBACK, 9),
+        (CONF_HOUSE_AWAY_FALLBACK, CONF_HOUSE_LEARNING_FALLBACK, 20),
+    ],
+)
+def test_house_learning_retains_coupled_parse_failure_fallback(
+    hass,
+    invalid_key: str,
+    valid_key: str,
+    valid_value: float,
+) -> None:
+    """If either legacy fallback is unparsable, both defaults remain authoritative."""
+    coordinator = EnergyCoordinator(
+        hass,
+        {
+            CONF_HOUSE_OCCUPANCY_MODE: "away",
+            invalid_key: "invalid",
+            valid_key: valid_value,
+        },
+        "house-fallback-test",
+    )
+
+    assert coordinator.learning_result.cycle_budget_kwh == DEFAULT_HOUSE_AWAY_FALLBACK_KWH
 
 
 @pytest.mark.parametrize(

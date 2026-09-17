@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
+from datetime import time
 from typing import cast
 
 from .const import (
@@ -48,8 +49,14 @@ from .const import (
     CONF_FOXESS_FORCE_CHARGE_POWER,
     CONF_FOXESS_FORCE_DISCHARGE_POWER,
     CONF_FOXESS_WORK_MODE,
+    CONF_FREE_CHARGE_END,
     CONF_FREE_CHARGE_SCHEDULE_CONFIRMED,
+    CONF_FREE_CHARGE_START,
     CONF_GRID_POWER_DIRECTION,
+    CONF_HEATER_POWER,
+    CONF_HOUSE_AWAY_CONFIRMATION_HOURS,
+    CONF_HOUSE_AWAY_FALLBACK,
+    CONF_HOUSE_LEARNING_FALLBACK,
     CONF_HOUSE_LOAD_INCLUDES_EV,
     CONF_HOUSE_OCCUPANCY_MODE,
     CONF_INVERTER_CHARGE_LIMIT_KW,
@@ -86,6 +93,9 @@ from .const import (
     DEFAULT_EXPORT_RATE,
     DEFAULT_FOXESS_CONTROL_OWNER,
     DEFAULT_GRID_POWER_DIRECTION,
+    DEFAULT_HOUSE_AWAY_CONFIRMATION_HOURS,
+    DEFAULT_HOUSE_AWAY_FALLBACK_KWH,
+    DEFAULT_HOUSE_LEARNING_FALLBACK_KWH,
     DEFAULT_HOUSE_LOAD_INCLUDES_EV,
     DEFAULT_HOUSE_OCCUPANCY_MODE,
     DEFAULT_INVERTER_CHARGE_LIMIT_KW,
@@ -114,6 +124,18 @@ def _optional_number(
 ) -> float | None:
     try:
         return float(data.get(key, default))
+    except (TypeError, ValueError):
+        return None
+
+
+def _optional_time(data: Mapping[str, object], key: str) -> time | None:
+    if key not in data:
+        return None
+    value = data[key]
+    if isinstance(value, time):
+        return value
+    try:
+        return time.fromisoformat(str(value))
     except (TypeError, ValueError):
         return None
 
@@ -212,7 +234,20 @@ class HouseSettings:
     """Operator-owned house-energy occupancy selection."""
 
     occupancy_mode: str
+    occupancy_mode_input: str
     load_includes_ev: bool
+    away_confirmation_hours: float | None
+    learning_fallback_kwh: float | None
+    away_fallback_kwh: float | None
+    heater_power_entity: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class WindowSettings:
+    """Explicitly configured windows used by persistent samplers."""
+
+    free_charge_start: time | None
+    free_charge_end: time | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -286,6 +321,7 @@ class RuntimeConfiguration:
     ev_telemetry: EvTelemetrySettings
     ev_policy: EvPolicySettings
     house: HouseSettings
+    windows: WindowSettings
     site: SiteSettings
     battery: BatterySettings
     electrical: ElectricalSettings
@@ -336,6 +372,7 @@ class RuntimeConfiguration:
         battery_soc_entity = data.get(CONF_BATTERY_SOC)
         battery_capacity_entity = data.get(CONF_BATTERY_CAPACITY_ENTITY)
         site_grid_current_entity = data.get(CONF_SITE_GRID_CURRENT)
+        heater_power_entity = data.get(CONF_HEATER_POWER)
         ev_phase_count = _optional_number(
             data,
             CONF_EV_PHASE_COUNT,
@@ -535,12 +572,40 @@ class RuntimeConfiguration:
             ),
             house=HouseSettings(
                 occupancy_mode=occupancy,
+                occupancy_mode_input=str(
+                    data.get(
+                        CONF_HOUSE_OCCUPANCY_MODE,
+                        DEFAULT_HOUSE_OCCUPANCY_MODE,
+                    )
+                ),
                 load_includes_ev=bool(
                     data.get(
                         CONF_HOUSE_LOAD_INCLUDES_EV,
                         DEFAULT_HOUSE_LOAD_INCLUDES_EV,
                     )
                 ),
+                away_confirmation_hours=_optional_number(
+                    data,
+                    CONF_HOUSE_AWAY_CONFIRMATION_HOURS,
+                    DEFAULT_HOUSE_AWAY_CONFIRMATION_HOURS,
+                ),
+                learning_fallback_kwh=_optional_number(
+                    data,
+                    CONF_HOUSE_LEARNING_FALLBACK,
+                    DEFAULT_HOUSE_LEARNING_FALLBACK_KWH,
+                ),
+                away_fallback_kwh=_optional_number(
+                    data,
+                    CONF_HOUSE_AWAY_FALLBACK,
+                    DEFAULT_HOUSE_AWAY_FALLBACK_KWH,
+                ),
+                heater_power_entity=(
+                    str(heater_power_entity) if heater_power_entity else None
+                ),
+            ),
+            windows=WindowSettings(
+                free_charge_start=_optional_time(data, CONF_FREE_CHARGE_START),
+                free_charge_end=_optional_time(data, CONF_FREE_CHARGE_END),
             ),
             site=SiteSettings(
                 solar_configured=data.get(CONF_CONFIGURE_SOLAR) is not False,
