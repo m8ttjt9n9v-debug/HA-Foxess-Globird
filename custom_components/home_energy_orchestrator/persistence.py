@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Literal, Protocol
 
@@ -54,16 +54,21 @@ class TypedValueStoreRepository[StateT]:
     store: Store[dict[str, object]]
     decode: Callable[[dict[str, object] | None], StateT]
     encode: Callable[[StateT], dict[str, object]]
+    last_restore_status: RestoreStatus = field(default="missing", init=False)
 
     async def async_load(self) -> StateT:
         """Decode stored state or return the decoder's safe fallback."""
         payload = await self.store.async_load()
         if payload is not None and not isinstance(payload, dict):
+            self.last_restore_status = "invalid"
             return self.decode(None)
         try:
-            return self.decode(payload)
+            state = self.decode(payload)
         except (KeyError, OverflowError, TypeError, ValueError):
+            self.last_restore_status = "invalid"
             return self.decode(None)
+        self.last_restore_status = "missing" if payload is None else "restored"
+        return state
 
     async def async_save(self, state: StateT) -> None:
         """Save the domain encoder's existing payload without an extra wrapper."""

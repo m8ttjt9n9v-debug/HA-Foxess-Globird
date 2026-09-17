@@ -115,3 +115,4 @@ async def test_value_repository_invalid_outer_payload_uses_forecast_fallback() -
 
     assert restored.current.local_date == date(2026, 9, 17)
     assert restored.export_realisation_fraction == 0.75
+    assert repo.last_restore_status == "invalid"

@@ -28,6 +28,40 @@ class ChargeSessionState:
     attempts: int = 0
     last_command_at: datetime | None = None
 
+    @classmethod
+    def from_payload(cls, payload: dict[str, object] | None) -> ChargeSessionState:
+        """Decode the established Store payload, raising on malformed evidence."""
+        if payload is None:
+            return cls()
+        phase = str(payload["phase"])
+        power = float(payload["requested_power_kw"])
+        attempts = int(payload["attempts"])
+        last_raw = payload.get("last_command_at")
+        last_at = datetime.fromisoformat(str(last_raw)) if last_raw else None
+        if phase not in {
+            "idle",
+            "starting",
+            "active",
+            "completed",
+            "stopping",
+            "recovering",
+        }:
+            raise ValueError("invalid charge session phase")
+        if power < 0 or attempts < 0:
+            raise ValueError("invalid charge session counter")
+        return cls(phase, power, attempts, last_at)
+
+    def to_payload(self) -> dict[str, object]:
+        """Return the unchanged Store payload."""
+        return {
+            "phase": self.phase,
+            "requested_power_kw": self.requested_power_kw,
+            "attempts": self.attempts,
+            "last_command_at": (
+                self.last_command_at.isoformat() if self.last_command_at else None
+            ),
+        }
+
 
 @dataclass(frozen=True, slots=True)
 class ChargeSessionTransition:

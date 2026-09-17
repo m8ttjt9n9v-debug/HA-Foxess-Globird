@@ -36,12 +36,18 @@ The fourth seam adds a typed composite state for house learning. It preserves
 the two histories and two optional in-progress sampler payloads while leaving
 sampler freshness validation with the configured runtime samplers.
 
+The fifth seam moves charge and export session codecs into their pure session
+models and routes all active-controller persistence through separate typed
+repositories. Missing and malformed evidence retain their ownership-safety
+distinction.
+
 Work-item evidence:
 
 - [daily-import typed repository](work-item-daily-import-repository.md)
 - [tariff-meter typed repositories](work-item-tariff-meter-repositories.md)
 - [forecast-feedback typed repository](work-item-forecast-repository.md)
 - [house-learning typed repository](work-item-learning-repository.md)
+- [inverter-session typed repositories](work-item-inverter-session-repositories.md)
 
 ## Exit gate
 
@@ -51,6 +57,6 @@ are documented and tested; all thirteen frozen Store contracts remain intact.
 
 ## Status
 
-In progress. Tariff meters, forecast feedback and house learning are behind
-repository boundaries; inverter sessions, EV sessions and manual diagnostics
+In progress. Tariff meters, forecast feedback, house learning and inverter
+sessions are behind repository boundaries; EV sessions and manual diagnostics
 remain on their existing direct persistence paths.

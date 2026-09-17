@@ -2,6 +2,8 @@
 
 from datetime import UTC, datetime, timedelta
 
+import pytest
+
 from custom_components.home_energy_orchestrator.planner.export_session import (
     ExportSessionState,
     advance_export_session,
@@ -128,3 +130,15 @@ def test_exhausted_retries_do_not_restart_on_next_tick() -> None:
     assert first.reason == second.reason == "max_attempts_exceeded"
     assert first.state == second.state == state
     assert second.plan.commands == ()
+
+
+def test_export_session_payload_codec_preserves_all_phases() -> None:
+    timestamp = datetime(2026, 9, 17, 18, tzinfo=UTC)
+    for phase in ("idle", "starting", "active", "stopping", "recovering"):
+        state = ExportSessionState(phase, 12.0, 2, timestamp)
+        assert ExportSessionState.from_payload(state.to_payload()) == state
+
+
+def test_export_session_payload_codec_rejects_malformed_state() -> None:
+    with pytest.raises((KeyError, TypeError, ValueError)):
+        ExportSessionState.from_payload({"phase": "unknown"})

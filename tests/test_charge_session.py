@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 
+import pytest
+
 from custom_components.home_energy_orchestrator.planner.charge_session import (
     ChargeSessionState,
     advance_charge_session,
@@ -245,3 +247,15 @@ def test_reduced_native_limit_lowers_a_latched_session_without_raising_it_later(
     )
     assert unchanged.state.requested_power_kw == 6.0
     assert unchanged.plan.commands == ()
+
+
+def test_charge_session_payload_codec_preserves_all_phases() -> None:
+    timestamp = datetime(2026, 9, 17, 12, tzinfo=UTC)
+    for phase in ("idle", "starting", "active", "completed", "stopping", "recovering"):
+        state = ChargeSessionState(phase, 8.5, 2, timestamp)
+        assert ChargeSessionState.from_payload(state.to_payload()) == state
+
+
+def test_charge_session_payload_codec_rejects_malformed_state() -> None:
+    with pytest.raises((KeyError, TypeError, ValueError)):
+        ChargeSessionState.from_payload({"phase": "unknown"})

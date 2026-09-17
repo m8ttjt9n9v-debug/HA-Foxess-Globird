@@ -23,6 +23,7 @@ from .const import (
 from .coordinator import EnergyCoordinator
 from .foxess_adapter import FoxessEntityMap, FoxessServiceAdapter
 from .normalise import power_to_kw
+from .persistence import TypedValueStoreRepository
 from .planner.charge_session import ChargeSessionState, advance_charge_session
 from .planner.ev_before_export import (
     EvBeforeExportDecision,
@@ -75,6 +76,16 @@ class ActiveFoxessController:
             "home_energy_orchestrator."
             f"{getattr(coordinator, 'entry_id', 'runtime')}.charge_session",
             private=True,
+        )
+        self._export_repository = TypedValueStoreRepository(
+            self._export_store,
+            decode=ExportSessionState.from_payload,
+            encode=ExportSessionState.to_payload,
+        )
+        self._charge_repository = TypedValueStoreRepository(
+            self._charge_store,
+            decode=ChargeSessionState.from_payload,
+            encode=ChargeSessionState.to_payload,
         )
 
     @property
@@ -279,7 +290,7 @@ class ActiveFoxessController:
             else 0.0
         )
         if self.charge_session != previous_state:
-            await self._charge_store.async_save(self._charge_state_payload())
+            await self._charge_repository.async_save(self.charge_session)
         self.last_reason = f"charge_{transition.reason}"
         self.last_actions = ()
         if transition.plan.commands:
@@ -397,7 +408,7 @@ class ActiveFoxessController:
         )
         self.export_session = transition.state
         if self.export_session != previous_state:
-            await self._export_store.async_save(self._export_state_payload())
+            await self._export_repository.async_save(self.export_session)
         self.last_reason = f"export_{transition.reason}"
         self.last_actions = ()
         if transition.plan.commands:
@@ -428,7 +439,7 @@ class ActiveFoxessController:
                 self.charge_session.attempts,
                 self.charge_session.last_command_at or now,
             )
-            await self._charge_store.async_save(self._charge_state_payload())
+            await self._charge_repository.async_save(self.charge_session)
         if self.export_session.phase != "idle":
             self.export_session = ExportSessionState(
                 "recovering",
@@ -436,74 +447,32 @@ class ActiveFoxessController:
                 self.export_session.attempts,
                 self.export_session.last_command_at or now,
             )
-            await self._export_store.async_save(self._export_state_payload())
+            await self._export_repository.async_save(self.export_session)
 
     async def _async_load_charge_session(self) -> None:
-        payload = await self._charge_store.async_load()
-        if not isinstance(payload, dict):
-            self._charge_storage_status = (
-                "missing" if payload is None else "malformed"
-            )
-            return
-        try:
-            phase = str(payload["phase"])
-            power = float(payload["requested_power_kw"])
-            attempts = int(payload["attempts"])
-            last_raw = payload.get("last_command_at")
-            last_at = datetime.fromisoformat(str(last_raw)) if last_raw else None
-            restored = ChargeSessionState(phase, power, attempts, last_at)
-            if phase not in {
-                "idle",
-                "starting",
-                "active",
-                "completed",
-                "stopping",
-                "recovering",
-            }:
-                raise ValueError
-            if power < 0 or attempts < 0:
-                raise ValueError
+        restored = await self._charge_repository.async_load()
+        status = self._charge_repository.last_restore_status
+        self._charge_storage_status = {
+            "restored": "valid",
+            "missing": "missing",
+            "invalid": "malformed",
+        }[status]
+        if status != "missing":
             self.charge_session = restored
-            self._charge_storage_status = "valid"
-        except (KeyError, TypeError, ValueError):
-            self.charge_session = ChargeSessionState()
-            self._charge_storage_status = "malformed"
 
     def _charge_state_payload(self) -> dict[str, object]:
-        return {
-            "phase": self.charge_session.phase,
-            "requested_power_kw": self.charge_session.requested_power_kw,
-            "attempts": self.charge_session.attempts,
-            "last_command_at": (
-                self.charge_session.last_command_at.isoformat()
-                if self.charge_session.last_command_at
-                else None
-            ),
-        }
+        return self.charge_session.to_payload()
 
     async def _async_load_export_session(self) -> None:
-        payload = await self._export_store.async_load()
-        if not isinstance(payload, dict):
-            self._export_storage_status = (
-                "missing" if payload is None else "malformed"
-            )
-            return
-        try:
-            phase = str(payload["phase"])
-            power = float(payload["requested_power_kw"])
-            attempts = int(payload["attempts"])
-            last_raw = payload.get("last_command_at")
-            last_at = datetime.fromisoformat(str(last_raw)) if last_raw else None
-            restored = ExportSessionState(phase, power, attempts, last_at)
-            if phase not in {"idle", "starting", "active", "stopping", "recovering"}:
-                raise ValueError
-            if power < 0 or attempts < 0:
-                raise ValueError
+        restored = await self._export_repository.async_load()
+        status = self._export_repository.last_restore_status
+        self._export_storage_status = {
+            "restored": "valid",
+            "missing": "missing",
+            "invalid": "malformed",
+        }[status]
+        if status != "missing":
             self.export_session = restored
-            self._export_storage_status = "valid"
-        except (KeyError, TypeError, ValueError):
-            self.export_session = ExportSessionState()
-            self._export_storage_status = "malformed"
 
     async def _async_hold_unverified_ownership(
         self, observation: FoxessObservation
@@ -560,8 +529,8 @@ class ActiveFoxessController:
             if degraded:
                 self.charge_session = ChargeSessionState()
                 self.export_session = ExportSessionState()
-                await self._charge_store.async_save(self._charge_state_payload())
-                await self._export_store.async_save(self._export_state_payload())
+                await self._charge_repository.async_save(self.charge_session)
+                await self._export_repository.async_save(self.export_session)
                 self._charge_storage_status = "valid"
                 self._export_storage_status = "valid"
                 if manual is not None:
@@ -585,16 +554,7 @@ class ActiveFoxessController:
         return True
 
     def _export_state_payload(self) -> dict[str, object]:
-        return {
-            "phase": self.export_session.phase,
-            "requested_power_kw": self.export_session.requested_power_kw,
-            "attempts": self.export_session.attempts,
-            "last_command_at": (
-                self.export_session.last_command_at.isoformat()
-                if self.export_session.last_command_at
-                else None
-            ),
-        }
+        return self.export_session.to_payload()
 
     def _export_bounds(self, now: datetime) -> tuple[datetime, datetime]:
         start = self.coordinator.runtime_config.windows.effective_bonus_start
