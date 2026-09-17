@@ -176,7 +176,6 @@ from .planner.ev_outside_window import (
     calculate_pre_free_plan,
     plan_pre_free_current,
     plan_solar_spill_current,
-    select_outside_window_current,
 )
 from .planner.ev_persistence import EvPersistenceState
 from .planner.learning import DemandHistory
@@ -1712,25 +1711,13 @@ class ActiveEvController:
             )
         )
 
-        if charge_to_full:
-            selected = EvCurrentDecision(
-                service_ceiling,
-                "charge_to_full_paid_grid_override",
-            )
-        elif self.daily_backfill_active:
-            selected = EvCurrentDecision(daily_current_a, "daily_ready_backfill")
-        else:
-            selected = select_outside_window_current(
-                baseline_a=baseline,
-                current_ceiling_a=ceiling,
-                charger_minimum_a=current_minimum,
-                pre_free_active=self.pre_free_session.active,
-                pre_free_current_a=self.pre_free_current_a,
-                solar_spill_current_a=self.solar_spill.current_a,
-            )
         self.outside_stage_selection = select_outside_stage_candidate(
             self.outside_stage_candidates,
             current_ceiling_a=ceiling,
+        )
+        selected = EvCurrentDecision(
+            self.outside_stage_selection.target_current_a,
+            self.outside_stage_selection.reason,
         )
         self.outside_target_active = bool(
             charge_to_full
