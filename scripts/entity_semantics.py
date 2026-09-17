@@ -114,6 +114,12 @@ def validate_semantic_contract(contract: dict[str, Any] | None = None) -> None:
             raise ValueError(f"invalid audience for {key!r}")
         if record["decision"] not in _DECISIONS:
             raise ValueError(f"invalid decision for {key!r}")
+        proposed_name = record.get("proposed_display_name")
+        if record["decision"] == "relabel":
+            if not isinstance(proposed_name, str) or not proposed_name.strip():
+                raise ValueError(f"relabel decision lacks proposed_display_name for {key!r}")
+        elif proposed_name is not None:
+            raise ValueError(f"non-relabel record has proposed_display_name for {key!r}")
         if record["review_status"] not in _REVIEW_STATES:
             raise ValueError(f"invalid review status for {key!r}")
         if set(record["equivalents"]) != _EQUIVALENT_KEYS:

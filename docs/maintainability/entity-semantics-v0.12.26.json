@@ -72,9 +72,137 @@
         "last_sample": "Timestamp of the last accepted grid-import observation.",
         "threshold_kwh_per_hour": "Configured maximum import allowed in each qualifying hour."
       }
+    },
+    "ev_control_diagnostics_v1": {
+      "attributes": {
+        "actual_current_a": "Same observation as EV Actual Charging Current.",
+        "allowance_ev_power_kw": "EV power subtracted when reconstructing non-EV house load for allowance planning.",
+        "allowance_house_load_kw": "Non-EV house load used by the free-energy allowance planner.",
+        "allowance_phase": "Current free-energy allowance decision phase.",
+        "applied_limit_percent": "Same actuator observation as EV Applied Charge Limit.",
+        "charge_switch_on": "Whether the mapped EV charge switch currently reports on.",
+        "charge_to_full_started_at": "Start timestamp retained for the bounded Charge to Full override.",
+        "daily_backfill_active": "Whether an HEO-owned daily ready-by backfill session is active.",
+        "daily_backfill_cycle_ready_at": "Ready-by timestamp identifying the current daily allocation cycle.",
+        "daily_backfill_delivered_kwh": "Same accumulator as EV Daily Backfill Delivered.",
+        "daily_backfill_frozen_start": "Start timestamp frozen when the active daily backfill session began.",
+        "daily_backfill_session_target_kwh": "Wall-energy target frozen for the active daily backfill session.",
+        "decision_phase": "Final EV policy-priority decision phase for the current evaluation.",
+        "driving_learning_mode": "Same mode as EV Driving Learning Status.",
+        "driving_learning_samples": "Same count as EV Driving Learning Samples.",
+        "driving_p85_kwh": "Same learned value as EV Driving P85.",
+        "ev_average_source_valid": "Whether the EV actual-current average has valid source evidence.",
+        "gate": "Current ordered EV authorization gate result.",
+        "grid_average_coverage": "Age-coverage ratio of the three-minute site-current average.",
+        "grid_source_valid": "Whether the site-current average has valid source evidence.",
+        "last_actions": "Ordered EV command actions attempted in the latest reconciliation.",
+        "last_write_at": "Timestamp of the latest HEO EV hardware service call.",
+        "learned_general_limit_percent": "Same value as EV Learned General Charge Limit.",
+        "maximum_reconciliation_attempts": "Fixed maximum direct-EVSE attempts allowed in one command episode.",
+        "outside_control_active": "Whether HEO currently owns an outside-free-window EV charging stage.",
+        "pre_free_current_a": "Same target as EV Pre-Free Current Target.",
+        "pre_free_frozen_start": "Start timestamp frozen for the retained pre-free session.",
+        "pre_free_phase": "Same state as EV Pre-Free Status.",
+        "pre_free_planned_energy_kwh": "Same plan value as EV Pre-Free Planned Energy.",
+        "pre_free_planned_start": "Same timestamp as EV Pre-Free Planned Start.",
+        "pre_free_session_active": "Whether the persistent pre-free session is active.",
+        "reconciliation_attempts": "Same count as EV Reconciliation Attempts.",
+        "reconciliation_phase": "Current direct-EVSE command confirmation phase.",
+        "requested_current_a": "Same actuator setting as EV Requested Current.",
+        "smart_socket_recovery_attempted": "Whether the bounded recovery attempt has been consumed for this fault episode.",
+        "smart_socket_recovery_current_a": "Staged current used by the active smart-socket recovery attempt.",
+        "smart_socket_recovery_phase": "Same state as EV Smart Socket Recovery Status.",
+        "smart_socket_recovery_started_at": "Timestamp at which the current smart-socket recovery phase began.",
+        "solar_spill_current_a": "Same target as EV Solar Spill Current Target.",
+        "solar_spill_phase": "Same state as EV Solar Spill Status.",
+        "solar_spill_reconstructed_kw": "Same calculation as EV Reconstructed Solar Spill.",
+        "target_current_a": "Same policy result as EV Current Target.",
+        "target_limit_percent": "Same policy result as EV Charge Limit Target.",
+        "writes_performed": "Count of EV hardware service calls performed since controller creation."
+      }
+    },
+    "fleet_summary_v1": {
+      "attributes": {
+        "battery_power_kw": "Same canonical value as Battery Power.",
+        "battery_soc": "Same canonical value as Battery State of Charge.",
+        "charging_status": "Same persistent phase as Free-Window Battery Charge Status.",
+        "ev_control_status": "Same reason state as EV Control Status.",
+        "ev_learning_samples": "Same count as EV Driving Learning Samples.",
+        "export_status": "Same state as the automatic export status entity.",
+        "forecast_cost": "Same optimistic daily result as Forecast Net Cost Today.",
+        "forecast_error": "Same matched-day result as Forecast Error for Latest GloBird Day.",
+        "forecast_scorecard_status": "Same state as Forecast Scorecard Status.",
+        "foxess_control_gate": "Current ordered FoxESS authorization gate result.",
+        "grid_power_kw": "Same canonical value as Grid Power.",
+        "house_learning_samples": "Same count as House Learning Samples.",
+        "house_load_kw": "Same canonical value as House Load.",
+        "last_update": "ISO timestamp at which the Fleet Summary payload was rendered.",
+        "latest_actual_cost": "Same matched retailer result as Actual Cost for Latest GloBird Day.",
+        "latest_zerohero_status": "Retailer-reported ZEROHERO outcome for the matched completed day.",
+        "ledger_status": "Current energy-ledger reason state.",
+        "measured_cost": "Same factual value as Measured Net Cost Today.",
+        "orchestrator_status": "Same high-level operating mode as Status.",
+        "planned_export_kwh": "Same current plan as Planned Export Energy.",
+        "sellable_energy_kwh": "Same current value as Sellable Energy.",
+        "solar_power_kw": "Same canonical value as Solar Generation.",
+        "summary_schema_version": "Version of this Fleet Summary attribute payload.",
+        "tariff_status": "Same reason state as Tariff Guard Status.",
+        "zerohero_status": "Same provisional local state as ZEROHERO Credit Status."
+      }
+    },
+    "orchestrator_status_v1": {
+      "attributes": {
+        "automatic_charge_enabled": "Same request state as Automatic Battery Free Charge.",
+        "automatic_control_enabled": "Whether the HEO Local Modbus master gate is requested.",
+        "automatic_export_effective": "Whether automatic export is requested and all current export gates permit planning.",
+        "automatic_export_enabled": "Same request state as Automatic Export.",
+        "automatic_export_remaining_kwh": "Legacy-compatible alias of export_allowance_remaining_kwh.",
+        "charge_power_target_kw": "Same policy value as Free-Window Battery Charge Power Target.",
+        "charge_session_phase": "Same persistent phase as Free-Window Battery Charge Status.",
+        "control_gate": "Current ordered FoxESS authorization gate result.",
+        "ev_allowance_phase": "Current EV free-energy allowance decision phase.",
+        "ev_automatic_control_enabled": "Same request state as Automatic EV Control.",
+        "ev_before_export_status": "Same reason as EV Before Export Status.",
+        "ev_control_gate": "Current ordered EV authorization gate result.",
+        "ev_decision_phase": "Current final EV policy-priority decision phase.",
+        "ev_driving_learning_mode": "Same mode as EV Driving Learning Status.",
+        "ev_driving_learning_samples": "Same count as EV Driving Learning Samples.",
+        "ev_last_control_actions": "Ordered EV actions attempted in the latest reconciliation.",
+        "ev_last_control_reason": "Same reason state as EV Control Status.",
+        "ev_last_write_at": "Timestamp of the latest HEO EV hardware service call.",
+        "ev_learned_general_limit_percent": "Same value as EV Learned General Charge Limit.",
+        "ev_reconciliation_attempts": "Same count as EV Reconciliation Attempts.",
+        "ev_reconciliation_phase": "Current direct-EVSE command confirmation phase.",
+        "ev_target_current_a": "Same policy result as EV Current Target.",
+        "ev_target_limit_percent": "Same policy result as EV Charge Limit Target.",
+        "ev_writes_enabled": "Whether the EV control gate currently authorizes hardware writes.",
+        "ev_writes_performed": "Count of EV hardware service calls since controller creation.",
+        "export_allowance_remaining_kwh": "Automatic export cap remaining after measured export in the current window.",
+        "export_protected_ev_kwh": "Energy reserved from automatic export for current EV policy.",
+        "export_session_phase": "Current persistent automatic-export lifecycle phase.",
+        "foxess_control_owner": "Configured exclusive FoxESS control owner.",
+        "foxess_modbus_control_effective": "Whether the FoxESS write gate currently authorizes Local Modbus commands.",
+        "free_charge_schedule_confirmed": "Whether the operator confirmed the exact ZEROCHARGE schedule.",
+        "heater_learning_samples": "Same count as Heater Learning Samples.",
+        "house_occupancy": "Occupancy class used by the current house budget.",
+        "house_occupancy_reason": "Stable reason produced by the occupancy classifier.",
+        "integration": "Integration domain producing this status payload.",
+        "last_control_actions": "Ordered FoxESS actions attempted in the latest reconciliation.",
+        "last_control_reason": "Latest FoxESS controller decision or fault reason.",
+        "learning_max_age_days": "Maximum age retained for house-demand samples.",
+        "learning_model": "Same model as House Learning Status.",
+        "learning_sample_limit": "Maximum number of house-demand samples retained.",
+        "learning_sampler_enabled": "Whether the runtime house-demand sampler is installed.",
+        "learning_samples": "Same count as House Learning Samples.",
+        "ledger_status": "Current energy-ledger reason state.",
+        "mode": "Same high-level state as the Status entity itself.",
+        "rehearsal_mode": "Legacy configuration name for Safety Lock; true means writes are blocked.",
+        "sign_conventions_verified": "Same state as Sign Conventions Verified.",
+        "writes_performed": "Count of FoxESS hardware service calls since controller creation."
+      }
     }
   },
-  "reviewed_entity_count": 104,
+  "reviewed_entity_count": 107,
   "total_entity_count": 107,
   "entities": [
     {
@@ -365,7 +493,7 @@
       "audience": "primary",
       "equivalents": {"foxess": null, "globird": "HEO forecast for comparison with the next completed retailer day", "tessie": null},
       "consumers": ["Accounting dashboard", "forecast scorecard", "Fleet Summary"],
-      "decision": "relabel",
+      "decision": "retain",
       "review_status": "engineering_draft",
       "attribute_profile": "optimistic_forecast_evidence_v1"
     },
@@ -428,7 +556,7 @@
       "audience": "advanced",
       "equivalents": {"foxess": null, "globird": "Forecast comparator for Latest Daily Cost", "tessie": null},
       "consumers": ["Forecast scorecard", "Fleet Summary"],
-      "decision": "relabel",
+      "decision": "retain",
       "review_status": "engineering_draft",
       "attribute_profile": "scorecard_evidence_v1"
     },
@@ -520,7 +648,7 @@
       "audience": "advanced",
       "equivalents": {"foxess": null, "globird": "Peak Solar/GenerationFeedin window energy", "tessie": null},
       "consumers": ["Export revenue calculation", "Super Export eligibility evidence"],
-      "decision": "relabel",
+      "decision": "retain",
       "review_status": "engineering_draft"
     },
     {
@@ -596,6 +724,7 @@
       "equivalents": {"foxess": "HEO request only; not Force Discharge feedback", "globird": "Automatic export may operate during ZEROHERO tariff conditions", "tessie": null},
       "consumers": ["Export controller", "configuration dashboard", "Status attributes"],
       "decision": "relabel",
+      "proposed_display_name": "Automatic Battery Export",
       "review_status": "engineering_draft"
     },
     {
@@ -611,6 +740,7 @@
       "equivalents": {"foxess": null, "globird": "Local provisional ZEROHERO import guard", "tessie": null},
       "consumers": ["ZEROHERO accounting", "tariff diagnostics"],
       "decision": "relabel",
+      "proposed_display_name": "ZEROHERO Local Telemetry Qualified",
       "review_status": "engineering_draft"
     },
     {
@@ -731,7 +861,7 @@
       "audience": "primary",
       "equivalents": {"foxess": null, "globird": null, "tessie": null},
       "consumers": ["Export protection", "EV backfill planning", "house learning dashboard"],
-      "decision": "relabel",
+      "decision": "retain",
       "review_status": "engineering_draft"
     },
     {
@@ -746,7 +876,7 @@
       "audience": "diagnostic",
       "equivalents": {"foxess": null, "globird": null, "tessie": null},
       "consumers": ["House learning dashboard", "Fleet Summary", "Status attributes"],
-      "decision": "relabel",
+      "decision": "retain",
       "review_status": "engineering_draft"
     },
     {
@@ -761,7 +891,7 @@
       "audience": "diagnostic",
       "equivalents": {"foxess": null, "globird": null, "tessie": null},
       "consumers": ["House learning dashboard", "Status attributes"],
-      "decision": "relabel",
+      "decision": "retain",
       "review_status": "engineering_draft"
     },
     {
@@ -806,7 +936,7 @@
       "audience": "diagnostic",
       "equivalents": {"foxess": "HEO commissioning evidence", "globird": null, "tessie": null},
       "consumers": ["FoxESS control gate", "EV control gate", "configuration dashboard"],
-      "decision": "relabel",
+      "decision": "retain",
       "review_status": "engineering_draft"
     },
     {
@@ -837,6 +967,7 @@
       "equivalents": {"foxess": null, "globird": "HEO calculation within the ZEROCHARGE allowance", "tessie": null},
       "consumers": ["Battery free-charge controller", "battery charging dashboard"],
       "decision": "relabel",
+      "proposed_display_name": "Battery Free-Charge Energy Allowed",
       "review_status": "engineering_draft"
     },
     {
@@ -851,7 +982,7 @@
       "audience": "diagnostic",
       "equivalents": {"foxess": "HEO-owned Force Charge lifecycle, not raw work mode", "globird": "ZEROCHARGE automation lifecycle", "tessie": null},
       "consumers": ["Battery charging dashboard", "Status attributes", "Fleet Summary"],
-      "decision": "relabel",
+      "decision": "retain",
       "review_status": "engineering_draft"
     },
     {
@@ -1062,6 +1193,7 @@
       "equivalents": {"foxess": "HEO Force Discharge lifecycle, not raw work mode", "globird": "Automatic export status during relevant tariff conditions", "tessie": null},
       "consumers": ["Export dashboard", "Fleet Summary"],
       "decision": "relabel",
+      "proposed_display_name": "Automatic Battery Export Status",
       "review_status": "engineering_draft"
     },
     {
@@ -1076,7 +1208,7 @@
       "audience": "advanced",
       "equivalents": {"foxess": "Accumulated canonical grid export", "globird": "Export measured in the ZEROHERO window", "tessie": null},
       "consumers": ["Automatic export cap", "export planning", "export dashboard"],
-      "decision": "relabel",
+      "decision": "retain",
       "review_status": "engineering_draft"
     },
     {
@@ -1108,6 +1240,7 @@
       "equivalents": {"foxess": "Planned Force Discharge duration", "globird": "Planned automatic export duration", "tessie": null},
       "consumers": ["Export dashboard", "planned start calculation"],
       "decision": "relabel",
+      "proposed_display_name": "Automatic Export Planned Duration",
       "review_status": "engineering_draft"
     },
     {
@@ -1123,6 +1256,7 @@
       "equivalents": {"foxess": null, "globird": "Planned automatic export, not necessarily all boost-eligible energy", "tessie": null},
       "consumers": ["Export dashboard", "optimistic forecast", "Fleet Summary"],
       "decision": "relabel",
+      "proposed_display_name": "Automatic Export Planned Energy",
       "review_status": "engineering_draft"
     },
     {
@@ -1138,6 +1272,7 @@
       "equivalents": {"foxess": null, "globird": "HEO planned automatic-export start", "tessie": null},
       "consumers": ["Export dashboard", "export session scheduler"],
       "decision": "relabel",
+      "proposed_display_name": "Automatic Export Planned Start",
       "review_status": "engineering_draft"
     },
     {
@@ -1153,6 +1288,7 @@
       "equivalents": {"foxess": null, "globird": "Energy available to sell; not restricted to ZEROHERO credit eligibility", "tessie": null},
       "consumers": ["Export dashboard", "automatic export plan", "Fleet Summary"],
       "decision": "relabel",
+      "proposed_display_name": "Sellable Battery Energy",
       "review_status": "engineering_draft"
     },
     {
@@ -1649,6 +1785,55 @@
       "consumers": ["EV dashboard", "daily backfill diagnostics"],
       "decision": "retain",
       "review_status": "engineering_draft"
+    },
+    {
+      "key": "ev_control_status",
+      "definition": "Primary machine-readable reason for the latest EV controller decision, gate, reconciliation or fault outcome.",
+      "producer": "ActiveEvController.last_reason via EnergySensor.native_value",
+      "role": "session_state",
+      "unit_and_sign": "No unit",
+      "time_basis": "Latest EV controller reconciliation",
+      "availability": "Unavailable without the EV controller; otherwise always exposes a stable reason state.",
+      "state_vocabulary": "Stable EV controller reason string",
+      "audience": "primary",
+      "equivalents": {"foxess": null, "globird": null, "tessie": "HEO decision state, not Tessie's raw charging state"},
+      "consumers": ["EV dashboard", "Status attributes", "Fleet Summary", "diagnostics"],
+      "decision": "retain",
+      "review_status": "engineering_draft",
+      "attribute_profile": "ev_control_diagnostics_v1"
+    },
+    {
+      "key": "fleet_summary",
+      "definition": "Versioned compact read-only projection of selected HEO values for cross-site REST monitoring.",
+      "producer": "EnergySensor._fleet_summary_attributes with EnergySensor._control_mode as state",
+      "role": "calculation",
+      "unit_and_sign": "Aggregate state plus versioned attributes",
+      "time_basis": "Current coordinator update cycle with latest retained scorecard",
+      "availability": "Available after setup; individual attributes remain null when their canonical producer is unavailable.",
+      "state_vocabulary": "Same high-level operating-mode string as Status",
+      "audience": "advanced",
+      "equivalents": {"foxess": null, "globird": "Includes selected local accounting and matched retailer results", "tessie": "Includes selected EV status and learning evidence"},
+      "consumers": ["Remote Home Assistant REST sensor", "HEO Fleet dashboard"],
+      "decision": "retain",
+      "review_status": "engineering_draft",
+      "attribute_profile": "fleet_summary_v1"
+    },
+    {
+      "key": "status",
+      "definition": "High-level HEO operating mode with compatibility attributes exposing FoxESS, EV, learning and ownership diagnostics.",
+      "producer": "EnergySensor._control_mode() via EnergySensor.native_value",
+      "role": "session_state",
+      "unit_and_sign": "No unit",
+      "time_basis": "Current coordinator and controller state",
+      "availability": "Available after setup and always exposes a conservative operating mode.",
+      "state_vocabulary": "observe, foxcloud_scheduler, local_modbus_ready, local_modbus_free_charge, zerohero_export, or local_modbus_charge_and_export",
+      "audience": "primary",
+      "equivalents": {"foxess": "HEO ownership/readiness summary, not raw inverter work mode", "globird": null, "tessie": null},
+      "consumers": ["Protection dashboard", "automations", "Fleet Summary", "diagnostics"],
+      "decision": "relabel",
+      "proposed_display_name": "Orchestrator Status",
+      "review_status": "engineering_draft",
+      "attribute_profile": "orchestrator_status_v1"
     }
   ]
 }
