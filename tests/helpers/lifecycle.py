@@ -15,6 +15,7 @@ from typing import Any
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EVENT_CALL_SERVICE, STATE_UNAVAILABLE
 from homeassistant.core import Event, HomeAssistant
+from homeassistant.helpers.storage import Store
 
 
 @dataclass(frozen=True, slots=True)
@@ -97,6 +98,31 @@ class LifecycleHarness:
         """Remove one input state and drain state-change listeners."""
         self.hass.states.async_remove(entity_id)
         await self.hass.async_block_till_done()
+
+    async def save_store(
+        self,
+        key: str,
+        payload: dict[str, Any],
+        *,
+        version: int = 1,
+    ) -> None:
+        """Seed one private Home Assistant store for restart reconstruction."""
+        store: Store[dict[str, Any]] = Store(
+            self.hass, version, key, private=True
+        )
+        await store.async_save(deepcopy(payload))
+
+    async def load_store(
+        self,
+        key: str,
+        *,
+        version: int = 1,
+    ) -> dict[str, Any] | None:
+        """Read one private store without exposing controller internals."""
+        store: Store[dict[str, Any]] = Store(
+            self.hass, version, key, private=True
+        )
+        return await store.async_load()
 
     def states(
         self,
