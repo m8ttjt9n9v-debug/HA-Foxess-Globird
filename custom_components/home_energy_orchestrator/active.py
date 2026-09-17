@@ -39,6 +39,10 @@ from .planner.foxess import (
     FoxessCommandPlan,
     FoxessObservation,
 )
+from .planner.foxess_charge_policy import (
+    FoxessChargePolicyContext,
+    evaluate_foxess_charge_policy,
+)
 from .planner.foxess_gate import FoxessGateContext, evaluate_foxess_gate
 
 _LOGGER = logging.getLogger(__name__)
@@ -217,75 +221,47 @@ class ActiveFoxessController:
     ) -> bool:
         """Run the default-off fixed-power free-window charge extension."""
         automation = self.coordinator.runtime_config.automation
-        requested_enabled = automation.battery_charge_enabled
-        schedule_confirmed = automation.free_charge_schedule_confirmed
-        enabled = requested_enabled and schedule_confirmed
         window_active = self.coordinator._free_window_hours_remaining(now) > 0  # noqa: SLF001
-        configured_max = max(
-            self.coordinator.runtime_config.inverter.charge_limit_kw,
-            0.0,
-        )
-        charge_max = min(configured_max, feedback.charge_power_max_kw)
-        source_available = feedback.charge_source_available and charge_max > 0
-        self.charge_power_target_kw = (
-            self.charge_session.requested_power_kw
-            if source_available
-            and self.charge_session.phase
-            in {"starting", "active", "recovering", "stopping"}
-            else (0.0 if source_available else None)
-        )
         soc = getattr(self.coordinator.snapshot, "battery_soc", None)
         target_soc = self.coordinator.runtime_config.battery.free_window_target_percent
         free_energy_remaining = getattr(
             self.coordinator.data, "free_energy_remaining_kwh", None
         )
-        allowance_available = (
-            free_energy_remaining is not None and float(free_energy_remaining) > 0
-        )
-        eligible_to_start = (
-            soc is not None
-            and 0 <= float(soc) < target_soc
-            and charge_max > 0
-            and allowance_available
-        )
-        latched = self.charge_session.phase != "idle"
-        if requested_enabled and not schedule_confirmed and not latched:
-            self.last_reason = "charge_schedule_unconfirmed"
-            self.last_actions = ()
-            return True
-        if (
-            not latched
-            and enabled
-            and window_active
-            and eligible_to_start
-            and observation.mode != "Self Use"
-        ):
-            self.last_reason = "charge_start_mode_not_self_use"
-            self.last_actions = ()
-            return True
-        if not latched and enabled and window_active and not allowance_available:
-            self.last_reason = (
-                "charge_allowance_exhausted"
-                if free_energy_remaining is not None
-                else "charge_allowance_unavailable"
+        policy = evaluate_foxess_charge_policy(
+            FoxessChargePolicyContext(
+                requested_enabled=automation.battery_charge_enabled,
+                schedule_confirmed=automation.free_charge_schedule_confirmed,
+                window_active=window_active,
+                configured_max_kw=(
+                    self.coordinator.runtime_config.inverter.charge_limit_kw
+                ),
+                observed_max_kw=feedback.charge_power_max_kw,
+                source_capability_available=feedback.charge_source_available,
+                mode=observation.mode,
+                battery_soc=soc,
+                target_soc_percent=target_soc,
+                free_energy_remaining_kwh=free_energy_remaining,
+                session=self.charge_session,
             )
+        )
+        self.charge_power_target_kw = policy.charge_power_target_kw
+        if policy.terminal_reason is not None:
+            self.last_reason = policy.terminal_reason
             self.last_actions = ()
             return True
-        if not latched and not (enabled and window_active and eligible_to_start):
+        if not policy.should_advance:
             return False
         previous_state = self.charge_session
         transition = advance_charge_session(
             previous_state,
             observation,
             now=now,
-            source_available=source_available,
-            window_active=enabled and window_active and allowance_available,
-            eligible_to_start=eligible_to_start,
-            requested_charge_power_kw=charge_max,
-            charge_power_max_kw=charge_max,
-            finish_requested=(
-                not enabled or not window_active or not allowance_available
-            ),
+            source_available=policy.source_available,
+            window_active=policy.session_window_active,
+            eligible_to_start=policy.eligible_to_start,
+            requested_charge_power_kw=policy.charge_max_kw,
+            charge_power_max_kw=policy.charge_max_kw,
+            finish_requested=policy.finish_requested,
         )
         self.charge_session = transition.state
         self.charge_power_target_kw = (
