@@ -55,23 +55,48 @@ def _coordinator() -> SimpleNamespace:
         active_controller=controller,
         ev_controller=SimpleNamespace(
             last_reason="free_window",
+            gate_status="ready",
+            decision_phase="free_power",
+            allowance_phase="within_allowance",
+            allowance_house_load_kw=1.25,
+            allowance_ev_power_kw=10.5,
             target_current_a=16.0,
             requested_current_a=15.0,
             actual_current_a=14.0,
             target_limit_percent=90,
             applied_limit_percent=89,
+            charge_switch_on=True,
             grid_average=SimpleNamespace(
-                result=lambda _now: SimpleNamespace(value=-2.5)
+                result=lambda _now: SimpleNamespace(
+                    value=-2.5,
+                    age_coverage_ratio=0.95,
+                    source_value_valid=True,
+                )
             ),
             ev_average=SimpleNamespace(
-                result=lambda _now: SimpleNamespace(value=14.5)
+                result=lambda _now: SimpleNamespace(
+                    value=14.5,
+                    source_value_valid=True,
+                )
             ),
-            reconciliation=SimpleNamespace(attempts=2),
-            smart_recovery=SimpleNamespace(phase="healthy"),
+            reconciliation=SimpleNamespace(phase="confirming", attempts=2),
+            smart_recovery=SimpleNamespace(
+                phase="healthy",
+                attempted=True,
+                phase_started_at=datetime(2026, 9, 17, 9, 0, tzinfo=UTC),
+                recovery_current_a=6.0,
+            ),
+            last_actions=("set_current",),
+            writes_performed=4,
+            last_write_at=datetime(2026, 9, 17, 9, 1, tzinfo=UTC),
             solar_spill=SimpleNamespace(
                 phase="tracking",
                 current_a=12.0,
                 reconstructed_surplus_kw=8.2,
+            ),
+            pre_free_session=SimpleNamespace(
+                active=True,
+                frozen_start=datetime(2026, 9, 17, 13, 15, tzinfo=UTC),
             ),
             pre_free_phase="planned",
             pre_free_plan=SimpleNamespace(
@@ -79,7 +104,12 @@ def _coordinator() -> SimpleNamespace:
                 planned_start=datetime(2026, 9, 17, 13, 30, tzinfo=UTC),
             ),
             pre_free_current_a=10.0,
+            outside_control_active=True,
             daily_backfill_active=False,
+            daily_backfill_cycle_ready_at=datetime(
+                2026, 9, 18, 4, 30, tzinfo=UTC
+            ),
+            daily_backfill_session_target_kwh=5.5,
             daily_backfill_plan=SimpleNamespace(
                 phase="planned",
                 remaining_allocation_kwh=6.0,
@@ -90,6 +120,9 @@ def _coordinator() -> SimpleNamespace:
             ),
             daily_backfill_delivered_kwh=1.25,
             daily_backfill_frozen_start=None,
+            charge_to_full_started_at=datetime(
+                2026, 9, 17, 8, 30, tzinfo=UTC
+            ),
             daily_driving_energy_kwh=9.5,
             learned_charge_limit=SimpleNamespace(
                 p85_daily_energy_kwh=11.0,
@@ -349,6 +382,67 @@ def test_candidate_export_remains_visible_while_effective_plan_is_withheld() -> 
     assert model.export_status == "withheld_ev_below_target"
 
 
+def test_ev_control_attributes_preserve_existing_public_values() -> None:
+    model = build_site_read_model(_coordinator())
+
+    assert model.ev.control_attributes() == {
+        "gate": "ready",
+        "decision_phase": "free_power",
+        "allowance_phase": "within_allowance",
+        "allowance_house_load_kw": 1.25,
+        "allowance_ev_power_kw": 10.5,
+        "target_current_a": 16.0,
+        "target_limit_percent": 90,
+        "requested_current_a": 15.0,
+        "actual_current_a": 14.0,
+        "applied_limit_percent": 89,
+        "charge_switch_on": True,
+        "reconciliation_phase": "confirming",
+        "reconciliation_attempts": 2,
+        "maximum_reconciliation_attempts": 3,
+        "smart_socket_recovery_phase": "healthy",
+        "smart_socket_recovery_attempted": True,
+        "smart_socket_recovery_started_at": datetime(
+            2026, 9, 17, 9, 0, tzinfo=UTC
+        ),
+        "smart_socket_recovery_current_a": 6.0,
+        "grid_average_coverage": 0.95,
+        "grid_source_valid": True,
+        "ev_average_source_valid": True,
+        "last_actions": ("set_current",),
+        "writes_performed": 4,
+        "last_write_at": datetime(2026, 9, 17, 9, 1, tzinfo=UTC),
+        "solar_spill_phase": "tracking",
+        "solar_spill_current_a": 12.0,
+        "solar_spill_reconstructed_kw": 8.2,
+        "pre_free_session_active": True,
+        "pre_free_phase": "planned",
+        "pre_free_frozen_start": datetime(
+            2026, 9, 17, 13, 15, tzinfo=UTC
+        ),
+        "pre_free_planned_energy_kwh": 4.2,
+        "pre_free_planned_start": datetime(
+            2026, 9, 17, 13, 30, tzinfo=UTC
+        ),
+        "pre_free_current_a": 10.0,
+        "outside_control_active": True,
+        "daily_backfill_active": False,
+        "daily_backfill_cycle_ready_at": datetime(
+            2026, 9, 18, 4, 30, tzinfo=UTC
+        ),
+        "daily_backfill_delivered_kwh": 1.25,
+        "daily_backfill_session_target_kwh": 5.5,
+        "daily_backfill_frozen_start": None,
+        "charge_to_full_started_at": datetime(
+            2026, 9, 17, 8, 30, tzinfo=UTC
+        ),
+        "driving_learning_mode": "learned",
+        "driving_learning_samples": 3,
+        "driving_p85_kwh": 11.0,
+        "learned_general_limit_percent": 82,
+    }
+
+
 def test_missing_ev_controller_preserves_unavailable_state_defaults() -> None:
     coordinator = _coordinator()
     coordinator.ev_controller = None
@@ -364,6 +458,9 @@ def test_missing_ev_controller_preserves_unavailable_state_defaults() -> None:
     assert values["ev_driving_learning_samples"] == 0
     assert values["ev_driving_learning_status"] == "unavailable"
     assert values["ev_current_target"] is None
+    assert build_site_read_model(coordinator).ev.control_attributes() == {
+        "gate": "unavailable"
+    }
 
 
 def test_active_daily_backfill_exposes_frozen_start() -> None:

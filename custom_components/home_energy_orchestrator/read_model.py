@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 from homeassistant.util import dt as dt_util
 
 from .const import FOXESS_CONTROL_OWNER_CLOUD
+from .planner.ev import DIRECT_EVSE_MAX_ATTEMPTS
 from .planner.export import ExportPlan
 
 if TYPE_CHECKING:
@@ -245,6 +246,12 @@ class EvReadModel:
     soc_percent: float | None
     maximum_power_kw: float
     control_status: str
+    controller_available: bool
+    gate_status: str
+    decision_phase: str
+    allowance_phase: str
+    allowance_house_load_kw: float | None
+    allowance_ev_power_kw: float | None
     target_current_a: float | None
     requested_current_a: float | None
     actual_current_a: float | None
@@ -252,15 +259,33 @@ class EvReadModel:
     applied_limit_percent: float | None
     grid_average_a: float | None
     actual_average_a: float | None
+    charge_switch_on: bool | None
+    reconciliation_phase: str
     reconciliation_attempts: int
     smart_recovery_phase: str
+    smart_recovery_attempted: bool
+    smart_recovery_started_at: datetime | None
+    smart_recovery_current_a: float | None
+    grid_average_coverage: float | None
+    grid_source_valid: bool
+    actual_average_source_valid: bool
+    last_actions: tuple[str, ...]
+    writes_performed: int
+    last_write_at: datetime | None
     solar_spill_phase: str
     solar_spill_current_a: float | None
     solar_spill_surplus_kw: float | None
     pre_free_phase: str
+    pre_free_session_active: bool
+    pre_free_frozen_start: datetime | None
     pre_free_planned_energy_kwh: float | None
     pre_free_planned_start: datetime | None
     pre_free_current_a: float | None
+    outside_control_active: bool
+    daily_backfill_active: bool
+    daily_backfill_cycle_ready_at: datetime | None
+    daily_backfill_session_target_kwh: float | None
+    daily_backfill_frozen_start: datetime | None
     daily_backfill_status: str
     daily_backfill_remaining_kwh: float | None
     daily_backfill_delivered_kwh: float | None
@@ -275,6 +300,7 @@ class EvReadModel:
     free_window_soc_gain_percent: float | None
     learned_charge_limit_percent: float | None
     learning_status: str
+    charge_to_full_started_at: datetime | None
 
     def sensor_values(self) -> dict[str, object]:
         """Project the existing EV entity states."""
@@ -312,6 +338,59 @@ class EvReadModel:
             "ev_free_window_soc_gain": self.free_window_soc_gain_percent,
             "ev_learned_charge_limit": self.learned_charge_limit_percent,
             "ev_driving_learning_status": self.learning_status,
+        }
+
+    def control_attributes(self) -> dict[str, object]:
+        """Project the existing EV Control Status entity attributes."""
+        if not self.controller_available:
+            return {"gate": "unavailable"}
+        return {
+            "gate": self.gate_status,
+            "decision_phase": self.decision_phase,
+            "allowance_phase": self.allowance_phase,
+            "allowance_house_load_kw": self.allowance_house_load_kw,
+            "allowance_ev_power_kw": self.allowance_ev_power_kw,
+            "target_current_a": self.target_current_a,
+            "target_limit_percent": self.target_limit_percent,
+            "requested_current_a": self.requested_current_a,
+            "actual_current_a": self.actual_current_a,
+            "applied_limit_percent": self.applied_limit_percent,
+            "charge_switch_on": self.charge_switch_on,
+            "reconciliation_phase": self.reconciliation_phase,
+            "reconciliation_attempts": self.reconciliation_attempts,
+            "maximum_reconciliation_attempts": DIRECT_EVSE_MAX_ATTEMPTS,
+            "smart_socket_recovery_phase": self.smart_recovery_phase,
+            "smart_socket_recovery_attempted": self.smart_recovery_attempted,
+            "smart_socket_recovery_started_at": self.smart_recovery_started_at,
+            "smart_socket_recovery_current_a": self.smart_recovery_current_a,
+            "grid_average_coverage": self.grid_average_coverage,
+            "grid_source_valid": self.grid_source_valid,
+            "ev_average_source_valid": self.actual_average_source_valid,
+            "last_actions": self.last_actions,
+            "writes_performed": self.writes_performed,
+            "last_write_at": self.last_write_at,
+            "solar_spill_phase": self.solar_spill_phase,
+            "solar_spill_current_a": self.solar_spill_current_a,
+            "solar_spill_reconstructed_kw": self.solar_spill_surplus_kw,
+            "pre_free_session_active": self.pre_free_session_active,
+            "pre_free_phase": self.pre_free_phase,
+            "pre_free_frozen_start": self.pre_free_frozen_start,
+            "pre_free_planned_energy_kwh": self.pre_free_planned_energy_kwh,
+            "pre_free_planned_start": self.pre_free_planned_start,
+            "pre_free_current_a": self.pre_free_current_a,
+            "outside_control_active": self.outside_control_active,
+            "daily_backfill_active": self.daily_backfill_active,
+            "daily_backfill_cycle_ready_at": self.daily_backfill_cycle_ready_at,
+            "daily_backfill_delivered_kwh": self.daily_backfill_delivered_kwh,
+            "daily_backfill_session_target_kwh": (
+                self.daily_backfill_session_target_kwh
+            ),
+            "daily_backfill_frozen_start": self.daily_backfill_frozen_start,
+            "charge_to_full_started_at": self.charge_to_full_started_at,
+            "driving_learning_mode": self.learning_status,
+            "driving_learning_samples": self.learning_samples,
+            "driving_p85_kwh": self.driving_p85_kwh,
+            "learned_general_limit_percent": self.learned_charge_limit_percent,
         }
 
 
@@ -434,6 +513,12 @@ def _build_ev_read_model(
             soc_percent=None if snapshot is None else snapshot.ev_soc,
             maximum_power_kw=ledger.ev_max_power_kw,
             control_status="unavailable",
+            controller_available=False,
+            gate_status="unavailable",
+            decision_phase="unavailable",
+            allowance_phase="unavailable",
+            allowance_house_load_kw=None,
+            allowance_ev_power_kw=None,
             target_current_a=None,
             requested_current_a=None,
             actual_current_a=None,
@@ -441,15 +526,33 @@ def _build_ev_read_model(
             applied_limit_percent=None,
             grid_average_a=None,
             actual_average_a=None,
+            charge_switch_on=None,
+            reconciliation_phase="unavailable",
             reconciliation_attempts=0,
             smart_recovery_phase="unavailable",
+            smart_recovery_attempted=False,
+            smart_recovery_started_at=None,
+            smart_recovery_current_a=None,
+            grid_average_coverage=None,
+            grid_source_valid=False,
+            actual_average_source_valid=False,
+            last_actions=(),
+            writes_performed=0,
+            last_write_at=None,
             solar_spill_phase="unavailable",
             solar_spill_current_a=None,
             solar_spill_surplus_kw=None,
             pre_free_phase="unavailable",
+            pre_free_session_active=False,
+            pre_free_frozen_start=None,
             pre_free_planned_energy_kwh=None,
             pre_free_planned_start=None,
             pre_free_current_a=None,
+            outside_control_active=False,
+            daily_backfill_active=False,
+            daily_backfill_cycle_ready_at=None,
+            daily_backfill_session_target_kwh=None,
+            daily_backfill_frozen_start=None,
             daily_backfill_status="disabled",
             daily_backfill_remaining_kwh=None,
             daily_backfill_delivered_kwh=None,
@@ -464,6 +567,7 @@ def _build_ev_read_model(
             free_window_soc_gain_percent=None,
             learned_charge_limit_percent=None,
             learning_status="unavailable",
+            charge_to_full_started_at=None,
         )
     grid_average = controller.grid_average.result(now)
     actual_average = controller.ev_average.result(now)
@@ -474,6 +578,12 @@ def _build_ev_read_model(
         soc_percent=None if snapshot is None else snapshot.ev_soc,
         maximum_power_kw=ledger.ev_max_power_kw,
         control_status=controller.last_reason,
+        controller_available=True,
+        gate_status=controller.gate_status,
+        decision_phase=controller.decision_phase,
+        allowance_phase=controller.allowance_phase,
+        allowance_house_load_kw=controller.allowance_house_load_kw,
+        allowance_ev_power_kw=controller.allowance_ev_power_kw,
         target_current_a=controller.target_current_a,
         requested_current_a=controller.requested_current_a,
         actual_current_a=controller.actual_current_a,
@@ -481,12 +591,25 @@ def _build_ev_read_model(
         applied_limit_percent=controller.applied_limit_percent,
         grid_average_a=grid_average.value,
         actual_average_a=actual_average.value,
+        charge_switch_on=controller.charge_switch_on,
+        reconciliation_phase=controller.reconciliation.phase,
         reconciliation_attempts=controller.reconciliation.attempts,
         smart_recovery_phase=controller.smart_recovery.phase,
+        smart_recovery_attempted=controller.smart_recovery.attempted,
+        smart_recovery_started_at=controller.smart_recovery.phase_started_at,
+        smart_recovery_current_a=controller.smart_recovery.recovery_current_a,
+        grid_average_coverage=grid_average.age_coverage_ratio,
+        grid_source_valid=grid_average.source_value_valid,
+        actual_average_source_valid=actual_average.source_value_valid,
+        last_actions=controller.last_actions,
+        writes_performed=controller.writes_performed,
+        last_write_at=controller.last_write_at,
         solar_spill_phase=controller.solar_spill.phase,
         solar_spill_current_a=controller.solar_spill.current_a,
         solar_spill_surplus_kw=controller.solar_spill.reconstructed_surplus_kw,
         pre_free_phase=controller.pre_free_phase,
+        pre_free_session_active=controller.pre_free_session.active,
+        pre_free_frozen_start=controller.pre_free_session.frozen_start,
         pre_free_planned_energy_kwh=(
             None if pre_free_plan is None else pre_free_plan.planned_energy_kwh
         ),
@@ -494,6 +617,13 @@ def _build_ev_read_model(
             None if pre_free_plan is None else pre_free_plan.planned_start
         ),
         pre_free_current_a=controller.pre_free_current_a,
+        outside_control_active=controller.outside_control_active,
+        daily_backfill_active=controller.daily_backfill_active,
+        daily_backfill_cycle_ready_at=controller.daily_backfill_cycle_ready_at,
+        daily_backfill_session_target_kwh=(
+            controller.daily_backfill_session_target_kwh
+        ),
+        daily_backfill_frozen_start=controller.daily_backfill_frozen_start,
         daily_backfill_status=(
             "active"
             if controller.daily_backfill_active
@@ -536,6 +666,7 @@ def _build_ev_read_model(
             None if learned is None else learned.limit_percent
         ),
         learning_status="unavailable" if learned is None else learned.mode,
+        charge_to_full_started_at=controller.charge_to_full_started_at,
     )
 
 

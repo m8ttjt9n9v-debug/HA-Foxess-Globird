@@ -15,7 +15,6 @@ from .const import DOMAIN
 from .coordinator import EnergyCoordinator
 from .entity_catalogue import SENSOR_DESCRIPTIONS as DESCRIPTIONS
 from .ev_adapter import ev_control_gate_status
-from .planner.ev import DIRECT_EVSE_MAX_ATTEMPTS
 from .read_model import (
     build_site_read_model,
     control_mode,
@@ -218,78 +217,7 @@ class EnergySensor(CoordinatorEntity[EnergyCoordinator], SensorEntity):
         }:
             return build_site_read_model(self.coordinator).scorecard.sensor_attributes()
         if self.entity_description.key == "ev_control_status":
-            controller = self.coordinator.ev_controller
-            if controller is None:
-                return {"gate": "unavailable"}
-            now = dt_util.now()
-            grid = controller.grid_average.result(now)
-            actual = controller.ev_average.result(now)
-            return {
-                "gate": controller.gate_status,
-                "decision_phase": controller.decision_phase,
-                "allowance_phase": controller.allowance_phase,
-                "allowance_house_load_kw": controller.allowance_house_load_kw,
-                "allowance_ev_power_kw": controller.allowance_ev_power_kw,
-                "target_current_a": controller.target_current_a,
-                "target_limit_percent": controller.target_limit_percent,
-                "requested_current_a": controller.requested_current_a,
-                "actual_current_a": controller.actual_current_a,
-                "applied_limit_percent": controller.applied_limit_percent,
-                "charge_switch_on": controller.charge_switch_on,
-                "reconciliation_phase": controller.reconciliation.phase,
-                "reconciliation_attempts": controller.reconciliation.attempts,
-                "maximum_reconciliation_attempts": DIRECT_EVSE_MAX_ATTEMPTS,
-                "smart_socket_recovery_phase": controller.smart_recovery.phase,
-                "smart_socket_recovery_attempted": controller.smart_recovery.attempted,
-                "smart_socket_recovery_started_at": (controller.smart_recovery.phase_started_at),
-                "smart_socket_recovery_current_a": (controller.smart_recovery.recovery_current_a),
-                "grid_average_coverage": grid.age_coverage_ratio,
-                "grid_source_valid": grid.source_value_valid,
-                "ev_average_source_valid": actual.source_value_valid,
-                "last_actions": controller.last_actions,
-                "writes_performed": controller.writes_performed,
-                "last_write_at": controller.last_write_at,
-                "solar_spill_phase": controller.solar_spill.phase,
-                "solar_spill_current_a": controller.solar_spill.current_a,
-                "solar_spill_reconstructed_kw": (controller.solar_spill.reconstructed_surplus_kw),
-                "pre_free_session_active": controller.pre_free_session.active,
-                "pre_free_phase": controller.pre_free_phase,
-                "pre_free_frozen_start": controller.pre_free_session.frozen_start,
-                "pre_free_planned_energy_kwh": (
-                    controller.pre_free_plan.planned_energy_kwh
-                    if controller.pre_free_plan is not None
-                    else None
-                ),
-                "pre_free_planned_start": (
-                    controller.pre_free_plan.planned_start
-                    if controller.pre_free_plan is not None
-                    else None
-                ),
-                "pre_free_current_a": controller.pre_free_current_a,
-                "outside_control_active": controller.outside_control_active,
-                "daily_backfill_active": controller.daily_backfill_active,
-                "daily_backfill_cycle_ready_at": (controller.daily_backfill_cycle_ready_at),
-                "daily_backfill_delivered_kwh": (controller.daily_backfill_delivered_kwh),
-                "daily_backfill_session_target_kwh": (controller.daily_backfill_session_target_kwh),
-                "daily_backfill_frozen_start": controller.daily_backfill_frozen_start,
-                "charge_to_full_started_at": controller.charge_to_full_started_at,
-                "driving_learning_mode": (
-                    controller.learned_charge_limit.mode
-                    if controller.learned_charge_limit is not None
-                    else "unavailable"
-                ),
-                "driving_learning_samples": len(controller.driving_history.samples),
-                "driving_p85_kwh": (
-                    controller.learned_charge_limit.p85_daily_energy_kwh
-                    if controller.learned_charge_limit is not None
-                    else None
-                ),
-                "learned_general_limit_percent": (
-                    controller.learned_charge_limit.limit_percent
-                    if controller.learned_charge_limit is not None
-                    else None
-                ),
-            }
+            return build_site_read_model(self.coordinator).ev.control_attributes()
         if self.entity_description.key == "house_occupancy_state":
             return build_site_read_model(self.coordinator).learning.occupancy_attributes()
         if self.entity_description.key != "status":

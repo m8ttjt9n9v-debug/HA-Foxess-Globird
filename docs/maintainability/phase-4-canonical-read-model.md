@@ -44,6 +44,10 @@ session start precedence without moving EV control or command behavior.
 The fifth seam completes cost entity-state projection through the existing
 cost submodel, retaining all established state rounding.
 
+The sixth seam moves EV Control Status attributes into the EV read model. It
+preserves all public attribute names and values, including the single `gate`
+attribute exposed when no EV controller exists.
+
 Work-item evidence:
 
 - [core SiteReadModel projection](work-item-core-read-model.md)
@@ -51,6 +55,7 @@ Work-item evidence:
 - [house learning and occupancy read model](work-item-learning-read-model.md)
 - [EV entity-state read model](work-item-ev-state-read-model.md)
 - [cost entity-state read model](work-item-cost-state-read-model.md)
+- [EV control attribute read model](work-item-ev-control-attribute-read-model.md)
 
 ## Work packages
 

@@ -107,6 +107,8 @@ def build_entity_attribute_contract() -> dict[str, Any]:
         _method(read_model_tree, "ScorecardReadModel", "sensor_attributes")
     ) + _dict_return_keys(
         _method(read_model_tree, "LearningReadModel", "occupancy_attributes")
+    ) + _dict_return_keys(
+        _method(read_model_tree, "EvReadModel", "control_attributes")
     )
 
     telemetry = _group_by_sentinel(groups, "positive_direction")
@@ -116,7 +118,7 @@ def build_entity_attribute_contract() -> dict[str, Any]:
     scorecard = _group_by_sentinel(read_model_groups, "result_date")
     # The full EV status mapping already contains ``gate``; the separate
     # unavailable fallback exposes only that same key.
-    ev_control = _group_by_sentinel(groups, "decision_phase")
+    ev_control = _group_by_sentinel(read_model_groups, "decision_phase")
     occupancy = _group_by_sentinel(read_model_groups, "selected_mode")
     status = _group_by_sentinel(groups, "ledger_status")
 
