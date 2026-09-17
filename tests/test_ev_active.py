@@ -127,11 +127,22 @@ def _coordinator(config):
         async_update_listeners=lambda: None,
     )
 
-    def update_config_value(key, value):
+    def update_config_value(key, value, *, remove_key=None):
+        if remove_key is not None:
+            config.pop(remove_key, None)
         config[key] = value
         coordinator.runtime_config = RuntimeConfiguration.from_mapping(config)
 
+    def update_persisted_config_value(entry, key, value, *, remove_key=None):
+        data = dict(entry.data)
+        if remove_key is not None:
+            data.pop(remove_key, None)
+        data[key] = value
+        object.__setattr__(entry, "data", data)
+        update_config_value(key, value, remove_key=remove_key)
+
     coordinator.update_config_value = update_config_value
+    coordinator.update_persisted_config_value = update_persisted_config_value
     return coordinator
 
 

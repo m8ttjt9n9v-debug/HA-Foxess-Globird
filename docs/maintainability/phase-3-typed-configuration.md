@@ -38,7 +38,11 @@ selectors, validation, migration behavior and the multi-page draft workflow.
   Daily-import accounting, retailer scorecard mappings and the ZEROHERO active
   window are now typed, reducing direct AST-visible runtime raw access to four
   and coordinator raw access to zero. The four remaining raw accesses are
-  explicit charge-to-full compatibility mutations.
+  explicit charge-to-full compatibility mutations. Those compatibility writes
+  now use the same coordinator-owned persistence/snapshot boundary as every
+  other operator mutation. Direct raw mapping access is therefore confined to
+  setup/configuration boundaries; the 11 runtime accesses are all inventoried
+  managed mutations.
 
 ## Work packages
 

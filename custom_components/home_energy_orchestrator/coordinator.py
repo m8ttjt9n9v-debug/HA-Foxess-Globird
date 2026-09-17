@@ -7,6 +7,7 @@ from dataclasses import replace
 from datetime import date, datetime, time, timedelta
 from math import isfinite
 
+from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import CALLBACK_TYPE, Event, HomeAssistant, State, callback
 from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.helpers.storage import Store
@@ -264,10 +265,34 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
             self._async_source_changed,
         )
 
-    def update_config_value(self, key: str, value: object) -> None:
-        """Update the live config mirror through one future typed-config boundary."""
+    def update_config_value(
+        self,
+        key: str,
+        value: object,
+        *,
+        remove_key: str | None = None,
+    ) -> None:
+        """Atomically update the live mirror and rebuild its typed snapshot."""
+        if remove_key is not None:
+            self.config.pop(remove_key, None)
         self.config[key] = value
         self.runtime_config = RuntimeConfiguration.from_mapping(self.config)
+
+    def update_persisted_config_value(
+        self,
+        entry: ConfigEntry,
+        key: str,
+        value: object,
+        *,
+        remove_key: str | None = None,
+    ) -> None:
+        """Persist one operator value and update the live snapshot atomically."""
+        data = dict(entry.data)
+        if remove_key is not None:
+            data.pop(remove_key, None)
+        data[key] = value
+        self.hass.config_entries.async_update_entry(entry, data=data)
+        self.update_config_value(key, value, remove_key=remove_key)
 
     async def async_load_demand_history(self) -> None:
         """Load and validate the rolling learner history from HA storage."""

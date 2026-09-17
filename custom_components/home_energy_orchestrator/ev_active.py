@@ -2228,11 +2228,12 @@ class ActiveEvController:
         entry = self.hass.config_entries.async_get_entry(self.coordinator.entry_id)
         if entry is None:
             return
-        config = {key: value for key, value in entry.data.items() if key != CONF_EV_CHARGE_TO_FULL}
-        config[CONF_EV_CHARGE_TO_FULL_ENABLED] = False
-        self.hass.config_entries.async_update_entry(entry, data=config)
-        self.coordinator.config.pop(CONF_EV_CHARGE_TO_FULL, None)
-        self.coordinator.update_config_value(CONF_EV_CHARGE_TO_FULL_ENABLED, False)
+        self.coordinator.update_persisted_config_value(
+            entry,
+            CONF_EV_CHARGE_TO_FULL_ENABLED,
+            False,
+            remove_key=CONF_EV_CHARGE_TO_FULL,
+        )
 
     def _float(self, key: str, default: float) -> float:
         try:

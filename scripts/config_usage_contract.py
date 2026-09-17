@@ -19,7 +19,13 @@ BASELINE_PATH = (
     / "maintainability"
     / "config-usage-contract-v0.12.26.json"
 )
-_CONFIG_ACCESS_METHODS = {"get", "pop", "setdefault", "update_config_value"}
+_CONFIG_ACCESS_METHODS = {
+    "get",
+    "pop",
+    "setdefault",
+    "update_config_value",
+    "update_persisted_config_value",
+}
 _BOUNDARY_FILES = {"__init__.py", "config_flow.py", "configuration.py"}
 
 
@@ -42,7 +48,11 @@ class _UsageVisitor(ast.NodeVisitor):
         if constant not in self.constants:
             return
         relative = self.source.relative_to(REPOSITORY_ROOT).as_posix()
-        kind = "managed_mutation" if access == "update_config_value" else "raw_mapping"
+        kind = (
+            "managed_mutation"
+            if access in {"update_config_value", "update_persisted_config_value"}
+            else "raw_mapping"
+        )
         self.records.append(
             {
                 "constant": constant,
@@ -79,7 +89,20 @@ class _UsageVisitor(ast.NodeVisitor):
             and node.func.attr in _CONFIG_ACCESS_METHODS
             and node.args
         ):
-            self._record(node.args[0], node.func.value, node.func.attr)
+            key_index = 1 if node.func.attr == "update_persisted_config_value" else 0
+            if len(node.args) > key_index:
+                self._record(node.args[key_index], node.func.value, node.func.attr)
+            if node.func.attr in {
+                "update_config_value",
+                "update_persisted_config_value",
+            }:
+                for keyword in node.keywords:
+                    if keyword.arg == "remove_key":
+                        self._record(
+                            keyword.value,
+                            node.func.value,
+                            node.func.attr,
+                        )
         self.generic_visit(node)
 
     def visit_Subscript(self, node: ast.Subscript) -> None:  # noqa: N802

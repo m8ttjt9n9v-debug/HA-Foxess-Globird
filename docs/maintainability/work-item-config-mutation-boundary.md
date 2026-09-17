@@ -1,27 +1,33 @@
-# Work item — configuration mutation boundary
+# Work item — centralized runtime configuration mutation
 
-## Problem and evidence
+## Scope
 
-Nine runtime actions write directly into `coordinator.config`. A future immutable
-typed configuration cannot remain coherent while each switch, number, select
-and controller mutates the backing dictionary independently.
+Move the two charge-to-full compatibility updates behind the coordinator's
+single runtime configuration mutation boundary.
 
-## Observable contract
+## Existing contract
 
-- The same config-entry update occurs before each runtime mirror update.
-- The same key and value become immediately visible through `coordinator.config`.
-- Existing state refreshes, reconciliation calls, persistence and service-call
-  order remain unchanged.
+- The first owned switch action removes the legacy helper mapping and stores
+  the owned boolean in the config entry and live runtime mirror.
+- Automatic completion/timeout performs the same replacement with `false`.
+- The immutable runtime snapshot is rebuilt synchronously before reconciliation.
+- Unrelated operator-owned mutations continue to update one value at a time.
 
 ## Invariants and non-goals
 
-- Introduce one mutation boundary only; do not add typed parsing yet.
-- Do not change defaults, validation, state, actions or hardware commands.
-- Do not change config-entry serialization or version.
+- Preserve config-entry persistence, entity state and reconciliation order.
+- Preserve the legacy helper until the owned switch or automatic clear acts.
+- Do not change charge eligibility, targets, timeouts or service calls.
+- Do not remove compatibility fields from serialized configuration or migration.
 
-## Tests and rollback
+Focused configuration/EV/setup tests, the full suite and previous-release
+rehearsal are the acceptance gates. Rollback requires no data migration.
 
-The configuration usage contract must retain each key mutation while reporting
-no direct runtime constant-key subscript stores. Existing switch, number,
-select, charge-to-full and lifecycle tests prove behavior. Revert the commit to
-roll back; no persisted migration is involved.
+## Outcome
+
+- Direct raw mapping access is confined to setup/configuration boundaries;
+  all 11 runtime accesses are classified managed mutations.
+- Owned-switch and automatic-clear paths now share one persistence/live-snapshot
+  replacement boundary while retaining legacy-helper removal semantics.
+- Acceptance passed: 167 focused tests, 579 full-suite tests, Ruff, all tracked
+  configuration/persistence contracts and the v0.12.26 upgrade rehearsal.

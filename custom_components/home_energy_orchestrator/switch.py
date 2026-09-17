@@ -294,15 +294,12 @@ class EvChargeToFullSwitch(CoordinatorEntity[EnergyCoordinator], SwitchEntity):
         await self._set_enabled(False)
 
     async def _set_enabled(self, enabled: bool) -> None:
-        config = {
-            key: value
-            for key, value in self._entry.data.items()
-            if key != CONF_EV_CHARGE_TO_FULL
-        }
-        config[CONF_EV_CHARGE_TO_FULL_ENABLED] = enabled
-        self.hass.config_entries.async_update_entry(self._entry, data=config)
-        self.coordinator.config.pop(CONF_EV_CHARGE_TO_FULL, None)
-        self.coordinator.update_config_value(CONF_EV_CHARGE_TO_FULL_ENABLED, enabled)
+        self.coordinator.update_persisted_config_value(
+            self._entry,
+            CONF_EV_CHARGE_TO_FULL_ENABLED,
+            enabled,
+            remove_key=CONF_EV_CHARGE_TO_FULL,
+        )
         self.async_write_ha_state()
         controller = self.coordinator.ev_controller
         if controller is not None:

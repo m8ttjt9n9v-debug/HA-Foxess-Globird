@@ -1,5 +1,5 @@
 {
-  "access_count": 438,
+  "access_count": 436,
   "accesses": [
     {
       "access": "subscript_store",
@@ -4252,27 +4252,17 @@
       "source": "custom_components/home_energy_orchestrator/configuration.py"
     },
     {
-      "access": "pop",
+      "access": "update_persisted_config_value",
       "constant": "CONF_EV_CHARGE_TO_FULL",
       "key": "ev_charge_to_full_entity",
-      "kind": "raw_mapping",
+      "kind": "managed_mutation",
       "layer": "runtime",
-      "receiver": "self.coordinator.config",
+      "receiver": "self.coordinator",
       "scope": "ActiveEvController._async_clear_charge_to_full",
       "source": "custom_components/home_energy_orchestrator/ev_active.py"
     },
     {
-      "access": "subscript_store",
-      "constant": "CONF_EV_CHARGE_TO_FULL_ENABLED",
-      "key": "ev_charge_to_full_enabled",
-      "kind": "raw_mapping",
-      "layer": "runtime",
-      "receiver": "config",
-      "scope": "ActiveEvController._async_clear_charge_to_full",
-      "source": "custom_components/home_energy_orchestrator/ev_active.py"
-    },
-    {
-      "access": "update_config_value",
+      "access": "update_persisted_config_value",
       "constant": "CONF_EV_CHARGE_TO_FULL_ENABLED",
       "key": "ev_charge_to_full_enabled",
       "kind": "managed_mutation",
@@ -4342,27 +4332,17 @@
       "source": "custom_components/home_energy_orchestrator/switch.py"
     },
     {
-      "access": "pop",
+      "access": "update_persisted_config_value",
       "constant": "CONF_EV_CHARGE_TO_FULL",
       "key": "ev_charge_to_full_entity",
-      "kind": "raw_mapping",
+      "kind": "managed_mutation",
       "layer": "runtime",
-      "receiver": "self.coordinator.config",
+      "receiver": "self.coordinator",
       "scope": "EvChargeToFullSwitch._set_enabled",
       "source": "custom_components/home_energy_orchestrator/switch.py"
     },
     {
-      "access": "subscript_store",
-      "constant": "CONF_EV_CHARGE_TO_FULL_ENABLED",
-      "key": "ev_charge_to_full_enabled",
-      "kind": "raw_mapping",
-      "layer": "runtime",
-      "receiver": "config",
-      "scope": "EvChargeToFullSwitch._set_enabled",
-      "source": "custom_components/home_energy_orchestrator/switch.py"
-    },
-    {
-      "access": "update_config_value",
+      "access": "update_persisted_config_value",
       "constant": "CONF_EV_CHARGE_TO_FULL_ENABLED",
       "key": "ev_charge_to_full_enabled",
       "kind": "managed_mutation",
@@ -4383,26 +4363,25 @@
     }
   ],
   "accesses_by_kind": {
-    "managed_mutation": 9,
-    "raw_mapping": 429
+    "managed_mutation": 11,
+    "raw_mapping": 425
   },
   "accesses_by_layer": {
     "boundary": 425,
-    "runtime": 13
+    "runtime": 11
   },
   "accesses_by_source": {
     "custom_components/home_energy_orchestrator/__init__.py": 24,
     "custom_components/home_energy_orchestrator/config_flow.py": 347,
     "custom_components/home_energy_orchestrator/configuration.py": 54,
-    "custom_components/home_energy_orchestrator/ev_active.py": 3,
+    "custom_components/home_energy_orchestrator/ev_active.py": 2,
     "custom_components/home_energy_orchestrator/number.py": 1,
     "custom_components/home_energy_orchestrator/select.py": 1,
-    "custom_components/home_energy_orchestrator/switch.py": 8
+    "custom_components/home_energy_orchestrator/switch.py": 7
   },
   "key_count": 129,
   "raw_accesses_by_layer": {
-    "boundary": 425,
-    "runtime": 4
+    "boundary": 425
   },
   "release_baseline": "0.12.26",
   "schema_version": 2

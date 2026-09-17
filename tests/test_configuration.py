@@ -1054,7 +1054,10 @@ def test_runtime_configuration_is_a_snapshot() -> None:
 
 
 def test_coordinator_mutation_rebuilds_the_snapshot_synchronously() -> None:
-    config = {CONF_AUTOMATIC_CHARGE_ENABLED: False}
+    config = {
+        CONF_AUTOMATIC_CHARGE_ENABLED: False,
+        CONF_EV_CHARGE_TO_FULL: "input_boolean.legacy_charge_to_full",
+    }
     coordinator = SimpleNamespace(
         config=config,
         runtime_config=RuntimeConfiguration.from_mapping(config),
@@ -1063,6 +1066,9 @@ def test_coordinator_mutation_rebuilds_the_snapshot_synchronously() -> None:
         coordinator,
         CONF_AUTOMATIC_CHARGE_ENABLED,
         True,
+        remove_key=CONF_EV_CHARGE_TO_FULL,
     )
     assert coordinator.config[CONF_AUTOMATIC_CHARGE_ENABLED] is True
+    assert CONF_EV_CHARGE_TO_FULL not in coordinator.config
     assert coordinator.runtime_config.automation.battery_charge_enabled is True
+    assert coordinator.runtime_config.ev_preferences.legacy_charge_to_full_entity is None
