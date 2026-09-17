@@ -14,22 +14,28 @@ from custom_components.home_energy_orchestrator.const import (
     CONF_AUTOMATIC_EXPORT_ENABLED,
     CONF_CONFIGURE_EV,
     CONF_EV_ACTUAL_CURRENT,
+    CONF_EV_ALLOWANCE_GUARD_ENABLED,
     CONF_EV_AT_HOME,
     CONF_EV_BEFORE_EXPORT_SOC_TARGET,
     CONF_EV_CABLE_CONNECTED,
     CONF_EV_CHARGE_LIMIT,
+    CONF_EV_CHARGE_PATH,
     CONF_EV_CHARGE_SWITCH,
     CONF_EV_CHARGE_TO_FULL,
     CONF_EV_CHARGE_TO_FULL_ENABLED,
     CONF_EV_CHARGING_STATE,
     CONF_EV_CONTROL_COMMISSIONED,
     CONF_EV_CURRENT_LIMIT,
+    CONF_EV_FREE_WINDOW_PRIORITY,
     CONF_EV_LIFETIME_ENERGY,
     CONF_EV_LOCATION_MODE,
     CONF_EV_PHASE_COUNT,
+    CONF_EV_PRE_FREE_ENABLED,
     CONF_EV_PROTECTED_BASELINE_A,
     CONF_EV_SMART_SOCKET,
+    CONF_EV_SMART_SOCKET_POWER_SWITCHING,
     CONF_EV_SOC,
+    CONF_EV_SOLAR_SPILL_ENABLED,
     CONF_EV_STORED_ENERGY,
     CONF_EV_VOLTAGE,
     CONF_EXPORT_RATE,
@@ -45,10 +51,16 @@ from custom_components.home_energy_orchestrator.const import (
     CONF_REHEARSAL_MODE,
     CONF_SIGN_CONVENTIONS_VERIFIED,
     CONF_ZERO_IMPORT_THRESHOLD_KW,
+    DEFAULT_EV_ALLOWANCE_GUARD_ENABLED,
     DEFAULT_EV_BEFORE_EXPORT_SOC_TARGET,
+    DEFAULT_EV_CHARGE_PATH,
+    DEFAULT_EV_FREE_WINDOW_PRIORITY,
     DEFAULT_EV_LOCATION_MODE,
     DEFAULT_EV_PHASE_COUNT,
+    DEFAULT_EV_PRE_FREE_ENABLED,
     DEFAULT_EV_PROTECTED_BASELINE_A,
+    DEFAULT_EV_SMART_SOCKET_POWER_SWITCHING,
+    DEFAULT_EV_SOLAR_SPILL_ENABLED,
     DEFAULT_EV_VOLTAGE,
     DEFAULT_EXPORT_RATE,
     DEFAULT_FOXESS_CONTROL_OWNER,
@@ -140,6 +152,18 @@ def test_runtime_configuration_uses_established_defaults() -> None:
     assert parsed.ev_telemetry.actual_current_entity is None
     assert parsed.ev_telemetry.stored_energy_entity is None
     assert parsed.ev_telemetry.lifetime_energy_entity is None
+    assert parsed.ev_policy.charge_path == DEFAULT_EV_CHARGE_PATH
+    assert parsed.ev_policy.free_window_priority == DEFAULT_EV_FREE_WINDOW_PRIORITY
+    assert (
+        parsed.ev_policy.allowance_guard_enabled
+        is DEFAULT_EV_ALLOWANCE_GUARD_ENABLED
+    )
+    assert parsed.ev_policy.solar_spill_enabled is DEFAULT_EV_SOLAR_SPILL_ENABLED
+    assert parsed.ev_policy.pre_free_enabled is DEFAULT_EV_PRE_FREE_ENABLED
+    assert (
+        parsed.ev_policy.smart_socket_power_switching
+        is DEFAULT_EV_SMART_SOCKET_POWER_SWITCHING
+    )
     assert parsed.house.occupancy_mode == DEFAULT_HOUSE_OCCUPANCY_MODE
     assert parsed.electrical.verified is False
     assert (
@@ -404,6 +428,60 @@ def test_ev_telemetry_snapshot_preserves_mapping_coercion(
         telemetry.actual_current_entity,
         telemetry.stored_energy_entity,
         telemetry.lifetime_energy_entity,
+    ) == expected
+
+
+@pytest.mark.parametrize(
+    ("data", "expected"),
+    [
+        (
+            {},
+            (
+                DEFAULT_EV_CHARGE_PATH,
+                DEFAULT_EV_FREE_WINDOW_PRIORITY,
+                DEFAULT_EV_ALLOWANCE_GUARD_ENABLED,
+                DEFAULT_EV_SOLAR_SPILL_ENABLED,
+                DEFAULT_EV_PRE_FREE_ENABLED,
+                DEFAULT_EV_SMART_SOCKET_POWER_SWITCHING,
+            ),
+        ),
+        (
+            {
+                CONF_EV_CHARGE_PATH: "smart_socket",
+                CONF_EV_FREE_WINDOW_PRIORITY: "battery",
+                CONF_EV_ALLOWANCE_GUARD_ENABLED: False,
+                CONF_EV_SOLAR_SPILL_ENABLED: True,
+                CONF_EV_PRE_FREE_ENABLED: True,
+                CONF_EV_SMART_SOCKET_POWER_SWITCHING: True,
+            },
+            ("smart_socket", "battery", False, True, True, True),
+        ),
+        (
+            {
+                CONF_EV_CHARGE_PATH: None,
+                CONF_EV_FREE_WINDOW_PRIORITY: "",
+                CONF_EV_ALLOWANCE_GUARD_ENABLED: "false",
+                CONF_EV_SOLAR_SPILL_ENABLED: 0,
+                CONF_EV_PRE_FREE_ENABLED: None,
+                CONF_EV_SMART_SOCKET_POWER_SWITCHING: 1,
+            },
+            (None, "", True, False, False, True),
+        ),
+    ],
+)
+def test_ev_policy_snapshot_preserves_enum_and_truthiness_semantics(
+    data: dict[str, object],
+    expected: tuple[object, object, bool, bool, bool, bool],
+) -> None:
+    """Preserve valid and malformed legacy values exactly at this boundary."""
+    policy = RuntimeConfiguration.from_mapping(data).ev_policy
+    assert (
+        policy.charge_path,
+        policy.free_window_priority,
+        policy.allowance_guard_enabled,
+        policy.solar_spill_enabled,
+        policy.pre_free_enabled,
+        policy.smart_socket_power_switching,
     ) == expected
 
 

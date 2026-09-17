@@ -23,12 +23,10 @@ from .const import (
     CONF_CONFIGURE_SOLAR,
     CONF_DAILY_FREE_ALLOWANCE_KWH,
     CONF_DISCHARGE_EFFICIENCY_PERCENT,
-    CONF_EV_ALLOWANCE_GUARD_ENABLED,
     CONF_EV_ALLOWANCE_SAFETY_MARGIN,
     CONF_EV_ARRIVAL_RESERVE_SOC,
     CONF_EV_BACKFILL_BUFFER_MINUTES,
     CONF_EV_CHARGE_EFFICIENCY,
-    CONF_EV_CHARGE_PATH,
     CONF_EV_CHARGE_TO_FULL,
     CONF_EV_CHARGE_TO_FULL_ENABLED,
     CONF_EV_CHARGE_TO_FULL_MAX_HOURS,
@@ -37,13 +35,11 @@ from .const import (
     CONF_EV_DIRECT_LIMIT_HEADROOM,
     CONF_EV_FREE_WINDOW_CHARGE_LIMIT,
     CONF_EV_FREE_WINDOW_MINIMUM_CURRENT,
-    CONF_EV_FREE_WINDOW_PRIORITY,
     CONF_EV_FREE_WINDOW_SETTLE_MINUTES,
     CONF_EV_LEARNING_MINIMUM_SAMPLES,
     CONF_EV_MAX_CURRENT,
     CONF_EV_OUTSIDE_INVERTER_PERCENT,
     CONF_EV_PHASE_COUNT,
-    CONF_EV_PRE_FREE_ENABLED,
     CONF_EV_PROTECTED_BASELINE_A,
     CONF_EV_SMART_RECOVERY_CHARGING_CONFIRM_SECONDS,
     CONF_EV_SMART_RECOVERY_CURRENT_CONFIRM_SECONDS,
@@ -54,16 +50,13 @@ from .const import (
     CONF_EV_SMART_RECOVERY_REARM_SECONDS,
     CONF_EV_SMART_RECOVERY_SOCKET_CONFIRM_SECONDS,
     CONF_EV_SMART_SOCKET_CURRENT_LIMIT,
-    CONF_EV_SMART_SOCKET_POWER_SWITCHING,
     CONF_EV_SMART_SOCKET_RETRY_SECONDS,
     CONF_EV_SMART_SOCKET_SETTLE_SECONDS,
     CONF_EV_SOLAR_SPILL_BATTERY_SOC,
-    CONF_EV_SOLAR_SPILL_ENABLED,
     CONF_EV_TELEMETRY_MAX_AGE_SECONDS,
     CONF_EV_TELEMETRY_MAX_SKEW_SECONDS,
     CONF_EV_VOLTAGE,
     CONF_FORCE_DISCHARGE_FINISH,
-    CONF_FOXESS_CONTROL_OWNER,
     CONF_FREE_CHARGE_END,
     CONF_FREE_CHARGE_START,
     CONF_HOUSE_LOAD_INCLUDES_EV,
@@ -78,24 +71,20 @@ from .const import (
     DEFAULT_BONUS_WINDOW_START,
     DEFAULT_DAILY_FREE_ALLOWANCE_KWH,
     DEFAULT_DISCHARGE_EFFICIENCY_PERCENT,
-    DEFAULT_EV_ALLOWANCE_GUARD_ENABLED,
     DEFAULT_EV_ALLOWANCE_SAFETY_MARGIN,
     DEFAULT_EV_ARRIVAL_RESERVE_SOC,
     DEFAULT_EV_BACKFILL_BUFFER_MINUTES,
     DEFAULT_EV_CHARGE_EFFICIENCY,
-    DEFAULT_EV_CHARGE_PATH,
     DEFAULT_EV_CHARGE_TO_FULL_MAX_HOURS,
     DEFAULT_EV_DAILY_BACKFILL_ENERGY,
     DEFAULT_EV_DAILY_READY_TIME,
     DEFAULT_EV_DIRECT_LIMIT_HEADROOM,
     DEFAULT_EV_FREE_WINDOW_CHARGE_LIMIT,
     DEFAULT_EV_FREE_WINDOW_MINIMUM_CURRENT,
-    DEFAULT_EV_FREE_WINDOW_PRIORITY,
     DEFAULT_EV_FREE_WINDOW_SETTLE_MINUTES,
     DEFAULT_EV_LEARNING_MINIMUM_SAMPLES,
     DEFAULT_EV_OUTSIDE_INVERTER_PERCENT,
     DEFAULT_EV_PHASE_COUNT,
-    DEFAULT_EV_PRE_FREE_ENABLED,
     DEFAULT_EV_PROTECTED_BASELINE_A,
     DEFAULT_EV_SMART_RECOVERY_CHARGING_CONFIRM_SECONDS,
     DEFAULT_EV_SMART_RECOVERY_CURRENT_CONFIRM_SECONDS,
@@ -106,16 +95,13 @@ from .const import (
     DEFAULT_EV_SMART_RECOVERY_REARM_SECONDS,
     DEFAULT_EV_SMART_RECOVERY_SOCKET_CONFIRM_SECONDS,
     DEFAULT_EV_SMART_SOCKET_CURRENT_LIMIT,
-    DEFAULT_EV_SMART_SOCKET_POWER_SWITCHING,
     DEFAULT_EV_SMART_SOCKET_RETRY_SECONDS,
     DEFAULT_EV_SMART_SOCKET_SETTLE_SECONDS,
     DEFAULT_EV_SOLAR_SPILL_BATTERY_SOC,
-    DEFAULT_EV_SOLAR_SPILL_ENABLED,
     DEFAULT_EV_TELEMETRY_MAX_AGE_SECONDS,
     DEFAULT_EV_TELEMETRY_MAX_SKEW_SECONDS,
     DEFAULT_EV_VOLTAGE,
     DEFAULT_FORCE_DISCHARGE_FINISH,
-    DEFAULT_FOXESS_CONTROL_OWNER,
     DEFAULT_FREE_CHARGE_END,
     DEFAULT_FREE_CHARGE_START,
     DEFAULT_HOUSE_LOAD_INCLUDES_EV,
@@ -350,7 +336,8 @@ class ActiveEvController:
             if gate not in {"ready", "safety_locked"}:
                 self.last_reason = gate
                 return
-            charge_path = self.coordinator.config.get(CONF_EV_CHARGE_PATH, DEFAULT_EV_CHARGE_PATH)
+            policy = self.coordinator.runtime_config.ev_policy
+            charge_path = policy.charge_path
             smart_path = charge_path == EV_CHARGE_PATH_SMART_SOCKET
             if not smart_path and (
                 self.smart_recovery != SmartSocketRecoveryState()
@@ -375,10 +362,7 @@ class ActiveEvController:
                     0.0,
                     (
                         "vehicle_not_eligible"
-                        if self.coordinator.config.get(
-                            CONF_EV_SOLAR_SPILL_ENABLED,
-                            DEFAULT_EV_SOLAR_SPILL_ENABLED,
-                        )
+                        if policy.solar_spill_enabled
                         else "disabled"
                     ),
                 )
@@ -454,19 +438,9 @@ class ActiveEvController:
                 or self._charge_to_full_requested()
                 or self.daily_backfill_stop_pending
                 or (
-                    self.coordinator.config.get(
-                        CONF_FOXESS_CONTROL_OWNER,
-                        DEFAULT_FOXESS_CONTROL_OWNER,
-                    )
+                    self.coordinator.runtime_config.automation.control_owner
                     == FOXESS_CONTROL_OWNER_MODBUS
-                    and (
-                        self.coordinator.config.get(
-                            CONF_EV_SOLAR_SPILL_ENABLED, DEFAULT_EV_SOLAR_SPILL_ENABLED
-                        )
-                        or self.coordinator.config.get(
-                            CONF_EV_PRE_FREE_ENABLED, DEFAULT_EV_PRE_FREE_ENABLED
-                        )
-                    )
+                    and (policy.solar_spill_enabled or policy.pre_free_enabled)
                 )
             )
             if not in_window and not outside_enabled and not self.outside_control_active:
@@ -481,9 +455,7 @@ class ActiveEvController:
             decision_fingerprint = (
                 vehicle_soc,
                 charge_to_full_requested,
-                self.coordinator.config.get(
-                    CONF_EV_FREE_WINDOW_PRIORITY, DEFAULT_EV_FREE_WINDOW_PRIORITY
-                ),
+                policy.free_window_priority,
                 observation.current_minimum_a,
                 observation.current_maximum_a,
                 observation.current_step_a,
@@ -521,10 +493,7 @@ class ActiveEvController:
             current_transition_pending = (
                 in_window
                 and bool(
-                    self.coordinator.config.get(
-                        CONF_EV_ALLOWANCE_GUARD_ENABLED,
-                        DEFAULT_EV_ALLOWANCE_GUARD_ENABLED,
-                    )
+                    policy.allowance_guard_enabled
                 )
                 and bool(
                     self.coordinator.config.get(
@@ -775,11 +744,8 @@ class ActiveEvController:
             charge_allowed=False,
             in_free_window=in_window,
             connected_for_planning=False,
-            power_switching_enabled=bool(
-                self.coordinator.config.get(
-                    CONF_EV_SMART_SOCKET_POWER_SWITCHING,
-                    DEFAULT_EV_SMART_SOCKET_POWER_SWITCHING,
-                )
+            power_switching_enabled=(
+                self.coordinator.runtime_config.ev_policy.smart_socket_power_switching
             ),
         )
         if gate == "safety_locked":
@@ -903,11 +869,8 @@ class ActiveEvController:
             ),
             in_free_window=in_window,
             connected_for_planning=connected_for_planning,
-            power_switching_enabled=bool(
-                self.coordinator.config.get(
-                    CONF_EV_SMART_SOCKET_POWER_SWITCHING,
-                    DEFAULT_EV_SMART_SOCKET_POWER_SWITCHING,
-                )
+            power_switching_enabled=(
+                self.coordinator.runtime_config.ev_policy.smart_socket_power_switching
             ),
         )
         if gate == "safety_locked":
@@ -1201,10 +1164,7 @@ class ActiveEvController:
                 current_step_a=current_step,
                 ev_priority=(
                     below_policy
-                    and self.coordinator.config.get(
-                        CONF_EV_FREE_WINDOW_PRIORITY,
-                        DEFAULT_EV_FREE_WINDOW_PRIORITY,
-                    )
+                    and self.coordinator.runtime_config.ev_policy.free_window_priority
                     == "ev"
                 ),
                 charge_to_full=charge_to_full,
@@ -1217,9 +1177,7 @@ class ActiveEvController:
         self.allowance_phase = "disabled"
         self.allowance_house_load_kw = None
         self.allowance_ev_power_kw = None
-        if self.coordinator.config.get(
-            CONF_EV_ALLOWANCE_GUARD_ENABLED, DEFAULT_EV_ALLOWANCE_GUARD_ENABLED
-        ):
+        if self.coordinator.runtime_config.ev_policy.allowance_guard_enabled:
             allowance = self._allowance_target(
                 target_current,
                 baseline,
@@ -1497,9 +1455,7 @@ class ActiveEvController:
 
         self.solar_spill = SolarSpillDecision(0.0, 0.0, "disabled")
         solar_configured = self.coordinator.config.get(CONF_CONFIGURE_SOLAR) is not False
-        if solar_configured and self.coordinator.config.get(
-            CONF_EV_SOLAR_SPILL_ENABLED, DEFAULT_EV_SOLAR_SPILL_ENABLED
-        ):
+        if solar_configured and self.coordinator.runtime_config.ev_policy.solar_spill_enabled:
             if snapshot is None or snapshot.battery_soc is None:
                 self.solar_spill = SolarSpillDecision(0.0, 0.0, "site_snapshot_unavailable")
             else:
@@ -1515,7 +1471,7 @@ class ActiveEvController:
 
         self.pre_free_plan = None
         self.pre_free_current_a = baseline
-        if self.coordinator.config.get(CONF_EV_PRE_FREE_ENABLED, DEFAULT_EV_PRE_FREE_ENABLED):
+        if self.coordinator.runtime_config.ev_policy.pre_free_enabled:
             free_start, in_pre_free, hours_until_free = self._pre_free_window(now)
             active_controller = getattr(self.coordinator, "active_controller", None)
             export_plan = getattr(active_controller, "export_plan", None)
@@ -2292,7 +2248,7 @@ class ActiveEvController:
 
     def _path_ceiling_a(self) -> float:
         if (
-            self.coordinator.config.get(CONF_EV_CHARGE_PATH, DEFAULT_EV_CHARGE_PATH)
+            self.coordinator.runtime_config.ev_policy.charge_path
             == EV_CHARGE_PATH_SMART_SOCKET
         ):
             return self._float(

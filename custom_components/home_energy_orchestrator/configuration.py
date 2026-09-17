@@ -13,24 +13,30 @@ from .const import (
     CONF_BATTERY_POWER_DIRECTION,
     CONF_CONFIGURE_EV,
     CONF_EV_ACTUAL_CURRENT,
+    CONF_EV_ALLOWANCE_GUARD_ENABLED,
     CONF_EV_AT_HOME,
     CONF_EV_AUTOMATIC_CONTROL_ENABLED,
     CONF_EV_BEFORE_EXPORT_ENABLED,
     CONF_EV_BEFORE_EXPORT_SOC_TARGET,
     CONF_EV_CABLE_CONNECTED,
     CONF_EV_CHARGE_LIMIT,
+    CONF_EV_CHARGE_PATH,
     CONF_EV_CHARGE_SWITCH,
     CONF_EV_CHARGE_TO_FULL,
     CONF_EV_CHARGE_TO_FULL_ENABLED,
     CONF_EV_CHARGING_STATE,
     CONF_EV_CONTROL_COMMISSIONED,
     CONF_EV_CURRENT_LIMIT,
+    CONF_EV_FREE_WINDOW_PRIORITY,
     CONF_EV_LIFETIME_ENERGY,
     CONF_EV_LOCATION_MODE,
     CONF_EV_PHASE_COUNT,
+    CONF_EV_PRE_FREE_ENABLED,
     CONF_EV_PROTECTED_BASELINE_A,
     CONF_EV_SMART_SOCKET,
+    CONF_EV_SMART_SOCKET_POWER_SWITCHING,
     CONF_EV_SOC,
+    CONF_EV_SOLAR_SPILL_ENABLED,
     CONF_EV_STORED_ENERGY,
     CONF_EV_VOLTAGE,
     CONF_EXPORT_RATE,
@@ -54,14 +60,20 @@ from .const import (
     DEFAULT_AUTOMATIC_CONTROL_ENABLED,
     DEFAULT_AUTOMATIC_EXPORT_ENABLED,
     DEFAULT_BATTERY_POWER_DIRECTION,
+    DEFAULT_EV_ALLOWANCE_GUARD_ENABLED,
     DEFAULT_EV_AUTOMATIC_CONTROL_ENABLED,
     DEFAULT_EV_BEFORE_EXPORT_ENABLED,
     DEFAULT_EV_BEFORE_EXPORT_SOC_TARGET,
+    DEFAULT_EV_CHARGE_PATH,
     DEFAULT_EV_CHARGE_TO_FULL_ENABLED,
     DEFAULT_EV_CONTROL_COMMISSIONED,
+    DEFAULT_EV_FREE_WINDOW_PRIORITY,
     DEFAULT_EV_LOCATION_MODE,
     DEFAULT_EV_PHASE_COUNT,
+    DEFAULT_EV_PRE_FREE_ENABLED,
     DEFAULT_EV_PROTECTED_BASELINE_A,
+    DEFAULT_EV_SMART_SOCKET_POWER_SWITCHING,
+    DEFAULT_EV_SOLAR_SPILL_ENABLED,
     DEFAULT_EV_VOLTAGE,
     DEFAULT_EXPORT_RATE,
     DEFAULT_FOXESS_CONTROL_OWNER,
@@ -162,6 +174,18 @@ class EvTelemetrySettings:
 
 
 @dataclass(frozen=True, slots=True)
+class EvPolicySettings:
+    """Existing EV path and optional-policy selections."""
+
+    charge_path: str
+    free_window_priority: str
+    allowance_guard_enabled: bool
+    solar_spill_enabled: bool
+    pre_free_enabled: bool
+    smart_socket_power_switching: bool
+
+
+@dataclass(frozen=True, slots=True)
 class HouseSettings:
     """Operator-owned house-energy occupancy selection."""
 
@@ -220,6 +244,7 @@ class RuntimeConfiguration:
     ev_connection: EvConnectionSettings
     ev_actuators: EvActuatorSettings
     ev_telemetry: EvTelemetrySettings
+    ev_policy: EvPolicySettings
     house: HouseSettings
     electrical: ElectricalSettings
     tariff: TariffSettings
@@ -393,6 +418,43 @@ class RuntimeConfiguration:
                     str(ev_lifetime_energy_entity)
                     if ev_lifetime_energy_entity
                     else None
+                ),
+            ),
+            ev_policy=EvPolicySettings(
+                charge_path=cast(
+                    str,
+                    data.get(CONF_EV_CHARGE_PATH, DEFAULT_EV_CHARGE_PATH),
+                ),
+                free_window_priority=cast(
+                    str,
+                    data.get(
+                        CONF_EV_FREE_WINDOW_PRIORITY,
+                        DEFAULT_EV_FREE_WINDOW_PRIORITY,
+                    ),
+                ),
+                allowance_guard_enabled=bool(
+                    data.get(
+                        CONF_EV_ALLOWANCE_GUARD_ENABLED,
+                        DEFAULT_EV_ALLOWANCE_GUARD_ENABLED,
+                    )
+                ),
+                solar_spill_enabled=bool(
+                    data.get(
+                        CONF_EV_SOLAR_SPILL_ENABLED,
+                        DEFAULT_EV_SOLAR_SPILL_ENABLED,
+                    )
+                ),
+                pre_free_enabled=bool(
+                    data.get(
+                        CONF_EV_PRE_FREE_ENABLED,
+                        DEFAULT_EV_PRE_FREE_ENABLED,
+                    )
+                ),
+                smart_socket_power_switching=bool(
+                    data.get(
+                        CONF_EV_SMART_SOCKET_POWER_SWITCHING,
+                        DEFAULT_EV_SMART_SOCKET_POWER_SWITCHING,
+                    )
                 ),
             ),
             house=HouseSettings(occupancy_mode=occupancy),
