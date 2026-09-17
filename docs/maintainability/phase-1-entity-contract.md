@@ -47,8 +47,9 @@ blast radius.
    change.
 
 The semantic worksheet is deliberately completed in reviewed domain slices.
-The first two slices define 31 core electrical, energy-accounting, forecast and
-scorecard entities plus their shared attribute profiles. Records remain
+The first three slices define 49 core electrical, energy-accounting, forecast,
+scorecard, house-learning and operator-control entities plus shared attribute
+profiles. Records remain
 `engineering_draft`
 until the complete proposed vocabulary is presented to the project owner in
 one batch; no piecemeal approval interrupts the inventory work.
@@ -87,7 +88,7 @@ new contract without changing runtime data, registry state or hardware mode.
 - [x] Existing entity identity characterised
 - [x] Custom public attributes characterised
 - [x] Existing wizard field mechanics characterised
-- [ ] Semantic worksheet complete (31 of 107 entities drafted)
+- [ ] Semantic worksheet complete (49 of 107 entities drafted)
 - [ ] Project-owner terminology review complete
 - [ ] Compatibility checks passed for any proposed naming release
 - [ ] Independent review complete
