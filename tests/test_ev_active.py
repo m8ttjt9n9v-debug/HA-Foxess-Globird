@@ -1439,6 +1439,10 @@ async def test_smart_socket_runtime_respects_connector_settle_time(
 
     assert controller.gate_status == "ready"
     assert controller.last_reason == "smart_socket_settling"
+    assert controller.smart_socket_candidate is not None
+    assert controller.smart_socket_candidate.eligible is True
+    assert controller.smart_socket_candidate.reason == controller.last_reason
+    assert controller.smart_socket_candidate.command_intent == ()
     assert controller.writes_performed == 0
     assert calls == []
 
@@ -1481,6 +1485,11 @@ async def test_smart_socket_runtime_preserves_pilot_command_order(
     start = datetime(2026, 9, 7, 12, 1, tzinfo=UTC)
 
     await controller.async_reconcile(start)
+    assert controller.smart_socket_candidate is not None
+    assert controller.smart_socket_candidate.command_intent == (
+        "set_charge_current",
+        "turn_on_smart_socket",
+    )
     assert actions == [
         ("set_charge_current", 10),
         ("turn_on_smart_socket", None),
@@ -1530,6 +1539,11 @@ async def test_smart_socket_runtime_turns_off_disconnected_socket_outside_window
     assert calls == ["switch.car_socket"]
     assert controller.last_actions == ("turn_off_smart_socket",)
     assert controller.last_reason == "smart_socket_no_charge_command"
+    assert controller.smart_socket_candidate is not None
+    assert controller.smart_socket_candidate.reason == controller.last_reason
+    assert controller.smart_socket_candidate.command_intent == (
+        "turn_off_smart_socket",
+    )
 
 
 @pytest.mark.freeze_time("2026-09-07 12:01:00+00:00")
@@ -1556,6 +1570,16 @@ async def test_smart_socket_recovery_safety_lock_never_latches_or_writes(
     await controller.async_reconcile(datetime(2026, 9, 7, 12, 3, tzinfo=UTC))
 
     assert controller.smart_recovery == SmartSocketRecoveryState()
+    assert controller.smart_recovery_candidate is not None
+    assert controller.smart_recovery_candidate.eligible is True
+    assert controller.smart_recovery_candidate.reason == "recovery_current_staged"
+    assert controller.smart_recovery_candidate.command_intent == (
+        "set_charge_current",
+    )
+    assert (
+        controller.smart_recovery_candidate.persistence_transition
+        == "smart_recovery_state_changed"
+    )
     assert controller.last_actions == ("would_set_charge_current",)
     assert controller.last_reason == "rehearsal_recovery_current_staged"
     assert calls == []

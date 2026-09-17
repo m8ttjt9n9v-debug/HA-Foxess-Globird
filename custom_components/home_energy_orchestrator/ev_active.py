@@ -244,6 +244,8 @@ class ActiveEvController:
         self.free_window_candidate: EvStageCandidate | None = None
         self.general_limit_candidate: EvStageCandidate | None = None
         self.outside_stage_candidates: tuple[EvStageCandidate, ...] = ()
+        self.smart_socket_candidate: EvStageCandidate | None = None
+        self.smart_recovery_candidate: EvStageCandidate | None = None
         self.requested_current_a: float | None = None
         self.applied_limit_percent: float | None = None
         self.charge_switch_on: bool | None = None
@@ -341,6 +343,8 @@ class ActiveEvController:
             self.free_window_candidate = None
             self.general_limit_candidate = None
             self.outside_stage_candidates = ()
+            self.smart_socket_candidate = None
+            self.smart_recovery_candidate = None
             grid_current, grid_valid = self._grid_current_a()
             ev_current, ev_valid = self._actual_ev_current_a()
             self.actual_current_a = ev_current if ev_valid else None
@@ -795,6 +799,11 @@ class ActiveEvController:
         physical_minimum = self._physical_charging_minimum_a(observation)
         if smart is None or physical_minimum is None:
             self.last_reason = "smart_socket_feedback_unavailable"
+            self.smart_socket_candidate = EvStageCandidate(
+                stage="smart_socket",
+                eligible=False,
+                reason=self.last_reason,
+            )
             return
         plan = plan_smart_socket_commands(
             smart,
@@ -811,6 +820,14 @@ class ActiveEvController:
             power_switching_enabled=(
                 self.coordinator.runtime_config.ev_policy.smart_socket_power_switching
             ),
+        )
+        self.smart_socket_candidate = EvStageCandidate(
+            stage="smart_socket",
+            eligible=True,
+            reason=plan.reason,
+            target_current_a=0.0,
+            target_limit_percent=self.target_limit_percent,
+            command_intent=tuple(command.action for command in plan.commands),
         )
         if gate == "safety_locked":
             self.last_actions = tuple(f"would_{command.action}" for command in plan.commands)
@@ -834,11 +851,21 @@ class ActiveEvController:
         smart = self._smart_socket_observation(now, observation)
         if smart is None:
             self.last_reason = "smart_socket_feedback_unavailable"
+            self.smart_socket_candidate = EvStageCandidate(
+                stage="smart_socket",
+                eligible=False,
+                reason=self.last_reason,
+            )
             return
         physical_minimum = self._physical_charging_minimum_a(observation)
         physical_ceiling = self._path_ceiling_a()
         if physical_minimum is None or physical_ceiling < physical_minimum:
             self.last_reason = "smart_socket_physical_limits_invalid"
+            self.smart_socket_candidate = EvStageCandidate(
+                stage="smart_socket",
+                eligible=False,
+                reason=self.last_reason,
+            )
             return
 
         recovery_observation = self._smart_recovery_observation(
@@ -897,6 +924,20 @@ class ActiveEvController:
             "awaiting_actuator",
             "confirming_charging",
         }
+        recovery_changed = recovery.state != self.smart_recovery
+        self.smart_recovery_candidate = EvStageCandidate(
+            stage="smart_recovery",
+            eligible=bool(recovery_active or recovery.plan.commands),
+            reason=recovery.plan.reason,
+            target_current_a=recovery.state.recovery_current_a,
+            target_limit_percent=self.target_limit_percent,
+            command_intent=tuple(
+                command.action for command in recovery.plan.commands
+            ),
+            persistence_transition=(
+                "smart_recovery_state_changed" if recovery_changed else "none"
+            ),
+        )
         if gate == "safety_locked" and (recovery_active or recovery.plan.commands):
             self.last_actions = tuple(
                 f"would_{command.action}" for command in recovery.plan.commands
@@ -938,10 +979,26 @@ class ActiveEvController:
             ),
         )
         if gate == "safety_locked":
+            self.smart_socket_candidate = EvStageCandidate(
+                stage="smart_socket",
+                eligible=True,
+                reason=plan.reason,
+                target_current_a=self.target_current_a,
+                target_limit_percent=self.target_limit_percent,
+                command_intent=tuple(command.action for command in plan.commands),
+            )
             self.last_actions = tuple(f"would_{command.action}" for command in plan.commands)
             self.last_reason = f"rehearsal_{plan.reason}"
             return
         plan = self._suppress_unconfirmed_smart_stage(plan, smart, now)
+        self.smart_socket_candidate = EvStageCandidate(
+            stage="smart_socket",
+            eligible=True,
+            reason=plan.reason,
+            target_current_a=self.target_current_a,
+            target_limit_percent=self.target_limit_percent,
+            command_intent=tuple(command.action for command in plan.commands),
+        )
         if not plan.commands:
             self.last_reason = plan.reason
             return
