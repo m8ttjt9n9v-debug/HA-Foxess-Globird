@@ -1,3 +1,4 @@
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -7,6 +8,7 @@ from custom_components.home_energy_orchestrator.planner.ev_daily_backfill import
     DailyBackfillEnergyState,
     DailyBackfillInputs,
     DailyBackfillStopState,
+    advance_daily_backfill_session,
     calculate_daily_backfill_plan,
     integrate_daily_backfill_energy,
     reconcile_daily_backfill_stop,
@@ -314,3 +316,65 @@ def test_daily_backfill_stop_transition_matches_bounded_feedback_trace():
     assert stopped.state == DailyBackfillStopState()
     assert stopped.plan.reason == "daily_backfill_stopped"
     assert stopped.save_required is True
+
+
+def test_daily_backfill_session_transition_starts_shrinks_and_completes():
+    now = datetime(2026, 9, 10, 6, tzinfo=UTC)
+    planned_start = now - timedelta(minutes=1)
+    plan = replace(
+        calculate_daily_backfill_plan(_inputs()),
+        phase="charge_now",
+        planned_energy_kwh=4.0,
+        current_ceiling_a=6.0,
+        planned_start=planned_start,
+    )
+    state = DailyBackfillCycleState(
+        ready_at=datetime(2026, 9, 10, 8, tzinfo=UTC),
+        energy=DailyBackfillEnergyState(delivered_kwh=1.0),
+        stop_pending=True,
+        stop_attempts=2,
+    )
+
+    started = advance_daily_backfill_session(
+        state,
+        plan,
+        now=now,
+        actual_current_a=2.0,
+    )
+    assert started.current_a == 6.0
+    assert started.state.active is True
+    assert started.state.session_target_kwh == 4.0
+    assert started.state.session_start_delivered_kwh == 1.0
+    assert started.state.frozen_start == planned_start
+    assert started.state.energy == DailyBackfillEnergyState(1.0, now, 2.0)
+    assert started.state.stop_pending is False
+    assert started.state.stop_attempts == 0
+
+    progressed = replace(
+        started.state,
+        energy=replace(started.state.energy, delivered_kwh=1.2),
+    )
+    shrunk = advance_daily_backfill_session(
+        progressed,
+        replace(plan, phase="waiting_latest_start", planned_energy_kwh=0.4),
+        now=now + timedelta(minutes=1),
+        actual_current_a=6.0,
+    )
+    assert shrunk.current_a == 6.0
+    assert shrunk.state.active is True
+    assert shrunk.state.session_target_kwh == pytest.approx(0.6)
+    assert shrunk.state.frozen_start == planned_start
+
+    completed = advance_daily_backfill_session(
+        shrunk.state,
+        replace(plan, phase="sellable_energy_unavailable", planned_energy_kwh=0.0),
+        now=now + timedelta(minutes=2),
+        actual_current_a=6.0,
+    )
+    assert completed.current_a == 0.0
+    assert completed.state.active is False
+    assert completed.state.session_target_kwh == 0.0
+    assert completed.state.session_start_delivered_kwh == 0.0
+    assert completed.state.frozen_start is None
+    assert completed.state.stop_pending is True
+    assert completed.state.stop_attempts == 0

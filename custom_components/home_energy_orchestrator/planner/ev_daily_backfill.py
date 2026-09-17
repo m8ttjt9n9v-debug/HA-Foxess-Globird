@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timedelta
 from math import floor, isfinite
 
@@ -92,6 +92,86 @@ class DailyBackfillStopTransition:
     state: DailyBackfillStopState
     plan: EvCommandPlan
     save_required: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class DailyBackfillSessionTransition:
+    """Next daily session state and its permitted current ceiling."""
+
+    state: DailyBackfillCycleState
+    current_a: float = 0.0
+
+
+_DAILY_BACKFILL_COMPLETION_PHASES = frozenset(
+    {
+        "ready_time_passed",
+        "vehicle_target_reached",
+        "protected_energy_unavailable",
+        "sellable_energy_unavailable",
+        "outside_power_ceiling_too_low",
+    }
+)
+
+
+def advance_daily_backfill_session(
+    state: DailyBackfillCycleState,
+    plan: DailyBackfillPlan,
+    *,
+    now: datetime,
+    actual_current_a: float | None,
+) -> DailyBackfillSessionTransition:
+    """Advance the existing start, shrink or completion lifecycle."""
+    next_state = state
+    session_delivered = max(
+        state.energy.delivered_kwh - state.session_start_delivered_kwh,
+        0.0,
+    )
+    if state.active and (
+        session_delivered >= state.session_target_kwh
+        or plan.phase in _DAILY_BACKFILL_COMPLETION_PHASES
+        or plan.planned_energy_kwh <= 0
+    ):
+        next_state = replace(
+            state,
+            active=False,
+            session_target_kwh=0.0,
+            session_start_delivered_kwh=0.0,
+            frozen_start=None,
+            stop_pending=True,
+            stop_attempts=0,
+            last_stop_at=None,
+        )
+    elif not state.active and plan.phase == "charge_now" and plan.planned_energy_kwh > 0:
+        next_state = replace(
+            state,
+            energy=replace(
+                state.energy,
+                last_sample_at=now,
+                last_actual_current_a=actual_current_a,
+            ),
+            active=True,
+            session_target_kwh=plan.planned_energy_kwh,
+            session_start_delivered_kwh=state.energy.delivered_kwh,
+            frozen_start=plan.planned_start,
+            stop_pending=False,
+            stop_attempts=0,
+            last_stop_at=None,
+        )
+    if not next_state.active:
+        return DailyBackfillSessionTransition(next_state)
+    session_delivered = max(
+        next_state.energy.delivered_kwh
+        - next_state.session_start_delivered_kwh,
+        0.0,
+    )
+    next_state = replace(
+        next_state,
+        session_target_kwh=min(
+            next_state.session_target_kwh,
+            session_delivered + plan.planned_energy_kwh,
+        ),
+    )
+    return DailyBackfillSessionTransition(next_state, plan.current_ceiling_a)
 
 
 def reconcile_daily_backfill_stop(

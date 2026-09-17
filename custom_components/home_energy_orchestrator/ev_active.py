@@ -164,6 +164,7 @@ from .planner.ev_daily_backfill import (
     DailyBackfillInputs,
     DailyBackfillPlan,
     DailyBackfillStopState,
+    advance_daily_backfill_session,
     calculate_daily_backfill_plan,
     integrate_daily_backfill_energy,
     reconcile_daily_backfill_stop,
@@ -1552,57 +1553,14 @@ class ActiveEvController:
             )
             plan = self.daily_backfill_plan
             if plan is not None:
-                if self.daily_backfill_active:
-                    session_delivered = max(
-                        self.daily_backfill_delivered_kwh
-                        - self.daily_backfill_session_start_delivered_kwh,
-                        0.0,
-                    )
-                    if (
-                        session_delivered >= self.daily_backfill_session_target_kwh
-                        or plan.phase
-                        in {
-                            "ready_time_passed",
-                            "vehicle_target_reached",
-                            "protected_energy_unavailable",
-                            "sellable_energy_unavailable",
-                            "outside_power_ceiling_too_low",
-                        }
-                        or plan.planned_energy_kwh <= 0
-                    ):
-                        self.daily_backfill_active = False
-                        self.daily_backfill_session_target_kwh = 0.0
-                        self.daily_backfill_session_start_delivered_kwh = 0.0
-                        self.daily_backfill_frozen_start = None
-                        self.daily_backfill_stop_pending = True
-                        self.daily_backfill_stop_attempts = 0
-                        self.daily_backfill_last_stop_at = None
-                elif plan.phase == "charge_now" and plan.planned_energy_kwh > 0:
-                    self.daily_backfill_active = True
-                    self.daily_backfill_session_target_kwh = plan.planned_energy_kwh
-                    self.daily_backfill_session_start_delivered_kwh = (
-                        self.daily_backfill_delivered_kwh
-                    )
-                    self.daily_backfill_frozen_start = plan.planned_start
-                    self.daily_backfill_last_sample_at = now
-                    self.daily_backfill_last_actual_current_a = self.actual_current_a
-                    self.daily_backfill_stop_pending = False
-                    self.daily_backfill_stop_attempts = 0
-                    self.daily_backfill_last_stop_at = None
-                if self.daily_backfill_active:
-                    # The start time may remain frozen, but the energy authority
-                    # does not. Shrink the remaining session target whenever the
-                    # live sellable budget shrinks.
-                    session_delivered = max(
-                        self.daily_backfill_delivered_kwh
-                        - self.daily_backfill_session_start_delivered_kwh,
-                        0.0,
-                    )
-                    self.daily_backfill_session_target_kwh = min(
-                        self.daily_backfill_session_target_kwh,
-                        session_delivered + plan.planned_energy_kwh,
-                    )
-                    daily_current_a = plan.current_ceiling_a
+                session = advance_daily_backfill_session(
+                    self._daily_backfill_cycle_state(),
+                    plan,
+                    now=now,
+                    actual_current_a=self.actual_current_a,
+                )
+                self._apply_daily_backfill_cycle_state(session.state)
+                daily_current_a = session.current_a
 
         self.solar_spill = SolarSpillDecision(0.0, 0.0, "disabled")
         solar_configured = self.coordinator.runtime_config.site.solar_configured
@@ -1963,25 +1921,34 @@ class ActiveEvController:
 
     def _roll_daily_backfill_cycle(self, ready_at: datetime) -> None:
         transition = roll_daily_backfill_cycle(
-            DailyBackfillCycleState(
-                ready_at=self.daily_backfill_cycle_ready_at,
-                energy=DailyBackfillEnergyState(
-                    self.daily_backfill_delivered_kwh,
-                    self.daily_backfill_last_sample_at,
-                    self.daily_backfill_last_actual_current_a,
-                ),
-                active=self.daily_backfill_active,
-                session_target_kwh=self.daily_backfill_session_target_kwh,
-                session_start_delivered_kwh=(
-                    self.daily_backfill_session_start_delivered_kwh
-                ),
-                frozen_start=self.daily_backfill_frozen_start,
-                stop_pending=self.daily_backfill_stop_pending,
-                stop_attempts=self.daily_backfill_stop_attempts,
-                last_stop_at=self.daily_backfill_last_stop_at,
-            ),
+            self._daily_backfill_cycle_state(),
             ready_at,
         )
+        self._apply_daily_backfill_cycle_state(transition)
+
+    def _daily_backfill_cycle_state(self) -> DailyBackfillCycleState:
+        return DailyBackfillCycleState(
+            ready_at=self.daily_backfill_cycle_ready_at,
+            energy=DailyBackfillEnergyState(
+                self.daily_backfill_delivered_kwh,
+                self.daily_backfill_last_sample_at,
+                self.daily_backfill_last_actual_current_a,
+            ),
+            active=self.daily_backfill_active,
+            session_target_kwh=self.daily_backfill_session_target_kwh,
+            session_start_delivered_kwh=(
+                self.daily_backfill_session_start_delivered_kwh
+            ),
+            frozen_start=self.daily_backfill_frozen_start,
+            stop_pending=self.daily_backfill_stop_pending,
+            stop_attempts=self.daily_backfill_stop_attempts,
+            last_stop_at=self.daily_backfill_last_stop_at,
+        )
+
+    def _apply_daily_backfill_cycle_state(
+        self,
+        transition: DailyBackfillCycleState,
+    ) -> None:
         self.daily_backfill_cycle_ready_at = transition.ready_at
         self.daily_backfill_delivered_kwh = transition.energy.delivered_kwh
         self.daily_backfill_last_sample_at = transition.energy.last_sample_at
