@@ -44,6 +44,93 @@ def hours_until_next_window(now: datetime, *, start: time) -> float:
     return max((target - now).total_seconds() / 3600, 0.0)
 
 
+def window_duration_hours(*, start: time, end: time) -> float:
+    """Return retained daily window duration, treating equal bounds as 24 h."""
+    anchor = datetime.min.date()
+    start_at = datetime.combine(anchor, start)
+    end_at = datetime.combine(anchor, end)
+    if end_at <= start_at:
+        end_at += timedelta(days=1)
+    return (end_at - start_at).total_seconds() / 3600
+
+
+def window_position(
+    now: datetime,
+    *,
+    start: time,
+    end: time,
+) -> tuple[bool, float, float]:
+    """Return active, elapsed minutes and remaining hours for a daily window."""
+    start_at, end_at = control_window_bounds(now, start=start, finish=end)
+    active = start_at <= now < end_at
+    return (
+        active,
+        max((now - start_at).total_seconds() / 60, 0.0) if active else 0.0,
+        max((end_at - now).total_seconds() / 3600, 0.0) if active else 0.0,
+    )
+
+
+def daily_ready_cycle_bounds(
+    now: datetime,
+    *,
+    ready: time,
+    free_start: time,
+) -> tuple[datetime, datetime, datetime]:
+    """Return next ready deadline, its planning-day start and next free start."""
+    ready_at = datetime.combine(now.date(), ready, tzinfo=now.tzinfo)
+    if now >= ready_at:
+        ready_at += timedelta(days=1)
+    planning_start = datetime.combine(
+        ready_at.date(),
+        datetime.min.time(),
+        tzinfo=now.tzinfo,
+    )
+    next_free = datetime.combine(ready_at.date(), free_start, tzinfo=now.tzinfo)
+    if next_free <= ready_at:
+        next_free += timedelta(days=1)
+    return ready_at, planning_start, next_free
+
+
+def pre_free_window_position(
+    now: datetime,
+    *,
+    free_start: time,
+    discharge_finish: time,
+) -> tuple[datetime, bool, float]:
+    """Return next free start and retained pre-free interval membership."""
+    free_at = datetime.combine(now.date(), free_start, tzinfo=now.tzinfo)
+    if free_at <= now:
+        free_at += timedelta(days=1)
+    finish_at = datetime.combine(
+        free_at.date(),
+        discharge_finish,
+        tzinfo=now.tzinfo,
+    )
+    if discharge_finish >= free_start:
+        finish_at -= timedelta(days=1)
+    return (
+        free_at,
+        finish_at <= now < free_at,
+        max((free_at - now).total_seconds() / 3600, 0.0),
+    )
+
+
+def boosted_window_active(
+    now: datetime,
+    *,
+    start: time,
+    end: time,
+) -> bool:
+    """Return boosted-window membership, retaining equal-bounds disabled state."""
+    start_at = datetime.combine(now.date(), start, tzinfo=now.tzinfo)
+    end_at = datetime.combine(now.date(), end, tzinfo=now.tzinfo)
+    if end > start:
+        return start_at <= now < end_at
+    if end < start:
+        return now >= start_at or now < end_at
+    return False
+
+
 def daily_windows_overlap(
     first_start: time,
     first_end: time,

@@ -118,6 +118,13 @@ from .ev_observation_adapter import (
     ev_observation_entity_map,
 )
 from .persistence import create_typed_value_repository
+from .planner.control_windows import (
+    boosted_window_active,
+    daily_ready_cycle_bounds,
+    pre_free_window_position,
+    window_duration_hours,
+    window_position,
+)
 from .planner.ev import (
     DIRECT_EVSE_MAX_ATTEMPTS,
     DIRECT_EVSE_RETRY_INTERVAL,
@@ -1852,18 +1859,11 @@ class ActiveEvController:
             CONF_FREE_CHARGE_START,
             DEFAULT_FREE_CHARGE_START,
         )
-        ready_at = datetime.combine(now.date(), ready_time, tzinfo=now.tzinfo)
-        if now >= ready_at:
-            ready_at += timedelta(days=1)
-        planning_start = datetime.combine(
-            ready_at.date(),
-            datetime.min.time(),
-            tzinfo=now.tzinfo,
+        return daily_ready_cycle_bounds(
+            now,
+            ready=ready_time,
+            free_start=free_time,
         )
-        next_free = datetime.combine(ready_at.date(), free_time, tzinfo=now.tzinfo)
-        if next_free <= ready_at:
-            next_free += timedelta(days=1)
-        return ready_at, planning_start, next_free
 
     def _roll_daily_backfill_cycle(self, ready_at: datetime) -> None:
         transition = roll_daily_backfill_cycle(
@@ -2032,12 +2032,7 @@ class ActiveEvController:
         end = self.coordinator._configured_time(  # noqa: SLF001
             CONF_FREE_CHARGE_END, DEFAULT_FREE_CHARGE_END
         )
-        anchor = dt_util.now().date()
-        start_at = datetime.combine(anchor, start)
-        end_at = datetime.combine(anchor, end)
-        if end_at <= start_at:
-            end_at += timedelta(days=1)
-        return (end_at - start_at).total_seconds() / 3600
+        return window_duration_hours(start=start, end=end)
 
     def _solar_spill_decision(
         self,
@@ -2140,16 +2135,10 @@ class ActiveEvController:
         finish_time = self.coordinator._configured_time(  # noqa: SLF001
             CONF_FORCE_DISCHARGE_FINISH, DEFAULT_FORCE_DISCHARGE_FINISH
         )
-        free_start = datetime.combine(now.date(), free_time, tzinfo=now.tzinfo)
-        if free_start <= now:
-            free_start += timedelta(days=1)
-        finish = datetime.combine(free_start.date(), finish_time, tzinfo=now.tzinfo)
-        if finish_time >= free_time:
-            finish -= timedelta(days=1)
-        return (
-            free_start,
-            finish <= now < free_start,
-            max((free_start - now).total_seconds() / 3600, 0.0),
+        return pre_free_window_position(
+            now,
+            free_start=free_time,
+            discharge_finish=finish_time,
         )
 
     def _boosted_window_active(self, now: datetime) -> bool:
@@ -2159,13 +2148,7 @@ class ActiveEvController:
         end = self.coordinator._configured_time(  # noqa: SLF001
             CONF_BONUS_WINDOW_END, DEFAULT_BONUS_WINDOW_END
         )
-        start_at = datetime.combine(now.date(), start, tzinfo=now.tzinfo)
-        end_at = datetime.combine(now.date(), end, tzinfo=now.tzinfo)
-        if end > start:
-            return start_at <= now < end_at
-        if end < start:
-            return now >= start_at or now < end_at
-        return False
+        return boosted_window_active(now, start=start, end=end)
 
     def _connected_at_home(self) -> tuple[bool, str]:
         connection = self.coordinator.runtime_config.ev_connection
@@ -2269,19 +2252,7 @@ class ActiveEvController:
         end = self.coordinator._configured_time(  # noqa: SLF001
             CONF_FREE_CHARGE_END, DEFAULT_FREE_CHARGE_END
         )
-        start_at = datetime.combine(now.date(), start, tzinfo=now.tzinfo)
-        end_at = datetime.combine(now.date(), end, tzinfo=now.tzinfo)
-        if end <= start:
-            end_at += timedelta(days=1)
-            if now < datetime.combine(now.date(), end, tzinfo=now.tzinfo):
-                start_at -= timedelta(days=1)
-                end_at -= timedelta(days=1)
-        active = start_at <= now < end_at
-        return (
-            active,
-            max((now - start_at).total_seconds() / 60, 0.0) if active else 0.0,
-            max((end_at - now).total_seconds() / 3600, 0.0) if active else 0.0,
-        )
+        return window_position(now, start=start, end=end)
 
     def _create_adapter(self) -> EvServiceAdapter | None:
         actuators = self.coordinator.runtime_config.ev_actuators
