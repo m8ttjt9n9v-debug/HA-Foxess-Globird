@@ -17,6 +17,12 @@ SENSOR_SOURCE = (
     / "home_energy_orchestrator"
     / "sensor.py"
 )
+READ_MODEL_SOURCE = (
+    REPOSITORY_ROOT
+    / "custom_components"
+    / "home_energy_orchestrator"
+    / "read_model.py"
+)
 BASELINE_PATH = (
     REPOSITORY_ROOT
     / "docs"
@@ -39,13 +45,13 @@ _SCORECARD_KEYS = (
 )
 
 
-def _method(tree: ast.Module, name: str) -> ast.FunctionDef:
+def _method(tree: ast.Module, class_name: str, name: str) -> ast.FunctionDef:
     for node in tree.body:
-        if isinstance(node, ast.ClassDef) and node.name == "EnergySensor":
+        if isinstance(node, ast.ClassDef) and node.name == class_name:
             for member in node.body:
                 if isinstance(member, ast.FunctionDef) and member.name == name:
                     return member
-    raise ValueError(f"EnergySensor.{name} was not found")
+    raise ValueError(f"{class_name}.{name} was not found")
 
 
 def _dict_return_keys(function: ast.FunctionDef) -> list[frozenset[str]]:
@@ -86,10 +92,15 @@ def _record(entity_key: str, attributes: frozenset[str]) -> dict[str, Any]:
 def build_entity_attribute_contract() -> dict[str, Any]:
     """Return the deterministic custom public-attribute contract."""
     tree = ast.parse(SENSOR_SOURCE.read_text(encoding="utf-8"))
-    fleet_groups = _dict_return_keys(_method(tree, "_fleet_summary_attributes"))
+    read_model_tree = ast.parse(READ_MODEL_SOURCE.read_text(encoding="utf-8"))
+    fleet_groups = _dict_return_keys(
+        _method(read_model_tree, "SiteReadModel", "fleet_attributes")
+    )
     if len(fleet_groups) != 1:
         raise ValueError("Fleet Summary must have one literal attribute mapping")
-    groups = _dict_return_keys(_method(tree, "extra_state_attributes"))
+    groups = _dict_return_keys(
+        _method(tree, "EnergySensor", "extra_state_attributes")
+    )
 
     telemetry = _group_by_sentinel(groups, "positive_direction")
     zerohero_import = _group_by_sentinel(groups, "hourly_import_kwh")

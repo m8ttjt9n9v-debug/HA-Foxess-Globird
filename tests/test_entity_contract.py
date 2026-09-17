@@ -72,13 +72,18 @@ def test_entity_catalogue_is_complete_and_unique() -> None:
 
 def test_sensor_specs_match_native_value_projection_keys() -> None:
     """Sensor projection metadata must match the actual presentation mapping."""
-    tree = ast.parse(
+    sensor_tree = ast.parse(
         (ROOT / "custom_components/home_energy_orchestrator/sensor.py").read_text(
             encoding="utf-8"
         )
     )
+    read_model_tree = ast.parse(
+        (ROOT / "custom_components/home_energy_orchestrator/read_model.py").read_text(
+            encoding="utf-8"
+        )
+    )
     projection: ast.Dict | None = None
-    for node in ast.walk(tree):
+    for node in ast.walk(sensor_tree):
         if not isinstance(node, ast.ClassDef) or node.name != "EnergySensor":
             continue
         for child in ast.walk(node):
@@ -97,6 +102,24 @@ def test_sensor_specs_match_native_value_projection_keys() -> None:
         for key in projection.keys
         if key is not None
     }
+    read_model_projection: ast.Dict | None = None
+    for node in ast.walk(read_model_tree):
+        if not isinstance(node, ast.FunctionDef) or node.name != "sensor_values":
+            continue
+        returns = [
+            child
+            for child in ast.walk(node)
+            if isinstance(child, ast.Return) and isinstance(child.value, ast.Dict)
+        ]
+        assert len(returns) == 1
+        read_model_projection = returns[0].value
+        break
+    assert read_model_projection is not None
+    projected_keys.update(
+        ast.literal_eval(key)
+        for key in read_model_projection.keys
+        if key is not None
+    )
     catalogued_keys = {
         spec.description.key for spec in ENTITY_SPECS if spec.platform == "sensor"
     }

@@ -11,11 +11,17 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util
 
 from . import EnergyConfigEntry
-from .const import DOMAIN, FOXESS_CONTROL_OWNER_CLOUD
+from .const import DOMAIN
 from .coordinator import EnergyCoordinator
 from .entity_catalogue import SENSOR_DESCRIPTIONS as DESCRIPTIONS
 from .ev_adapter import ev_control_gate_status
 from .planner.ev import DIRECT_EVSE_MAX_ATTEMPTS
+from .read_model import (
+    build_site_read_model,
+    control_mode,
+    effective_export_plan,
+    export_status,
+)
 
 
 async def async_setup_entry(
@@ -53,135 +59,19 @@ class EnergySensor(CoordinatorEntity[EnergyCoordinator], SensorEntity):
 
     def _control_mode(self) -> str:
         """Return the commissioned control surface, not the ledger reason."""
-        automation = self.coordinator.runtime_config.automation
-        owner = automation.control_owner
-        controller = self.coordinator.active_controller
-        if (
-            controller is not None
-            and getattr(controller, "ownership_status", None) == "ownership_unknown"
-        ):
-            return "ownership_unknown"
-        foxess_ready = controller is not None and controller.gate_status == "ready"
-        charge_enabled = automation.battery_charge_enabled
-        export_enabled = automation.battery_export_enabled
-        if owner == FOXESS_CONTROL_OWNER_CLOUD:
-            return "foxcloud_scheduler"
-        if foxess_ready and charge_enabled and export_enabled:
-            return "local_modbus_charge_and_export"
-        if foxess_ready and charge_enabled:
-            return "local_modbus_free_charge"
-        if foxess_ready and export_enabled:
-            return "zerohero_export"
-        if foxess_ready:
-            return "local_modbus_ready"
-        return "observe"
+        return control_mode(self.coordinator)
 
     def _effective_export_plan(self):
         """Expose an export plan only while export is actually permitted."""
-        controller = self.coordinator.active_controller
-        if (
-            controller is None
-            or not controller.export_effective_enabled
-            or controller.export_plan is None
-        ):
-            return None
-        return controller.export_plan
+        return effective_export_plan(self.coordinator)
 
     def _export_status(self) -> str:
         """Explain whether export is disabled, withheld, or running."""
-        controller = self.coordinator.active_controller
-        if controller is None:
-            return "unavailable"
-        if not self.coordinator.runtime_config.automation.battery_export_enabled:
-            return "disabled"
-        decision = controller.ev_before_export_decision
-        if not decision.export_allowed:
-            return f"withheld_{decision.reason}"
-        return controller.export_session.phase
+        return export_status(self.coordinator)
 
     def _fleet_summary_attributes(self) -> dict[str, object]:
         """Return one compact, read-only payload for a monitoring hub."""
-        coordinator = self.coordinator
-        ledger = coordinator.data
-        snapshot = coordinator.snapshot
-        telemetry = coordinator.telemetry
-        controller = coordinator.active_controller
-        ev_controller = coordinator.ev_controller
-        forecast = coordinator.optimistic_forecast
-        export_plan = self._effective_export_plan()
-        candidate_export_plan = (
-            controller.export_plan if controller is not None else None
-        )
-        scorecard = (
-            coordinator.forecast_feedback.record_for(
-                coordinator.forecast_scorecard_date
-            )
-            if coordinator.forecast_scorecard_date is not None
-            else None
-        )
-
-        def rounded(value: float | None, digits: int = 3) -> float | None:
-            return None if value is None else round(float(value), digits)
-
-        return {
-            "summary_schema_version": 1,
-            "battery_soc": rounded(
-                None if snapshot is None else snapshot.battery_soc, 2
-            ),
-            "battery_power_kw": rounded(
-                None if telemetry is None else telemetry.battery_power.value
-            ),
-            "grid_power_kw": rounded(
-                None if telemetry is None else telemetry.grid_power.value
-            ),
-            "solar_power_kw": rounded(
-                None if telemetry is None else telemetry.solar_power.value
-            ),
-            "house_load_kw": rounded(
-                None if snapshot is None else snapshot.house_load_kw
-            ),
-            "sellable_energy_kwh": rounded(
-                None
-                if candidate_export_plan is None
-                else candidate_export_plan.sellable_energy_kwh
-            ),
-            "planned_export_kwh": rounded(
-                None if export_plan is None else export_plan.planned_export_energy_kwh
-            ),
-            "orchestrator_status": self._control_mode(),
-            "foxess_control_gate": (
-                "unavailable" if controller is None else controller.gate_status
-            ),
-            "charging_status": (
-                "unavailable" if controller is None else controller.charge_session.phase
-            ),
-            "export_status": self._export_status(),
-            "ev_control_status": (
-                "unavailable" if ev_controller is None else ev_controller.last_reason
-            ),
-            "forecast_cost": rounded(
-                None if forecast is None else forecast.calibrated_net_cost, 2
-            ),
-            "measured_cost": rounded(ledger.estimated_net_cost, 2),
-            "latest_actual_cost": rounded(
-                None if scorecard is None else scorecard.retailer_actual_cost, 2
-            ),
-            "forecast_error": rounded(
-                None if scorecard is None else scorecard.forecast_error, 2
-            ),
-            "zerohero_status": ledger.zerohero_credit_status,
-            "latest_zerohero_status": (
-                None if scorecard is None else scorecard.retailer_zerohero_status
-            ),
-            "forecast_scorecard_status": coordinator.forecast_scorecard_status,
-            "house_learning_samples": coordinator.learning_result.sample_count,
-            "ev_learning_samples": (
-                0 if ev_controller is None else len(ev_controller.driving_history.samples)
-            ),
-            "ledger_status": ledger.reason,
-            "tariff_status": ledger.tariff_reason,
-            "last_update": dt_util.now().isoformat(),
-        }
+        return build_site_read_model(self.coordinator).fleet_attributes(dt_util.now())
 
     @property
     def native_value(self):
@@ -201,34 +91,17 @@ class EnergySensor(CoordinatorEntity[EnergyCoordinator], SensorEntity):
         )
         ev_learning = ev_controller.learned_charge_limit if ev_controller is not None else None
         telemetry = self.coordinator.telemetry
-        forecast = self.coordinator.optimistic_forecast
-        scorecard_record = (
-            self.coordinator.forecast_feedback.record_for(
-                self.coordinator.forecast_scorecard_date
-            )
-            if self.coordinator.forecast_scorecard_date is not None
-            else None
-        )
-        export_plan = self._effective_export_plan()
+        read_model = build_site_read_model(self.coordinator)
         values = {
-            "status": self._control_mode(),
-            "fleet_summary": self._control_mode(),
-            "battery_soc": None if snapshot is None else snapshot.battery_soc,
+            **read_model.sensor_values(),
             "battery_potential_capacity": ledger.battery_potential_capacity_kwh,
             "battery_energy": ledger.battery_energy_kwh,
             "available_energy": ledger.available_after_reserve_kwh,
-            "grid_power": None if telemetry is None else telemetry.grid_power.value,
             "grid_import": ledger.grid_import_kw,
             "grid_export": ledger.grid_export_kw,
-            "battery_power": None if telemetry is None else telemetry.battery_power.value,
-            "house_load": None if snapshot is None else snapshot.house_load_kw,
-            "solar_power": None if telemetry is None else telemetry.solar_power.value,
             "site_grid_current": (None if telemetry is None else telemetry.site_grid_current.value),
             "ev_soc": None if snapshot is None else snapshot.ev_soc,
             "ev_max_power": ledger.ev_max_power_kw,
-            "ev_control_status": (
-                ev_controller.last_reason if ev_controller is not None else "unavailable"
-            ),
             "ev_current_target": (
                 ev_controller.target_current_a if ev_controller is not None else None
             ),
@@ -372,33 +245,10 @@ class EnergySensor(CoordinatorEntity[EnergyCoordinator], SensorEntity):
             "zerohero_credit": (
                 None if ledger.zerohero_credit is None else round(ledger.zerohero_credit, 2)
             ),
-            "zerohero_credit_status": ledger.zerohero_credit_status,
-            "estimated_net_cost": (
-                None if forecast is None else round(forecast.calibrated_net_cost, 2)
-            ),
-            "measured_net_cost": (
-                None
-                if ledger.estimated_net_cost is None
-                else round(ledger.estimated_net_cost, 2)
-            ),
             "forecast_export_realisation": round(
                 self.coordinator.forecast_feedback.export_realisation_fraction * 100,
                 1,
             ),
-            "forecast_yesterday_cost": (
-                None
-                if scorecard_record is None
-                else scorecard_record.frozen_forecast_cost
-            ),
-            "globird_yesterday_actual_cost": (
-                None
-                if scorecard_record is None
-                else scorecard_record.retailer_actual_cost
-            ),
-            "forecast_error_yesterday": (
-                None if scorecard_record is None else scorecard_record.forecast_error
-            ),
-            "forecast_scorecard_status": self.coordinator.forecast_scorecard_status,
             "free_charge_allowed": ledger.free_charge_allowed_kwh,
             "free_charge_power_target": (
                 None
@@ -418,24 +268,6 @@ class EnergySensor(CoordinatorEntity[EnergyCoordinator], SensorEntity):
             ),
             "tariff_status": ledger.tariff_reason,
             "zerohero_export_window": round(self.coordinator.zerohero_export.imported_kwh, 3),
-            "zerohero_sellable_energy": (
-                None
-                if self.coordinator.active_controller is None
-                or self.coordinator.active_controller.export_plan is None
-                else self.coordinator.active_controller.export_plan.sellable_energy_kwh
-            ),
-            "zerohero_planned_export_energy": (
-                None if export_plan is None else export_plan.planned_export_energy_kwh
-            ),
-            "zerohero_planned_duration": (
-                None if export_plan is None else round(export_plan.planned_duration_h * 60, 1)
-            ),
-            "zerohero_planned_start": (
-                None
-                if export_plan is None or self.coordinator.active_controller is None
-                else self.coordinator.active_controller.export_planned_start
-            ),
-            "zerohero_export_status": self._export_status(),
             "ev_before_export_status": (
                 "unavailable"
                 if self.coordinator.active_controller is None

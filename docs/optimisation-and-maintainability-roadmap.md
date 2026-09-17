@@ -215,6 +215,9 @@ different values for the same concept in one cycle; presentation contains no
 business calculation; snapshots change only where the approved entity contract
 requires it.
 
+Current work package and completion evidence:
+[Phase 4 canonical read model and presentation](maintainability/phase-4-canonical-read-model.md).
+
 ### Phase 5 — versioned persistence repositories
 
 Estimated effort: 6–8 engineer-days.
