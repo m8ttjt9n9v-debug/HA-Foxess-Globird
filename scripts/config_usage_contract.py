@@ -42,6 +42,7 @@ class _UsageVisitor(ast.NodeVisitor):
         if constant not in self.constants:
             return
         relative = self.source.relative_to(REPOSITORY_ROOT).as_posix()
+        kind = "managed_mutation" if access == "update_config_value" else "raw_mapping"
         self.records.append(
             {
                 "constant": constant,
@@ -50,6 +51,7 @@ class _UsageVisitor(ast.NodeVisitor):
                 "scope": ".".join(self.scope) or "<module>",
                 "receiver": ast.unparse(receiver),
                 "access": access,
+                "kind": kind,
                 "layer": (
                     "boundary" if self.source.name in _BOUNDARY_FILES else "runtime"
                 ),
@@ -109,13 +111,19 @@ def build_config_usage_contract() -> dict[str, Any]:
         )
     )
     by_layer = Counter(item["layer"] for item in records)
+    by_kind = Counter(item["kind"] for item in records)
+    raw_by_layer = Counter(
+        item["layer"] for item in records if item["kind"] == "raw_mapping"
+    )
     by_source = Counter(item["source"] for item in records)
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "release_baseline": "0.12.26",
         "access_count": len(records),
         "key_count": len({item["key"] for item in records}),
         "accesses_by_layer": dict(sorted(by_layer.items())),
+        "accesses_by_kind": dict(sorted(by_kind.items())),
+        "raw_accesses_by_layer": dict(sorted(raw_by_layer.items())),
         "accesses_by_source": dict(sorted(by_source.items())),
         "accesses": records,
     }

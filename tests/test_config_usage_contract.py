@@ -26,6 +26,8 @@ def test_config_usage_only_references_declared_keys() -> None:
     declared = set(build_config_contract()["declared_config_keys"])
     assert contract["access_count"] > 0
     assert contract["accesses_by_layer"]["runtime"] > 0
+    assert contract["raw_accesses_by_layer"]["runtime"] > 0
+    assert contract["accesses_by_kind"]["managed_mutation"] > 0
     assert {item["key"] for item in contract["accesses"]} <= declared
 
 
@@ -42,7 +44,11 @@ def test_runtime_config_writes_use_the_coordinator_boundary() -> None:
         if item["access"] == "subscript_store"
         and item["receiver"].endswith("coordinator.config")
     ]
-    mutations = [
-        item for item in runtime if item["access"] == "update_config_value"
-    ]
+    mutations = [item for item in runtime if item["kind"] == "managed_mutation"]
     assert len(mutations) == 9
+    assert all(item["access"] == "update_config_value" for item in mutations)
+    assert all(
+        item["kind"] == "raw_mapping"
+        for item in runtime
+        if item["access"] != "update_config_value"
+    )

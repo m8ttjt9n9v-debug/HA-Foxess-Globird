@@ -12,7 +12,9 @@ selectors, validation, migration behavior and the multi-page draft workflow.
 - `config-field-contract-v0.12.26.json` freezes all 124 wizard fields, labels,
   required/default behavior, input kind and selector configuration.
 - `config-usage-contract-v0.12.26.json` inventories direct AST-visible mapping
-  reads/writes and separates Home Assistant boundaries from runtime consumers.
+  reads/writes, separates Home Assistant boundaries from runtime consumers,
+  and distinguishes raw mapping access from the centralized managed-mutation
+  API.
 
 ## Work packages
 
@@ -22,8 +24,10 @@ selectors, validation, migration behavior and the multi-page draft workflow.
    the frozen key and UI contract.
 3. Add immutable nested runtime configuration objects and a single parser at
    setup/reconfigure boundaries.
-4. Migrate one runtime consumer seam at a time; each commit must reduce raw
-   runtime access without changing a value, default or validation outcome.
+4. Migrate one runtime consumer seam at a time; each commit must reduce
+   `raw_accesses_by_layer.runtime` without changing a value, default or
+   validation outcome. Managed mutations are tracked separately and do not
+   count as raw configuration access.
 5. Keep named cross-field validators outside metadata and prove draft retention
    after invalid submissions.
 6. Remove raw runtime mappings only after the inventory reports boundary-only
