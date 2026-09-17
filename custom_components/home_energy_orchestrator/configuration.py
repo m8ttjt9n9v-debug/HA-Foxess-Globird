@@ -10,6 +10,7 @@ from .const import (
     CONF_AUTOMATIC_CHARGE_ENABLED,
     CONF_AUTOMATIC_CONTROL_ENABLED,
     CONF_AUTOMATIC_EXPORT_ENABLED,
+    CONF_BATTERY_CAPACITY_ENTITY,
     CONF_BATTERY_POWER_DIRECTION,
     CONF_BATTERY_SOC,
     CONF_CONFIGURE_EV,
@@ -154,6 +155,7 @@ class EvConnectionSettings:
     protected_baseline_a: float
     voltage_v: float
     phase_count: float
+    phase_count_valid: bool
 
 
 @dataclass(frozen=True, slots=True)
@@ -227,6 +229,7 @@ class BatterySettings:
     """Explicit Home Assistant entities used to observe the battery."""
 
     soc_entity: str | None
+    capacity_entity: str | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -331,7 +334,13 @@ class RuntimeConfiguration:
         ev_stored_energy_entity = data.get(CONF_EV_STORED_ENERGY)
         ev_lifetime_energy_entity = data.get(CONF_EV_LIFETIME_ENERGY)
         battery_soc_entity = data.get(CONF_BATTERY_SOC)
+        battery_capacity_entity = data.get(CONF_BATTERY_CAPACITY_ENTITY)
         site_grid_current_entity = data.get(CONF_SITE_GRID_CURRENT)
+        ev_phase_count = _optional_number(
+            data,
+            CONF_EV_PHASE_COUNT,
+            DEFAULT_EV_PHASE_COUNT,
+        )
         legacy_charge_to_full_entity = data.get(CONF_EV_CHARGE_TO_FULL)
         ev_control_commissioned = bool(
             data.get(
@@ -445,6 +454,7 @@ class RuntimeConfiguration:
                     _number(data, CONF_EV_PHASE_COUNT, DEFAULT_EV_PHASE_COUNT),
                     0.0,
                 ),
+                phase_count_valid=ev_phase_count is not None,
             ),
             ev_actuators=EvActuatorSettings(
                 current_limit_entity=(
@@ -545,6 +555,9 @@ class RuntimeConfiguration:
             ),
             battery=BatterySettings(
                 soc_entity=str(battery_soc_entity) if battery_soc_entity else None,
+                capacity_entity=(
+                    str(battery_capacity_entity) if battery_capacity_entity else None
+                ),
             ),
             electrical=ElectricalSettings(
                 verified=bool(

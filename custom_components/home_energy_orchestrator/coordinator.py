@@ -28,7 +28,6 @@ from .const import (
     CONF_BATTERY_SOC,
     CONF_BONUS_WINDOW_END,
     CONF_BONUS_WINDOW_START,
-    CONF_CONFIGURE_SOLAR,
     CONF_DAILY_CHARGE,
     CONF_DAILY_FREE_ALLOWANCE_KWH,
     CONF_DAILY_IMPORT_ENTITY,
@@ -83,7 +82,6 @@ from .const import (
     DEFAULT_BONUS_WINDOW_START,
     DEFAULT_DAILY_CHARGE,
     DEFAULT_DAILY_FREE_ALLOWANCE_KWH,
-    DEFAULT_EV_PHASE_COUNT,
     DEFAULT_EXPORT_ALLOWANCE_KWH,
     DEFAULT_EXPORT_LIMIT_KW,
     DEFAULT_EXPORT_RATE,
@@ -107,7 +105,6 @@ from .const import (
     DEFAULT_SERVICE_IMPORT_LIMIT_A,
     DEFAULT_SHOULDER_RATE,
     DEFAULT_SITE_GRID_CURRENT_DIRECTION,
-    DEFAULT_SITE_PHASE_COUNT,
     DEFAULT_SOLAR_POWER_DIRECTION,
     DEFAULT_SUPER_EXPORT_RATE,
     DEFAULT_TELEMETRY_MAX_AGE_SECONDS,
@@ -523,14 +520,19 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
 
     def _configured_phase_count(self) -> int:
         """Read the explicitly commissioned EV phase count."""
-        value = float(self.config.get(CONF_EV_PHASE_COUNT, DEFAULT_EV_PHASE_COUNT))
+        connection = self.runtime_config.ev_connection
+        if not connection.phase_count_valid:
+            raise ValueError(f"{CONF_EV_PHASE_COUNT} must be a positive integer")
+        value = connection.phase_count
         if not isfinite(value) or value < 1 or not value.is_integer():
             raise ValueError(f"{CONF_EV_PHASE_COUNT} must be a positive integer")
         return int(value)
 
     def _configured_site_phase_count(self) -> int:
         """Read the commissioned supply topology without inferring it from power."""
-        value = float(self.config.get(CONF_SITE_PHASE_COUNT, DEFAULT_SITE_PHASE_COUNT))
+        value = self.runtime_config.site.phase_count
+        if value is None:
+            raise ValueError(f"{CONF_SITE_PHASE_COUNT} must be a positive integer")
         if not isfinite(value) or value < 1 or not value.is_integer():
             raise ValueError(f"{CONF_SITE_PHASE_COUNT} must be a positive integer")
         return int(value)
@@ -1149,7 +1151,7 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
 
         # Missing is a pre-capability entry and retains its historical sensor
         # behavior. Only an explicit choice means deliberate absence.
-        solar_configured = self.config.get(CONF_CONFIGURE_SOLAR) is not False
+        solar_configured = self.runtime_config.site.solar_configured
         if solar_configured:
             solar_direction = self._direction(
                 CONF_SOLAR_POWER_DIRECTION, DEFAULT_SOLAR_POWER_DIRECTION
@@ -1177,7 +1179,7 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
             positive_direction="positive_consumption",
         )
 
-        current_source = self._source(self.config.get(CONF_SITE_GRID_CURRENT))
+        current_source = self._source(self.runtime_config.site.grid_current_entity)
         current = None
         if current_source is not None:
             current_direction = self._direction(
@@ -1242,7 +1244,7 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
             return None
 
     async def _async_update_data(self) -> EnergyLedger:
-        battery_soc = self._number(self.config.get(CONF_BATTERY_SOC))
+        battery_soc = self._number(self.runtime_config.battery.soc_entity)
         if battery_soc is not None:
             try:
                 battery_soc = percent(battery_soc)
@@ -1328,7 +1330,9 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
                 )
                 self._zerohero_export_last_saved = exported
         try:
-            measured_capacity = self._energy(self.config.get(CONF_BATTERY_CAPACITY_ENTITY))
+            measured_capacity = self._energy(
+                self.runtime_config.battery.capacity_entity
+            )
             effective_capacity = (
                 measured_capacity if measured_capacity is not None and measured_capacity > 0
                 else self._configured_float(CONF_BATTERY_CAPACITY)
@@ -1340,7 +1344,7 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
                 reserve_kwh=self._configured_float(CONF_RESERVE),
                 grid_power_kw=grid,
                 house_load_kw=self.telemetry.house_load.value,
-                ev_soc=self._number(self.config.get(CONF_EV_SOC)),
+                ev_soc=self._number(self.runtime_config.ev_telemetry.soc_entity),
                 ev_min_current_a=self._configured_float(CONF_EV_MIN_CURRENT),
                 ev_max_current_a=self._configured_float(CONF_EV_MAX_CURRENT),
                 ev_voltage_v=self._configured_float(CONF_EV_VOLTAGE),
@@ -1428,8 +1432,9 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
 
     def _state_qualified_ev_power_kw(self, now: datetime) -> float | None:
         """Port the pilot's charging-state-qualified EV power calculation."""
-        charging_entity = self.config.get(CONF_EV_CHARGING_STATE)
-        charging_state = self.hass.states.get(str(charging_entity)) if charging_entity else None
+        ev_telemetry = self.runtime_config.ev_telemetry
+        charging_entity = ev_telemetry.charging_state_entity
+        charging_state = self.hass.states.get(charging_entity) if charging_entity else None
         if charging_state is None:
             return None
         age_seconds = (now - self._state_reported_at(charging_state)).total_seconds()
@@ -1437,8 +1442,8 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
             return None
         if charging_state.state.lower() != "charging":
             return 0.0
-        current_entity = self.config.get(CONF_EV_ACTUAL_CURRENT)
-        current_state = self.hass.states.get(str(current_entity)) if current_entity else None
+        current_entity = ev_telemetry.actual_current_entity
+        current_state = self.hass.states.get(current_entity) if current_entity else None
         if current_state is None:
             return None
         current_age_seconds = (now - self._state_reported_at(current_state)).total_seconds()

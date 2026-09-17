@@ -12,6 +12,7 @@ from custom_components.home_energy_orchestrator.const import (
     CONF_AUTOMATIC_CHARGE_ENABLED,
     CONF_AUTOMATIC_CONTROL_ENABLED,
     CONF_AUTOMATIC_EXPORT_ENABLED,
+    CONF_BATTERY_CAPACITY_ENTITY,
     CONF_BATTERY_SOC,
     CONF_CONFIGURE_EV,
     CONF_CONFIGURE_SOLAR,
@@ -155,6 +156,7 @@ def test_runtime_configuration_uses_established_defaults() -> None:
     )
     assert parsed.ev_connection.voltage_v == DEFAULT_EV_VOLTAGE
     assert parsed.ev_connection.phase_count == DEFAULT_EV_PHASE_COUNT
+    assert parsed.ev_connection.phase_count_valid is True
     assert parsed.ev_actuators.direct_entities is None
     assert parsed.ev_actuators.smart_socket_entity is None
     assert parsed.ev_telemetry.soc_entity is None
@@ -183,6 +185,7 @@ def test_runtime_configuration_uses_established_defaults() -> None:
     assert parsed.site.phase_count == DEFAULT_SITE_PHASE_COUNT
     assert parsed.site.grid_current_entity is None
     assert parsed.battery.soc_entity is None
+    assert parsed.battery.capacity_entity is None
     assert parsed.ev_required_mapping_complete is False
     assert parsed.house.occupancy_mode == DEFAULT_HOUSE_OCCUPANCY_MODE
     assert parsed.electrical.verified is False
@@ -508,36 +511,39 @@ def test_ev_policy_snapshot_preserves_enum_and_truthiness_semantics(
 @pytest.mark.parametrize(
     ("data", "expected"),
     [
-        ({}, (False, True, None)),
+        ({}, (False, True, None, None)),
         (
             {
                 CONF_HOUSE_LOAD_INCLUDES_EV: True,
                 CONF_CONFIGURE_SOLAR: False,
                 CONF_BATTERY_SOC: "sensor.battery_soc",
+                CONF_BATTERY_CAPACITY_ENTITY: "sensor.battery_capacity",
             },
-            (True, False, "sensor.battery_soc"),
+            (True, False, "sensor.battery_soc", "sensor.battery_capacity"),
         ),
         (
             {
                 CONF_HOUSE_LOAD_INCLUDES_EV: "false",
                 CONF_CONFIGURE_SOLAR: None,
                 CONF_BATTERY_SOC: 123,
+                CONF_BATTERY_CAPACITY_ENTITY: 456,
             },
-            (True, True, "123"),
+            (True, True, "123", "456"),
         ),
         (
             {
                 CONF_HOUSE_LOAD_INCLUDES_EV: 0,
                 CONF_CONFIGURE_SOLAR: 0,
                 CONF_BATTERY_SOC: "",
+                CONF_BATTERY_CAPACITY_ENTITY: False,
             },
-            (False, True, None),
+            (False, True, None, None),
         ),
     ],
 )
 def test_active_site_snapshot_preserves_upgrade_fallbacks(
     data: dict[str, object],
-    expected: tuple[bool, bool, str | None],
+    expected: tuple[bool, bool, str | None, str | None],
 ) -> None:
     """Characterize truthiness, exact-false solar and mapping coercion."""
     parsed = RuntimeConfiguration.from_mapping(data)
@@ -545,7 +551,30 @@ def test_active_site_snapshot_preserves_upgrade_fallbacks(
         parsed.house.load_includes_ev,
         parsed.site.solar_configured,
         parsed.battery.soc_entity,
+        parsed.battery.capacity_entity,
     ) == expected
+
+
+@pytest.mark.parametrize(
+    ("value", "expected_valid"),
+    [
+        (1, True),
+        ("3", True),
+        (-3, True),
+        (float("nan"), True),
+        (None, False),
+        ("invalid", False),
+    ],
+)
+def test_ev_phase_snapshot_retains_strict_parse_validity(
+    value: object,
+    expected_valid: bool,
+) -> None:
+    """Separate parse validity from the established non-negative projection."""
+    connection = RuntimeConfiguration.from_mapping(
+        {CONF_EV_PHASE_COUNT: value}
+    ).ev_connection
+    assert connection.phase_count_valid is expected_valid
 
 
 @pytest.mark.parametrize(
