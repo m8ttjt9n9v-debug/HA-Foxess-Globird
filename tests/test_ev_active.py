@@ -202,6 +202,12 @@ def _outside_candidate(controller: ActiveEvController, stage: str):
     )
 
 
+def _assert_outside_selection_matches_retained(controller: ActiveEvController) -> None:
+    assert controller.outside_stage_selection is not None
+    assert controller.outside_stage_selection.reason == controller.decision_phase
+    assert controller.outside_stage_selection.target_current_a == controller.target_current_a
+
+
 @pytest.mark.parametrize(
     ("location_mode", "tracker_state", "cable_state", "expected"),
     [
@@ -824,6 +830,7 @@ async def test_solar_spill_runtime_ports_measured_surplus_to_tessie(
     assert solar.eligible is True
     assert solar.reason == controller.solar_spill.phase
     assert solar.target_current_a == controller.target_current_a
+    _assert_outside_selection_matches_retained(controller)
     assert {event.data["domain"] for event in calls} == {"number", "switch"}
 
 
@@ -953,6 +960,7 @@ async def test_opted_in_outside_policy_restores_baseline_after_reconnect(
     baseline = _outside_candidate(controller, "protected_baseline")
     assert baseline.eligible is True
     assert baseline.target_current_a == controller.target_current_a
+    _assert_outside_selection_matches_retained(controller)
     current_calls = [
         event
         for event in calls
@@ -1001,6 +1009,7 @@ async def test_pre_free_runtime_latches_latest_start_and_uses_export_budget(
     assert pre_free.reason == controller.pre_free_phase
     assert pre_free.target_current_a == controller.pre_free_current_a
     assert pre_free.persistence_transition == "pre_free_session_active"
+    _assert_outside_selection_matches_retained(controller)
 
 
 async def test_daily_ready_backfill_runs_with_foxcloud_owner_and_never_writes_foxess(
@@ -1042,6 +1051,7 @@ async def test_daily_ready_backfill_runs_with_foxcloud_owner_and_never_writes_fo
     assert daily.reason == controller.daily_backfill_plan.phase
     assert daily.target_current_a == controller.target_current_a
     assert daily.persistence_transition == "daily_backfill_active"
+    _assert_outside_selection_matches_retained(controller)
     assert all(event.data["domain"] in {"number", "switch"} for event in calls)
     assert not any(event.data["domain"] == "foxess_modbus" for event in calls)
 
@@ -1076,6 +1086,7 @@ async def test_charge_to_full_starts_immediately_outside_free_and_bypasses_norma
     assert charge_to_full.eligible is True
     assert charge_to_full.reason == controller.decision_phase
     assert charge_to_full.target_current_a == controller.target_current_a
+    _assert_outside_selection_matches_retained(controller)
     assert controller.last_actions == (
         "set_charge_limit",
         "set_charge_current",

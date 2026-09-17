@@ -145,10 +145,12 @@ from .planner.ev import (
 )
 from .planner.ev_candidates import (
     EvStageCandidate,
+    EvStageSelection,
     OutsideStageCandidateInputs,
     build_ev_stage_candidate,
     build_outside_stage_candidates,
     reject_ev_stage_candidate,
+    select_outside_stage_candidate,
 )
 from .planner.ev_daily_backfill import (
     DailyBackfillInputs,
@@ -250,6 +252,7 @@ class ActiveEvController:
         self.free_window_candidate: EvStageCandidate | None = None
         self.general_limit_candidate: EvStageCandidate | None = None
         self.outside_stage_candidates: tuple[EvStageCandidate, ...] = ()
+        self.outside_stage_selection: EvStageSelection | None = None
         self.smart_socket_candidate: EvStageCandidate | None = None
         self.smart_recovery_candidate: EvStageCandidate | None = None
         self.requested_current_a: float | None = None
@@ -349,6 +352,7 @@ class ActiveEvController:
             self.free_window_candidate = None
             self.general_limit_candidate = None
             self.outside_stage_candidates = ()
+            self.outside_stage_selection = None
             self.smart_socket_candidate = None
             self.smart_recovery_candidate = None
             grid_current, grid_valid = self._grid_current_a()
@@ -1724,6 +1728,10 @@ class ActiveEvController:
                 pre_free_current_a=self.pre_free_current_a,
                 solar_spill_current_a=self.solar_spill.current_a,
             )
+        self.outside_stage_selection = select_outside_stage_candidate(
+            self.outside_stage_candidates,
+            current_ceiling_a=ceiling,
+        )
         self.outside_target_active = bool(
             charge_to_full
             or self.daily_backfill_active

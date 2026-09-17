@@ -19,6 +19,15 @@ class EvStageCandidate:
 
 
 @dataclass(frozen=True, slots=True)
+class EvStageSelection:
+    """One selected stage and its resulting current intent."""
+
+    stage: str
+    reason: str
+    target_current_a: float
+
+
+@dataclass(frozen=True, slots=True)
 class OutsideStageCandidateInputs:
     """Retained outside-stage results required to describe every candidate."""
 
@@ -135,4 +144,57 @@ def build_outside_stage_candidates(
                 command_intent if inputs.protected_baseline_a > 0 else ()
             ),
         ),
+    )
+
+
+def select_outside_stage_candidate(
+    candidates: tuple[EvStageCandidate, ...],
+    *,
+    current_ceiling_a: float,
+) -> EvStageSelection:
+    """Shadow the retained outside-window branch and source ordering."""
+    by_stage = {candidate.stage: candidate for candidate in candidates}
+
+    def current(stage: str) -> float:
+        candidate = by_stage[stage]
+        return candidate.target_current_a or 0.0
+
+    charge_to_full = by_stage["charge_to_full"]
+    if charge_to_full.eligible:
+        return EvStageSelection(
+            charge_to_full.stage,
+            charge_to_full.reason,
+            current("charge_to_full"),
+        )
+    daily = by_stage["daily_ready"]
+    if daily.eligible:
+        return EvStageSelection(
+            daily.stage,
+            "daily_ready_backfill",
+            current("daily_ready"),
+        )
+    pre_free = by_stage["pre_free"]
+    solar = by_stage["solar_spill"]
+    if pre_free.eligible:
+        return EvStageSelection(
+            "pre_free_or_solar_spill",
+            "pre_free_or_solar_spill",
+            round(
+                min(
+                    max(current("pre_free"), current("solar_spill")),
+                    current_ceiling_a,
+                ),
+                3,
+            ),
+        )
+    if solar.eligible:
+        return EvStageSelection(
+            solar.stage,
+            "solar_spill",
+            round(min(current("solar_spill"), current_ceiling_a), 3),
+        )
+    return EvStageSelection(
+        "protected_baseline",
+        "protected_baseline",
+        round(current("protected_baseline"), 3),
     )
