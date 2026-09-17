@@ -160,12 +160,16 @@ from .planner.ev import (
     reset_smart_state_for_path,
 )
 from .planner.ev_candidates import (
+    EvConnectionDecision,
     EvCycleRoute,
     EvStageCandidate,
     EvStageSelection,
     OutsideStageCandidateInputs,
     build_ev_stage_candidate,
     build_outside_stage_candidates,
+    ev_home_presence_required,
+    evaluate_ev_connection_evidence,
+    evaluate_ev_home_control,
     reject_ev_stage_candidate,
     select_ev_eligibility_route,
     select_ev_policy_route,
@@ -2158,28 +2162,43 @@ class ActiveEvController:
 
     def _connected_at_home(self) -> tuple[bool, str]:
         connection = self.coordinator.runtime_config.ev_connection
-        mode = connection.location_mode
-        if mode == "away":
-            return False, "ev_location_away"
-        if not self._home_control_active():
-            return False, "ev_location_not_confirmed_home"
-        if self._mapped_state(connection.cable_connected_entity) != "on":
-            return False, "ev_cable_not_connected"
+        home = self._home_control_decision()
+        if not home.connected:
+            return home.connected, home.reason
+        cable = self._mapped_state(connection.cable_connected_entity)
+        if cable != "on":
+            decision = evaluate_ev_connection_evidence(
+                home,
+                cable_state=cable,
+                charging_state=None,
+            )
+            return decision.connected, decision.reason
         charging = self._mapped_state(
             self.coordinator.runtime_config.ev_telemetry.charging_state_entity
         )
-        if charging is None or charging == "disconnected":
-            return False, "ev_connection_state_unavailable"
-        return True, "ev_connected_at_home"
+        decision = evaluate_ev_connection_evidence(
+            home,
+            cable_state=cable,
+            charging_state=charging,
+        )
+        return decision.connected, decision.reason
+
+    def _home_control_decision(self) -> EvConnectionDecision:
+        """Acquire only the presence evidence required by the selected mode."""
+        connection = self.coordinator.runtime_config.ev_connection
+        at_home = (
+            self._mapped_state(connection.at_home_entity)
+            if ev_home_presence_required(location_mode=connection.location_mode)
+            else None
+        )
+        return evaluate_ev_home_control(
+            location_mode=connection.location_mode,
+            at_home_state=at_home,
+        )
 
     def _home_control_active(self) -> bool:
         """Port the pilot's explicit Home/Auto/Away current-write scope."""
-        connection = self.coordinator.runtime_config.ev_connection
-        mode = connection.location_mode
-        return mode == "home" or (
-            mode == "auto"
-            and self._mapped_state(connection.at_home_entity) in {"home", "on"}
-        )
+        return self._home_control_decision().connected
 
     def _grid_current_a(self) -> tuple[float, bool]:
         telemetry = self.coordinator.telemetry

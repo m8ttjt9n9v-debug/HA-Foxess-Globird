@@ -5,15 +5,55 @@ from dataclasses import FrozenInstanceError
 import pytest
 
 from custom_components.home_energy_orchestrator.planner.ev_candidates import (
+    EvConnectionDecision,
     EvStageCandidate,
     OutsideStageCandidateInputs,
     build_ev_stage_candidate,
     build_outside_stage_candidates,
+    ev_home_presence_required,
+    evaluate_ev_connection_evidence,
+    evaluate_ev_home_control,
     reject_ev_stage_candidate,
     select_ev_eligibility_route,
     select_ev_policy_route,
     select_outside_stage_candidate,
 )
+
+
+def test_ev_home_control_retains_explicit_location_mode_semantics():
+    assert ev_home_presence_required(location_mode="auto") is True
+    assert ev_home_presence_required(location_mode="home") is False
+    assert evaluate_ev_home_control(
+        location_mode="away",
+        at_home_state="home",
+    ) == EvConnectionDecision(False, "ev_location_away")
+    assert evaluate_ev_home_control(
+        location_mode="home",
+        at_home_state=None,
+    ) == EvConnectionDecision(True, "ev_connected_at_home")
+    assert evaluate_ev_home_control(
+        location_mode="auto",
+        at_home_state="unavailable",
+    ) == EvConnectionDecision(False, "ev_location_not_confirmed_home")
+
+
+def test_ev_connection_evidence_retains_cable_before_vehicle_state_order():
+    home = EvConnectionDecision(True, "ev_connected_at_home")
+    assert evaluate_ev_connection_evidence(
+        home,
+        cable_state="off",
+        charging_state="charging",
+    ) == EvConnectionDecision(False, "ev_cable_not_connected")
+    assert evaluate_ev_connection_evidence(
+        home,
+        cable_state="on",
+        charging_state=None,
+    ) == EvConnectionDecision(False, "ev_connection_state_unavailable")
+    assert evaluate_ev_connection_evidence(
+        home,
+        cable_state="on",
+        charging_state="stopped",
+    ) == EvConnectionDecision(True, "ev_connected_at_home")
 
 
 def test_stage_candidate_is_lossless_and_immutable() -> None:

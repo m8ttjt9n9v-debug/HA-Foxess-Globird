@@ -36,6 +36,52 @@ class EvCycleRoute:
 
 
 @dataclass(frozen=True, slots=True)
+class EvConnectionDecision:
+    """Mapped location/cable/vehicle evidence for current-write eligibility."""
+
+    connected: bool
+    reason: str
+
+
+def ev_home_presence_required(*, location_mode: str) -> bool:
+    """Return whether the selected location mode requires tracker evidence."""
+    return location_mode == "auto"
+
+
+def evaluate_ev_home_control(
+    *,
+    location_mode: str,
+    at_home_state: str | None,
+) -> EvConnectionDecision:
+    """Evaluate the retained Home / Auto / Away current-write scope."""
+    if location_mode == "away":
+        return EvConnectionDecision(False, "ev_location_away")
+    active = location_mode == "home" or (
+        location_mode == "auto" and at_home_state in {"home", "on"}
+    )
+    return EvConnectionDecision(
+        active,
+        "ev_connected_at_home" if active else "ev_location_not_confirmed_home",
+    )
+
+
+def evaluate_ev_connection_evidence(
+    home: EvConnectionDecision,
+    *,
+    cable_state: str | None,
+    charging_state: str | None,
+) -> EvConnectionDecision:
+    """Apply cable and vehicle-state evidence after home control is allowed."""
+    if not home.connected:
+        return home
+    if cable_state != "on":
+        return EvConnectionDecision(False, "ev_cable_not_connected")
+    if charging_state is None or charging_state == "disconnected":
+        return EvConnectionDecision(False, "ev_connection_state_unavailable")
+    return EvConnectionDecision(True, "ev_connected_at_home")
+
+
+@dataclass(frozen=True, slots=True)
 class OutsideStageCandidateInputs:
     """Retained outside-stage results required to describe every candidate."""
 
