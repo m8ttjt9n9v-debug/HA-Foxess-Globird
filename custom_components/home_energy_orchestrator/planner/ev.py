@@ -81,6 +81,34 @@ class SmartSocketStageTransition:
 
 
 @dataclass(frozen=True, slots=True)
+class SmartPathResetDecision:
+    """Smart-only latch state after selecting a commissioned charge path."""
+
+    recovery: SmartSocketRecoveryState
+    stage: SmartSocketStageState
+    save_required: bool = False
+
+
+def reset_smart_state_for_path(
+    *,
+    smart_path_selected: bool,
+    recovery: SmartSocketRecoveryState,
+    stage: SmartSocketStageState,
+) -> SmartPathResetDecision:
+    """Clear smart-only latches when Direct / EVSE becomes authoritative."""
+    changed = not smart_path_selected and (
+        recovery != SmartSocketRecoveryState() or stage != SmartSocketStageState()
+    )
+    if changed:
+        return SmartPathResetDecision(
+            SmartSocketRecoveryState(),
+            SmartSocketStageState(),
+            save_required=True,
+        )
+    return SmartPathResetDecision(recovery, stage)
+
+
+@dataclass(frozen=True, slots=True)
 class DirectEvseReconciliationState:
     """Restart-safe, bounded command/feedback state for one direct EVSE."""
 

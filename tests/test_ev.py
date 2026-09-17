@@ -31,6 +31,7 @@ from custom_components.home_energy_orchestrator.planner.ev import (
     reconcile_direct_evse,
     reconcile_smart_socket_recovery,
     reconcile_smart_socket_stage,
+    reset_smart_state_for_path,
 )
 
 BASE = FreeWindowCurrentInputs(
@@ -694,6 +695,37 @@ def test_smart_socket_stage_transition_retains_hold_for_unrelated_plan():
     )
     assert transition.state == state
     assert transition.plan == unrelated
+
+
+def test_smart_path_reset_clears_only_when_direct_path_becomes_authoritative():
+    now = datetime(2026, 9, 7, 8, tzinfo=UTC)
+    recovery = SmartSocketRecoveryState(True, "fault", now, 10)
+    stage = SmartSocketStageState(10, now)
+
+    retained = reset_smart_state_for_path(
+        smart_path_selected=True,
+        recovery=recovery,
+        stage=stage,
+    )
+    assert retained.recovery is recovery
+    assert retained.stage is stage
+    assert retained.save_required is False
+
+    reset = reset_smart_state_for_path(
+        smart_path_selected=False,
+        recovery=recovery,
+        stage=stage,
+    )
+    assert reset.recovery == SmartSocketRecoveryState()
+    assert reset.stage == SmartSocketStageState()
+    assert reset.save_required is True
+
+    unchanged = reset_smart_state_for_path(
+        smart_path_selected=False,
+        recovery=reset.recovery,
+        stage=reset.stage,
+    )
+    assert unchanged.save_required is False
 
 
 def test_direct_path_orders_limit_current_then_start():

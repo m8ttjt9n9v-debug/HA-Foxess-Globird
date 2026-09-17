@@ -146,6 +146,7 @@ from .planner.ev import (
     reconcile_direct_evse,
     reconcile_smart_socket_recovery,
     reconcile_smart_socket_stage,
+    reset_smart_state_for_path,
 )
 from .planner.ev_candidates import (
     EvCycleRoute,
@@ -413,17 +414,19 @@ class ActiveEvController:
             policy = self.coordinator.runtime_config.ev_policy
             charge_path = policy.charge_path
             smart_path = charge_path == EV_CHARGE_PATH_SMART_SOCKET
-            if not smart_path and (
-                self.smart_recovery != SmartSocketRecoveryState()
-                or self.smart_stage_target_a is not None
-                or self.smart_stage_started_at is not None
-            ):
-                # Faithful port of the pilot latch-reset automation: changing
-                # to Direct / EVSE ends the smart-socket fault episode even if
-                # Tessie connection telemetry is currently unavailable.
-                self.smart_recovery = SmartSocketRecoveryState()
-                self.smart_stage_target_a = None
-                self.smart_stage_started_at = None
+            smart_reset = reset_smart_state_for_path(
+                smart_path_selected=smart_path,
+                recovery=self.smart_recovery,
+                stage=SmartSocketStageState(
+                    self.smart_stage_target_a,
+                    self.smart_stage_started_at,
+                ),
+            )
+            self.smart_recovery = smart_reset.recovery
+            self.smart_stage_target_a = smart_reset.stage.target_current_a
+            self.smart_stage_started_at = smart_reset.stage.started_at
+            if smart_reset.save_required:
+                # Preserve the pilot reset even when telemetry is unavailable.
                 await self._async_save(now)
             if self._float(CONF_SITE_PHASE_COUNT, DEFAULT_SITE_PHASE_COUNT) > 1 and not grid_valid:
                 self.last_reason = "multiphase_current_feedback_unavailable"
