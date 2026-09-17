@@ -58,6 +58,8 @@ separate reviewable work items.
   their frozen descriptions. Every spec identifies its current value-projection
   owner, availability rule and deprecation state; translations remain
   untouched.
+- The generated [entity reference](entity-reference-v0.12.26.md) joins the
+  catalogue to the semantic worksheet and is checked for drift in CI.
 - Nine display-label proposals await project-owner approval; no label is
   inferred as approved from engineering analysis.
 
