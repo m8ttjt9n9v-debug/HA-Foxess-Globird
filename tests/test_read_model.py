@@ -150,12 +150,18 @@ def _coordinator() -> SimpleNamespace:
             free_window_import_kwh=8.0,
             daily_export_kwh=5.0,
             standard_window_export_kwh=4.0,
+            boosted_window_export_kwh=2.0,
+            standard_rate_export_kwh=4.0,
             offpeak_rate_export_kwh=1.0,
+            boosted_rate_export_kwh=2.0,
             free_charge_allowed_kwh=30.0,
             bonus_zero_import_allowed=True,
             estimated_energy_cost=3.456,
             estimated_import_energy_cost=4.567,
             daily_supply_charge=1.234,
+            standard_export_revenue=0.2,
+            offpeak_export_revenue=0.3,
+            boosted_bonus_revenue=0.4,
             estimated_export_revenue=1.112,
             zerohero_credit=1.0,
             estimated_net_cost=2.344,
@@ -504,6 +510,24 @@ def test_ev_control_attributes_preserve_existing_public_values() -> None:
         "driving_learning_samples": 3,
         "driving_p85_kwh": 11.0,
         "learned_general_limit_percent": 82,
+    }
+
+
+def test_export_revenue_attributes_use_authoritative_accounting_components() -> None:
+    model = build_site_read_model(_coordinator())
+
+    assert model.cost.export_revenue_attributes() == {
+        "standard_rate_export_kwh": 4.0,
+        "offpeak_rate_export_kwh": 1.0,
+        "standard_window_export_kwh": 4.0,
+        "boosted_rate_export_kwh": 2.0,
+        "boosted_window_export_kwh": 2.0,
+        "standard_rate_per_kwh": 0.0,
+        "offpeak_rate_per_kwh": 0.0,
+        "additional_boost_rate_per_kwh": 0.1,
+        "standard_export_revenue": 0.2,
+        "offpeak_export_revenue": 0.3,
+        "boosted_bonus_revenue": 0.4,
     }
 
 

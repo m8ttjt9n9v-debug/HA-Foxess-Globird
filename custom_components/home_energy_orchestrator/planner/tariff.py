@@ -32,6 +32,9 @@ class DailyFinancialSummary:
     standard_export_kwh: float
     offpeak_export_kwh: float
     boosted_export_kwh: float
+    standard_export_revenue: float
+    offpeak_export_revenue: float
+    boosted_bonus_revenue: float
     export_revenue: float
     zerohero_credit: float
     net_cost: float
@@ -171,10 +174,13 @@ def calculate_daily_financials(
     )
     standard_export = min(total_export_kwh, standard_window_export_kwh)
     offpeak_export = max(total_export_kwh - standard_export, 0.0)
+    standard_export_revenue = standard_export * export_rate
+    offpeak_export_revenue = offpeak_export * offpeak_export_rate
+    boosted_bonus_revenue = boosted_export * boosted_export_rate
     export_revenue = (
-        standard_export * export_rate
-        + offpeak_export * offpeak_export_rate
-        + boosted_export * boosted_export_rate
+        standard_export_revenue
+        + offpeak_export_revenue
+        + boosted_bonus_revenue
     )
     import_energy_cost = max(gross_cost - daily_charge, 0.0)
     return DailyFinancialSummary(
@@ -184,6 +190,9 @@ def calculate_daily_financials(
         standard_export_kwh=standard_export,
         offpeak_export_kwh=offpeak_export,
         boosted_export_kwh=boosted_export,
+        standard_export_revenue=standard_export_revenue,
+        offpeak_export_revenue=offpeak_export_revenue,
+        boosted_bonus_revenue=boosted_bonus_revenue,
         export_revenue=export_revenue,
         zerohero_credit=zerohero_credit,
         net_cost=gross_cost - export_revenue - zerohero_credit,

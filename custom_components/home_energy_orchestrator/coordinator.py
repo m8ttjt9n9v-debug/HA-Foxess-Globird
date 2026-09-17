@@ -720,6 +720,21 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
             estimated_energy_cost=financials.gross_cost,
             estimated_import_energy_cost=financials.import_energy_cost,
             daily_supply_charge=financials.supply_charge,
+            standard_export_revenue=(
+                financials.standard_export_revenue
+                if export_accounting_available
+                else None
+            ),
+            offpeak_export_revenue=(
+                financials.offpeak_export_revenue
+                if export_accounting_available
+                else None
+            ),
+            boosted_bonus_revenue=(
+                financials.boosted_bonus_revenue
+                if export_accounting_available
+                else None
+            ),
             estimated_export_revenue=(
                 financials.export_revenue if export_accounting_available else None
             ),

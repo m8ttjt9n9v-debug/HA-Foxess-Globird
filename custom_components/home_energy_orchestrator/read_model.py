@@ -146,6 +146,17 @@ class CostReadModel:
     measured_import_cost: float | None
     daily_supply_charge: float | None
     measured_export_revenue: float | None
+    standard_rate_export_kwh: float | None
+    offpeak_rate_export_kwh: float | None
+    standard_window_export_kwh: float | None
+    boosted_rate_export_kwh: float | None
+    boosted_window_export_kwh: float | None
+    standard_rate_per_kwh: float
+    offpeak_rate_per_kwh: float
+    additional_boost_rate_per_kwh: float
+    standard_export_revenue: float | None
+    offpeak_export_revenue: float | None
+    boosted_bonus_revenue: float | None
     measured_zerohero_credit: float | None
     measured_net_cost: float | None
     calibrated_net_cost: float | None
@@ -201,6 +212,31 @@ class CostReadModel:
             ),
             "raw_optimistic_forecast": self.raw_net_cost,
             "learned_cost_bias": self.forecast_learned_cost_bias,
+        }
+
+    def export_revenue_attributes(self) -> dict[str, object]:
+        """Project the existing export-revenue breakdown attributes."""
+        return {
+            "standard_rate_export_kwh": self.standard_rate_export_kwh,
+            "offpeak_rate_export_kwh": self.offpeak_rate_export_kwh,
+            "standard_window_export_kwh": self.standard_window_export_kwh,
+            "boosted_rate_export_kwh": self.boosted_rate_export_kwh,
+            "boosted_window_export_kwh": self.boosted_window_export_kwh,
+            "standard_rate_per_kwh": self.standard_rate_per_kwh,
+            "offpeak_rate_per_kwh": self.offpeak_rate_per_kwh,
+            "additional_boost_rate_per_kwh": self.additional_boost_rate_per_kwh,
+            "standard_export_revenue": _rounded(
+                self.standard_export_revenue,
+                4,
+            ),
+            "offpeak_export_revenue": _rounded(
+                self.offpeak_export_revenue,
+                4,
+            ),
+            "boosted_bonus_revenue": _rounded(
+                self.boosted_bonus_revenue,
+                4,
+            ),
         }
 
 
@@ -913,6 +949,23 @@ def build_site_read_model(
         measured_import_cost=ledger.estimated_import_energy_cost,
         daily_supply_charge=ledger.daily_supply_charge,
         measured_export_revenue=ledger.estimated_export_revenue,
+        standard_rate_export_kwh=ledger.standard_rate_export_kwh,
+        offpeak_rate_export_kwh=ledger.offpeak_rate_export_kwh,
+        standard_window_export_kwh=ledger.standard_window_export_kwh,
+        boosted_rate_export_kwh=ledger.boosted_rate_export_kwh,
+        boosted_window_export_kwh=ledger.boosted_window_export_kwh,
+        standard_rate_per_kwh=(
+            coordinator.runtime_config.tariff.peak_export_rate_per_kwh
+        ),
+        offpeak_rate_per_kwh=(
+            coordinator.runtime_config.tariff.offpeak_export_rate_per_kwh
+        ),
+        additional_boost_rate_per_kwh=(
+            coordinator.runtime_config.tariff.additional_export_rate_per_kwh
+        ),
+        standard_export_revenue=ledger.standard_export_revenue,
+        offpeak_export_revenue=ledger.offpeak_export_revenue,
+        boosted_bonus_revenue=ledger.boosted_bonus_revenue,
         measured_zerohero_credit=ledger.zerohero_credit,
         measured_net_cost=ledger.estimated_net_cost,
         calibrated_net_cost=(

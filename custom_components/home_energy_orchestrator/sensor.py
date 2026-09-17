@@ -127,36 +127,9 @@ class EnergySensor(CoordinatorEntity[EnergyCoordinator], SensorEntity):
                 ),
             }
         if self.entity_description.key == "estimated_export_revenue":
-            ledger = self.coordinator.data
-            tariff = self.coordinator.runtime_config.tariff
-            standard_rate = tariff.peak_export_rate_per_kwh
-            boost_rate = tariff.additional_export_rate_per_kwh
-            offpeak_rate = tariff.offpeak_export_rate_per_kwh
-            return {
-                "standard_rate_export_kwh": ledger.standard_rate_export_kwh,
-                "offpeak_rate_export_kwh": ledger.offpeak_rate_export_kwh,
-                "standard_window_export_kwh": ledger.standard_window_export_kwh,
-                "boosted_rate_export_kwh": ledger.boosted_rate_export_kwh,
-                "boosted_window_export_kwh": ledger.boosted_window_export_kwh,
-                "standard_rate_per_kwh": standard_rate,
-                "offpeak_rate_per_kwh": offpeak_rate,
-                "additional_boost_rate_per_kwh": boost_rate,
-                "standard_export_revenue": (
-                    None
-                    if ledger.standard_rate_export_kwh is None
-                    else round(ledger.standard_rate_export_kwh * standard_rate, 4)
-                ),
-                "offpeak_export_revenue": (
-                    None
-                    if ledger.offpeak_rate_export_kwh is None
-                    else round(ledger.offpeak_rate_export_kwh * offpeak_rate, 4)
-                ),
-                "boosted_bonus_revenue": (
-                    None
-                    if ledger.boosted_rate_export_kwh is None
-                    else round(ledger.boosted_rate_export_kwh * boost_rate, 4)
-                ),
-            }
+            return build_site_read_model(
+                self.coordinator
+            ).cost.export_revenue_attributes()
         if self.entity_description.key == "estimated_net_cost":
             return build_site_read_model(self.coordinator).cost.sensor_attributes()
         if self.entity_description.key in {

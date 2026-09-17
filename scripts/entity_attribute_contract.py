@@ -104,6 +104,8 @@ def build_entity_attribute_contract() -> dict[str, Any]:
     read_model_groups = _dict_return_keys(
         _method(read_model_tree, "CostReadModel", "sensor_attributes")
     ) + _dict_return_keys(
+        _method(read_model_tree, "CostReadModel", "export_revenue_attributes")
+    ) + _dict_return_keys(
         _method(read_model_tree, "ScorecardReadModel", "sensor_attributes")
     ) + _dict_return_keys(
         _method(read_model_tree, "LearningReadModel", "occupancy_attributes")
@@ -115,7 +117,10 @@ def build_entity_attribute_contract() -> dict[str, Any]:
 
     telemetry = _group_by_sentinel(groups, "positive_direction")
     zerohero_import = _group_by_sentinel(groups, "hourly_import_kwh")
-    export_revenue = _group_by_sentinel(groups, "standard_export_revenue")
+    export_revenue = _group_by_sentinel(
+        read_model_groups,
+        "standard_export_revenue",
+    )
     forecast = _group_by_sentinel(read_model_groups, "raw_optimistic_forecast")
     scorecard = _group_by_sentinel(read_model_groups, "result_date")
     # The full EV status mapping already contains ``gate``; the separate

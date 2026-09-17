@@ -57,6 +57,9 @@ class EnergyLedger:
     estimated_energy_cost: float | None = None
     estimated_import_energy_cost: float | None = None
     daily_supply_charge: float | None = None
+    standard_export_revenue: float | None = None
+    offpeak_export_revenue: float | None = None
+    boosted_bonus_revenue: float | None = None
     estimated_export_revenue: float | None = None
     zerohero_credit: float | None = None
     zerohero_credit_status: str = "pending_window_completion"

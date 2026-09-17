@@ -177,6 +177,9 @@ def test_daily_financials_count_boosted_export_once_and_report_net_cost() -> Non
     assert summary.gross_cost == pytest.approx(2.035 + import_energy_cost)
     assert summary.standard_export_kwh == pytest.approx(20)
     assert summary.boosted_export_kwh == pytest.approx(15)
+    assert summary.standard_export_revenue == pytest.approx(1.0)
+    assert summary.offpeak_export_revenue == pytest.approx(0.0)
+    assert summary.boosted_bonus_revenue == pytest.approx(1.5)
     assert summary.export_revenue == pytest.approx(export_revenue)
     assert summary.net_cost == pytest.approx(2.035 + import_energy_cost - export_revenue)
 
