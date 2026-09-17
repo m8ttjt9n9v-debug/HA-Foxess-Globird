@@ -11,14 +11,18 @@ from custom_components.home_energy_orchestrator.configuration import RuntimeConf
 from custom_components.home_energy_orchestrator.const import (
     CONF_AUTOMATIC_CHARGE_ENABLED,
     CONF_EV_BEFORE_EXPORT_SOC_TARGET,
+    CONF_EXPORT_RATE,
     CONF_FOXESS_CONTROL_OWNER,
     CONF_FREE_CHARGE_SCHEDULE_CONFIRMED,
     CONF_GRID_POWER_DIRECTION,
     CONF_HOUSE_OCCUPANCY_MODE,
+    CONF_ZERO_IMPORT_THRESHOLD_KW,
     DEFAULT_EV_BEFORE_EXPORT_SOC_TARGET,
+    DEFAULT_EXPORT_RATE,
     DEFAULT_FOXESS_CONTROL_OWNER,
     DEFAULT_GRID_POWER_DIRECTION,
     DEFAULT_HOUSE_OCCUPANCY_MODE,
+    DEFAULT_ZERO_IMPORT_THRESHOLD_KW,
 )
 from custom_components.home_energy_orchestrator.coordinator import EnergyCoordinator
 
@@ -42,6 +46,11 @@ def test_runtime_configuration_uses_established_defaults() -> None:
         parsed.electrical.grid_power_positive_direction
         == DEFAULT_GRID_POWER_DIRECTION
     )
+    assert parsed.tariff.peak_export_rate_per_kwh == DEFAULT_EXPORT_RATE
+    assert (
+        parsed.tariff.zero_import_threshold_kwh_per_hour
+        == DEFAULT_ZERO_IMPORT_THRESHOLD_KW
+    )
 
 
 def test_runtime_configuration_preserves_existing_coercion_behavior() -> None:
@@ -53,6 +62,8 @@ def test_runtime_configuration_preserves_existing_coercion_behavior() -> None:
             CONF_FOXESS_CONTROL_OWNER: None,
             CONF_FREE_CHARGE_SCHEDULE_CONFIRMED: "confirmed",
             CONF_HOUSE_OCCUPANCY_MODE: "invalid",
+            CONF_EXPORT_RATE: "0.075",
+            CONF_ZERO_IMPORT_THRESHOLD_KW: "invalid",
         }
     )
     assert parsed.automation.battery_charge_enabled is True
@@ -63,6 +74,11 @@ def test_runtime_configuration_preserves_existing_coercion_behavior() -> None:
     assert parsed.electrical.grid_power_positive_direction is None
     assert parsed.automation.control_owner is None
     assert parsed.automation.free_charge_schedule_confirmed is True
+    assert parsed.tariff.peak_export_rate_per_kwh == 0.075
+    assert (
+        parsed.tariff.zero_import_threshold_kwh_per_hour
+        == DEFAULT_ZERO_IMPORT_THRESHOLD_KW
+    )
 
 
 def test_runtime_configuration_is_immutable() -> None:

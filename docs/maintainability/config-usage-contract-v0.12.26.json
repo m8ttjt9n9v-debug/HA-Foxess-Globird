@@ -1,5 +1,5 @@
 {
-  "access_count": 519,
+  "access_count": 514,
   "accesses": [
     {
       "access": "subscript_store",
@@ -4538,51 +4538,6 @@
       "source": "custom_components/home_energy_orchestrator/select.py"
     },
     {
-      "access": "get",
-      "constant": "CONF_EXPORT_RATE",
-      "key": "export_rate_per_kwh",
-      "layer": "runtime",
-      "receiver": "self.coordinator.config",
-      "scope": "EnergySensor.extra_state_attributes",
-      "source": "custom_components/home_energy_orchestrator/sensor.py"
-    },
-    {
-      "access": "get",
-      "constant": "CONF_FREE_CHARGE_SCHEDULE_CONFIRMED",
-      "key": "free_charge_schedule_confirmed",
-      "layer": "runtime",
-      "receiver": "self.coordinator.config",
-      "scope": "EnergySensor.extra_state_attributes",
-      "source": "custom_components/home_energy_orchestrator/sensor.py"
-    },
-    {
-      "access": "get",
-      "constant": "CONF_OFFPEAK_EXPORT_RATE",
-      "key": "offpeak_export_rate_per_kwh",
-      "layer": "runtime",
-      "receiver": "self.coordinator.config",
-      "scope": "EnergySensor.extra_state_attributes",
-      "source": "custom_components/home_energy_orchestrator/sensor.py"
-    },
-    {
-      "access": "get",
-      "constant": "CONF_SUPER_EXPORT_RATE",
-      "key": "super_export_rate_per_kwh",
-      "layer": "runtime",
-      "receiver": "self.coordinator.config",
-      "scope": "EnergySensor.extra_state_attributes",
-      "source": "custom_components/home_energy_orchestrator/sensor.py"
-    },
-    {
-      "access": "get",
-      "constant": "CONF_ZERO_IMPORT_THRESHOLD_KW",
-      "key": "zero_import_threshold_kw",
-      "layer": "runtime",
-      "receiver": "self.coordinator.config",
-      "scope": "EnergySensor.extra_state_attributes",
-      "source": "custom_components/home_energy_orchestrator/sensor.py"
-    },
-    {
       "access": "update_config_value",
       "constant": "CONF_AUTOMATIC_CHARGE_ENABLED",
       "key": "automatic_charge_enabled",
@@ -4675,7 +4630,7 @@
   ],
   "accesses_by_layer": {
     "boundary": 386,
-    "runtime": 133
+    "runtime": 128
   },
   "accesses_by_source": {
     "custom_components/home_energy_orchestrator/__init__.py": 24,
@@ -4688,7 +4643,6 @@
     "custom_components/home_energy_orchestrator/manual_test.py": 10,
     "custom_components/home_energy_orchestrator/number.py": 3,
     "custom_components/home_energy_orchestrator/select.py": 1,
-    "custom_components/home_energy_orchestrator/sensor.py": 5,
     "custom_components/home_energy_orchestrator/switch.py": 10
   },
   "key_count": 129,

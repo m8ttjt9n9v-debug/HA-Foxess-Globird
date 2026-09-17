@@ -11,19 +11,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util
 
 from . import EnergyConfigEntry
-from .const import (
-    CONF_EXPORT_RATE,
-    CONF_FREE_CHARGE_SCHEDULE_CONFIRMED,
-    CONF_OFFPEAK_EXPORT_RATE,
-    CONF_SUPER_EXPORT_RATE,
-    CONF_ZERO_IMPORT_THRESHOLD_KW,
-    DEFAULT_EXPORT_RATE,
-    DEFAULT_OFFPEAK_EXPORT_RATE,
-    DEFAULT_SUPER_EXPORT_RATE,
-    DEFAULT_ZERO_IMPORT_THRESHOLD_KW,
-    DOMAIN,
-    FOXESS_CONTROL_OWNER_CLOUD,
-)
+from .const import DOMAIN, FOXESS_CONTROL_OWNER_CLOUD
 from .coordinator import EnergyCoordinator
 from .entity_catalogue import SENSOR_DESCRIPTIONS as DESCRIPTIONS
 from .ev_adapter import ev_control_gate_status
@@ -515,23 +503,16 @@ class EnergySensor(CoordinatorEntity[EnergyCoordinator], SensorEntity):
                 "last_sample": (
                     None if accumulator.last_at is None else accumulator.last_at.isoformat()
                 ),
-                "threshold_kwh_per_hour": self.coordinator.config.get(
-                    CONF_ZERO_IMPORT_THRESHOLD_KW, DEFAULT_ZERO_IMPORT_THRESHOLD_KW
+                "threshold_kwh_per_hour": (
+                    self.coordinator.runtime_config.tariff.zero_import_threshold_kwh_per_hour
                 ),
             }
         if self.entity_description.key == "estimated_export_revenue":
             ledger = self.coordinator.data
-            standard_rate = float(
-                self.coordinator.config.get(CONF_EXPORT_RATE, DEFAULT_EXPORT_RATE)
-            )
-            boost_rate = float(
-                self.coordinator.config.get(CONF_SUPER_EXPORT_RATE, DEFAULT_SUPER_EXPORT_RATE)
-            )
-            offpeak_rate = float(
-                self.coordinator.config.get(
-                    CONF_OFFPEAK_EXPORT_RATE, DEFAULT_OFFPEAK_EXPORT_RATE
-                )
-            )
+            tariff = self.coordinator.runtime_config.tariff
+            standard_rate = tariff.peak_export_rate_per_kwh
+            boost_rate = tariff.additional_export_rate_per_kwh
+            offpeak_rate = tariff.offpeak_export_rate_per_kwh
             return {
                 "standard_rate_export_kwh": ledger.standard_rate_export_kwh,
                 "offpeak_rate_export_kwh": ledger.offpeak_rate_export_kwh,
@@ -757,9 +738,7 @@ class EnergySensor(CoordinatorEntity[EnergyCoordinator], SensorEntity):
             ),
             "automatic_control_enabled": foxess_requested,
             "automatic_charge_enabled": charge_enabled,
-            "free_charge_schedule_confirmed": bool(
-                self.coordinator.config.get(CONF_FREE_CHARGE_SCHEDULE_CONFIRMED, False)
-            ),
+            "free_charge_schedule_confirmed": automation.free_charge_schedule_confirmed,
             "sign_conventions_verified": self.coordinator.runtime_config.electrical.verified,
             "foxess_modbus_control_effective": foxess_enabled,
             "foxess_control_owner": foxess_owner,

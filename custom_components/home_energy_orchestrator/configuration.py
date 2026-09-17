@@ -15,14 +15,18 @@ from .const import (
     CONF_EV_BEFORE_EXPORT_ENABLED,
     CONF_EV_BEFORE_EXPORT_SOC_TARGET,
     CONF_EV_CHARGE_TO_FULL_ENABLED,
+    CONF_EXPORT_RATE,
     CONF_FOXESS_CONTROL_OWNER,
     CONF_FREE_CHARGE_SCHEDULE_CONFIRMED,
     CONF_GRID_POWER_DIRECTION,
     CONF_HOUSE_OCCUPANCY_MODE,
+    CONF_OFFPEAK_EXPORT_RATE,
     CONF_REHEARSAL_MODE,
     CONF_SIGN_CONVENTIONS_VERIFIED,
     CONF_SITE_GRID_CURRENT_DIRECTION,
     CONF_SOLAR_POWER_DIRECTION,
+    CONF_SUPER_EXPORT_RATE,
+    CONF_ZERO_IMPORT_THRESHOLD_KW,
     DEFAULT_AUTOMATIC_CHARGE_ENABLED,
     DEFAULT_AUTOMATIC_CONTROL_ENABLED,
     DEFAULT_AUTOMATIC_EXPORT_ENABLED,
@@ -31,13 +35,17 @@ from .const import (
     DEFAULT_EV_BEFORE_EXPORT_ENABLED,
     DEFAULT_EV_BEFORE_EXPORT_SOC_TARGET,
     DEFAULT_EV_CHARGE_TO_FULL_ENABLED,
+    DEFAULT_EXPORT_RATE,
     DEFAULT_FOXESS_CONTROL_OWNER,
     DEFAULT_GRID_POWER_DIRECTION,
     DEFAULT_HOUSE_OCCUPANCY_MODE,
+    DEFAULT_OFFPEAK_EXPORT_RATE,
     DEFAULT_REHEARSAL_MODE,
     DEFAULT_SIGN_CONVENTIONS_VERIFIED,
     DEFAULT_SITE_GRID_CURRENT_DIRECTION,
     DEFAULT_SOLAR_POWER_DIRECTION,
+    DEFAULT_SUPER_EXPORT_RATE,
+    DEFAULT_ZERO_IMPORT_THRESHOLD_KW,
     HOUSE_OCCUPANCY_MODES,
 )
 
@@ -90,6 +98,16 @@ class ElectricalSettings:
 
 
 @dataclass(frozen=True, slots=True)
+class TariffSettings:
+    """Tariff values currently projected by observer entities."""
+
+    peak_export_rate_per_kwh: float
+    offpeak_export_rate_per_kwh: float
+    additional_export_rate_per_kwh: float
+    zero_import_threshold_kwh_per_hour: float
+
+
+@dataclass(frozen=True, slots=True)
 class RuntimeConfiguration:
     """Typed runtime snapshot adopted one domain at a time."""
 
@@ -97,6 +115,7 @@ class RuntimeConfiguration:
     ev_preferences: EvPreferenceSettings
     house: HouseSettings
     electrical: ElectricalSettings
+    tariff: TariffSettings
 
     @classmethod
     def from_mapping(cls, data: Mapping[str, object]) -> RuntimeConfiguration:
@@ -200,6 +219,28 @@ class RuntimeConfiguration:
                         CONF_SITE_GRID_CURRENT_DIRECTION,
                         DEFAULT_SITE_GRID_CURRENT_DIRECTION,
                     ),
+                ),
+            ),
+            tariff=TariffSettings(
+                peak_export_rate_per_kwh=_number(
+                    data,
+                    CONF_EXPORT_RATE,
+                    DEFAULT_EXPORT_RATE,
+                ),
+                offpeak_export_rate_per_kwh=_number(
+                    data,
+                    CONF_OFFPEAK_EXPORT_RATE,
+                    DEFAULT_OFFPEAK_EXPORT_RATE,
+                ),
+                additional_export_rate_per_kwh=_number(
+                    data,
+                    CONF_SUPER_EXPORT_RATE,
+                    DEFAULT_SUPER_EXPORT_RATE,
+                ),
+                zero_import_threshold_kwh_per_hour=_number(
+                    data,
+                    CONF_ZERO_IMPORT_THRESHOLD_KW,
+                    DEFAULT_ZERO_IMPORT_THRESHOLD_KW,
                 ),
             ),
         )
