@@ -29,6 +29,7 @@ from custom_components.home_energy_orchestrator.const import (
     CONF_GRID_POWER_DIRECTION,
     CONF_HOUSE_OCCUPANCY_MODE,
     CONF_INVERTER_CHARGE_LIMIT_KW,
+    CONF_INVERTER_DISCHARGE_LIMIT_KW,
     CONF_REHEARSAL_MODE,
     CONF_SIGN_CONVENTIONS_VERIFIED,
     CONF_ZERO_IMPORT_THRESHOLD_KW,
@@ -41,6 +42,7 @@ from custom_components.home_energy_orchestrator.const import (
     DEFAULT_GRID_POWER_DIRECTION,
     DEFAULT_HOUSE_OCCUPANCY_MODE,
     DEFAULT_INVERTER_CHARGE_LIMIT_KW,
+    DEFAULT_INVERTER_DISCHARGE_LIMIT_KW,
     DEFAULT_REHEARSAL_MODE,
     DEFAULT_SIGN_CONVENTIONS_VERIFIED,
     DEFAULT_ZERO_IMPORT_THRESHOLD_KW,
@@ -220,6 +222,47 @@ def test_ev_connection_snapshot_preserves_keepalive_input_semantics(
         ev.voltage_v,
         ev.phase_count,
     ) == expected
+
+
+@pytest.mark.parametrize(
+    ("data", "expected_charge", "expected_discharge"),
+    [
+        ({}, DEFAULT_INVERTER_CHARGE_LIMIT_KW, DEFAULT_INVERTER_DISCHARGE_LIMIT_KW),
+        (
+            {
+                CONF_INVERTER_CHARGE_LIMIT_KW: "12.5",
+                CONF_INVERTER_DISCHARGE_LIMIT_KW: "15",
+            },
+            12.5,
+            15.0,
+        ),
+        (
+            {
+                CONF_INVERTER_CHARGE_LIMIT_KW: -1,
+                CONF_INVERTER_DISCHARGE_LIMIT_KW: -2,
+            },
+            0.0,
+            0.0,
+        ),
+        (
+            {
+                CONF_INVERTER_CHARGE_LIMIT_KW: "invalid",
+                CONF_INVERTER_DISCHARGE_LIMIT_KW: None,
+            },
+            DEFAULT_INVERTER_CHARGE_LIMIT_KW,
+            DEFAULT_INVERTER_DISCHARGE_LIMIT_KW,
+        ),
+    ],
+)
+def test_active_inverter_limits_preserve_legacy_numeric_semantics(
+    data: dict[str, object],
+    expected_charge: float,
+    expected_discharge: float,
+) -> None:
+    """Characterize parsing and active controller's non-negative clamp."""
+    inverter = RuntimeConfiguration.from_mapping(data).inverter
+    assert max(inverter.charge_limit_kw, 0.0) == expected_charge
+    assert max(inverter.discharge_limit_kw, 0.0) == expected_discharge
 
 
 @pytest.mark.parametrize(

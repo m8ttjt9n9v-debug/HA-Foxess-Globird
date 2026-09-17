@@ -26,8 +26,6 @@ from .const import (
     CONF_FORCE_DISCHARGE_OFFSET_MINUTES,
     CONF_FREE_CHARGE_END,
     CONF_FREE_CHARGE_START,
-    CONF_INVERTER_CHARGE_LIMIT_KW,
-    CONF_INVERTER_DISCHARGE_LIMIT_KW,
     DEFAULT_AUTOMATIC_EXPORT_LIMIT_KWH,
     DEFAULT_BATTERY_FREE_WINDOW_TARGET,
     DEFAULT_BONUS_WINDOW_END,
@@ -37,8 +35,6 @@ from .const import (
     DEFAULT_FORCE_DISCHARGE_OFFSET_MINUTES,
     DEFAULT_FREE_CHARGE_END,
     DEFAULT_FREE_CHARGE_START,
-    DEFAULT_INVERTER_CHARGE_LIMIT_KW,
-    DEFAULT_INVERTER_DISCHARGE_LIMIT_KW,
     FOXESS_CONTROL_OWNER_CLOUD,
     FOXESS_CONTROL_OWNER_MODBUS,
 )
@@ -225,9 +221,9 @@ class ActiveFoxessController:
         schedule_confirmed = automation.free_charge_schedule_confirmed
         enabled = requested_enabled and schedule_confirmed
         window_active = self.coordinator._free_window_hours_remaining(now) > 0  # noqa: SLF001
-        configured_max = self._configured(
-            CONF_INVERTER_CHARGE_LIMIT_KW,
-            DEFAULT_INVERTER_CHARGE_LIMIT_KW,
+        configured_max = max(
+            self.coordinator.runtime_config.inverter.charge_limit_kw,
+            0.0,
         )
         charge_max = min(configured_max, self._entity_power_max(str(mapping[1])))
         source_available = (
@@ -343,9 +339,9 @@ class ActiveFoxessController:
         within_session_window = start_at <= now < finish_at
         source_available = self._export_source_available(str(mapping[0]))
         discharge_max = min(
-            self._configured(
-                CONF_INVERTER_DISCHARGE_LIMIT_KW,
-                DEFAULT_INVERTER_DISCHARGE_LIMIT_KW,
+            max(
+                self.coordinator.runtime_config.inverter.discharge_limit_kw,
+                0.0,
             ),
             self._entity_power_max(str(mapping[2])),
         )
