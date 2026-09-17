@@ -219,6 +219,11 @@ Status here describes behavioral parity, not merely the presence of code.
   retain a visible bounded-retry fault that continues blocking automatic
   inverter control if restoration cannot be confirmed. Completed in v0.12.17.
 
+- [x] Apply Safety Lock and the Local Modbus/mapping gates to persisted manual
+  diagnostic restoration. Reload, restart, or unload must issue zero service
+  calls while a no-write gate is active, retain the visible cleanup obligation,
+  and preserve all bounded attempts for a later eligible retry.
+
 - [x] Do not reassert Force Charge after a confirmed active battery-charge
   session observes a complete external restoration to Self Use with both force
   targets cleared. Persist a completed-for-window hold so an inverter/BMS

@@ -63,6 +63,10 @@ its own bounded sessions. It clears the opposite force target before starting
 and clears both targets after restoring Self Use, so finding those two setpoints
 at zero after an HEO-controlled session can be expected. HEO does not currently
 write the FoxESS Modbus Import Power Limit or Export Power Limit entities.
+Safety Lock also blocks recovery writes for a persisted manual diagnostic after
+reload or restart. The cleanup obligation remains visible and retryable without
+consuming its bounded attempt allowance until Safety Lock is off, Local Modbus
+owns control, and all three actuator mappings are complete.
 
 Automatic Local Modbus battery charging additionally requires the work-mode
 entity to advertise `Self Use` and `Force Charge`, a positive commissioned

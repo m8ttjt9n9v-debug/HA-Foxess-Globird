@@ -157,6 +157,35 @@ async def test_controller_blocks_diagnostic_when_cloud_scheduler_owns_inverter(h
         await controller.async_start("charge", 1.0, 1.0)
 
 
+@pytest.mark.parametrize(
+    ("config", "expected_reason"),
+    [
+        (
+            {CONF_FOXESS_CONTROL_OWNER: FOXESS_CONTROL_OWNER_CLOUD},
+            "restore_blocked_control_owner",
+        ),
+        (
+            {CONF_FOXESS_FORCE_DISCHARGE_POWER: ""},
+            "restore_blocked_incomplete_mapping",
+        ),
+    ],
+)
+async def test_persisted_restore_respects_control_and_mapping_gates(
+    hass, config, expected_reason
+) -> None:
+    coordinator = _coordinator(**config)
+    controller = ManualTestController(hass, coordinator)
+    controller.active_kind = "discharge"
+    controller.phase = "stopping"
+
+    await controller._async_reconcile_restore("integration_restarted")
+
+    assert controller.status == "stopping_discharge"
+    assert controller.restore_attempts == 0
+    assert controller.last_reason == expected_reason
+    controller._cancel_callbacks()
+
+
 async def test_controller_blocks_charge_outside_free_window(hass) -> None:
     coordinator = _coordinator(free_window_hours=0.0)
     controller = ManualTestController(hass, coordinator)

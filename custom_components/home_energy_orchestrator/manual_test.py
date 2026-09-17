@@ -279,6 +279,14 @@ class ManualTestController:
         """Confirm restoration or issue one bounded retry."""
         if not self.is_active:
             return
+        if blocked_reason := self._restore_gate_reason():
+            self.phase = "stopping"
+            self.last_reason = blocked_reason
+            await self._async_save()
+            self.coordinator.async_update_listeners()
+            if schedule_retry:
+                self._schedule_restore(reason)
+            return
         try:
             observation = self._observation()
         except ManualTestError:
@@ -453,6 +461,26 @@ class ManualTestController:
             raise ManualTestError(
                 "stop the active automatic FoxESS session before a diagnostic test"
             )
+
+    def _restore_gate_reason(self) -> str | None:
+        """Return the no-write reason for a persisted restoration obligation."""
+        owner = self.coordinator.config.get(
+            CONF_FOXESS_CONTROL_OWNER, DEFAULT_FOXESS_CONTROL_OWNER
+        )
+        if owner != FOXESS_CONTROL_OWNER_MODBUS:
+            return "restore_blocked_control_owner"
+        if self.coordinator.config.get(CONF_REHEARSAL_MODE, True):
+            return "restore_blocked_safety_lock"
+        if not all(
+            self.coordinator.config.get(key)
+            for key in (
+                CONF_FOXESS_WORK_MODE,
+                CONF_FOXESS_FORCE_CHARGE_POWER,
+                CONF_FOXESS_FORCE_DISCHARGE_POWER,
+            )
+        ):
+            return "restore_blocked_incomplete_mapping"
+        return None
 
     def _validate_power(self, kind: str, value: float) -> float:
         try:

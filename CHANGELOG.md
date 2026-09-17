@@ -9,6 +9,10 @@
 - Preserve user-renamed sensor and switch entity IDs, custom names, areas,
   labels, visibility and enabled state instead of reclaiming HEO's preferred
   object IDs during setup.
+- Honor Safety Lock, Local Modbus ownership, and complete actuator mappings
+  while recovering an interrupted manual diagnostic. Block every restoration
+  service call without consuming retry attempts, while retaining the persisted
+  cleanup obligation for a later eligible retry.
 
 ## 0.12.26 — restore GloBird scorecard mappings on upgrade
 

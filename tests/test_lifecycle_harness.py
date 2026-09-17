@@ -1088,3 +1088,63 @@ async def test_unfinished_manual_discharge_restores_and_clears_across_reload(
     hass.services.async_remove("number", "set_value")
     hass.services.async_remove("select", "select_option")
     harness.close()
+
+
+@pytest.mark.freeze_time("2026-09-17 02:30:00+00:00")
+async def test_safety_lock_blocks_persisted_manual_restore_on_setup_and_unload(
+    hass, monkeypatch
+) -> None:
+    """Safety Lock blocks every write while retaining diagnostic ownership."""
+    harness = LifecycleHarness(hass)
+    _register_foxess_services(hass, monkeypatch)
+    await _seed_foxess_states(harness, 80)
+    await harness.set_state(
+        "number.test_force_discharge",
+        "8",
+        {"unit_of_measurement": "kW", "max": 10},
+    )
+    await harness.set_state(
+        "select.test_work_mode",
+        "Force Discharge",
+        {"options": ["Self Use", "Force Discharge", "Force Charge"]},
+    )
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Locked interrupted diagnostic",
+        version=6,
+        data=_active_entry_data(
+            rehearsal_mode=True,
+            inverter_discharge_limit_kw=10.0,
+        ),
+    )
+    entry.add_to_hass(hass)
+    store_key = f"home_energy_orchestrator.{entry.entry_id}.manual_test"
+    await harness.save_store(
+        store_key,
+        {
+            "active_kind": "discharge",
+            "phase": "running",
+            "started_at": "2026-09-17T01:30:00+00:00",
+            "ends_at": "2026-09-17T03:30:00+00:00",
+            "restore_attempts": 0,
+            "last_restore_at": None,
+        },
+    )
+
+    await harness.setup(entry)
+
+    assert harness.service_calls == ()
+    controller = entry.runtime_data.manual_test
+    assert controller.phase == "stopping"
+    assert controller.restore_attempts == 0
+    assert controller.last_reason == "restore_blocked_safety_lock"
+    persisted = await harness.load_store(store_key)
+    assert persisted is not None
+    assert persisted["phase"] == "stopping"
+    assert persisted["restore_attempts"] == 0
+
+    await harness.unload(entry)
+    assert harness.service_calls == ()
+    hass.services.async_remove("number", "set_value")
+    hass.services.async_remove("select", "select_option")
+    harness.close()

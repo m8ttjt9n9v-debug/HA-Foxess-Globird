@@ -98,7 +98,10 @@ layers around the proven algorithm, not replacement algorithms.
   attempts persist across reload/restart. An interrupted test immediately
   enters bounded Self Use restoration on setup and remains visibly active until
   mapped mode plus both force targets confirm completion; an unconfirmed
-  restoration cannot silently release automatic inverter control.
+  restoration cannot silently release automatic inverter control. Safety Lock,
+  non-Local-Modbus ownership, or incomplete actuator mappings block restoration
+  service calls without consuming the bounded attempt allowance; the persisted
+  obligation remains visible and retryable.
 - A separately gated, default-off Local Modbus free-window Force Charge
   extension is implemented. It uses the configured 24-hour window, requires
   fresh SoC below target and remaining daily free-import allowance to start,
