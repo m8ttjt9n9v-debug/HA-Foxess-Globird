@@ -113,7 +113,7 @@ def test_sensor_specs_match_native_value_projection_keys() -> None:
         ]
         assert len(returns) == 1
         read_model_projections.append(returns[0].value)
-    assert len(read_model_projections) == 2
+    assert len(read_model_projections) == 3
     for read_model_projection in read_model_projections:
         projected_keys.update(
             ast.literal_eval(key)

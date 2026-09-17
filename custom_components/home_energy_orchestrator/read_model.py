@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from typing import TYPE_CHECKING
 
+from homeassistant.util import dt as dt_util
+
 from .const import FOXESS_CONTROL_OWNER_CLOUD
 from .planner.export import ExportPlan
 
@@ -211,6 +213,83 @@ class LearningReadModel:
 
 
 @dataclass(frozen=True, slots=True)
+class EvReadModel:
+    """Canonical EV entity-state presentation values."""
+
+    soc_percent: float | None
+    maximum_power_kw: float
+    control_status: str
+    target_current_a: float | None
+    requested_current_a: float | None
+    actual_current_a: float | None
+    target_limit_percent: float | None
+    applied_limit_percent: float | None
+    grid_average_a: float | None
+    actual_average_a: float | None
+    reconciliation_attempts: int
+    smart_recovery_phase: str
+    solar_spill_phase: str
+    solar_spill_current_a: float | None
+    solar_spill_surplus_kw: float | None
+    pre_free_phase: str
+    pre_free_planned_energy_kwh: float | None
+    pre_free_planned_start: datetime | None
+    pre_free_current_a: float | None
+    daily_backfill_status: str
+    daily_backfill_remaining_kwh: float | None
+    daily_backfill_delivered_kwh: float | None
+    daily_backfill_planned_energy_kwh: float | None
+    daily_backfill_shortfall_kwh: float | None
+    daily_backfill_planned_start: datetime | None
+    daily_backfill_current_a: float | None
+    daily_driving_energy_kwh: float | None
+    driving_p85_kwh: float | None
+    learning_samples: int
+    usable_capacity_kwh: float | None
+    free_window_soc_gain_percent: float | None
+    learned_charge_limit_percent: float | None
+    learning_status: str
+
+    def sensor_values(self) -> dict[str, object]:
+        """Project the existing EV entity states."""
+        return {
+            "ev_soc": self.soc_percent,
+            "ev_max_power": self.maximum_power_kw,
+            "ev_control_status": self.control_status,
+            "ev_current_target": self.target_current_a,
+            "ev_requested_current": self.requested_current_a,
+            "ev_actual_current": self.actual_current_a,
+            "ev_charge_limit_target": self.target_limit_percent,
+            "ev_applied_charge_limit": self.applied_limit_percent,
+            "ev_grid_current_average": self.grid_average_a,
+            "ev_actual_current_average": self.actual_average_a,
+            "ev_reconciliation_attempts": self.reconciliation_attempts,
+            "ev_smart_socket_recovery_status": self.smart_recovery_phase,
+            "ev_solar_spill_status": self.solar_spill_phase,
+            "ev_solar_spill_current_target": self.solar_spill_current_a,
+            "ev_solar_spill_surplus": self.solar_spill_surplus_kw,
+            "ev_pre_free_status": self.pre_free_phase,
+            "ev_pre_free_planned_energy": self.pre_free_planned_energy_kwh,
+            "ev_pre_free_planned_start": self.pre_free_planned_start,
+            "ev_pre_free_current_target": self.pre_free_current_a,
+            "ev_daily_backfill_status": self.daily_backfill_status,
+            "ev_daily_backfill_remaining": self.daily_backfill_remaining_kwh,
+            "ev_daily_backfill_delivered": self.daily_backfill_delivered_kwh,
+            "ev_daily_backfill_planned_energy": self.daily_backfill_planned_energy_kwh,
+            "ev_daily_backfill_shortfall": self.daily_backfill_shortfall_kwh,
+            "ev_daily_backfill_planned_start": self.daily_backfill_planned_start,
+            "ev_daily_backfill_current_target": self.daily_backfill_current_a,
+            "ev_daily_driving_energy": self.daily_driving_energy_kwh,
+            "ev_driving_p85": self.driving_p85_kwh,
+            "ev_driving_learning_samples": self.learning_samples,
+            "ev_usable_capacity": self.usable_capacity_kwh,
+            "ev_free_window_soc_gain": self.free_window_soc_gain_percent,
+            "ev_learned_charge_limit": self.learned_charge_limit_percent,
+            "ev_driving_learning_status": self.learning_status,
+        }
+
+
+@dataclass(frozen=True, slots=True)
 class SiteReadModel:
     """One immutable view of values shared by public presentation surfaces."""
 
@@ -227,13 +306,12 @@ class SiteReadModel:
     foxess_control_gate: str
     charging_status: str
     export_status: str
-    ev_control_status: str
+    ev: EvReadModel
     cost: CostReadModel
     scorecard: ScorecardReadModel
     learning: LearningReadModel
     zerohero_status: str
     latest_zerohero_status: str | None
-    ev_learning_samples: int
     ledger_status: str
     tariff_status: str
 
@@ -247,7 +325,6 @@ class SiteReadModel:
             "grid_power": self.grid_power_kw,
             "solar_power": self.solar_power_kw,
             "house_load": self.house_load_kw,
-            "ev_control_status": self.ev_control_status,
             "estimated_net_cost": _rounded(self.cost.calibrated_net_cost, 2),
             "measured_net_cost": _rounded(self.cost.measured_net_cost, 2),
             "forecast_yesterday_cost": self.scorecard.forecast_cost,
@@ -261,6 +338,7 @@ class SiteReadModel:
             "zerohero_planned_start": self.planned_export_start,
             "zerohero_export_status": self.export_status,
             **self.learning.sensor_values(),
+            **self.ev.sensor_values(),
         }
 
     def fleet_attributes(self, updated_at: datetime) -> dict[str, object]:
@@ -278,7 +356,7 @@ class SiteReadModel:
             "foxess_control_gate": self.foxess_control_gate,
             "charging_status": self.charging_status,
             "export_status": self.export_status,
-            "ev_control_status": self.ev_control_status,
+            "ev_control_status": self.ev.control_status,
             "forecast_cost": _rounded(self.cost.calibrated_net_cost, 2),
             "measured_cost": _rounded(self.cost.measured_net_cost, 2),
             "latest_actual_cost": _rounded(self.scorecard.actual_cost, 2),
@@ -287,7 +365,7 @@ class SiteReadModel:
             "latest_zerohero_status": self.latest_zerohero_status,
             "forecast_scorecard_status": self.scorecard.status,
             "house_learning_samples": self.learning.sample_count,
-            "ev_learning_samples": self.ev_learning_samples,
+            "ev_learning_samples": self.ev.learning_samples,
             "ledger_status": self.ledger_status,
             "tariff_status": self.tariff_status,
             "last_update": updated_at.isoformat(),
@@ -319,13 +397,132 @@ class SiteReadModel:
         }
 
 
-def build_site_read_model(coordinator: EnergyCoordinator) -> SiteReadModel:
+def _build_ev_read_model(
+    coordinator: EnergyCoordinator, now: datetime
+) -> EvReadModel:
+    """Build the EV state projection without changing controller decisions."""
+    snapshot = coordinator.snapshot
+    ledger = coordinator.data
+    controller = coordinator.ev_controller
+    if controller is None:
+        return EvReadModel(
+            soc_percent=None if snapshot is None else snapshot.ev_soc,
+            maximum_power_kw=ledger.ev_max_power_kw,
+            control_status="unavailable",
+            target_current_a=None,
+            requested_current_a=None,
+            actual_current_a=None,
+            target_limit_percent=None,
+            applied_limit_percent=None,
+            grid_average_a=None,
+            actual_average_a=None,
+            reconciliation_attempts=0,
+            smart_recovery_phase="unavailable",
+            solar_spill_phase="unavailable",
+            solar_spill_current_a=None,
+            solar_spill_surplus_kw=None,
+            pre_free_phase="unavailable",
+            pre_free_planned_energy_kwh=None,
+            pre_free_planned_start=None,
+            pre_free_current_a=None,
+            daily_backfill_status="disabled",
+            daily_backfill_remaining_kwh=None,
+            daily_backfill_delivered_kwh=None,
+            daily_backfill_planned_energy_kwh=None,
+            daily_backfill_shortfall_kwh=None,
+            daily_backfill_planned_start=None,
+            daily_backfill_current_a=None,
+            daily_driving_energy_kwh=None,
+            driving_p85_kwh=None,
+            learning_samples=0,
+            usable_capacity_kwh=None,
+            free_window_soc_gain_percent=None,
+            learned_charge_limit_percent=None,
+            learning_status="unavailable",
+        )
+    grid_average = controller.grid_average.result(now)
+    actual_average = controller.ev_average.result(now)
+    learned = controller.learned_charge_limit
+    pre_free_plan = controller.pre_free_plan
+    daily_plan = controller.daily_backfill_plan
+    return EvReadModel(
+        soc_percent=None if snapshot is None else snapshot.ev_soc,
+        maximum_power_kw=ledger.ev_max_power_kw,
+        control_status=controller.last_reason,
+        target_current_a=controller.target_current_a,
+        requested_current_a=controller.requested_current_a,
+        actual_current_a=controller.actual_current_a,
+        target_limit_percent=controller.target_limit_percent,
+        applied_limit_percent=controller.applied_limit_percent,
+        grid_average_a=grid_average.value,
+        actual_average_a=actual_average.value,
+        reconciliation_attempts=controller.reconciliation.attempts,
+        smart_recovery_phase=controller.smart_recovery.phase,
+        solar_spill_phase=controller.solar_spill.phase,
+        solar_spill_current_a=controller.solar_spill.current_a,
+        solar_spill_surplus_kw=controller.solar_spill.reconstructed_surplus_kw,
+        pre_free_phase=controller.pre_free_phase,
+        pre_free_planned_energy_kwh=(
+            None if pre_free_plan is None else pre_free_plan.planned_energy_kwh
+        ),
+        pre_free_planned_start=(
+            None if pre_free_plan is None else pre_free_plan.planned_start
+        ),
+        pre_free_current_a=controller.pre_free_current_a,
+        daily_backfill_status=(
+            "active"
+            if controller.daily_backfill_active
+            else daily_plan.phase
+            if daily_plan is not None
+            else "disabled"
+        ),
+        daily_backfill_remaining_kwh=(
+            None if daily_plan is None else daily_plan.remaining_allocation_kwh
+        ),
+        daily_backfill_delivered_kwh=controller.daily_backfill_delivered_kwh,
+        daily_backfill_planned_energy_kwh=(
+            None if daily_plan is None else daily_plan.planned_energy_kwh
+        ),
+        daily_backfill_shortfall_kwh=(
+            None if daily_plan is None else daily_plan.allocation_shortfall_kwh
+        ),
+        daily_backfill_planned_start=(
+            controller.daily_backfill_frozen_start
+            if controller.daily_backfill_active
+            else daily_plan.planned_start
+            if daily_plan is not None
+            else None
+        ),
+        daily_backfill_current_a=(
+            None if daily_plan is None else daily_plan.current_ceiling_a
+        ),
+        daily_driving_energy_kwh=controller.daily_driving_energy_kwh,
+        driving_p85_kwh=(
+            None if learned is None else learned.p85_daily_energy_kwh
+        ),
+        learning_samples=len(controller.driving_history.samples),
+        usable_capacity_kwh=(
+            None if learned is None else learned.usable_capacity_kwh
+        ),
+        free_window_soc_gain_percent=(
+            None if learned is None else learned.free_window_soc_gain_percent
+        ),
+        learned_charge_limit_percent=(
+            None if learned is None else learned.limit_percent
+        ),
+        learning_status="unavailable" if learned is None else learned.mode,
+    )
+
+
+def build_site_read_model(
+    coordinator: EnergyCoordinator, now: datetime | None = None
+) -> SiteReadModel:
     """Build one canonical presentation snapshot from coordinator-owned state."""
     ledger = coordinator.data
     snapshot = coordinator.snapshot
     telemetry = coordinator.telemetry
     controller = coordinator.active_controller
-    ev_controller = coordinator.ev_controller
+    now = now or dt_util.now()
     forecast = coordinator.optimistic_forecast
     plan = effective_export_plan(coordinator)
     candidate_plan = controller.export_plan if controller is not None else None
@@ -422,6 +619,7 @@ def build_site_read_model(coordinator: EnergyCoordinator) -> SiteReadModel:
         people_home=occupancy.people_home,
         all_people_away_for_hours=occupancy.all_people_away_for_hours,
     )
+    ev_model = _build_ev_read_model(coordinator, now)
     return SiteReadModel(
         orchestrator_status=control_mode(coordinator),
         battery_soc=None if snapshot is None else snapshot.battery_soc,
@@ -450,18 +648,13 @@ def build_site_read_model(coordinator: EnergyCoordinator) -> SiteReadModel:
             "unavailable" if controller is None else controller.charge_session.phase
         ),
         export_status=export_status(coordinator),
-        ev_control_status=(
-            "unavailable" if ev_controller is None else ev_controller.last_reason
-        ),
+        ev=ev_model,
         cost=cost,
         scorecard=scorecard_model,
         learning=learning_model,
         zerohero_status=ledger.zerohero_credit_status,
         latest_zerohero_status=(
             None if scorecard is None else scorecard.retailer_zerohero_status
-        ),
-        ev_learning_samples=(
-            0 if ev_controller is None else len(ev_controller.driving_history.samples)
         ),
         ledger_status=ledger.reason,
         tariff_status=ledger.tariff_reason,

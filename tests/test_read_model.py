@@ -55,6 +55,49 @@ def _coordinator() -> SimpleNamespace:
         active_controller=controller,
         ev_controller=SimpleNamespace(
             last_reason="free_window",
+            target_current_a=16.0,
+            requested_current_a=15.0,
+            actual_current_a=14.0,
+            target_limit_percent=90,
+            applied_limit_percent=89,
+            grid_average=SimpleNamespace(
+                result=lambda _now: SimpleNamespace(value=-2.5)
+            ),
+            ev_average=SimpleNamespace(
+                result=lambda _now: SimpleNamespace(value=14.5)
+            ),
+            reconciliation=SimpleNamespace(attempts=2),
+            smart_recovery=SimpleNamespace(phase="healthy"),
+            solar_spill=SimpleNamespace(
+                phase="tracking",
+                current_a=12.0,
+                reconstructed_surplus_kw=8.2,
+            ),
+            pre_free_phase="planned",
+            pre_free_plan=SimpleNamespace(
+                planned_energy_kwh=4.2,
+                planned_start=datetime(2026, 9, 17, 13, 30, tzinfo=UTC),
+            ),
+            pre_free_current_a=10.0,
+            daily_backfill_active=False,
+            daily_backfill_plan=SimpleNamespace(
+                phase="planned",
+                remaining_allocation_kwh=6.0,
+                planned_energy_kwh=5.5,
+                allocation_shortfall_kwh=0.5,
+                planned_start=datetime(2026, 9, 18, 5, 0, tzinfo=UTC),
+                current_ceiling_a=16.0,
+            ),
+            daily_backfill_delivered_kwh=1.25,
+            daily_backfill_frozen_start=None,
+            daily_driving_energy_kwh=9.5,
+            learned_charge_limit=SimpleNamespace(
+                p85_daily_energy_kwh=11.0,
+                usable_capacity_kwh=72.0,
+                free_window_soc_gain_percent=35.0,
+                limit_percent=82,
+                mode="learned",
+            ),
             driving_history=SimpleNamespace(samples=(1, 2, 3)),
         ),
         data=SimpleNamespace(
@@ -65,8 +108,13 @@ def _coordinator() -> SimpleNamespace:
             zerohero_credit_status="pending_window_completion",
             reason="ready",
             tariff_reason="ready",
+            ev_max_power_kw=11.04,
         ),
-        snapshot=SimpleNamespace(battery_soc=61.234, house_load_kw=1.23456),
+        snapshot=SimpleNamespace(
+            battery_soc=61.234,
+            house_load_kw=1.23456,
+            ev_soc=74.0,
+        ),
         telemetry=SimpleNamespace(
             battery_power=SimpleNamespace(value=-3.45678),
             grid_power=SimpleNamespace(value=-1.23456),
@@ -148,6 +196,42 @@ def test_site_read_model_projects_existing_sensor_and_fleet_values() -> None:
         "learning_status": "occupied_combined_p80",
         "heater_learning_samples": 5,
         "house_occupancy_state": "home",
+        "ev_soc": 74.0,
+        "ev_max_power": 11.04,
+        "ev_current_target": 16.0,
+        "ev_requested_current": 15.0,
+        "ev_actual_current": 14.0,
+        "ev_charge_limit_target": 90,
+        "ev_applied_charge_limit": 89,
+        "ev_grid_current_average": -2.5,
+        "ev_actual_current_average": 14.5,
+        "ev_reconciliation_attempts": 2,
+        "ev_smart_socket_recovery_status": "healthy",
+        "ev_solar_spill_status": "tracking",
+        "ev_solar_spill_current_target": 12.0,
+        "ev_solar_spill_surplus": 8.2,
+        "ev_pre_free_status": "planned",
+        "ev_pre_free_planned_energy": 4.2,
+        "ev_pre_free_planned_start": datetime(
+            2026, 9, 17, 13, 30, tzinfo=UTC
+        ),
+        "ev_pre_free_current_target": 10.0,
+        "ev_daily_backfill_status": "planned",
+        "ev_daily_backfill_remaining": 6.0,
+        "ev_daily_backfill_delivered": 1.25,
+        "ev_daily_backfill_planned_energy": 5.5,
+        "ev_daily_backfill_shortfall": 0.5,
+        "ev_daily_backfill_planned_start": datetime(
+            2026, 9, 18, 5, 0, tzinfo=UTC
+        ),
+        "ev_daily_backfill_current_target": 16.0,
+        "ev_daily_driving_energy": 9.5,
+        "ev_driving_p85": 11.0,
+        "ev_driving_learning_samples": 3,
+        "ev_usable_capacity": 72.0,
+        "ev_free_window_soc_gain": 35.0,
+        "ev_learned_charge_limit": 82,
+        "ev_driving_learning_status": "learned",
     }
     assert model.fleet_attributes(updated_at) == {
         "summary_schema_version": 1,
@@ -255,6 +339,35 @@ def test_candidate_export_remains_visible_while_effective_plan_is_withheld() -> 
     assert model.planned_export_duration_minutes is None
     assert model.planned_export_start is None
     assert model.export_status == "withheld_ev_below_target"
+
+
+def test_missing_ev_controller_preserves_unavailable_state_defaults() -> None:
+    coordinator = _coordinator()
+    coordinator.ev_controller = None
+
+    values = build_site_read_model(coordinator).ev.sensor_values()
+
+    assert values["ev_soc"] == 74.0
+    assert values["ev_max_power"] == 11.04
+    assert values["ev_control_status"] == "unavailable"
+    assert values["ev_reconciliation_attempts"] == 0
+    assert values["ev_smart_socket_recovery_status"] == "unavailable"
+    assert values["ev_daily_backfill_status"] == "disabled"
+    assert values["ev_driving_learning_samples"] == 0
+    assert values["ev_driving_learning_status"] == "unavailable"
+    assert values["ev_current_target"] is None
+
+
+def test_active_daily_backfill_exposes_frozen_start() -> None:
+    coordinator = _coordinator()
+    frozen_start = datetime(2026, 9, 18, 4, 45, tzinfo=UTC)
+    coordinator.ev_controller.daily_backfill_active = True
+    coordinator.ev_controller.daily_backfill_frozen_start = frozen_start
+
+    model = build_site_read_model(coordinator)
+
+    assert model.ev.daily_backfill_status == "active"
+    assert model.ev.daily_backfill_planned_start == frozen_start
 
 
 def test_site_read_model_is_immutable() -> None:

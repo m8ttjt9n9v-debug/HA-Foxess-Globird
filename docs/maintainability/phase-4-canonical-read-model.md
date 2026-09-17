@@ -37,11 +37,16 @@ The third seam adds a frozen learning/occupancy submodel shared by learning
 entities, occupancy and Status attributes, Fleet sample counts and redacted
 diagnostics. Sampling, learning selection and occupancy policy remain unchanged.
 
+The fourth seam adds a frozen EV state submodel for all EV entity states and
+Fleet EV summary values. It preserves missing-controller defaults and active
+session start precedence without moving EV control or command behavior.
+
 Work-item evidence:
 
 - [core SiteReadModel projection](work-item-core-read-model.md)
 - [accounting and scorecard read model](work-item-accounting-read-model.md)
 - [house learning and occupancy read model](work-item-learning-read-model.md)
+- [EV entity-state read model](work-item-ev-state-read-model.md)
 
 ## Work packages
 

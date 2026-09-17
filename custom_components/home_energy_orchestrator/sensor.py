@@ -76,16 +76,6 @@ class EnergySensor(CoordinatorEntity[EnergyCoordinator], SensorEntity):
     @property
     def native_value(self):
         ledger = self.coordinator.data
-        snapshot = self.coordinator.snapshot
-        ev_controller = self.coordinator.ev_controller
-        now = dt_util.now()
-        ev_grid_average = (
-            ev_controller.grid_average.result(now) if ev_controller is not None else None
-        )
-        ev_current_average = (
-            ev_controller.ev_average.result(now) if ev_controller is not None else None
-        )
-        ev_learning = ev_controller.learned_charge_limit if ev_controller is not None else None
         telemetry = self.coordinator.telemetry
         read_model = build_site_read_model(self.coordinator)
         values = {
@@ -96,120 +86,6 @@ class EnergySensor(CoordinatorEntity[EnergyCoordinator], SensorEntity):
             "grid_import": ledger.grid_import_kw,
             "grid_export": ledger.grid_export_kw,
             "site_grid_current": (None if telemetry is None else telemetry.site_grid_current.value),
-            "ev_soc": None if snapshot is None else snapshot.ev_soc,
-            "ev_max_power": ledger.ev_max_power_kw,
-            "ev_current_target": (
-                ev_controller.target_current_a if ev_controller is not None else None
-            ),
-            "ev_requested_current": (
-                ev_controller.requested_current_a if ev_controller is not None else None
-            ),
-            "ev_actual_current": (
-                ev_controller.actual_current_a if ev_controller is not None else None
-            ),
-            "ev_charge_limit_target": (
-                ev_controller.target_limit_percent if ev_controller is not None else None
-            ),
-            "ev_applied_charge_limit": (
-                ev_controller.applied_limit_percent if ev_controller is not None else None
-            ),
-            "ev_grid_current_average": (
-                ev_grid_average.value if ev_grid_average is not None else None
-            ),
-            "ev_actual_current_average": (
-                ev_current_average.value if ev_current_average is not None else None
-            ),
-            "ev_reconciliation_attempts": (
-                ev_controller.reconciliation.attempts if ev_controller is not None else 0
-            ),
-            "ev_smart_socket_recovery_status": (
-                ev_controller.smart_recovery.phase if ev_controller is not None else "unavailable"
-            ),
-            "ev_solar_spill_status": (
-                ev_controller.solar_spill.phase if ev_controller is not None else "unavailable"
-            ),
-            "ev_solar_spill_current_target": (
-                ev_controller.solar_spill.current_a if ev_controller is not None else None
-            ),
-            "ev_solar_spill_surplus": (
-                ev_controller.solar_spill.reconstructed_surplus_kw
-                if ev_controller is not None
-                else None
-            ),
-            "ev_pre_free_status": (
-                ev_controller.pre_free_phase if ev_controller is not None else "unavailable"
-            ),
-            "ev_pre_free_planned_energy": (
-                ev_controller.pre_free_plan.planned_energy_kwh
-                if ev_controller is not None and ev_controller.pre_free_plan is not None
-                else None
-            ),
-            "ev_pre_free_planned_start": (
-                ev_controller.pre_free_plan.planned_start
-                if ev_controller is not None and ev_controller.pre_free_plan is not None
-                else None
-            ),
-            "ev_pre_free_current_target": (
-                ev_controller.pre_free_current_a if ev_controller is not None else None
-            ),
-            "ev_daily_backfill_status": (
-                "active"
-                if ev_controller is not None and ev_controller.daily_backfill_active
-                else ev_controller.daily_backfill_plan.phase
-                if ev_controller is not None and ev_controller.daily_backfill_plan is not None
-                else "disabled"
-            ),
-            "ev_daily_backfill_remaining": (
-                ev_controller.daily_backfill_plan.remaining_allocation_kwh
-                if ev_controller is not None and ev_controller.daily_backfill_plan is not None
-                else None
-            ),
-            "ev_daily_backfill_delivered": (
-                ev_controller.daily_backfill_delivered_kwh if ev_controller is not None else None
-            ),
-            "ev_daily_backfill_planned_energy": (
-                ev_controller.daily_backfill_plan.planned_energy_kwh
-                if ev_controller is not None and ev_controller.daily_backfill_plan is not None
-                else None
-            ),
-            "ev_daily_backfill_shortfall": (
-                ev_controller.daily_backfill_plan.allocation_shortfall_kwh
-                if ev_controller is not None and ev_controller.daily_backfill_plan is not None
-                else None
-            ),
-            "ev_daily_backfill_planned_start": (
-                ev_controller.daily_backfill_frozen_start
-                if ev_controller is not None and ev_controller.daily_backfill_active
-                else ev_controller.daily_backfill_plan.planned_start
-                if ev_controller is not None and ev_controller.daily_backfill_plan is not None
-                else None
-            ),
-            "ev_daily_backfill_current_target": (
-                ev_controller.daily_backfill_plan.current_ceiling_a
-                if ev_controller is not None and ev_controller.daily_backfill_plan is not None
-                else None
-            ),
-            "ev_daily_driving_energy": (
-                ev_controller.daily_driving_energy_kwh if ev_controller is not None else None
-            ),
-            "ev_driving_p85": (
-                ev_learning.p85_daily_energy_kwh if ev_learning is not None else None
-            ),
-            "ev_driving_learning_samples": (
-                len(ev_controller.driving_history.samples) if ev_controller is not None else 0
-            ),
-            "ev_usable_capacity": (
-                ev_learning.usable_capacity_kwh if ev_learning is not None else None
-            ),
-            "ev_free_window_soc_gain": (
-                ev_learning.free_window_soc_gain_percent if ev_learning is not None else None
-            ),
-            "ev_learned_charge_limit": (
-                ev_learning.limit_percent if ev_learning is not None else None
-            ),
-            "ev_driving_learning_status": (
-                ev_learning.mode if ev_learning is not None else "unavailable"
-            ),
             "free_energy_remaining": ledger.free_energy_remaining_kwh,
             "daily_import": ledger.daily_import_kwh,
             "free_window_import": ledger.free_window_import_kwh,
