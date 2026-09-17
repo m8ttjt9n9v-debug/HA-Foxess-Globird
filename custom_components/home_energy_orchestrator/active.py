@@ -52,6 +52,7 @@ from .planner.foxess_ownership import (
     FoxessOwnershipContext,
     evaluate_foxess_ownership,
 )
+from .planner.foxess_recovery import mark_foxess_source_unavailable
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -448,26 +449,16 @@ class ActiveFoxessController:
         return True
 
     async def _async_mark_sessions_source_unavailable(self, now: datetime) -> None:
-        if self.charge_session.phase in {
-            "starting",
-            "active",
-            "stopping",
-            "recovering",
-        }:
-            self.charge_session = ChargeSessionState(
-                "recovering",
-                self.charge_session.requested_power_kw,
-                self.charge_session.attempts,
-                self.charge_session.last_command_at or now,
-            )
+        recovery = mark_foxess_source_unavailable(
+            self.charge_session,
+            self.export_session,
+            now,
+        )
+        self.charge_session = recovery.charge_session
+        self.export_session = recovery.export_session
+        if recovery.save_charge:
             await self._charge_repository.async_save(self.charge_session)
-        if self.export_session.phase != "idle":
-            self.export_session = ExportSessionState(
-                "recovering",
-                self.export_session.requested_power_kw,
-                self.export_session.attempts,
-                self.export_session.last_command_at or now,
-            )
+        if recovery.save_export:
             await self._export_repository.async_save(self.export_session)
 
     async def _async_load_charge_session(self) -> None:
