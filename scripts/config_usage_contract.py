@@ -27,12 +27,16 @@ _CONFIG_ACCESS_METHODS = {
     "update_persisted_config_value",
 }
 _BOUNDARY_FILES = {"__init__.py", "config_flow.py", "configuration.py"}
+_RUNTIME_CONFIG_RECEIVERS = {"self.config", "self.coordinator.config"}
 
 
 class _UsageVisitor(ast.NodeVisitor):
     def __init__(self, source: Path, constants: dict[str, str]) -> None:
         self.source = source
         self.constants = constants
+        self.constants_by_value = {
+            value: name for name, value in sorted(constants.items())
+        }
         self.scope: list[str] = []
         self.records: list[dict[str, Any]] = []
 
@@ -42,10 +46,20 @@ class _UsageVisitor(ast.NodeVisitor):
         receiver: ast.expr,
         access: str,
     ) -> None:
-        if not isinstance(constant_node, ast.Name):
-            return
-        constant = constant_node.id
-        if constant not in self.constants:
+        receiver_text = ast.unparse(receiver)
+        constant: str | None = None
+        key: str | None = None
+        if isinstance(constant_node, ast.Name) and constant_node.id in self.constants:
+            constant = constant_node.id
+            key = self.constants[constant]
+        elif (
+            isinstance(constant_node, ast.Constant)
+            and isinstance(constant_node.value, str)
+            and receiver_text in _RUNTIME_CONFIG_RECEIVERS
+        ):
+            key = constant_node.value
+            constant = self.constants_by_value.get(key)
+        elif receiver_text not in _RUNTIME_CONFIG_RECEIVERS:
             return
         relative = self.source.relative_to(REPOSITORY_ROOT).as_posix()
         kind = (
@@ -56,14 +70,19 @@ class _UsageVisitor(ast.NodeVisitor):
         self.records.append(
             {
                 "constant": constant,
-                "key": self.constants[constant],
+                "key": key,
                 "source": relative,
                 "scope": ".".join(self.scope) or "<module>",
-                "receiver": ast.unparse(receiver),
+                "receiver": receiver_text,
                 "access": access,
                 "kind": kind,
                 "layer": (
                     "boundary" if self.source.name in _BOUNDARY_FILES else "runtime"
+                ),
+                **(
+                    {"key_expression": ast.unparse(constant_node)}
+                    if key is None
+                    else {}
                 ),
             }
         )
@@ -128,7 +147,7 @@ def build_config_usage_contract() -> dict[str, Any]:
         key=lambda item: (
             item["source"],
             item["scope"],
-            item["constant"],
+            item["constant"] or "",
             item["access"],
             item["receiver"],
         )
@@ -140,10 +159,13 @@ def build_config_usage_contract() -> dict[str, Any]:
     )
     by_source = Counter(item["source"] for item in records)
     return {
-        "schema_version": 2,
+        "schema_version": 3,
         "release_baseline": "0.12.26",
         "access_count": len(records),
-        "key_count": len({item["key"] for item in records}),
+        "key_count": len(
+            {item["key"] for item in records if item["key"] is not None}
+        ),
+        "dynamic_access_count": sum(item["key"] is None for item in records),
         "accesses_by_layer": dict(sorted(by_layer.items())),
         "accesses_by_kind": dict(sorted(by_kind.items())),
         "raw_accesses_by_layer": dict(sorted(raw_by_layer.items())),

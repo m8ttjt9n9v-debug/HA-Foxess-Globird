@@ -25,8 +25,10 @@ rehearsal are the acceptance gates. Rollback requires no data migration.
 
 ## Outcome
 
-- Direct raw mapping access is confined to setup/configuration boundaries;
-  all 11 runtime accesses are classified managed mutations.
+- All 11 named-constant runtime accesses are classified managed mutations.
+  A later v3 inventory audit found variable-key raw helpers that v2 did not
+  count; those are tracked separately and do not alter this work item's
+  persistence/live-snapshot replacement behavior.
 - Owned-switch and automatic-clear paths now share one persistence/live-snapshot
   replacement boundary while retaining legacy-helper removal semantics.
 - Acceptance passed: 167 focused tests, 579 full-suite tests, Ruff, all tracked

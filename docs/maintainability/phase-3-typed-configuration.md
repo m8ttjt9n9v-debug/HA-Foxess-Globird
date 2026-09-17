@@ -56,9 +56,12 @@ selectors, validation, migration behavior and the multi-page draft workflow.
   five-topology corpus now proves idempotent serialization and equivalent typed
   runtime meaning, while ten domain-invalid page scenarios prove the complete
   multi-page draft survives correction and final commit. The completion audit
-  also identified dynamic-key raw configuration helpers that the current AST
-  usage inventory does not yet count; Phase 3 therefore remains open until the
-  inventory detects them and those runtime reads are migrated.
+  also identified dynamic-key raw configuration helpers that the v2 AST usage
+  inventory did not count. Contract schema v3 now exposes 11 raw runtime
+  mapping operations (ten variable-key and one literal legacy fallback), in
+  addition to 11 managed mutation calls. Phase 3 therefore remains open until
+  those raw runtime reads are migrated and the central mutation implementation
+  is explicitly classified as the boundary it provides.
 
 ## Work packages
 

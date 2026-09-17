@@ -27,9 +27,27 @@ def test_config_usage_only_references_declared_keys() -> None:
     assert contract["access_count"] > 0
     assert contract["accesses_by_layer"]["runtime"] > 0
     assert contract["raw_accesses_by_layer"]["boundary"] > 0
-    assert "runtime" not in contract["raw_accesses_by_layer"]
+    assert contract["raw_accesses_by_layer"]["runtime"] > 0
     assert contract["accesses_by_kind"]["managed_mutation"] > 0
-    assert {item["key"] for item in contract["accesses"]} <= declared
+    assert {
+        item["key"] for item in contract["accesses"] if item["key"] is not None
+    } <= declared
+
+
+def test_dynamic_runtime_config_reads_are_inventory_visible() -> None:
+    """Variable-key helpers must not disappear from the raw-access metric."""
+    contract = build_config_usage_contract()
+    dynamic = [
+        item
+        for item in contract["accesses"]
+        if item["layer"] == "runtime" and item["key"] is None
+    ]
+    assert contract["dynamic_access_count"] == len(dynamic)
+    assert dynamic
+    assert {item["receiver"] for item in dynamic} <= {
+        "self.config",
+        "self.coordinator.config",
+    }
 
 
 def test_runtime_config_writes_use_the_coordinator_boundary() -> None:
@@ -39,16 +57,19 @@ def test_runtime_config_writes_use_the_coordinator_boundary() -> None:
         for item in build_config_usage_contract()["accesses"]
         if item["layer"] == "runtime"
     ]
-    assert not [
+    raw_writes = [
         item
         for item in runtime
-        if item["access"] == "subscript_store"
-        and item["receiver"].endswith("coordinator.config")
+        if item["kind"] == "raw_mapping"
+        and item["access"] in {"pop", "subscript_store"}
     ]
+    assert raw_writes
+    assert {
+        (item["scope"], item["receiver"]) for item in raw_writes
+    } == {("EnergyCoordinator.update_config_value", "self.config")}
     mutations = [item for item in runtime if item["kind"] == "managed_mutation"]
     assert len(mutations) == 11
     assert {item["access"] for item in mutations} <= {
         "update_config_value",
         "update_persisted_config_value",
     }
-    assert all(item["kind"] == "managed_mutation" for item in runtime)

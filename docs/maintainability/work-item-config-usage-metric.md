@@ -15,3 +15,11 @@ access it is intended to remove.
 - Do not change integration runtime behavior or public contracts.
 
 The reviewed generated baseline and contract tests provide the gate.
+
+## Audit correction
+
+The original v2 visitor recorded only named `CONF_*` arguments. Variable-key
+helpers and one literal legacy-key access were therefore omitted. The v3
+contract records those known coordinator-config receivers explicitly; raw
+runtime access is not boundary-only until the newly visible helpers are
+migrated.
