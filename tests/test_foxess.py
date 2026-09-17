@@ -6,7 +6,10 @@ import pytest
 
 from custom_components.home_energy_orchestrator.planner.foxess import (
     ControlDecision,
+    FoxessCommand,
+    FoxessCommandPlan,
     FoxessObservation,
+    apply_force_mode_command_delays,
     foxess_response_matches,
     plan_foxess_commands,
 )
@@ -24,6 +27,22 @@ def test_force_charge_orders_power_before_mode_and_clears_opposite_power() -> No
         ("set_charge_power", 10),
         ("select_mode", "Force Charge"),
     ]
+
+
+def test_force_mode_delay_applies_only_to_power_immediately_before_mode() -> None:
+    plan = FoxessCommandPlan(
+        (
+            FoxessCommand("set_discharge_power", 0),
+            FoxessCommand("set_charge_power", 10),
+            FoxessCommand("select_mode", "Force Charge"),
+        ),
+        "free_window_below_target",
+    )
+
+    delayed = apply_force_mode_command_delays(plan)
+
+    assert [command.wait_seconds for command in delayed.commands] == [0.0, 5.0, 0.0]
+    assert delayed.reason == plan.reason
 
 
 def test_restore_orders_mode_then_wait_then_clears_targets() -> None:

@@ -43,9 +43,8 @@ from .planner.ev_before_export import (
 from .planner.export import ExportPlan
 from .planner.export_session import ExportSessionState, advance_export_session
 from .planner.foxess import (
-    FoxessCommand,
-    FoxessCommandPlan,
     FoxessObservation,
+    apply_force_mode_command_delays,
 )
 from .planner.foxess_charge_policy import (
     FoxessChargePolicyContext,
@@ -294,7 +293,7 @@ class ActiveFoxessController:
                     entities,
                     allow_writes=True,
                 )
-            plan = self._force_mode_command_delays(transition.plan)
+            plan = apply_force_mode_command_delays(transition.plan)
             executed = await self._adapter.async_execute(plan)
             self.last_actions = executed
             self.writes_performed += len(executed)
@@ -444,7 +443,7 @@ class ActiveFoxessController:
                     entities,
                     allow_writes=True,
                 )
-            plan = self._force_mode_command_delays(transition.plan)
+            plan = apply_force_mode_command_delays(transition.plan)
             executed = await self._adapter.async_execute(plan)
             self.last_actions = executed
             self.writes_performed += len(executed)
@@ -608,18 +607,6 @@ class ActiveFoxessController:
             voltage_v=ev.voltage_v,
             phase_count=ev.phase_count,
         )
-
-    @staticmethod
-    def _force_mode_command_delays(plan: FoxessCommandPlan) -> FoxessCommandPlan:
-        commands = list(plan.commands)
-        for index, command in enumerate(commands[:-1]):
-            next_action = commands[index + 1].action
-            if command.action in {
-                "set_charge_power",
-                "set_discharge_power",
-            } and next_action == "select_mode":
-                commands[index] = FoxessCommand(command.action, command.value, 5.0)
-        return FoxessCommandPlan(tuple(commands), plan.reason)
 
     def _state(self, entity_id: str) -> str | None:
         reported = capture_ev_entity_feedback(self.hass, entity_id).reported_state

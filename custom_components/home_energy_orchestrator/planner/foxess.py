@@ -46,6 +46,27 @@ class FoxessCommandPlan:
     reason: str
 
 
+def apply_force_mode_command_delays(
+    plan: FoxessCommandPlan,
+    *,
+    settle_seconds: float = 5.0,
+) -> FoxessCommandPlan:
+    """Delay a mode selection only after its immediately preceding power write."""
+    commands = list(plan.commands)
+    for index, command in enumerate(commands[:-1]):
+        next_action = commands[index + 1].action
+        if command.action in {
+            "set_charge_power",
+            "set_discharge_power",
+        } and next_action == "select_mode":
+            commands[index] = FoxessCommand(
+                command.action,
+                command.value,
+                settle_seconds,
+            )
+    return FoxessCommandPlan(tuple(commands), plan.reason)
+
+
 def plan_foxess_commands(
     decision: ControlDecision,
     observation: FoxessObservation,
