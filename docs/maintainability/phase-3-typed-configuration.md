@@ -42,7 +42,11 @@ selectors, validation, migration behavior and the multi-page draft workflow.
   now use the same coordinator-owned persistence/snapshot boundary as every
   other operator mutation. Direct raw mapping access is therefore confined to
   setup/configuration boundaries; the 11 runtime accesses are all inventoried
-  managed mutations.
+  managed mutations. Every frozen v0.12.26 wizard field now has one generated,
+  immutable `FieldSpec` covering serialized key, semantic type, default,
+  selector, page/order, applicability, redaction and translation key. Exact
+  parity with the 124-field UI contract is enforced before the catalogue is
+  allowed to drive schema construction.
 
 ## Work packages
 
