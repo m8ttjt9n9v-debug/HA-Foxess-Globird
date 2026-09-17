@@ -70,6 +70,12 @@ Create reusable test infrastructure for:
 **Complete when:** one ordinary uninterrupted day and the same day with restart
 at each session phase produce equivalent final state and command obligations.
 
+Current deterministic evidence:
+`test_ordinary_day_has_restart_equivalent_command_obligations` runs the same
+charge → idle → export → idle day uninterrupted and with reloads at every
+starting, active and stopping boundary. Both traces must produce the same eight
+ordered FoxESS calls and finish with both persisted sessions idle.
+
 Ordered FoxESS traces are captured at the awaited Home Assistant service-call
 boundary. `EVENT_CALL_SERVICE` remains useful as evidence that calls occurred,
 but its asynchronously scheduled listeners are deliberately not used to infer

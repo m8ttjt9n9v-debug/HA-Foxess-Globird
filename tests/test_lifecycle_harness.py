@@ -1105,6 +1105,198 @@ async def test_inflight_session_phase_survives_unrelated_reconfiguration(
     harness.close()
 
 
+@pytest.mark.freeze_time("2026-09-17 00:05:00+00:00")
+@pytest.mark.parametrize("restart_at_each_phase", [False, True])
+async def test_ordinary_day_has_restart_equivalent_command_obligations(
+    hass, monkeypatch, restart_at_each_phase: bool
+) -> None:
+    """An ordinary charge/export day is invariant to phase-boundary reloads."""
+    harness = LifecycleHarness(hass)
+    _register_foxess_services(harness, monkeypatch)
+    await _seed_foxess_states(harness, 50)
+    now = [datetime(2026, 9, 17, 0, 5, tzinfo=UTC)]
+    monkeypatch.setattr(
+        "custom_components.home_energy_orchestrator.active.dt_util.now",
+        lambda: now[0],
+    )
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title=(
+            "Ordinary day with phase reloads"
+            if restart_at_each_phase
+            else "Ordinary uninterrupted day"
+        ),
+        version=6,
+        data=_active_entry_data(
+            automatic_charge_enabled=True,
+            automatic_export_enabled=True,
+            automatic_export_limit_kwh=25.0,
+            free_charge_schedule_confirmed=True,
+            free_charge_window_start="00:00:00",
+            free_charge_window_end="01:00:00",
+            bonus_window_start="18:00:00",
+            bonus_window_end="21:00:00",
+            force_discharge_offset_minutes=1.0,
+            battery_capacity_kwh=40.32,
+            inverter_charge_limit_kw=10.0,
+            inverter_discharge_limit_kw=10.0,
+            house_learning_fallback_kwh=0.0,
+        ),
+    )
+    entry.add_to_hass(hass)
+    charge_store = f"home_energy_orchestrator.{entry.entry_id}.charge_session"
+    export_store = f"home_energy_orchestrator.{entry.entry_id}.export_session"
+
+    await harness.setup(entry)
+
+    assert entry.runtime_data.active_controller.charge_session.phase == "starting"
+    if restart_at_each_phase:
+        await harness.reload(entry)
+        assert entry.runtime_data.active_controller.charge_session.phase == "starting"
+
+    await harness.set_state(
+        "number.test_force_charge",
+        "10",
+        {"unit_of_measurement": "kW", "max": 10},
+    )
+    await harness.set_state(
+        "select.test_work_mode",
+        "Force Charge",
+        {"options": ["Self Use", "Force Discharge", "Force Charge"]},
+    )
+    await entry.runtime_data.active_controller.async_reconcile()
+    assert entry.runtime_data.active_controller.charge_session.phase == "active"
+    if restart_at_each_phase:
+        await harness.reload(entry)
+        assert entry.runtime_data.active_controller.charge_session.phase == "active"
+
+    now[0] = datetime(2026, 9, 17, 1, 0, tzinfo=UTC)
+    await entry.runtime_data.active_controller.async_reconcile()
+    assert entry.runtime_data.active_controller.charge_session.phase == "stopping"
+    if restart_at_each_phase:
+        await harness.reload(entry)
+        assert entry.runtime_data.active_controller.charge_session.phase == "stopping"
+
+    await harness.set_state(
+        "number.test_force_charge",
+        "0",
+        {"unit_of_measurement": "kW", "max": 10},
+    )
+    await harness.set_state(
+        "select.test_work_mode",
+        "Self Use",
+        {"options": ["Self Use", "Force Discharge", "Force Charge"]},
+    )
+    await entry.runtime_data.active_controller.async_reconcile()
+    assert entry.runtime_data.active_controller.charge_session.phase == "idle"
+
+    now[0] = datetime(2026, 9, 17, 18, 45, tzinfo=UTC)
+    await harness.set_state(
+        "sensor.test_battery_soc", "100", {"unit_of_measurement": "%"}
+    )
+    await entry.runtime_data.active_controller.async_reconcile()
+    controller = entry.runtime_data.active_controller
+    assert controller.export_plan is not None
+    assert controller.export_session.phase == "starting"
+    if restart_at_each_phase:
+        await harness.reload(entry)
+        assert entry.runtime_data.active_controller.export_session.phase == "starting"
+
+    await harness.set_state(
+        "number.test_force_discharge",
+        "10",
+        {"unit_of_measurement": "kW", "max": 10},
+    )
+    await harness.set_state(
+        "select.test_work_mode",
+        "Force Discharge",
+        {"options": ["Self Use", "Force Discharge", "Force Charge"]},
+    )
+    await entry.runtime_data.active_controller.async_reconcile()
+    assert entry.runtime_data.active_controller.export_session.phase == "active"
+    if restart_at_each_phase:
+        await harness.reload(entry)
+        assert entry.runtime_data.active_controller.export_session.phase == "active"
+
+    now[0] = datetime(2026, 9, 17, 21, 1, tzinfo=UTC)
+    await entry.runtime_data.active_controller.async_reconcile()
+    assert entry.runtime_data.active_controller.export_session.phase == "stopping"
+    if restart_at_each_phase:
+        await harness.reload(entry)
+        assert entry.runtime_data.active_controller.export_session.phase == "stopping"
+
+    await harness.set_state(
+        "number.test_force_discharge",
+        "0",
+        {"unit_of_measurement": "kW", "max": 10},
+    )
+    await harness.set_state(
+        "select.test_work_mode",
+        "Self Use",
+        {"options": ["Self Use", "Force Discharge", "Force Charge"]},
+    )
+    await entry.runtime_data.active_controller.async_reconcile()
+
+    expected_calls = [
+        (
+            "number",
+            "set_value",
+            {"value": 10.0, "entity_id": "number.test_force_charge"},
+        ),
+        (
+            "select",
+            "select_option",
+            {"option": "Force Charge", "entity_id": "select.test_work_mode"},
+        ),
+        (
+            "select",
+            "select_option",
+            {"option": "Self Use", "entity_id": "select.test_work_mode"},
+        ),
+        (
+            "number",
+            "set_value",
+            {"value": 0.0, "entity_id": "number.test_force_charge"},
+        ),
+        (
+            "number",
+            "set_value",
+            {"value": 10.0, "entity_id": "number.test_force_discharge"},
+        ),
+        (
+            "select",
+            "select_option",
+            {"option": "Force Discharge", "entity_id": "select.test_work_mode"},
+        ),
+        (
+            "select",
+            "select_option",
+            {"option": "Self Use", "entity_id": "select.test_work_mode"},
+        ),
+        (
+            "number",
+            "set_value",
+            {"value": 0.0, "entity_id": "number.test_force_discharge"},
+        ),
+    ]
+    assert [
+        (call.domain, call.service, call.service_data)
+        for call in harness.service_calls
+    ] == expected_calls
+    assert entry.runtime_data.active_controller.charge_session.phase == "idle"
+    assert entry.runtime_data.active_controller.export_session.phase == "idle"
+    persisted_charge = await harness.load_store(charge_store)
+    persisted_export = await harness.load_store(export_store)
+    assert persisted_charge is not None
+    assert persisted_export is not None
+    assert persisted_charge["phase"] == "idle"
+    assert persisted_export["phase"] == "idle"
+    await harness.unload(entry)
+    hass.services.async_remove("number", "set_value")
+    hass.services.async_remove("select", "select_option")
+    harness.close()
+
+
 @pytest.mark.freeze_time("2026-09-17 00:30:00+00:00")
 async def test_export_cap_reconfiguration_keeps_sellable_energy_available(
     hass, monkeypatch
