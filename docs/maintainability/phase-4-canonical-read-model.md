@@ -48,6 +48,10 @@ The sixth seam moves EV Control Status attributes into the EV read model. It
 preserves all public attribute names and values, including the single `gate`
 attribute exposed when no EV controller exists.
 
+The seventh seam makes redacted support diagnostics consume the same EV
+facts, while retaining the configuration-derived control gate used when an EV
+controller is absent.
+
 Work-item evidence:
 
 - [core SiteReadModel projection](work-item-core-read-model.md)
@@ -56,6 +60,7 @@ Work-item evidence:
 - [EV entity-state read model](work-item-ev-state-read-model.md)
 - [cost entity-state read model](work-item-cost-state-read-model.md)
 - [EV control attribute read model](work-item-ev-control-attribute-read-model.md)
+- [EV support diagnostics read model](work-item-ev-diagnostics-read-model.md)
 
 ## Work packages
 

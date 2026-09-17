@@ -393,6 +393,38 @@ class EvReadModel:
             "learned_general_limit_percent": self.learned_charge_limit_percent,
         }
 
+    def actuator_diagnostics(self, control_gate: str) -> dict[str, object]:
+        """Project the existing EV portion of support diagnostics."""
+        return {
+            "ev_control_gate": control_gate,
+            "ev_writes_enabled": control_gate == "ready",
+            "ev_last_reason": self.control_status,
+            "ev_last_actions": self.last_actions,
+            "ev_writes_performed": self.writes_performed,
+            "ev_target_current_a": self.target_current_a,
+            "ev_target_limit_percent": self.target_limit_percent,
+            "ev_requested_current_a": self.requested_current_a,
+            "ev_actual_current_a": self.actual_current_a,
+            "ev_applied_limit_percent": self.applied_limit_percent,
+            "ev_charge_switch_on": self.charge_switch_on,
+            "ev_reconciliation_phase": self.reconciliation_phase,
+            "ev_reconciliation_attempts": self.reconciliation_attempts,
+            "ev_smart_socket_recovery_phase": self.smart_recovery_phase,
+            "ev_smart_socket_recovery_attempted": self.smart_recovery_attempted,
+            "ev_smart_socket_recovery_started_at": (
+                self.smart_recovery_started_at
+            ),
+            "ev_smart_socket_recovery_current_a": self.smart_recovery_current_a,
+            "ev_solar_spill_phase": self.solar_spill_phase,
+            "ev_solar_spill_current_a": self.solar_spill_current_a,
+            "ev_pre_free_session_active": self.pre_free_session_active,
+            "ev_pre_free_phase": self.pre_free_phase,
+            "ev_pre_free_planned_energy_kwh": self.pre_free_planned_energy_kwh,
+            "ev_pre_free_planned_start": self.pre_free_planned_start,
+            "ev_pre_free_current_a": self.pre_free_current_a,
+            "ev_outside_control_active": self.outside_control_active,
+        }
+
 
 @dataclass(frozen=True, slots=True)
 class SiteReadModel:

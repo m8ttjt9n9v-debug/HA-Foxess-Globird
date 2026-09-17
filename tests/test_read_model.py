@@ -443,6 +443,42 @@ def test_ev_control_attributes_preserve_existing_public_values() -> None:
     }
 
 
+def test_ev_actuator_diagnostics_preserve_existing_support_values() -> None:
+    model = build_site_read_model(_coordinator())
+
+    assert model.ev.actuator_diagnostics("ready") == {
+        "ev_control_gate": "ready",
+        "ev_writes_enabled": True,
+        "ev_last_reason": "free_window",
+        "ev_last_actions": ("set_current",),
+        "ev_writes_performed": 4,
+        "ev_target_current_a": 16.0,
+        "ev_target_limit_percent": 90,
+        "ev_requested_current_a": 15.0,
+        "ev_actual_current_a": 14.0,
+        "ev_applied_limit_percent": 89,
+        "ev_charge_switch_on": True,
+        "ev_reconciliation_phase": "confirming",
+        "ev_reconciliation_attempts": 2,
+        "ev_smart_socket_recovery_phase": "healthy",
+        "ev_smart_socket_recovery_attempted": True,
+        "ev_smart_socket_recovery_started_at": datetime(
+            2026, 9, 17, 9, 0, tzinfo=UTC
+        ),
+        "ev_smart_socket_recovery_current_a": 6.0,
+        "ev_solar_spill_phase": "tracking",
+        "ev_solar_spill_current_a": 12.0,
+        "ev_pre_free_session_active": True,
+        "ev_pre_free_phase": "planned",
+        "ev_pre_free_planned_energy_kwh": 4.2,
+        "ev_pre_free_planned_start": datetime(
+            2026, 9, 17, 13, 30, tzinfo=UTC
+        ),
+        "ev_pre_free_current_a": 10.0,
+        "ev_outside_control_active": True,
+    }
+
+
 def test_missing_ev_controller_preserves_unavailable_state_defaults() -> None:
     coordinator = _coordinator()
     coordinator.ev_controller = None
@@ -458,9 +494,16 @@ def test_missing_ev_controller_preserves_unavailable_state_defaults() -> None:
     assert values["ev_driving_learning_samples"] == 0
     assert values["ev_driving_learning_status"] == "unavailable"
     assert values["ev_current_target"] is None
-    assert build_site_read_model(coordinator).ev.control_attributes() == {
-        "gate": "unavailable"
-    }
+    ev_model = build_site_read_model(coordinator).ev
+    assert ev_model.control_attributes() == {"gate": "unavailable"}
+    diagnostics = ev_model.actuator_diagnostics("disabled")
+    assert diagnostics["ev_control_gate"] == "disabled"
+    assert diagnostics["ev_writes_enabled"] is False
+    assert diagnostics["ev_last_reason"] == "unavailable"
+    assert diagnostics["ev_last_actions"] == ()
+    assert diagnostics["ev_reconciliation_phase"] == "unavailable"
+    assert diagnostics["ev_smart_socket_recovery_phase"] == "unavailable"
+    assert diagnostics["ev_pre_free_session_active"] is False
 
 
 def test_active_daily_backfill_exposes_frozen_start() -> None:
