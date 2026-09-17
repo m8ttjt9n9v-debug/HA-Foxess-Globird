@@ -13,7 +13,6 @@ from .const import (
     CONF_EV_BEFORE_EXPORT_SOC_TARGET,
     CONF_INVERTER_CHARGE_LIMIT_KW,
     CONF_INVERTER_DISCHARGE_LIMIT_KW,
-    DEFAULT_EV_BEFORE_EXPORT_SOC_TARGET,
     DEFAULT_INVERTER_CHARGE_LIMIT_KW,
     DEFAULT_INVERTER_DISCHARGE_LIMIT_KW,
 )
@@ -62,15 +61,7 @@ class EvBeforeExportTargetNumber(CoordinatorEntity[EnergyCoordinator], NumberEnt
 
     @property
     def native_value(self) -> float:
-        try:
-            return float(
-                self.coordinator.config.get(
-                    CONF_EV_BEFORE_EXPORT_SOC_TARGET,
-                    DEFAULT_EV_BEFORE_EXPORT_SOC_TARGET,
-                )
-            )
-        except (TypeError, ValueError):
-            return DEFAULT_EV_BEFORE_EXPORT_SOC_TARGET
+        return self.coordinator.runtime_config.ev_preferences.before_export_soc_target
 
     async def async_set_native_value(self, value: float) -> None:
         target = min(max(float(value), 0.0), 100.0)

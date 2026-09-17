@@ -19,9 +19,6 @@ from .const import (
     CONF_EV_CHARGE_TO_FULL_ENABLED,
     CONF_FREE_CHARGE_SCHEDULE_CONFIRMED,
     CONF_REHEARSAL_MODE,
-    DEFAULT_AUTOMATIC_CHARGE_ENABLED,
-    DEFAULT_EV_BEFORE_EXPORT_ENABLED,
-    DEFAULT_EV_CHARGE_TO_FULL_ENABLED,
 )
 from .coordinator import EnergyCoordinator
 from .entity_catalogue import (
@@ -79,7 +76,7 @@ class SafetyLockSwitch(CoordinatorEntity[EnergyCoordinator], SwitchEntity):
     @property
     def is_on(self) -> bool:
         """Return true when the no-write interlock is engaged."""
-        return bool(self.coordinator.config.get(CONF_REHEARSAL_MODE, True))
+        return self.coordinator.runtime_config.automation.safety_lock
 
     async def async_turn_on(self, **kwargs: object) -> None:
         """Engage the interlock immediately and persist it."""
@@ -117,7 +114,7 @@ class AutomaticExportSwitch(CoordinatorEntity[EnergyCoordinator], SwitchEntity):
 
     @property
     def is_on(self) -> bool:
-        return bool(self.coordinator.config.get(CONF_AUTOMATIC_EXPORT_ENABLED, False))
+        return self.coordinator.runtime_config.automation.battery_export_enabled
 
     async def async_turn_on(self, **kwargs: object) -> None:
         await self._set_enabled(True)
@@ -156,12 +153,7 @@ class AutomaticChargeSwitch(CoordinatorEntity[EnergyCoordinator], SwitchEntity):
 
     @property
     def is_on(self) -> bool:
-        return bool(
-            self.coordinator.config.get(
-                CONF_AUTOMATIC_CHARGE_ENABLED,
-                DEFAULT_AUTOMATIC_CHARGE_ENABLED,
-            )
-        )
+        return self.coordinator.runtime_config.automation.battery_charge_enabled
 
     async def async_turn_on(self, **kwargs: object) -> None:
         if not self.coordinator.config.get(CONF_FREE_CHARGE_SCHEDULE_CONFIRMED, False):
@@ -204,9 +196,7 @@ class AutomaticEvControlSwitch(CoordinatorEntity[EnergyCoordinator], SwitchEntit
 
     @property
     def is_on(self) -> bool:
-        return bool(
-            self.coordinator.config.get(CONF_EV_AUTOMATIC_CONTROL_ENABLED, False)
-        )
+        return self.coordinator.runtime_config.automation.ev_control_enabled
 
     async def async_turn_on(self, **kwargs: object) -> None:
         await self._set_enabled(True)
@@ -248,12 +238,7 @@ class EvBeforeExportSwitch(CoordinatorEntity[EnergyCoordinator], SwitchEntity):
 
     @property
     def is_on(self) -> bool:
-        return bool(
-            self.coordinator.config.get(
-                CONF_EV_BEFORE_EXPORT_ENABLED,
-                DEFAULT_EV_BEFORE_EXPORT_ENABLED,
-            )
-        )
+        return self.coordinator.runtime_config.ev_preferences.before_export_enabled
 
     async def async_turn_on(self, **kwargs: object) -> None:
         await self._set_enabled(True)
@@ -298,12 +283,7 @@ class EvChargeToFullSwitch(CoordinatorEntity[EnergyCoordinator], SwitchEntity):
             return isinstance(legacy_entity, str) and self.hass.states.is_state(
                 legacy_entity, "on"
             )
-        return bool(
-            self.coordinator.config.get(
-                CONF_EV_CHARGE_TO_FULL_ENABLED,
-                DEFAULT_EV_CHARGE_TO_FULL_ENABLED,
-            )
-        )
+        return self.coordinator.runtime_config.ev_preferences.charge_to_full_enabled
 
     async def async_turn_on(self, **kwargs: object) -> None:
         """Request charge-to-full policy without bypassing any safety gate."""

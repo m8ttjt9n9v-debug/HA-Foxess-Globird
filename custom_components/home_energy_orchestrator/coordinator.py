@@ -13,6 +13,7 @@ from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.util import dt as dt_util
 
+from .configuration import RuntimeConfiguration
 from .const import (
     BATTERY_POSITIVE_CHARGE,
     BATTERY_POSITIVE_DISCHARGE,
@@ -170,6 +171,7 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
     def __init__(self, hass: HomeAssistant, config: dict[str, object], entry_id: str) -> None:
         super().__init__(hass, _LOGGER, name=DOMAIN, update_interval=timedelta(seconds=30))
         self.config = config
+        self.runtime_config = RuntimeConfiguration.from_mapping(config)
         self.entry_id = entry_id
         self.active_controller = None
         self.ev_controller = None
@@ -281,6 +283,7 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
     def update_config_value(self, key: str, value: object) -> None:
         """Update the live config mirror through one future typed-config boundary."""
         self.config[key] = value
+        self.runtime_config = RuntimeConfiguration.from_mapping(self.config)
 
     async def async_load_demand_history(self) -> None:
         """Load and validate the rolling learner history from HA storage."""

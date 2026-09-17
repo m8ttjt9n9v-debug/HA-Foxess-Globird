@@ -11,7 +11,6 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from . import EnergyConfigEntry
 from .const import (
     CONF_HOUSE_OCCUPANCY_MODE,
-    DEFAULT_HOUSE_OCCUPANCY_MODE,
     HOUSE_OCCUPANCY_MODES,
 )
 from .coordinator import EnergyCoordinator
@@ -43,15 +42,7 @@ class HouseOccupancyModeSelect(CoordinatorEntity[EnergyCoordinator], SelectEntit
     @property
     def current_option(self) -> str:
         """Return the configured mode using human-readable casing."""
-        mode = str(
-            self.coordinator.config.get(
-                CONF_HOUSE_OCCUPANCY_MODE,
-                DEFAULT_HOUSE_OCCUPANCY_MODE,
-            )
-        ).lower()
-        if mode not in HOUSE_OCCUPANCY_MODES:
-            mode = DEFAULT_HOUSE_OCCUPANCY_MODE
-        return mode.title()
+        return self.coordinator.runtime_config.house.occupancy_mode.title()
 
     async def async_select_option(self, option: str) -> None:
         """Persist a supported mode and immediately refresh policy evidence."""

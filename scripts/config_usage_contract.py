@@ -20,7 +20,7 @@ BASELINE_PATH = (
     / "config-usage-contract-v0.12.26.json"
 )
 _CONFIG_ACCESS_METHODS = {"get", "pop", "setdefault", "update_config_value"}
-_BOUNDARY_FILES = {"__init__.py", "config_flow.py"}
+_BOUNDARY_FILES = {"__init__.py", "config_flow.py", "configuration.py"}
 
 
 class _UsageVisitor(ast.NodeVisitor):
