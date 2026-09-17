@@ -20,6 +20,7 @@ from .const import (
     CONF_EV_CHARGE_TO_FULL,
     CONF_EV_CHARGE_TO_FULL_ENABLED,
     CONF_EV_CONTROL_COMMISSIONED,
+    CONF_EV_LOCATION_MODE,
     CONF_EV_PHASE_COUNT,
     CONF_EV_PROTECTED_BASELINE_A,
     CONF_EV_VOLTAGE,
@@ -49,6 +50,7 @@ from .const import (
     DEFAULT_EV_BEFORE_EXPORT_SOC_TARGET,
     DEFAULT_EV_CHARGE_TO_FULL_ENABLED,
     DEFAULT_EV_CONTROL_COMMISSIONED,
+    DEFAULT_EV_LOCATION_MODE,
     DEFAULT_EV_PHASE_COUNT,
     DEFAULT_EV_PROTECTED_BASELINE_A,
     DEFAULT_EV_VOLTAGE,
@@ -106,6 +108,7 @@ class EvConnectionSettings:
 
     configured: bool
     control_commissioned: bool
+    location_mode: str
     at_home_entity: str | None
     cable_connected_entity: str | None
     protected_baseline_a: float
@@ -273,6 +276,9 @@ class RuntimeConfiguration:
                     )
                 ),
                 control_commissioned=ev_control_commissioned,
+                location_mode=str(
+                    data.get(CONF_EV_LOCATION_MODE, DEFAULT_EV_LOCATION_MODE)
+                ),
                 at_home_entity=(
                     str(ev_at_home_entity) if ev_at_home_entity else None
                 ),

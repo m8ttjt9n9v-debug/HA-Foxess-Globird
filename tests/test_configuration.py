@@ -19,6 +19,7 @@ from custom_components.home_energy_orchestrator.const import (
     CONF_EV_CHARGE_TO_FULL,
     CONF_EV_CHARGE_TO_FULL_ENABLED,
     CONF_EV_CONTROL_COMMISSIONED,
+    CONF_EV_LOCATION_MODE,
     CONF_EV_PHASE_COUNT,
     CONF_EV_PROTECTED_BASELINE_A,
     CONF_EV_VOLTAGE,
@@ -36,6 +37,7 @@ from custom_components.home_energy_orchestrator.const import (
     CONF_SIGN_CONVENTIONS_VERIFIED,
     CONF_ZERO_IMPORT_THRESHOLD_KW,
     DEFAULT_EV_BEFORE_EXPORT_SOC_TARGET,
+    DEFAULT_EV_LOCATION_MODE,
     DEFAULT_EV_PHASE_COUNT,
     DEFAULT_EV_PROTECTED_BASELINE_A,
     DEFAULT_EV_VOLTAGE,
@@ -113,6 +115,7 @@ def test_runtime_configuration_uses_established_defaults() -> None:
     assert parsed.ev_preferences.legacy_charge_to_full_entity is None
     assert parsed.ev_connection.configured is False
     assert parsed.ev_connection.control_commissioned is False
+    assert parsed.ev_connection.location_mode == DEFAULT_EV_LOCATION_MODE
     assert parsed.ev_connection.at_home_entity is None
     assert parsed.ev_connection.cable_connected_entity is None
     assert (
@@ -214,7 +217,7 @@ def test_charge_to_full_snapshot_preserves_owned_switch_precedence_inputs(
 @pytest.mark.parametrize(
     ("data", "expected"),
     [
-        ({}, (False, False, None, None, 0.0, 230.0, 1.0)),
+        ({}, (False, False, "auto", None, None, 0.0, 230.0, 1.0)),
         (
             {
                 CONF_EV_CONTROL_COMMISSIONED: True,
@@ -227,6 +230,7 @@ def test_charge_to_full_snapshot_preserves_owned_switch_precedence_inputs(
             (
                 True,
                 True,
+                "auto",
                 "device_tracker.car",
                 "binary_sensor.car_cable",
                 1.0,
@@ -242,19 +246,33 @@ def test_charge_to_full_snapshot_preserves_owned_switch_precedence_inputs(
                 CONF_EV_VOLTAGE: "invalid",
                 CONF_EV_PHASE_COUNT: -3,
             },
-            (False, True, None, None, 0.0, 230.0, 0.0),
+            (False, True, "auto", None, None, 0.0, 230.0, 0.0),
+        ),
+        (
+            {CONF_EV_LOCATION_MODE: None},
+            (False, False, "None", None, None, 0.0, 230.0, 1.0),
         ),
     ],
 )
 def test_ev_connection_snapshot_preserves_keepalive_input_semantics(
     data: dict[str, object],
-    expected: tuple[bool, bool, str | None, str | None, float, float, float],
+    expected: tuple[
+        bool,
+        bool,
+        str,
+        str | None,
+        str | None,
+        float,
+        float,
+        float,
+    ],
 ) -> None:
     """Characterize legacy fallback, coercion and non-negative clamping."""
     ev = RuntimeConfiguration.from_mapping(data).ev_connection
     assert (
         ev.configured,
         ev.control_commissioned,
+        ev.location_mode,
         ev.at_home_entity,
         ev.cable_connected_entity,
         ev.protected_baseline_a,

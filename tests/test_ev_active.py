@@ -179,6 +179,51 @@ def _set_ev_states(hass: HomeAssistant) -> None:
     hass.states.async_set("switch.car_charge", "off")
 
 
+@pytest.mark.parametrize(
+    ("location_mode", "tracker_state", "cable_state", "expected"),
+    [
+        ("auto", "home", "on", (True, "ev_connected_at_home")),
+        ("auto", "not_home", "on", (False, "ev_location_not_confirmed_home")),
+        ("home", "unavailable", "on", (True, "ev_connected_at_home")),
+        ("away", "home", "on", (False, "ev_location_away")),
+        ("auto", "home", "off", (False, "ev_cable_not_connected")),
+    ],
+)
+def test_connected_at_home_preserves_location_mode_and_mapping_semantics(
+    hass: HomeAssistant,
+    location_mode: str,
+    tracker_state: str,
+    cable_state: str,
+    expected: tuple[bool, str],
+) -> None:
+    """Characterize the Home/Auto/Away boundary before further EV typing."""
+    _set_ev_states(hass)
+    hass.states.async_set("device_tracker.car", tracker_state)
+    hass.states.async_set("binary_sensor.car_cable", cable_state)
+    controller = ActiveEvController(
+        hass,
+        _coordinator(_controller_config(ev_location_mode=location_mode)),
+    )
+
+    assert controller._connected_at_home() == expected  # noqa: SLF001
+
+
+@pytest.mark.parametrize("entity_state", ["unknown", "unavailable"])
+def test_connected_at_home_fails_closed_on_unreadable_presence(
+    hass: HomeAssistant,
+    entity_state: str,
+) -> None:
+    """Unreadable Auto-mode presence evidence must never enable EV control."""
+    _set_ev_states(hass)
+    hass.states.async_set("device_tracker.car", entity_state)
+    controller = ActiveEvController(hass, _coordinator(_controller_config()))
+
+    assert controller._connected_at_home() == (  # noqa: SLF001
+        False,
+        "ev_location_not_confirmed_home",
+    )
+
+
 def test_allowance_does_not_cycle_when_whole_house_meter_includes_ev(
     hass: HomeAssistant,
 ) -> None:

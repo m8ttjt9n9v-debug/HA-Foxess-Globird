@@ -27,9 +27,7 @@ from .const import (
     CONF_EV_ALLOWANCE_GUARD_ENABLED,
     CONF_EV_ALLOWANCE_SAFETY_MARGIN,
     CONF_EV_ARRIVAL_RESERVE_SOC,
-    CONF_EV_AT_HOME,
     CONF_EV_BACKFILL_BUFFER_MINUTES,
-    CONF_EV_CABLE_CONNECTED,
     CONF_EV_CHARGE_EFFICIENCY,
     CONF_EV_CHARGE_LIMIT,
     CONF_EV_CHARGE_PATH,
@@ -48,7 +46,6 @@ from .const import (
     CONF_EV_FREE_WINDOW_SETTLE_MINUTES,
     CONF_EV_LEARNING_MINIMUM_SAMPLES,
     CONF_EV_LIFETIME_ENERGY,
-    CONF_EV_LOCATION_MODE,
     CONF_EV_MAX_CURRENT,
     CONF_EV_OUTSIDE_INVERTER_PERCENT,
     CONF_EV_PHASE_COUNT,
@@ -105,7 +102,6 @@ from .const import (
     DEFAULT_EV_FREE_WINDOW_PRIORITY,
     DEFAULT_EV_FREE_WINDOW_SETTLE_MINUTES,
     DEFAULT_EV_LEARNING_MINIMUM_SAMPLES,
-    DEFAULT_EV_LOCATION_MODE,
     DEFAULT_EV_OUTSIDE_INVERTER_PERCENT,
     DEFAULT_EV_PHASE_COUNT,
     DEFAULT_EV_PRE_FREE_ENABLED,
@@ -990,9 +986,16 @@ class ActiveEvController:
             CONF_EV_SMART_RECOVERY_NO_POWER_SECONDS,
             DEFAULT_EV_SMART_RECOVERY_NO_POWER_SECONDS,
         )
-        at_home_state = self.hass.states.get(str(self.coordinator.config.get(CONF_EV_AT_HOME, "")))
-        cable_state = self.hass.states.get(
-            str(self.coordinator.config.get(CONF_EV_CABLE_CONNECTED, ""))
+        connection = self.coordinator.runtime_config.ev_connection
+        at_home_state = (
+            self.hass.states.get(connection.at_home_entity)
+            if connection.at_home_entity
+            else None
+        )
+        cable_state = (
+            self.hass.states.get(connection.cable_connected_entity)
+            if connection.cable_connected_entity
+            else None
         )
         charge_switch_state = self.hass.states.get(
             str(self.coordinator.config.get(CONF_EV_CHARGE_SWITCH, ""))
@@ -1027,7 +1030,9 @@ class ActiveEvController:
             cloud_evidence_stable=cloud_stable,
             smart_path_selected=True,
             socket_on=smart.socket_on,
-            cable_connected=self._is_on(CONF_EV_CABLE_CONNECTED),
+            cable_connected=(
+                self._mapped_state(connection.cable_connected_entity) == "on"
+            ),
             charge_allowed=(self.target_current_a or 0.0) >= physical_minimum_a,
             actuator_writable=(
                 observation.current_maximum_a is not None
@@ -2085,12 +2090,13 @@ class ActiveEvController:
         return False
 
     def _connected_at_home(self) -> tuple[bool, str]:
-        mode = str(self.coordinator.config.get(CONF_EV_LOCATION_MODE, DEFAULT_EV_LOCATION_MODE))
+        connection = self.coordinator.runtime_config.ev_connection
+        mode = connection.location_mode
         if mode == "away":
             return False, "ev_location_away"
         if not self._home_control_active():
             return False, "ev_location_not_confirmed_home"
-        if self._entity_state(CONF_EV_CABLE_CONNECTED) != "on":
+        if self._mapped_state(connection.cable_connected_entity) != "on":
             return False, "ev_cable_not_connected"
         charging = self._entity_state(CONF_EV_CHARGING_STATE)
         if charging is None or charging == "disconnected":
@@ -2099,9 +2105,11 @@ class ActiveEvController:
 
     def _home_control_active(self) -> bool:
         """Port the pilot's explicit Home/Auto/Away current-write scope."""
-        mode = str(self.coordinator.config.get(CONF_EV_LOCATION_MODE, DEFAULT_EV_LOCATION_MODE))
+        connection = self.coordinator.runtime_config.ev_connection
+        mode = connection.location_mode
         return mode == "home" or (
-            mode == "auto" and self._entity_state(CONF_EV_AT_HOME) in {"home", "on"}
+            mode == "auto"
+            and self._mapped_state(connection.at_home_entity) in {"home", "on"}
         )
 
     def _grid_current_a(self) -> tuple[float, bool]:
@@ -2212,7 +2220,11 @@ class ActiveEvController:
 
     def _entity_state(self, key: str) -> str | None:
         entity = self.coordinator.config.get(key)
-        state = self.hass.states.get(str(entity)) if entity else None
+        return self._mapped_state(str(entity) if entity else None)
+
+    def _mapped_state(self, entity_id: str | None) -> str | None:
+        """Return one mapped entity state, excluding unreadable values."""
+        state = self.hass.states.get(entity_id) if entity_id else None
         if state is None or state.state.lower() in _UNKNOWN_STATES:
             return None
         return state.state.lower()
