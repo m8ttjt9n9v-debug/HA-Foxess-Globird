@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Literal, Protocol
 
+from homeassistant.core import HomeAssistant
 from homeassistant.helpers.storage import Store
 
 
@@ -73,3 +74,25 @@ class TypedValueStoreRepository[StateT]:
     async def async_save(self, state: StateT) -> None:
         """Save the domain encoder's existing payload without an extra wrapper."""
         await self.store.async_save(self.encode(state))
+
+
+def create_typed_value_repository[StateT](
+    hass: HomeAssistant,
+    *,
+    storage_version: int,
+    storage_key: str,
+    decode: Callable[[dict[str, object] | None], StateT],
+    encode: Callable[[StateT], dict[str, object]],
+    private: bool = True,
+) -> TypedValueStoreRepository[StateT]:
+    """Construct the raw Home Assistant Store behind its typed repository."""
+    return TypedValueStoreRepository(
+        Store(
+            hass,
+            storage_version,
+            storage_key,
+            private=private,
+        ),
+        decode=decode,
+        encode=encode,
+    )

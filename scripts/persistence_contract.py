@@ -22,6 +22,15 @@ def _assigned_name(node: ast.AnnAssign | ast.Assign) -> str:
     return ast.unparse(target)
 
 
+def _factory_store_attribute(assigned: str) -> str:
+    """Return the retained logical Store attribute for repository factories."""
+    if assigned == "self._repository":
+        return "self._store"
+    if assigned.endswith("_repository"):
+        return f"{assigned.removesuffix('_repository')}_store"
+    return assigned
+
+
 def build_persistence_contract() -> dict[str, object]:
     """Return every production Store construction and its compatibility fields."""
     stores: list[dict[str, object]] = []
@@ -31,12 +40,27 @@ def build_persistence_contract() -> dict[str, object]:
             if not isinstance(node, (ast.AnnAssign, ast.Assign)):
                 continue
             value = node.value
-            if not (
-                isinstance(value, ast.Call)
-                and isinstance(value.func, ast.Name)
-                and value.func.id == "Store"
-                and len(value.args) >= 3
-            ):
+            if not isinstance(value, ast.Call) or not isinstance(value.func, ast.Name):
+                continue
+            assigned = _assigned_name(node)
+            if value.func.id == "Store" and len(value.args) >= 3:
+                version_node = value.args[1]
+                storage_key_node = value.args[2]
+                private_default = False
+                attribute = assigned
+            elif value.func.id == "create_typed_value_repository":
+                keywords = {
+                    keyword.arg: keyword.value
+                    for keyword in value.keywords
+                    if keyword.arg is not None
+                }
+                if "storage_version" not in keywords or "storage_key" not in keywords:
+                    continue
+                version_node = keywords["storage_version"]
+                storage_key_node = keywords["storage_key"]
+                private_default = True
+                attribute = _factory_store_attribute(assigned)
+            else:
                 continue
             private = next(
                 (
@@ -44,14 +68,14 @@ def build_persistence_contract() -> dict[str, object]:
                     for keyword in value.keywords
                     if keyword.arg == "private"
                 ),
-                False,
+                private_default,
             )
             stores.append(
                 {
                     "source": path.relative_to(REPOSITORY_ROOT).as_posix(),
-                    "attribute": _assigned_name(node),
-                    "version": ast.literal_eval(value.args[1]),
-                    "storage_key_expression": ast.unparse(value.args[2]),
+                    "attribute": attribute,
+                    "version": ast.literal_eval(version_node),
+                    "storage_key_expression": ast.unparse(storage_key_node),
                     "private": private,
                 }
             )

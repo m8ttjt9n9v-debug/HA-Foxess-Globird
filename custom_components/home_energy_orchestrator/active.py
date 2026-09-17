@@ -13,7 +13,6 @@ from datetime import datetime, time, timedelta
 
 from homeassistant.core import CALLBACK_TYPE, HomeAssistant
 from homeassistant.helpers.event import async_track_time_interval
-from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
 from .const import (
@@ -27,7 +26,7 @@ from .foxess_observation_adapter import (
     FoxessFeedbackSnapshot,
     capture_foxess_feedback,
 )
-from .persistence import TypedValueStoreRepository
+from .persistence import create_typed_value_repository
 from .planner.charge_session import ChargeSessionState, advance_charge_session
 from .planner.ev_before_export import (
     EvBeforeExportDecision,
@@ -81,27 +80,23 @@ class ActiveFoxessController:
         self.ownership_status = "not_evaluated"
         self._charge_storage_status = "not_loaded"
         self._export_storage_status = "not_loaded"
-        self._export_store: Store[dict[str, object]] = Store(
+        self._export_repository = create_typed_value_repository(
             hass,
-            1,
-            "home_energy_orchestrator."
-            f"{getattr(coordinator, 'entry_id', 'runtime')}.export_session",
-            private=True,
-        )
-        self._charge_store: Store[dict[str, object]] = Store(
-            hass,
-            1,
-            "home_energy_orchestrator."
-            f"{getattr(coordinator, 'entry_id', 'runtime')}.charge_session",
-            private=True,
-        )
-        self._export_repository = TypedValueStoreRepository(
-            self._export_store,
+            storage_version=1,
+            storage_key=(
+                "home_energy_orchestrator."
+                f"{getattr(coordinator, 'entry_id', 'runtime')}.export_session"
+            ),
             decode=ExportSessionState.from_payload,
             encode=ExportSessionState.to_payload,
         )
-        self._charge_repository = TypedValueStoreRepository(
-            self._charge_store,
+        self._charge_repository = create_typed_value_repository(
+            hass,
+            storage_version=1,
+            storage_key=(
+                "home_energy_orchestrator."
+                f"{getattr(coordinator, 'entry_id', 'runtime')}.charge_session"
+            ),
             decode=ChargeSessionState.from_payload,
             encode=ChargeSessionState.to_payload,
         )

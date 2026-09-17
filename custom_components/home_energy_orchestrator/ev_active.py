@@ -11,7 +11,6 @@ from math import isfinite
 from homeassistant.components import persistent_notification
 from homeassistant.core import CALLBACK_TYPE, HomeAssistant
 from homeassistant.helpers.event import async_track_time_change, async_track_time_interval
-from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
 from .const import (
@@ -118,7 +117,7 @@ from .ev_observation_adapter import (
     capture_ev_feedback,
     ev_observation_entity_map,
 )
-from .persistence import TypedValueStoreRepository
+from .persistence import create_typed_value_repository
 from .planner.ev import (
     DIRECT_EVSE_MAX_ATTEMPTS,
     DIRECT_EVSE_RETRY_INTERVAL,
@@ -222,14 +221,10 @@ class ActiveEvController:
         self._unsub_driving_snapshot: CALLBACK_TYPE | None = None
         self._lock = asyncio.Lock()
         self._adapter: EvServiceAdapter | None = self._create_adapter()
-        self._store: Store[dict[str, object]] = Store(
+        self._repository = create_typed_value_repository(
             hass,
-            1,
-            f"home_energy_orchestrator.{coordinator.entry_id}.ev_control",
-            private=True,
-        )
-        self._repository = TypedValueStoreRepository(
-            self._store,
+            storage_version=1,
+            storage_key=f"home_energy_orchestrator.{coordinator.entry_id}.ev_control",
             decode=lambda payload: EvPersistenceState.from_payload(
                 payload, dt_util.now()
             ),

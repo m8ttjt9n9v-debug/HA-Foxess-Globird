@@ -9,6 +9,10 @@ from pathlib import Path
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 INTEGRATION_ROOT = REPOSITORY_ROOT / "custom_components" / "home_energy_orchestrator"
 REPOSITORY_SOURCE = INTEGRATION_ROOT / "persistence.py"
+ACTIVE_CONTROLLER_SOURCES = {
+    INTEGRATION_ROOT / "active.py",
+    INTEGRATION_ROOT / "ev_active.py",
+}
 
 
 def validate_persistence_boundary() -> None:
@@ -19,6 +23,22 @@ def validate_persistence_boundary() -> None:
             continue
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
         for node in ast.walk(tree):
+            if path in ACTIVE_CONTROLLER_SOURCES and (
+                (
+                    isinstance(node, ast.ImportFrom)
+                    and node.module == "homeassistant.helpers.storage"
+                    and any(alias.name == "Store" for alias in node.names)
+                )
+                or (
+                    isinstance(node, ast.Call)
+                    and isinstance(node.func, ast.Name)
+                    and node.func.id == "Store"
+                )
+            ):
+                relative = path.relative_to(REPOSITORY_ROOT)
+                violations.append(
+                    f"{relative}:{node.lineno}: raw Store dependency in active controller"
+                )
             if not (
                 isinstance(node, ast.Call)
                 and isinstance(node.func, ast.Attribute)

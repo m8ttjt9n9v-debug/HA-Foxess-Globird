@@ -715,7 +715,7 @@ async def test_export_session_latch_round_trips_through_ha_storage(hass):
     first.export_session = ExportSessionState(
         "recovering", 8.5, 2, datetime(2026, 9, 5, 20, 0, tzinfo=UTC)
     )
-    await first._export_store.async_save(first._export_state_payload())
+    await first._export_repository.async_save(first.export_session)
 
     restored = _loaded_controller(hass, coordinator)
     await restored._async_load_export_session()
@@ -1136,7 +1136,7 @@ async def test_charge_session_latch_round_trips_through_ha_storage(hass):
     first.charge_session = ChargeSessionState(
         "recovering", 8.5, 2, datetime(2026, 9, 10, 13, 0, tzinfo=UTC)
     )
-    await first._charge_store.async_save(first._charge_state_payload())
+    await first._charge_repository.async_save(first.charge_session)
 
     restored = _loaded_controller(hass, coordinator)
     await restored._async_load_charge_session()
@@ -1149,7 +1149,7 @@ async def test_completed_charge_session_round_trips_through_ha_storage(hass):
     coordinator.entry_id = "persisted-completed-charge-test"
     first = _loaded_controller(hass, coordinator)
     first.charge_session = ChargeSessionState("completed", 8.0, 0, None)
-    await first._charge_store.async_save(first._charge_state_payload())
+    await first._charge_repository.async_save(first.charge_session)
 
     restored = _loaded_controller(hass, coordinator)
     await restored._async_load_charge_session()
@@ -1358,8 +1358,8 @@ async def test_persisted_active_charge_restarts_after_ha_restart_feedback_settle
     before_restart.charge_session = ChargeSessionState(
         "active", 8.0, 0, now - timedelta(minutes=45)
     )
-    await before_restart._charge_store.async_save(  # noqa: SLF001
-        before_restart._charge_state_payload()  # noqa: SLF001
+    await before_restart._charge_repository.async_save(  # noqa: SLF001
+        before_restart.charge_session
     )
 
     restored = _loaded_controller(hass, coordinator)
