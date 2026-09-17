@@ -143,6 +143,7 @@ from .planner.ev import (
     reconcile_direct_evse,
     reconcile_smart_socket_recovery,
 )
+from .planner.ev_candidates import EvStageCandidate
 from .planner.ev_daily_backfill import (
     DailyBackfillInputs,
     DailyBackfillPlan,
@@ -240,6 +241,7 @@ class ActiveEvController:
         self.last_saved_at: datetime | None = None
         self.target_current_a: float | None = None
         self.target_limit_percent: float | None = None
+        self.free_window_candidate: EvStageCandidate | None = None
         self.requested_current_a: float | None = None
         self.applied_limit_percent: float | None = None
         self.charge_switch_on: bool | None = None
@@ -334,6 +336,7 @@ class ActiveEvController:
                 )
             )
             self.last_actions = ()
+            self.free_window_candidate = None
             grid_current, grid_valid = self._grid_current_a()
             ev_current, ev_valid = self._actual_ev_current_a()
             self.actual_current_a = ev_current if ev_valid else None
@@ -1089,22 +1092,23 @@ class ActiveEvController:
     ) -> bool:
         snapshot = self.coordinator.snapshot
         if snapshot is None:
-            self.last_reason = "site_snapshot_unavailable"
-            return False
+            return self._reject_free_window_candidate("site_snapshot_unavailable")
         grid = self.grid_average.result(now)
         ev = self.ev_average.result(now)
         current_minimum = self._physical_charging_minimum_a(observation)
         current_step = observation.current_step_a
         if current_minimum is None or current_step is None:
-            self.last_reason = "ev_actuator_metadata_unavailable"
-            return False
+            return self._reject_free_window_candidate(
+                "ev_actuator_metadata_unavailable"
+            )
         # The commissioned connector rating is the planning ceiling. Tessie's
         # transient number maximum is only a transport bound in the command
         # planner, matching the pilot's v1.4.19+ anti-ramp behavior.
         ceiling = self._path_ceiling_a()
         if ceiling <= 0:
-            self.last_reason = "ev_physical_ceiling_uncommissioned"
-            return False
+            return self._reject_free_window_candidate(
+                "ev_physical_ceiling_uncommissioned"
+            )
         baseline = min(
             max(
                 self._float(CONF_EV_PROTECTED_BASELINE_A, DEFAULT_EV_PROTECTED_BASELINE_A),
@@ -1136,8 +1140,7 @@ class ActiveEvController:
             self.coordinator.runtime_config.ev_telemetry.soc_entity
         )
         if vehicle_soc is None:
-            self.last_reason = "ev_soc_unavailable"
-            return False
+            return self._reject_free_window_candidate("ev_soc_unavailable")
         below_policy = vehicle_soc < policy_limit
         base = plan_free_window_current(
             FreeWindowCurrentInputs(
@@ -1205,8 +1208,9 @@ class ActiveEvController:
         limit_max = observation.limit_maximum_percent
         limit_step = observation.limit_step_percent
         if limit_min is None or limit_max is None or limit_step is None:
-            self.last_reason = "ev_charge_limit_metadata_unavailable"
-            return False
+            return self._reject_free_window_candidate(
+                "ev_charge_limit_metadata_unavailable"
+            )
         self.target_current_a = target_current
         self.target_limit_percent = plan_charge_limit_target(
             ChargeLimitInputs(
@@ -1223,7 +1227,25 @@ class ActiveEvController:
                 step_percent=limit_step,
             )
         )
+        self.free_window_candidate = EvStageCandidate(
+            stage="free_window",
+            eligible=True,
+            reason=self.decision_phase,
+            target_current_a=self.target_current_a,
+            target_limit_percent=self.target_limit_percent,
+            command_intent=("reconcile_current", "reconcile_charge_limit"),
+        )
         return True
+
+    def _reject_free_window_candidate(self, reason: str) -> bool:
+        """Record a shadow candidate rejection without changing legacy flow."""
+        self.last_reason = reason
+        self.free_window_candidate = EvStageCandidate(
+            stage="free_window",
+            eligible=False,
+            reason=reason,
+        )
+        return False
 
     def _allowance_target(
         self,

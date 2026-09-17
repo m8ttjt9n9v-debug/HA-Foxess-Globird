@@ -434,6 +434,18 @@ async def test_ev_runtime_writes_tessie_but_not_foxess_when_cloud_owns_inverter(
     assert controller.requested_current_a == 6
     assert controller.applied_limit_percent == 80
     assert controller.actual_current_a == 0
+    assert controller.free_window_candidate is not None
+    assert controller.free_window_candidate.eligible is True
+    assert controller.free_window_candidate.reason == controller.decision_phase
+    assert controller.free_window_candidate.target_current_a == controller.target_current_a
+    assert (
+        controller.free_window_candidate.target_limit_percent
+        == controller.target_limit_percent
+    )
+    assert controller.free_window_candidate.command_intent == (
+        "reconcile_current",
+        "reconcile_charge_limit",
+    )
     assert controller.last_actions == (
         "set_charge_limit",
         "set_charge_current",
@@ -441,6 +453,29 @@ async def test_ev_runtime_writes_tessie_but_not_foxess_when_cloud_owns_inverter(
     )
     assert controller.writes_performed == 3
     assert {event.data["domain"] for event in calls} == {"number", "switch"}
+
+
+def test_free_window_candidate_shadows_legacy_rejection(hass: HomeAssistant) -> None:
+    _set_ev_states(hass)
+    coordinator = _coordinator(_controller_config())
+    controller = ActiveEvController(hass, coordinator)
+    observation = controller._observation()  # noqa: SLF001
+    assert observation is not None
+    coordinator.snapshot = None
+
+    calculated = controller._calculate_target(  # noqa: SLF001
+        datetime(2026, 9, 7, 12, 1, tzinfo=UTC),
+        observation,
+        elapsed_minutes=0,
+        remaining_hours=3,
+    )
+
+    assert calculated is False
+    assert controller.last_reason == "site_snapshot_unavailable"
+    assert controller.free_window_candidate is not None
+    assert controller.free_window_candidate.eligible is False
+    assert controller.free_window_candidate.reason == controller.last_reason
+    assert controller.free_window_candidate.command_intent == ()
 
 
 async def test_soc_update_does_not_recalculate_whole_house_allowance_during_current_ramp(
