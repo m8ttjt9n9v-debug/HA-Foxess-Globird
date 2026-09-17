@@ -243,6 +243,7 @@ class ActiveEvController:
         self.target_limit_percent: float | None = None
         self.free_window_candidate: EvStageCandidate | None = None
         self.general_limit_candidate: EvStageCandidate | None = None
+        self.outside_stage_candidates: tuple[EvStageCandidate, ...] = ()
         self.requested_current_a: float | None = None
         self.applied_limit_percent: float | None = None
         self.charge_switch_on: bool | None = None
@@ -339,6 +340,7 @@ class ActiveEvController:
             self.last_actions = ()
             self.free_window_candidate = None
             self.general_limit_candidate = None
+            self.outside_stage_candidates = ()
             grid_current, grid_valid = self._grid_current_a()
             ev_current, ev_valid = self._actual_ev_current_a()
             self.actual_current_a = ev_current if ev_valid else None
@@ -1382,12 +1384,12 @@ class ActiveEvController:
         current_minimum = self._physical_charging_minimum_a(observation)
         current_step = observation.current_step_a
         if current_minimum is None or current_step is None:
-            self.last_reason = "ev_actuator_metadata_unavailable"
-            return False
+            return self._reject_outside_candidate("ev_actuator_metadata_unavailable")
         ceiling = self._path_ceiling_a()
         if ceiling <= 0:
-            self.last_reason = "ev_physical_ceiling_uncommissioned"
-            return False
+            return self._reject_outside_candidate(
+                "ev_physical_ceiling_uncommissioned"
+            )
         service_ceiling = self._outside_service_ceiling_a(
             ceiling,
             current_step=current_step,
@@ -1405,15 +1407,15 @@ class ActiveEvController:
             self.coordinator.runtime_config.ev_telemetry.soc_entity
         )
         if vehicle_soc is None:
-            self.last_reason = "ev_soc_unavailable"
-            return False
+            return self._reject_outside_candidate("ev_soc_unavailable")
         soft_limit = self._float(
             CONF_EV_FREE_WINDOW_CHARGE_LIMIT, DEFAULT_EV_FREE_WINDOW_CHARGE_LIMIT
         )
         charge_to_full = self._charge_to_full_requested()
         if charge_to_full and service_ceiling < current_minimum:
-            self.last_reason = "charge_to_full_service_headroom_unavailable"
-            return False
+            return self._reject_outside_candidate(
+                "charge_to_full_service_headroom_unavailable"
+            )
 
         # Paid charging is the explicit exception. Every automatic
         # outside-window policy otherwise yields immediately at the configured
@@ -1439,6 +1441,23 @@ class ActiveEvController:
             self.outside_target_active = False
             self.outside_stop_requested = observation.charge_switch_on
             self.outside_control_active = observation.charge_switch_on
+            self.outside_stage_candidates = (
+                EvStageCandidate(
+                    stage="battery_floor",
+                    eligible=observation.charge_switch_on,
+                    reason="battery_floor_reached",
+                    target_current_a=0.0,
+                    target_limit_percent=observation.charge_limit_percent,
+                    command_intent=("stop_charging",)
+                    if observation.charge_switch_on
+                    else (),
+                    persistence_transition=(
+                        "daily_backfill_stop_pending"
+                        if observation.charge_switch_on
+                        else "none"
+                    ),
+                ),
+            )
             if observation.charge_switch_on:
                 self.daily_backfill_stop_pending = True
                 self.daily_backfill_stop_attempts = 0
@@ -1610,6 +1629,14 @@ class ActiveEvController:
             self.pre_free_session = PreFreeSessionState()
             self.pre_free_phase = "disabled"
 
+        self.outside_stage_candidates = self._outside_candidates(
+            charge_to_full=charge_to_full,
+            service_ceiling=service_ceiling,
+            daily_current_a=daily_current_a,
+            baseline=baseline,
+            current_minimum=current_minimum,
+        )
+
         if charge_to_full:
             selected = EvCurrentDecision(
                 service_ceiling,
@@ -1703,6 +1730,94 @@ class ActiveEvController:
         self.decision_phase = selected.phase
         self.allowance_phase = "outside_free_window"
         return True
+
+    def _reject_outside_candidate(self, reason: str) -> bool:
+        """Record an outside-window input rejection without changing control."""
+        self.last_reason = reason
+        self.outside_stage_candidates = (
+            EvStageCandidate(
+                stage="outside_window",
+                eligible=False,
+                reason=reason,
+            ),
+        )
+        return False
+
+    def _outside_candidates(
+        self,
+        *,
+        charge_to_full: bool,
+        service_ceiling: float,
+        daily_current_a: float,
+        baseline: float,
+        current_minimum: float,
+    ) -> tuple[EvStageCandidate, ...]:
+        """Describe retained outside stages without selecting among them."""
+        daily_enabled = self._daily_backfill_enabled()
+        daily_reason = (
+            self.daily_backfill_plan.phase
+            if self.daily_backfill_plan is not None
+            else "inputs_unavailable"
+            if daily_enabled
+            else "disabled"
+        )
+        command_intent = ("reconcile_current", "reconcile_charge_limit")
+        solar_eligible = self.solar_spill.current_a >= current_minimum
+        return (
+            EvStageCandidate(
+                stage="charge_to_full",
+                eligible=charge_to_full,
+                reason=(
+                    "charge_to_full_paid_grid_override"
+                    if charge_to_full
+                    else "disabled"
+                ),
+                target_current_a=service_ceiling if charge_to_full else None,
+                command_intent=command_intent if charge_to_full else (),
+            ),
+            EvStageCandidate(
+                stage="daily_ready",
+                eligible=self.daily_backfill_active,
+                reason=daily_reason,
+                target_current_a=(daily_current_a if self.daily_backfill_active else None),
+                command_intent=(command_intent if self.daily_backfill_active else ()),
+                persistence_transition=(
+                    "daily_backfill_active"
+                    if self.daily_backfill_active
+                    else "daily_backfill_stop_pending"
+                    if self.daily_backfill_stop_pending
+                    else "none"
+                ),
+            ),
+            EvStageCandidate(
+                stage="solar_spill",
+                eligible=solar_eligible,
+                reason=self.solar_spill.phase,
+                target_current_a=(self.solar_spill.current_a if solar_eligible else None),
+                command_intent=command_intent if solar_eligible else (),
+            ),
+            EvStageCandidate(
+                stage="pre_free",
+                eligible=self.pre_free_session.active,
+                reason=self.pre_free_phase,
+                target_current_a=(
+                    self.pre_free_current_a if self.pre_free_session.active else None
+                ),
+                command_intent=(command_intent if self.pre_free_session.active else ()),
+                persistence_transition=(
+                    "pre_free_session_active"
+                    if self.pre_free_session.active
+                    else "none"
+                ),
+            ),
+            EvStageCandidate(
+                stage="protected_baseline",
+                eligible=baseline > 0,
+                reason="protected_baseline" if baseline > 0 else "disabled",
+                target_current_a=baseline if baseline > 0 else None,
+                command_intent=command_intent if baseline > 0 else (),
+            ),
+        )
 
     def _calculate_daily_backfill_plan(
         self,

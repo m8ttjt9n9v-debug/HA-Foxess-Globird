@@ -194,6 +194,14 @@ def _set_ev_states(hass: HomeAssistant) -> None:
     hass.states.async_set("switch.car_charge", "off")
 
 
+def _outside_candidate(controller: ActiveEvController, stage: str):
+    return next(
+        candidate
+        for candidate in controller.outside_stage_candidates
+        if candidate.stage == stage
+    )
+
+
 @pytest.mark.parametrize(
     ("location_mode", "tracker_state", "cable_state", "expected"),
     [
@@ -812,6 +820,10 @@ async def test_solar_spill_runtime_ports_measured_surplus_to_tessie(
     assert controller.solar_spill.reconstructed_surplus_kw == 2.5
     assert controller.target_current_a == 10
     assert controller.outside_control_active is True
+    solar = _outside_candidate(controller, "solar_spill")
+    assert solar.eligible is True
+    assert solar.reason == controller.solar_spill.phase
+    assert solar.target_current_a == controller.target_current_a
     assert {event.data["domain"] for event in calls} == {"number", "switch"}
 
 
@@ -938,6 +950,9 @@ async def test_opted_in_outside_policy_restores_baseline_after_reconnect(
     assert controller.target_current_a == 1
     assert controller.decision_phase == "protected_baseline"
     assert controller.outside_control_active is True
+    baseline = _outside_candidate(controller, "protected_baseline")
+    assert baseline.eligible is True
+    assert baseline.target_current_a == controller.target_current_a
     current_calls = [
         event
         for event in calls
@@ -981,6 +996,11 @@ async def test_pre_free_runtime_latches_latest_start_and_uses_export_budget(
     assert controller.pre_free_plan.planned_start == controller.pre_free_session.frozen_start
     assert controller.target_current_a == 16
     assert controller.decision_phase == "pre_free_or_solar_spill"
+    pre_free = _outside_candidate(controller, "pre_free")
+    assert pre_free.eligible is True
+    assert pre_free.reason == controller.pre_free_phase
+    assert pre_free.target_current_a == controller.pre_free_current_a
+    assert pre_free.persistence_transition == "pre_free_session_active"
 
 
 async def test_daily_ready_backfill_runs_with_foxcloud_owner_and_never_writes_foxess(
@@ -1017,6 +1037,11 @@ async def test_daily_ready_backfill_runs_with_foxcloud_owner_and_never_writes_fo
     assert controller.daily_backfill_plan.current_ceiling_a == 6
     assert controller.target_current_a == 6
     assert controller.decision_phase == "daily_ready_backfill"
+    daily = _outside_candidate(controller, "daily_ready")
+    assert daily.eligible is True
+    assert daily.reason == controller.daily_backfill_plan.phase
+    assert daily.target_current_a == controller.target_current_a
+    assert daily.persistence_transition == "daily_backfill_active"
     assert all(event.data["domain"] in {"number", "switch"} for event in calls)
     assert not any(event.data["domain"] == "foxess_modbus" for event in calls)
 
@@ -1047,6 +1072,10 @@ async def test_charge_to_full_starts_immediately_outside_free_and_bypasses_norma
     assert controller.target_current_a == 16
     assert controller.target_limit_percent == 100
     assert controller.decision_phase == "charge_to_full_paid_grid_override"
+    charge_to_full = _outside_candidate(controller, "charge_to_full")
+    assert charge_to_full.eligible is True
+    assert charge_to_full.reason == controller.decision_phase
+    assert charge_to_full.target_current_a == controller.target_current_a
     assert controller.last_actions == (
         "set_charge_limit",
         "set_charge_current",
