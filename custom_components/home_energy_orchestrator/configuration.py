@@ -16,6 +16,7 @@ from .const import (
     CONF_EV_BEFORE_EXPORT_SOC_TARGET,
     CONF_EV_CHARGE_TO_FULL_ENABLED,
     CONF_FOXESS_CONTROL_OWNER,
+    CONF_FREE_CHARGE_SCHEDULE_CONFIRMED,
     CONF_GRID_POWER_DIRECTION,
     CONF_HOUSE_OCCUPANCY_MODE,
     CONF_REHEARSAL_MODE,
@@ -58,6 +59,7 @@ class AutomationSettings:
     ev_control_enabled: bool
     safety_lock: bool
     control_owner: str
+    free_charge_schedule_confirmed: bool
 
 
 @dataclass(frozen=True, slots=True)
@@ -139,6 +141,9 @@ class RuntimeConfiguration:
                         CONF_FOXESS_CONTROL_OWNER,
                         DEFAULT_FOXESS_CONTROL_OWNER,
                     ),
+                ),
+                free_charge_schedule_confirmed=bool(
+                    data.get(CONF_FREE_CHARGE_SCHEDULE_CONFIRMED, False)
                 ),
             ),
             ev_preferences=EvPreferenceSettings(

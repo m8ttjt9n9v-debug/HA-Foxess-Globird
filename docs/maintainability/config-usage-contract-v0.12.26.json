@@ -1,5 +1,5 @@
 {
-  "access_count": 528,
+  "access_count": 519,
   "accesses": [
     {
       "access": "subscript_store",
@@ -3639,6 +3639,15 @@
     },
     {
       "access": "get",
+      "constant": "CONF_FREE_CHARGE_SCHEDULE_CONFIRMED",
+      "key": "free_charge_schedule_confirmed",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "RuntimeConfiguration.from_mapping",
+      "source": "custom_components/home_energy_orchestrator/configuration.py"
+    },
+    {
+      "access": "get",
       "constant": "CONF_GRID_POWER_DIRECTION",
       "key": "grid_power_positive_direction",
       "layer": "boundary",
@@ -3969,96 +3978,6 @@
       "receiver": "self.config",
       "scope": "EnergyCoordinator.occupancy_result",
       "source": "custom_components/home_energy_orchestrator/coordinator.py"
-    },
-    {
-      "access": "get",
-      "constant": "CONF_AUTOMATIC_CHARGE_ENABLED",
-      "key": "automatic_charge_enabled",
-      "layer": "runtime",
-      "receiver": "entry.data",
-      "scope": "async_get_config_entry_diagnostics",
-      "source": "custom_components/home_energy_orchestrator/diagnostics.py"
-    },
-    {
-      "access": "get",
-      "constant": "CONF_AUTOMATIC_CONTROL_ENABLED",
-      "key": "automatic_control_enabled",
-      "layer": "runtime",
-      "receiver": "entry.data",
-      "scope": "async_get_config_entry_diagnostics",
-      "source": "custom_components/home_energy_orchestrator/diagnostics.py"
-    },
-    {
-      "access": "get",
-      "constant": "CONF_AUTOMATIC_EXPORT_ENABLED",
-      "key": "automatic_export_enabled",
-      "layer": "runtime",
-      "receiver": "entry.data",
-      "scope": "async_get_config_entry_diagnostics",
-      "source": "custom_components/home_energy_orchestrator/diagnostics.py"
-    },
-    {
-      "access": "get",
-      "constant": "CONF_EV_AUTOMATIC_CONTROL_ENABLED",
-      "key": "ev_automatic_control_enabled",
-      "layer": "runtime",
-      "receiver": "entry.data",
-      "scope": "async_get_config_entry_diagnostics",
-      "source": "custom_components/home_energy_orchestrator/diagnostics.py"
-    },
-    {
-      "access": "get",
-      "constant": "CONF_EV_BEFORE_EXPORT_ENABLED",
-      "key": "ev_before_export_enabled",
-      "layer": "runtime",
-      "receiver": "entry.data",
-      "scope": "async_get_config_entry_diagnostics",
-      "source": "custom_components/home_energy_orchestrator/diagnostics.py"
-    },
-    {
-      "access": "get",
-      "constant": "CONF_EV_BEFORE_EXPORT_SOC_TARGET",
-      "key": "ev_before_export_soc_target_percent",
-      "layer": "runtime",
-      "receiver": "entry.data",
-      "scope": "async_get_config_entry_diagnostics",
-      "source": "custom_components/home_energy_orchestrator/diagnostics.py"
-    },
-    {
-      "access": "get",
-      "constant": "CONF_FOXESS_CONTROL_OWNER",
-      "key": "foxess_control_owner",
-      "layer": "runtime",
-      "receiver": "entry.data",
-      "scope": "async_get_config_entry_diagnostics",
-      "source": "custom_components/home_energy_orchestrator/diagnostics.py"
-    },
-    {
-      "access": "get",
-      "constant": "CONF_FREE_CHARGE_SCHEDULE_CONFIRMED",
-      "key": "free_charge_schedule_confirmed",
-      "layer": "runtime",
-      "receiver": "entry.data",
-      "scope": "async_get_config_entry_diagnostics",
-      "source": "custom_components/home_energy_orchestrator/diagnostics.py"
-    },
-    {
-      "access": "get",
-      "constant": "CONF_REHEARSAL_MODE",
-      "key": "rehearsal_mode",
-      "layer": "runtime",
-      "receiver": "entry.data",
-      "scope": "async_get_config_entry_diagnostics",
-      "source": "custom_components/home_energy_orchestrator/diagnostics.py"
-    },
-    {
-      "access": "get",
-      "constant": "CONF_SIGN_CONVENTIONS_VERIFIED",
-      "key": "sign_conventions_verified",
-      "layer": "runtime",
-      "receiver": "entry.data",
-      "scope": "async_get_config_entry_diagnostics",
-      "source": "custom_components/home_energy_orchestrator/diagnostics.py"
     },
     {
       "access": "get",
@@ -4755,16 +4674,15 @@
     }
   ],
   "accesses_by_layer": {
-    "boundary": 385,
-    "runtime": 143
+    "boundary": 386,
+    "runtime": 133
   },
   "accesses_by_source": {
     "custom_components/home_energy_orchestrator/__init__.py": 24,
     "custom_components/home_energy_orchestrator/active.py": 25,
     "custom_components/home_energy_orchestrator/config_flow.py": 347,
-    "custom_components/home_energy_orchestrator/configuration.py": 14,
+    "custom_components/home_energy_orchestrator/configuration.py": 15,
     "custom_components/home_energy_orchestrator/coordinator.py": 31,
-    "custom_components/home_energy_orchestrator/diagnostics.py": 10,
     "custom_components/home_energy_orchestrator/ev_active.py": 38,
     "custom_components/home_energy_orchestrator/ev_adapter.py": 10,
     "custom_components/home_energy_orchestrator/manual_test.py": 10,

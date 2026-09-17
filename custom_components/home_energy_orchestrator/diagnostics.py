@@ -8,24 +8,9 @@ from homeassistant.core import HomeAssistant
 
 from . import EnergyConfigEntry
 from .const import (
-    CONF_AUTOMATIC_CHARGE_ENABLED,
-    CONF_AUTOMATIC_CONTROL_ENABLED,
-    CONF_AUTOMATIC_EXPORT_ENABLED,
-    CONF_EV_AUTOMATIC_CONTROL_ENABLED,
-    CONF_EV_BEFORE_EXPORT_ENABLED,
-    CONF_EV_BEFORE_EXPORT_SOC_TARGET,
-    CONF_FOXESS_CONTROL_OWNER,
     CONF_FOXESS_FORCE_CHARGE_POWER,
     CONF_FOXESS_FORCE_DISCHARGE_POWER,
     CONF_FOXESS_WORK_MODE,
-    CONF_FREE_CHARGE_SCHEDULE_CONFIRMED,
-    CONF_REHEARSAL_MODE,
-    CONF_SIGN_CONVENTIONS_VERIFIED,
-    DEFAULT_AUTOMATIC_CHARGE_ENABLED,
-    DEFAULT_EV_BEFORE_EXPORT_ENABLED,
-    DEFAULT_EV_BEFORE_EXPORT_SOC_TARGET,
-    DEFAULT_FOXESS_CONTROL_OWNER,
-    DEFAULT_SIGN_CONVENTIONS_VERIFIED,
 )
 from .ev_adapter import ev_control_gate_status
 
@@ -44,7 +29,9 @@ async def async_get_config_entry_diagnostics(
         CONF_FOXESS_FORCE_CHARGE_POWER,
         CONF_FOXESS_FORCE_DISCHARGE_POWER,
     )
-    safety_locked = bool(entry.data.get(CONF_REHEARSAL_MODE, True))
+    runtime = coordinator.runtime_config
+    automation = runtime.automation
+    ev_preferences = runtime.ev_preferences
     active_controller = getattr(coordinator, "active_controller", None)
     ev_controller = getattr(coordinator, "ev_controller", None)
     foxess_gate = active_controller.gate_status if active_controller is not None else "unavailable"
@@ -65,25 +52,11 @@ async def async_get_config_entry_diagnostics(
         "entry": {"version": entry.version, "options": {"mode": "observe"}},
         "actuators": {
             "mapped_count": sum(bool(entry.data.get(key)) for key in actuator_keys),
-            "safety_lock_engaged": safety_locked,
-            "sign_conventions_verified": bool(
-                entry.data.get(
-                    CONF_SIGN_CONVENTIONS_VERIFIED,
-                    DEFAULT_SIGN_CONVENTIONS_VERIFIED,
-                )
-            ),
-            "foxess_automatic_control_enabled": bool(
-                entry.data.get(CONF_AUTOMATIC_CONTROL_ENABLED, False)
-            ),
-            "automatic_charge_enabled": bool(
-                entry.data.get(
-                    CONF_AUTOMATIC_CHARGE_ENABLED,
-                    DEFAULT_AUTOMATIC_CHARGE_ENABLED,
-                )
-            ),
-            "free_charge_schedule_confirmed": bool(
-                entry.data.get(CONF_FREE_CHARGE_SCHEDULE_CONFIRMED, False)
-            ),
+            "safety_lock_engaged": automation.safety_lock,
+            "sign_conventions_verified": runtime.electrical.verified,
+            "foxess_automatic_control_enabled": automation.master_enabled,
+            "automatic_charge_enabled": automation.battery_charge_enabled,
+            "free_charge_schedule_confirmed": automation.free_charge_schedule_confirmed,
             "charge_session_phase": (
                 active_controller.charge_session.phase
                 if active_controller is not None
@@ -94,32 +67,22 @@ async def async_get_config_entry_diagnostics(
                 if active_controller is not None
                 else None
             ),
-            "automatic_export_enabled": bool(entry.data.get(CONF_AUTOMATIC_EXPORT_ENABLED, False)),
+            "automatic_export_enabled": automation.battery_export_enabled,
             "automatic_export_effective": (
                 active_controller.export_effective_enabled
                 if active_controller is not None
                 else False
             ),
-            "ev_before_export_enabled": bool(
-                entry.data.get(
-                    CONF_EV_BEFORE_EXPORT_ENABLED,
-                    DEFAULT_EV_BEFORE_EXPORT_ENABLED,
-                )
-            ),
-            "ev_before_export_soc_target_percent": float(
-                entry.data.get(
-                    CONF_EV_BEFORE_EXPORT_SOC_TARGET,
-                    DEFAULT_EV_BEFORE_EXPORT_SOC_TARGET,
-                )
+            "ev_before_export_enabled": ev_preferences.before_export_enabled,
+            "ev_before_export_soc_target_percent": (
+                ev_preferences.before_export_soc_target
             ),
             "ev_before_export_status": (
                 active_controller.ev_before_export_decision.reason
                 if active_controller is not None
                 else "unavailable"
             ),
-            "ev_automatic_control_enabled": bool(
-                entry.data.get(CONF_EV_AUTOMATIC_CONTROL_ENABLED, False)
-            ),
+            "ev_automatic_control_enabled": automation.ev_control_enabled,
             "ev_control_gate": ev_gate,
             "ev_writes_enabled": ev_gate == "ready",
             "ev_last_reason": (
@@ -206,9 +169,7 @@ async def async_get_config_entry_diagnostics(
                 if active_controller is not None
                 else "unavailable"
             ),
-            "foxess_control_owner": entry.data.get(
-                CONF_FOXESS_CONTROL_OWNER, DEFAULT_FOXESS_CONTROL_OWNER
-            ),
+            "foxess_control_owner": automation.control_owner,
             "foxess_control_gate": foxess_gate,
             "foxess_writes_enabled": foxess_gate == "ready",
             "writes_enabled": foxess_gate == "ready",

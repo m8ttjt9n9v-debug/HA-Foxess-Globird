@@ -13,7 +13,10 @@ from homeassistant.helpers import entity_registry as er
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.home_energy_orchestrator import async_migrate_entry
-from custom_components.home_energy_orchestrator.const import DOMAIN
+from custom_components.home_energy_orchestrator.const import (
+    CONF_AUTOMATIC_CONTROL_ENABLED,
+    DOMAIN,
+)
 from custom_components.home_energy_orchestrator.coordinator import EnergyCoordinator
 from custom_components.home_energy_orchestrator.diagnostics import (
     async_get_config_entry_diagnostics,
@@ -196,6 +199,9 @@ async def test_setup_observes_normalised_values_and_never_calls_services(hass):
     assert diagnostics["actuators"]["free_charge_schedule_confirmed"] is False
     assert diagnostics["actuators"]["foxess_control_owner"] == "observer_only"
     assert diagnostics["actuators"]["writes_enabled"] is False
+    entry.runtime_data.update_config_value(CONF_AUTOMATIC_CONTROL_ENABLED, True)
+    diagnostics = await async_get_config_entry_diagnostics(hass, entry)
+    assert diagnostics["actuators"]["foxess_automatic_control_enabled"] is True
     assert service_calls == []
 
 
