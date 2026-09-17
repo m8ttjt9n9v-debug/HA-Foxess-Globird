@@ -448,6 +448,10 @@ async def test_ev_runtime_writes_tessie_but_not_foxess_when_cloud_owns_inverter(
     assert controller.requested_current_a == 6
     assert controller.applied_limit_percent == 80
     assert controller.actual_current_a == 0
+    assert controller.eligibility_route is not None
+    assert controller.eligibility_route.route == "eligible"
+    assert controller.policy_route is not None
+    assert controller.policy_route.route == "free_window"
     assert controller.free_window_candidate is not None
     assert controller.free_window_candidate.eligible is True
     assert controller.free_window_candidate.reason == controller.decision_phase
@@ -737,6 +741,8 @@ async def test_ev_runtime_only_applies_general_limit_outside_free_window(
     await hass.async_block_till_done()
 
     assert controller.last_reason == "outside_window_general_limit_awaiting_feedback"
+    assert controller.policy_route is not None
+    assert controller.policy_route.route == "general_limit"
     assert controller.general_limit_candidate is not None
     assert controller.general_limit_candidate.eligible is True
     assert controller.general_limit_candidate.reason == controller.last_reason
@@ -826,6 +832,8 @@ async def test_solar_spill_runtime_ports_measured_surplus_to_tessie(
     assert controller.solar_spill.reconstructed_surplus_kw == 2.5
     assert controller.target_current_a == 10
     assert controller.outside_control_active is True
+    assert controller.policy_route is not None
+    assert controller.policy_route.route == "outside_window"
     solar = _outside_candidate(controller, "solar_spill")
     assert solar.eligible is True
     assert solar.reason == controller.solar_spill.phase
@@ -1572,6 +1580,8 @@ async def test_smart_socket_runtime_turns_off_disconnected_socket_outside_window
     assert calls == ["switch.car_socket"]
     assert controller.last_actions == ("turn_off_smart_socket",)
     assert controller.last_reason == "smart_socket_no_charge_command"
+    assert controller.eligibility_route is not None
+    assert controller.eligibility_route.route == "disconnected_smart_socket"
     assert controller.smart_socket_candidate is not None
     assert controller.smart_socket_candidate.reason == controller.last_reason
     assert controller.smart_socket_candidate.command_intent == (

@@ -10,6 +10,8 @@ from custom_components.home_energy_orchestrator.planner.ev_candidates import (
     build_ev_stage_candidate,
     build_outside_stage_candidates,
     reject_ev_stage_candidate,
+    select_ev_eligibility_route,
+    select_ev_policy_route,
     select_outside_stage_candidate,
 )
 
@@ -205,3 +207,65 @@ def test_outside_selector_shadows_retained_collision_order(
     assert selected.stage == expected_stage
     assert selected.reason == expected_reason
     assert selected.target_current_a == expected_current
+
+
+@pytest.mark.parametrize(
+    (
+        "connected",
+        "observation_available",
+        "smart_path",
+        "home_control_active",
+        "expected_route",
+        "expected_reason",
+    ),
+    [
+        (False, True, True, True, "disconnected_smart_socket", "disconnected"),
+        (False, True, True, False, "blocked", "disconnected"),
+        (False, False, False, True, "blocked", "disconnected"),
+        (True, False, True, True, "blocked", "ev_actuator_feedback_unavailable"),
+        (True, True, False, True, "eligible", "ev_connected_at_home"),
+    ],
+)
+def test_eligibility_route_preserves_disconnected_cleanup_order(
+    connected,
+    observation_available,
+    smart_path,
+    home_control_active,
+    expected_route,
+    expected_reason,
+) -> None:
+    selected = select_ev_eligibility_route(
+        connected=connected,
+        connection_reason="disconnected",
+        observation_available=observation_available,
+        smart_path=smart_path,
+        home_control_active=home_control_active,
+    )
+
+    assert selected.route == expected_route
+    assert selected.reason == expected_reason
+
+
+@pytest.mark.parametrize(
+    ("in_window", "outside_enabled", "outside_active", "expected"),
+    [
+        (True, True, True, "free_window"),
+        (True, False, False, "free_window"),
+        (False, True, False, "outside_window"),
+        (False, False, True, "outside_window"),
+        (False, False, False, "general_limit"),
+    ],
+)
+def test_policy_route_preserves_free_outside_and_general_limit_order(
+    in_window,
+    outside_enabled,
+    outside_active,
+    expected,
+) -> None:
+    selected = select_ev_policy_route(
+        in_free_window=in_window,
+        outside_enabled=outside_enabled,
+        outside_control_active=outside_active,
+    )
+
+    assert selected.route == expected

@@ -28,6 +28,14 @@ class EvStageSelection:
 
 
 @dataclass(frozen=True, slots=True)
+class EvCycleRoute:
+    """One selected controller route before stage reconciliation."""
+
+    route: str
+    reason: str
+
+
+@dataclass(frozen=True, slots=True)
 class OutsideStageCandidateInputs:
     """Retained outside-stage results required to describe every candidate."""
 
@@ -198,3 +206,35 @@ def select_outside_stage_candidate(
         "protected_baseline",
         round(current("protected_baseline"), 3),
     )
+
+
+def select_ev_eligibility_route(
+    *,
+    connected: bool,
+    connection_reason: str,
+    observation_available: bool,
+    smart_path: bool,
+    home_control_active: bool,
+) -> EvCycleRoute:
+    """Preserve disconnected cleanup and actuator-feedback gate ordering."""
+    if not connected:
+        if smart_path and observation_available and home_control_active:
+            return EvCycleRoute("disconnected_smart_socket", connection_reason)
+        return EvCycleRoute("blocked", connection_reason)
+    if not observation_available:
+        return EvCycleRoute("blocked", "ev_actuator_feedback_unavailable")
+    return EvCycleRoute("eligible", "ev_connected_at_home")
+
+
+def select_ev_policy_route(
+    *,
+    in_free_window: bool,
+    outside_enabled: bool,
+    outside_control_active: bool,
+) -> EvCycleRoute:
+    """Preserve free-window, general-limit and outside-control routing."""
+    if in_free_window:
+        return EvCycleRoute("free_window", "free_window_active")
+    if outside_enabled or outside_control_active:
+        return EvCycleRoute("outside_window", "outside_policy_active")
+    return EvCycleRoute("general_limit", "outside_window_general_limit_only")

@@ -144,12 +144,15 @@ from .planner.ev import (
     reconcile_smart_socket_recovery,
 )
 from .planner.ev_candidates import (
+    EvCycleRoute,
     EvStageCandidate,
     EvStageSelection,
     OutsideStageCandidateInputs,
     build_ev_stage_candidate,
     build_outside_stage_candidates,
     reject_ev_stage_candidate,
+    select_ev_eligibility_route,
+    select_ev_policy_route,
     select_outside_stage_candidate,
 )
 from .planner.ev_daily_backfill import (
@@ -254,6 +257,8 @@ class ActiveEvController:
         self.outside_stage_selection: EvStageSelection | None = None
         self.smart_socket_candidate: EvStageCandidate | None = None
         self.smart_recovery_candidate: EvStageCandidate | None = None
+        self.eligibility_route: EvCycleRoute | None = None
+        self.policy_route: EvCycleRoute | None = None
         self.requested_current_a: float | None = None
         self.applied_limit_percent: float | None = None
         self.charge_switch_on: bool | None = None
@@ -354,6 +359,8 @@ class ActiveEvController:
             self.outside_stage_selection = None
             self.smart_socket_candidate = None
             self.smart_recovery_candidate = None
+            self.eligibility_route = None
+            self.policy_route = None
             grid_current, grid_valid = self._grid_current_a()
             ev_current, ev_valid = self._actual_ev_current_a()
             self.actual_current_a = ev_current if ev_valid else None
@@ -406,6 +413,13 @@ class ActiveEvController:
                 return
             connected, connection_reason = self._connected_at_home()
             in_window, elapsed_minutes, remaining_hours = self._free_window(now)
+            self.eligibility_route = select_ev_eligibility_route(
+                connected=connected,
+                connection_reason=connection_reason,
+                observation_available=observation is not None,
+                smart_path=smart_path,
+                home_control_active=self._home_control_active(),
+            )
             if not connected:
                 self.solar_spill = SolarSpillDecision(
                     0.0,
@@ -492,6 +506,11 @@ class ActiveEvController:
                     == FOXESS_CONTROL_OWNER_MODBUS
                     and (policy.solar_spill_enabled or policy.pre_free_enabled)
                 )
+            )
+            self.policy_route = select_ev_policy_route(
+                in_free_window=in_window,
+                outside_enabled=outside_enabled,
+                outside_control_active=self.outside_control_active,
             )
             if not in_window and not outside_enabled and not self.outside_control_active:
                 await self._async_reconcile_general_limit_only(
