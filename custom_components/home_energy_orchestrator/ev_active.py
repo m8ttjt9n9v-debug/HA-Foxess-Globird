@@ -2236,11 +2236,7 @@ class ActiveEvController:
         )
 
     def _float(self, key: str, default: float) -> float:
-        try:
-            value = float(self.coordinator.config.get(key, default))
-        except (TypeError, ValueError):
-            return default
-        return value if isfinite(value) else default
+        return self.coordinator.runtime_config.ev_numbers.value(key, default)
 
     def _path_ceiling_a(self) -> float:
         if (

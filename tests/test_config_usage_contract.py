@@ -27,15 +27,15 @@ def test_config_usage_only_references_declared_keys() -> None:
     assert contract["access_count"] > 0
     assert contract["accesses_by_layer"]["runtime"] > 0
     assert contract["raw_accesses_by_layer"]["boundary"] > 0
-    assert contract["raw_accesses_by_layer"]["runtime"] > 0
+    assert contract["raw_accesses_by_layer"].get("runtime", 0) == 0
     assert contract["accesses_by_kind"]["managed_mutation"] > 0
     assert {
         item["key"] for item in contract["accesses"] if item["key"] is not None
     } <= declared
 
 
-def test_dynamic_runtime_config_reads_are_inventory_visible() -> None:
-    """Variable-key helpers must not disappear from the raw-access metric."""
+def test_dynamic_config_access_is_confined_to_mutation_boundaries() -> None:
+    """Variable-key access must remain at the reviewed mutation boundary."""
     contract = build_config_usage_contract()
     dynamic = [item for item in contract["accesses"] if item["key"] is None]
     dynamic_runtime = [
@@ -44,12 +44,11 @@ def test_dynamic_runtime_config_reads_are_inventory_visible() -> None:
         if item["layer"] == "runtime" and item["key"] is None
     ]
     assert contract["dynamic_access_count"] == len(dynamic)
-    assert dynamic_runtime
-    assert {item["receiver"] for item in dynamic_runtime} <= {
-        "config",
-        "self.config",
-        "self.coordinator.config",
-    }
+    assert dynamic_runtime == []
+    assert len(dynamic) == 2
+    assert {item["kind"] for item in dynamic} == {"mutation_boundary"}
+    assert {item["layer"] for item in dynamic} == {"boundary"}
+    assert {item["receiver"] for item in dynamic} == {"self.config"}
 
 
 def test_runtime_config_writes_use_the_coordinator_boundary() -> None:

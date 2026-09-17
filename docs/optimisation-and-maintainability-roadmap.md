@@ -196,6 +196,8 @@ submissions retain the complete draft.
 
 Current work package and completion evidence:
 [Phase 3 typed configuration catalogue](maintainability/phase-3-typed-configuration.md).
+The technical Phase 3 exit gate was satisfied on 2026-09-17; the linked record
+contains the frozen-contract and regression evidence.
 
 ### Phase 4 — canonical read model and presentation
 

@@ -8,6 +8,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from custom_components.home_energy_orchestrator import configuration as config_module
 from custom_components.home_energy_orchestrator import const as heo_const
 from custom_components.home_energy_orchestrator.configuration import RuntimeConfiguration
 from custom_components.home_energy_orchestrator.const import (
@@ -485,6 +486,40 @@ def test_nonnegative_bridge_preserves_valid_configured_values() -> None:
         assert EnergyCoordinator._configured_nonnegative(
             coordinator, key, default
         ) == pytest.approx(1.25)
+
+
+def test_ev_numeric_snapshot_covers_all_reviewed_defaults_and_is_immutable() -> None:
+    numbers = RuntimeConfiguration.from_mapping({}).ev_numbers
+    assert len(numbers.values) == 39
+    for name in config_module._EV_NUMERIC_FIELD_NAMES:  # noqa: SLF001
+        key = getattr(heo_const, f"CONF_{name}")
+        default = float(getattr(heo_const, f"DEFAULT_{name}"))
+        assert numbers.value(key, -999) == pytest.approx(default)
+    assert numbers.value("unknown", 7.5) == pytest.approx(7.5)
+    with pytest.raises(TypeError):
+        numbers.values["new"] = 1.0  # type: ignore[index]
+
+
+@pytest.mark.parametrize("value", ["invalid", float("nan"), float("inf")])
+def test_ev_numeric_snapshot_preserves_invalid_finite_fallbacks(value: object) -> None:
+    data = {
+        getattr(heo_const, f"CONF_{name}"): value
+        for name in config_module._EV_NUMERIC_FIELD_NAMES  # noqa: SLF001
+    }
+    numbers = RuntimeConfiguration.from_mapping(data).ev_numbers
+    for name in config_module._EV_NUMERIC_FIELD_NAMES:  # noqa: SLF001
+        key = getattr(heo_const, f"CONF_{name}")
+        default = float(getattr(heo_const, f"DEFAULT_{name}"))
+        assert numbers.value(key, -999) == pytest.approx(default)
+
+
+def test_ev_numeric_snapshot_preserves_negative_values() -> None:
+    data = {
+        getattr(heo_const, f"CONF_{name}"): -1
+        for name in config_module._EV_NUMERIC_FIELD_NAMES  # noqa: SLF001
+    }
+    numbers = RuntimeConfiguration.from_mapping(data).ev_numbers
+    assert set(numbers.values.values()) == {-1.0}
 
 
 @pytest.mark.parametrize(

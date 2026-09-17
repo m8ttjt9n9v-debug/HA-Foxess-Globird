@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Phase 3 will parse persisted Home Assistant configuration once into immutable,
+Phase 3 parses persisted Home Assistant configuration once into immutable,
 domain-grouped values. It must preserve all serialized keys, defaults,
 selectors, validation, migration behavior and the multi-page draft workflow.
 
@@ -81,7 +81,13 @@ selectors, validation, migration behavior and the multi-page draft workflow.
   runtime reads: the coordinator's optional non-negative helper and the
   EV-controller numeric helper. The complete 17-key strict non-negative
   contract now also comes from an immutable snapshot, leaving only the
-  EV-controller numeric helper as a raw runtime read.
+  EV-controller numeric helper as a raw runtime read. The final reviewed
+  39-field EV numeric projection now supplies that helper through an immutable
+  snapshot while preserving each field's default, invalid/non-finite fallback
+  and signed-value behavior. The usage inventory therefore reports zero raw
+  runtime mapping operations: its 11 runtime accesses are all managed
+  mutations, and the only two dynamic accesses are the coordinator's explicit
+  boundary writes.
 
 ## Work packages
 
@@ -114,6 +120,13 @@ Every persisted key has one reviewed field definition; raw mapping access is
 confined to migration/platform boundaries; the existing configuration corpus
 round-trips with equivalent meaning; and invalid multi-page submissions retain
 the complete working draft.
+
+**Status: satisfied on 2026-09-17.** The catalogue contains the frozen 124
+wizard fields, runtime raw mapping access is zero, the five-topology sanitized
+corpus round-trips with equivalent typed meaning, and ten invalid-page cases
+retain the complete draft through correction and commit. The final gate passed
+628 repository tests, Ruff, all frozen catalogue/configuration/persistence
+contracts and the v0.12.26 previous-release upgrade rehearsal.
 
 ## Rollback
 

@@ -6,8 +6,10 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import time
 from math import isfinite
+from types import MappingProxyType
 from typing import cast
 
+from . import const as config_const
 from .const import (
     BATTERY_POSITIVE_CHARGE,
     BATTERY_POSITIVE_DISCHARGE,
@@ -332,6 +334,79 @@ class EvPolicySettings:
     smart_socket_current_limit_a: float | None
 
 
+_EV_NUMERIC_FIELD_NAMES = (
+    "BATTERY_CHARGE_EFFICIENCY",
+    "BATTERY_FLOOR",
+    "BATTERY_FREE_WINDOW_TARGET",
+    "DAILY_FREE_ALLOWANCE_KWH",
+    "DISCHARGE_EFFICIENCY_PERCENT",
+    "EV_ALLOWANCE_SAFETY_MARGIN",
+    "EV_ARRIVAL_RESERVE_SOC",
+    "EV_BACKFILL_BUFFER_MINUTES",
+    "EV_CHARGE_EFFICIENCY",
+    "EV_CHARGE_TO_FULL_MAX_HOURS",
+    "EV_DAILY_BACKFILL_ENERGY",
+    "EV_DIRECT_LIMIT_HEADROOM",
+    "EV_FREE_WINDOW_CHARGE_LIMIT",
+    "EV_FREE_WINDOW_MINIMUM_CURRENT",
+    "EV_FREE_WINDOW_SETTLE_MINUTES",
+    "EV_LEARNING_MINIMUM_SAMPLES",
+    "EV_MAX_CURRENT",
+    "EV_OUTSIDE_INVERTER_PERCENT",
+    "EV_PHASE_COUNT",
+    "EV_PROTECTED_BASELINE_A",
+    "EV_SMART_RECOVERY_CHARGING_CONFIRM_SECONDS",
+    "EV_SMART_RECOVERY_CURRENT_CONFIRM_SECONDS",
+    "EV_SMART_RECOVERY_IDLE_CURRENT_A",
+    "EV_SMART_RECOVERY_NO_POWER_SECONDS",
+    "EV_SMART_RECOVERY_POST_POWER_SECONDS",
+    "EV_SMART_RECOVERY_POWER_OFF_SECONDS",
+    "EV_SMART_RECOVERY_REARM_SECONDS",
+    "EV_SMART_RECOVERY_SOCKET_CONFIRM_SECONDS",
+    "EV_SMART_SOCKET_CURRENT_LIMIT",
+    "EV_SMART_SOCKET_RETRY_SECONDS",
+    "EV_SMART_SOCKET_SETTLE_SECONDS",
+    "EV_SOLAR_SPILL_BATTERY_SOC",
+    "EV_TELEMETRY_MAX_AGE_SECONDS",
+    "EV_TELEMETRY_MAX_SKEW_SECONDS",
+    "EV_VOLTAGE",
+    "INVERTER_DISCHARGE_LIMIT_KW",
+    "SERVICE_IMPORT_LIMIT_A",
+    "SITE_GRID_HEADROOM_CURRENT",
+    "SITE_PHASE_COUNT",
+)
+_EV_NUMERIC_DEFAULTS: Mapping[str, float] = MappingProxyType(
+    {
+        getattr(config_const, f"CONF_{name}"): float(
+            getattr(config_const, f"DEFAULT_{name}")
+        )
+        for name in _EV_NUMERIC_FIELD_NAMES
+    }
+)
+
+
+@dataclass(frozen=True, slots=True)
+class EvNumericSettings:
+    """Immutable finite numeric inputs used by the EV controller."""
+
+    values: Mapping[str, float]
+
+    @classmethod
+    def from_mapping(cls, data: Mapping[str, object]) -> EvNumericSettings:
+        values: dict[str, float] = {}
+        for key, default in _EV_NUMERIC_DEFAULTS.items():
+            try:
+                value = float(data.get(key, default))
+            except (TypeError, ValueError):
+                value = default
+            values[key] = value if isfinite(value) else default
+        return cls(MappingProxyType(values))
+
+    def value(self, key: str, default: float) -> float:
+        """Return one reviewed EV input or the caller's compatibility default."""
+        return self.values.get(key, default)
+
+
 @dataclass(frozen=True, slots=True)
 class HouseSettings:
     """Operator-owned house-energy occupancy selection."""
@@ -612,6 +687,7 @@ class RuntimeConfiguration:
     ev_actuators: EvActuatorSettings
     ev_telemetry: EvTelemetrySettings
     ev_policy: EvPolicySettings
+    ev_numbers: EvNumericSettings
     house: HouseSettings
     windows: WindowSettings
     accounting: AccountingSettings
@@ -900,6 +976,7 @@ class RuntimeConfiguration:
                     DEFAULT_EV_SMART_SOCKET_CURRENT_LIMIT,
                 ),
             ),
+            ev_numbers=EvNumericSettings.from_mapping(data),
             house=HouseSettings(
                 occupancy_mode=occupancy,
                 occupancy_mode_input=str(
