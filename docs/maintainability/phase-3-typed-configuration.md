@@ -52,7 +52,13 @@ selectors, validation, migration behavior and the multi-page draft workflow.
   selectors are now constructed directly from those same immutable field
   definitions, with exact frozen-contract and numeric-coercion coverage. The
   separate legacy full-payload compatibility schema remains unchanged, and
-  named cross-field validators remain outside catalogue metadata.
+  named cross-field validators remain outside catalogue metadata. A sanitized
+  five-topology corpus now proves idempotent serialization and equivalent typed
+  runtime meaning, while ten domain-invalid page scenarios prove the complete
+  multi-page draft survives correction and final commit. The completion audit
+  also identified dynamic-key raw configuration helpers that the current AST
+  usage inventory does not yet count; Phase 3 therefore remains open until the
+  inventory detects them and those runtime reads are migrated.
 
 ## Work packages
 
