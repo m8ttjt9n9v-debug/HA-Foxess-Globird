@@ -194,6 +194,9 @@ mapping reads exist only at the configuration and migration boundary; the
 existing configuration corpus round-trips with equivalent meaning and invalid
 submissions retain the complete draft.
 
+Current work package and completion evidence:
+[Phase 3 typed configuration catalogue](maintainability/phase-3-typed-configuration.md).
+
 ### Phase 4 — canonical read model and presentation
 
 Estimated effort: 6–9 engineer-days.

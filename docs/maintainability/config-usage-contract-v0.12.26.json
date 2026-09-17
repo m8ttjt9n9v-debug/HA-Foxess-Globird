@@ -1,0 +1,4869 @@
+{
+  "access_count": 538,
+  "accesses": [
+    {
+      "access": "subscript_store",
+      "constant": "CONF_AUTOMATIC_CHARGE_ENABLED",
+      "key": "automatic_charge_enabled",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "async_migrate_entry",
+      "source": "custom_components/home_energy_orchestrator/__init__.py"
+    },
+    {
+      "access": "setdefault",
+      "constant": "CONF_AUTOMATIC_EXPORT_LIMIT_KWH",
+      "key": "automatic_export_limit_kwh",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "async_migrate_entry",
+      "source": "custom_components/home_energy_orchestrator/__init__.py"
+    },
+    {
+      "access": "pop",
+      "constant": "CONF_BATTERY_CHARGE_POSITIVE",
+      "key": "battery_charge_positive",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "async_migrate_entry",
+      "source": "custom_components/home_energy_orchestrator/__init__.py"
+    },
+    {
+      "access": "subscript_store",
+      "constant": "CONF_BATTERY_POWER_DIRECTION",
+      "key": "battery_power_positive_direction",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "async_migrate_entry",
+      "source": "custom_components/home_energy_orchestrator/__init__.py"
+    },
+    {
+      "access": "subscript_load",
+      "constant": "CONF_BONUS_WINDOW_END",
+      "key": "bonus_window_end",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "async_migrate_entry",
+      "source": "custom_components/home_energy_orchestrator/__init__.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EXPORT_ALLOWANCE_KWH",
+      "key": "export_allowance_kwh",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "async_migrate_entry",
+      "source": "custom_components/home_energy_orchestrator/__init__.py"
+    },
+    {
+      "access": "setdefault",
+      "constant": "CONF_EXPORT_RATE_WINDOW_END",
+      "key": "export_rate_window_end",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "async_migrate_entry",
+      "source": "custom_components/home_energy_orchestrator/__init__.py"
+    },
+    {
+      "access": "setdefault",
+      "constant": "CONF_EXPORT_RATE_WINDOW_START",
+      "key": "export_rate_window_start",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "async_migrate_entry",
+      "source": "custom_components/home_energy_orchestrator/__init__.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_FORCE_DISCHARGE_FINISH",
+      "key": "force_discharge_finish",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "async_migrate_entry",
+      "source": "custom_components/home_energy_orchestrator/__init__.py"
+    },
+    {
+      "access": "setdefault",
+      "constant": "CONF_FORCE_DISCHARGE_OFFSET_MINUTES",
+      "key": "force_discharge_offset_minutes",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "async_migrate_entry",
+      "source": "custom_components/home_energy_orchestrator/__init__.py"
+    },
+    {
+      "access": "subscript_store",
+      "constant": "CONF_FREE_CHARGE_SCHEDULE_CONFIRMED",
+      "key": "free_charge_schedule_confirmed",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "async_migrate_entry",
+      "source": "custom_components/home_energy_orchestrator/__init__.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_GLOBIRD_LATEST_DAILY_COST",
+      "key": "globird_latest_daily_cost_entity",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "async_migrate_entry",
+      "source": "custom_components/home_energy_orchestrator/__init__.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_GLOBIRD_LATEST_DAILY_COST",
+      "key": "globird_latest_daily_cost_entity",
+      "layer": "boundary",
+      "receiver": "suggestions",
+      "scope": "async_migrate_entry",
+      "source": "custom_components/home_energy_orchestrator/__init__.py"
+    },
+    {
+      "access": "subscript_store",
+      "constant": "CONF_GLOBIRD_LATEST_DAILY_COST",
+      "key": "globird_latest_daily_cost_entity",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "async_migrate_entry",
+      "source": "custom_components/home_energy_orchestrator/__init__.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_GLOBIRD_ZEROHERO_STATUS",
+      "key": "globird_zerohero_status_entity",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "async_migrate_entry",
+      "source": "custom_components/home_energy_orchestrator/__init__.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_GLOBIRD_ZEROHERO_STATUS",
+      "key": "globird_zerohero_status_entity",
+      "layer": "boundary",
+      "receiver": "suggestions",
+      "scope": "async_migrate_entry",
+      "source": "custom_components/home_energy_orchestrator/__init__.py"
+    },
+    {
+      "access": "subscript_store",
+      "constant": "CONF_GLOBIRD_ZEROHERO_STATUS",
+      "key": "globird_zerohero_status_entity",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "async_migrate_entry",
+      "source": "custom_components/home_energy_orchestrator/__init__.py"
+    },
+    {
+      "access": "pop",
+      "constant": "CONF_GRID_IMPORT_POSITIVE",
+      "key": "grid_import_positive",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "async_migrate_entry",
+      "source": "custom_components/home_energy_orchestrator/__init__.py"
+    },
+    {
+      "access": "subscript_store",
+      "constant": "CONF_GRID_POWER_DIRECTION",
+      "key": "grid_power_positive_direction",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "async_migrate_entry",
+      "source": "custom_components/home_energy_orchestrator/__init__.py"
+    },
+    {
+      "access": "setdefault",
+      "constant": "CONF_OFFPEAK_EXPORT_RATE",
+      "key": "offpeak_export_rate_per_kwh",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "async_migrate_entry",
+      "source": "custom_components/home_energy_orchestrator/__init__.py"
+    },
+    {
+      "access": "subscript_store",
+      "constant": "CONF_SIGN_CONVENTIONS_VERIFIED",
+      "key": "sign_conventions_verified",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "async_migrate_entry",
+      "source": "custom_components/home_energy_orchestrator/__init__.py"
+    },
+    {
+      "access": "setdefault",
+      "constant": "CONF_SITE_GRID_CURRENT_DIRECTION",
+      "key": "site_grid_current_positive_direction",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "async_migrate_entry",
+      "source": "custom_components/home_energy_orchestrator/__init__.py"
+    },
+    {
+      "access": "setdefault",
+      "constant": "CONF_SOLAR_POWER_DIRECTION",
+      "key": "solar_power_generation_direction",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "async_migrate_entry",
+      "source": "custom_components/home_energy_orchestrator/__init__.py"
+    },
+    {
+      "access": "setdefault",
+      "constant": "CONF_TELEMETRY_MAX_AGE_SECONDS",
+      "key": "telemetry_max_age_seconds",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "async_migrate_entry",
+      "source": "custom_components/home_energy_orchestrator/__init__.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_AUTOMATIC_CHARGE_ENABLED",
+      "key": "automatic_charge_enabled",
+      "layer": "runtime",
+      "receiver": "self.coordinator.config",
+      "scope": "ActiveFoxessController._async_reconcile_charge",
+      "source": "custom_components/home_energy_orchestrator/active.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_FREE_CHARGE_SCHEDULE_CONFIRMED",
+      "key": "free_charge_schedule_confirmed",
+      "layer": "runtime",
+      "receiver": "self.coordinator.config",
+      "scope": "ActiveFoxessController._async_reconcile_charge",
+      "source": "custom_components/home_energy_orchestrator/active.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_AUTOMATIC_EXPORT_ENABLED",
+      "key": "automatic_export_enabled",
+      "layer": "runtime",
+      "receiver": "self.coordinator.config",
+      "scope": "ActiveFoxessController._async_reconcile_export",
+      "source": "custom_components/home_energy_orchestrator/active.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_BEFORE_EXPORT_ENABLED",
+      "key": "ev_before_export_enabled",
+      "layer": "runtime",
+      "receiver": "self.coordinator.config",
+      "scope": "ActiveFoxessController._async_reconcile_export",
+      "source": "custom_components/home_energy_orchestrator/active.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_AUTOMATIC_CHARGE_ENABLED",
+      "key": "automatic_charge_enabled",
+      "layer": "runtime",
+      "receiver": "self.coordinator.config",
+      "scope": "ActiveFoxessController._enabled_control_windows_overlap",
+      "source": "custom_components/home_energy_orchestrator/active.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_AUTOMATIC_EXPORT_ENABLED",
+      "key": "automatic_export_enabled",
+      "layer": "runtime",
+      "receiver": "self.coordinator.config",
+      "scope": "ActiveFoxessController._enabled_control_windows_overlap",
+      "source": "custom_components/home_energy_orchestrator/active.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_CONFIGURE_EV",
+      "key": "configure_ev",
+      "layer": "runtime",
+      "receiver": "self.coordinator.config",
+      "scope": "ActiveFoxessController._protected_keepalive_energy_kwh",
+      "source": "custom_components/home_energy_orchestrator/active.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_AT_HOME",
+      "key": "ev_at_home_entity",
+      "layer": "runtime",
+      "receiver": "self.coordinator.config",
+      "scope": "ActiveFoxessController._protected_keepalive_energy_kwh",
+      "source": "custom_components/home_energy_orchestrator/active.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_CABLE_CONNECTED",
+      "key": "ev_cable_connected_entity",
+      "layer": "runtime",
+      "receiver": "self.coordinator.config",
+      "scope": "ActiveFoxessController._protected_keepalive_energy_kwh",
+      "source": "custom_components/home_energy_orchestrator/active.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_CONTROL_COMMISSIONED",
+      "key": "ev_control_commissioned",
+      "layer": "runtime",
+      "receiver": "self.coordinator.config",
+      "scope": "ActiveFoxessController._protected_keepalive_energy_kwh",
+      "source": "custom_components/home_energy_orchestrator/active.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_CONTROL_COMMISSIONED",
+      "key": "ev_control_commissioned",
+      "layer": "runtime",
+      "receiver": "self.coordinator.config",
+      "scope": "ActiveFoxessController._protected_keepalive_energy_kwh",
+      "source": "custom_components/home_energy_orchestrator/active.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_AUTOMATIC_CONTROL_ENABLED",
+      "key": "automatic_control_enabled",
+      "layer": "runtime",
+      "receiver": "self.coordinator.config",
+      "scope": "ActiveFoxessController.async_reconcile",
+      "source": "custom_components/home_energy_orchestrator/active.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_FOXESS_CONTROL_OWNER",
+      "key": "foxess_control_owner",
+      "layer": "runtime",
+      "receiver": "self.coordinator.config",
+      "scope": "ActiveFoxessController.async_reconcile",
+      "source": "custom_components/home_energy_orchestrator/active.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_FOXESS_FORCE_CHARGE_POWER",
+      "key": "foxess_force_charge_power_entity",
+      "layer": "runtime",
+      "receiver": "self.coordinator.config",
+      "scope": "ActiveFoxessController.async_reconcile",
+      "source": "custom_components/home_energy_orchestrator/active.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_FOXESS_FORCE_DISCHARGE_POWER",
+      "key": "foxess_force_discharge_power_entity",
+      "layer": "runtime",
+      "receiver": "self.coordinator.config",
+      "scope": "ActiveFoxessController.async_reconcile",
+      "source": "custom_components/home_energy_orchestrator/active.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_FOXESS_WORK_MODE",
+      "key": "foxess_work_mode_entity",
+      "layer": "runtime",
+      "receiver": "self.coordinator.config",
+      "scope": "ActiveFoxessController.async_reconcile",
+      "source": "custom_components/home_energy_orchestrator/active.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_REHEARSAL_MODE",
+      "key": "rehearsal_mode",
+      "layer": "runtime",
+      "receiver": "self.coordinator.config",
+      "scope": "ActiveFoxessController.async_reconcile",
+      "source": "custom_components/home_energy_orchestrator/active.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_SIGN_CONVENTIONS_VERIFIED",
+      "key": "sign_conventions_verified",
+      "layer": "runtime",
+      "receiver": "self.coordinator.config",
+      "scope": "ActiveFoxessController.async_reconcile",
+      "source": "custom_components/home_energy_orchestrator/active.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_AUTOMATIC_CONTROL_ENABLED",
+      "key": "automatic_control_enabled",
+      "layer": "runtime",
+      "receiver": "self.coordinator.config",
+      "scope": "ActiveFoxessController.gate_status",
+      "source": "custom_components/home_energy_orchestrator/active.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_FOXESS_CONTROL_OWNER",
+      "key": "foxess_control_owner",
+      "layer": "runtime",
+      "receiver": "self.coordinator.config",
+      "scope": "ActiveFoxessController.gate_status",
+      "source": "custom_components/home_energy_orchestrator/active.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_FOXESS_FORCE_CHARGE_POWER",
+      "key": "foxess_force_charge_power_entity",
+      "layer": "runtime",
+      "receiver": "self.coordinator.config",
+      "scope": "ActiveFoxessController.gate_status",
+      "source": "custom_components/home_energy_orchestrator/active.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_FOXESS_FORCE_DISCHARGE_POWER",
+      "key": "foxess_force_discharge_power_entity",
+      "layer": "runtime",
+      "receiver": "self.coordinator.config",
+      "scope": "ActiveFoxessController.gate_status",
+      "source": "custom_components/home_energy_orchestrator/active.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_FOXESS_WORK_MODE",
+      "key": "foxess_work_mode_entity",
+      "layer": "runtime",
+      "receiver": "self.coordinator.config",
+      "scope": "ActiveFoxessController.gate_status",
+      "source": "custom_components/home_energy_orchestrator/active.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_REHEARSAL_MODE",
+      "key": "rehearsal_mode",
+      "layer": "runtime",
+      "receiver": "self.coordinator.config",
+      "scope": "ActiveFoxessController.gate_status",
+      "source": "custom_components/home_energy_orchestrator/active.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_SIGN_CONVENTIONS_VERIFIED",
+      "key": "sign_conventions_verified",
+      "layer": "runtime",
+      "receiver": "self.coordinator.config",
+      "scope": "ActiveFoxessController.gate_status",
+      "source": "custom_components/home_energy_orchestrator/active.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_BATTERY_POWER_DIRECTION",
+      "key": "battery_power_positive_direction",
+      "layer": "runtime",
+      "receiver": "config",
+      "scope": "SignConventionsVerifiedBinarySensor.extra_state_attributes",
+      "source": "custom_components/home_energy_orchestrator/binary_sensor.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_GRID_POWER_DIRECTION",
+      "key": "grid_power_positive_direction",
+      "layer": "runtime",
+      "receiver": "config",
+      "scope": "SignConventionsVerifiedBinarySensor.extra_state_attributes",
+      "source": "custom_components/home_energy_orchestrator/binary_sensor.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_SITE_GRID_CURRENT_DIRECTION",
+      "key": "site_grid_current_positive_direction",
+      "layer": "runtime",
+      "receiver": "config",
+      "scope": "SignConventionsVerifiedBinarySensor.extra_state_attributes",
+      "source": "custom_components/home_energy_orchestrator/binary_sensor.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_SOLAR_POWER_DIRECTION",
+      "key": "solar_power_generation_direction",
+      "layer": "runtime",
+      "receiver": "config",
+      "scope": "SignConventionsVerifiedBinarySensor.extra_state_attributes",
+      "source": "custom_components/home_energy_orchestrator/binary_sensor.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_SIGN_CONVENTIONS_VERIFIED",
+      "key": "sign_conventions_verified",
+      "layer": "runtime",
+      "receiver": "self.coordinator.config",
+      "scope": "SignConventionsVerifiedBinarySensor.is_on",
+      "source": "custom_components/home_energy_orchestrator/binary_sensor.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_AUTOMATIC_CHARGE_ENABLED",
+      "key": "automatic_charge_enabled",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._apply_defaults",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_AUTOMATIC_CONTROL_ENABLED",
+      "key": "automatic_control_enabled",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._apply_defaults",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_AUTOMATIC_EXPORT_ENABLED",
+      "key": "automatic_export_enabled",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._apply_defaults",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_AUTOMATIC_EXPORT_LIMIT_KWH",
+      "key": "automatic_export_limit_kwh",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._apply_defaults",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_BATTERY_CHARGE_EFFICIENCY",
+      "key": "battery_charge_efficiency_percent",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._apply_defaults",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_BATTERY_CHARGE_POSITIVE",
+      "key": "battery_charge_positive",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._apply_defaults",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_BATTERY_FREE_WINDOW_TARGET",
+      "key": "battery_free_window_target_percent",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._apply_defaults",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_BATTERY_POWER_DIRECTION",
+      "key": "battery_power_positive_direction",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._apply_defaults",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_BONUS_WINDOW_END",
+      "key": "bonus_window_end",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._apply_defaults",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_BONUS_WINDOW_START",
+      "key": "bonus_window_start",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._apply_defaults",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_DAILY_CHARGE",
+      "key": "daily_charge",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._apply_defaults",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_DAILY_FREE_ALLOWANCE_KWH",
+      "key": "daily_free_allowance_kwh",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._apply_defaults",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_DISCHARGE_EFFICIENCY_PERCENT",
+      "key": "discharge_efficiency_percent",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._apply_defaults",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_ALLOWANCE_GUARD_ENABLED",
+      "key": "ev_allowance_guard_enabled",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._apply_defaults",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_ALLOWANCE_SAFETY_MARGIN",
+      "key": "ev_allowance_safety_margin_kwh",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._apply_defaults",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_ARRIVAL_RESERVE_SOC",
+      "key": "ev_arrival_reserve_soc_percent",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._apply_defaults",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_AUTOMATIC_CONTROL_ENABLED",
+      "key": "ev_automatic_control_enabled",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._apply_defaults",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_BACKFILL_BUFFER_MINUTES",
+      "key": "ev_backfill_buffer_minutes",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._apply_defaults",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_BEFORE_EXPORT_ENABLED",
+      "key": "ev_before_export_enabled",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._apply_defaults",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_BEFORE_EXPORT_SOC_TARGET",
+      "key": "ev_before_export_soc_target_percent",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._apply_defaults",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_CHARGE_EFFICIENCY",
+      "key": "ev_charge_efficiency_percent",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._apply_defaults",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_CHARGE_PATH",
+      "key": "ev_charge_path",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._apply_defaults",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "subscript_load",
+      "constant": "CONF_EV_CHARGE_TO_FULL",
+      "key": "ev_charge_to_full_entity",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._apply_defaults",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "subscript_load",
+      "constant": "CONF_EV_CHARGE_TO_FULL_ENABLED",
+      "key": "ev_charge_to_full_enabled",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._apply_defaults",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_CHARGE_TO_FULL_MAX_HOURS",
+      "key": "ev_charge_to_full_max_hours",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._apply_defaults",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_CONTROL_COMMISSIONED",
+      "key": "ev_control_commissioned",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._apply_defaults",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_DAILY_BACKFILL_ENERGY",
+      "key": "ev_daily_backfill_energy_kwh",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._apply_defaults",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_DAILY_READY_TIME",
+      "key": "ev_daily_ready_time",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._apply_defaults",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_DIRECT_LIMIT_HEADROOM",
+      "key": "ev_direct_limit_headroom_percent",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._apply_defaults",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_FREE_WINDOW_CHARGE_LIMIT",
+      "key": "ev_free_window_charge_limit_percent",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._apply_defaults",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_FREE_WINDOW_MINIMUM_CURRENT",
+      "key": "ev_free_window_minimum_current_a",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._apply_defaults",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_FREE_WINDOW_PRIORITY",
+      "key": "ev_free_window_priority",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._apply_defaults",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_FREE_WINDOW_SETTLE_MINUTES",
+      "key": "ev_free_window_settle_minutes",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._apply_defaults",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_LEARNING_MINIMUM_SAMPLES",
+      "key": "ev_learning_minimum_samples",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._apply_defaults",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "subscript_load",
+      "constant": "CONF_EV_LIFETIME_ENERGY",
+      "key": "ev_lifetime_energy_entity",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._apply_defaults",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "subscript_store",
+      "constant": "CONF_EV_LIFETIME_ENERGY",
+      "key": "ev_lifetime_energy_entity",
+      "layer": "boundary",
+      "receiver": "result",
+      "scope": "ConfigFlow._apply_defaults",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_LOCATION_MODE",
+      "key": "ev_location_mode",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._apply_defaults",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_MAX_CURRENT",
+      "key": "ev_max_current",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._apply_defaults",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_MIN_CURRENT",
+      "key": "ev_min_current",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._apply_defaults",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_OUTSIDE_INVERTER_PERCENT",
+      "key": "ev_outside_inverter_percent",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._apply_defaults",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_PHASE_COUNT",
+      "key": "ev_phase_count",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._apply_defaults",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_PRE_FREE_ENABLED",
+      "key": "ev_pre_free_backfill_enabled",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._apply_defaults",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_PROTECTED_BASELINE_A",
+      "key": "ev_protected_baseline_a",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._apply_defaults",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_SMART_RECOVERY_CHARGING_CONFIRM_SECONDS",
+      "key": "ev_smart_recovery_charging_confirm_seconds",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._apply_defaults",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_SMART_RECOVERY_CURRENT_CONFIRM_SECONDS",
+      "key": "ev_smart_recovery_current_confirm_seconds",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._apply_defaults",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_SMART_RECOVERY_IDLE_CURRENT_A",
+      "key": "ev_smart_recovery_idle_current_a",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._apply_defaults",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_SMART_RECOVERY_NO_POWER_SECONDS",
+      "key": "ev_smart_recovery_no_power_seconds",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._apply_defaults",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_SMART_RECOVERY_POST_POWER_SECONDS",
+      "key": "ev_smart_recovery_post_power_seconds",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._apply_defaults",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_SMART_RECOVERY_POWER_OFF_SECONDS",
+      "key": "ev_smart_recovery_power_off_seconds",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._apply_defaults",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_SMART_RECOVERY_REARM_SECONDS",
+      "key": "ev_smart_recovery_rearm_seconds",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._apply_defaults",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_SMART_RECOVERY_SOCKET_CONFIRM_SECONDS",
+      "key": "ev_smart_recovery_socket_confirm_seconds",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._apply_defaults",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_SMART_SOCKET_CURRENT_LIMIT",
+      "key": "ev_smart_socket_current_limit_a",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._apply_defaults",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_SMART_SOCKET_POWER_SWITCHING",
+      "key": "ev_smart_socket_power_switching",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._apply_defaults",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_SMART_SOCKET_RETRY_SECONDS",
+      "key": "ev_smart_socket_retry_seconds",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._apply_defaults",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_SMART_SOCKET_SETTLE_SECONDS",
+      "key": "ev_smart_socket_settle_seconds",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._apply_defaults",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_SOLAR_SPILL_BATTERY_SOC",
+      "key": "ev_solar_spill_battery_soc_percent",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._apply_defaults",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_SOLAR_SPILL_ENABLED",
+      "key": "ev_solar_spill_enabled",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._apply_defaults",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_TELEMETRY_MAX_AGE_SECONDS",
+      "key": "ev_telemetry_max_age_seconds",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._apply_defaults",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_TELEMETRY_MAX_SKEW_SECONDS",
+      "key": "ev_telemetry_max_skew_seconds",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._apply_defaults",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_VOLTAGE",
+      "key": "ev_voltage",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._apply_defaults",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EXPORT_ALLOWANCE_KWH",
+      "key": "export_allowance_kwh",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._apply_defaults",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EXPORT_ALLOWANCE_KWH",
+      "key": "export_allowance_kwh",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._apply_defaults",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EXPORT_DISCHARGE_POWER_KW",
+      "key": "export_discharge_power_kw",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._apply_defaults",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EXPORT_LIMIT_KW",
+      "key": "export_limit_kw",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._apply_defaults",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EXPORT_RATE",
+      "key": "export_rate_per_kwh",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._apply_defaults",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EXPORT_RATE_WINDOW_END",
+      "key": "export_rate_window_end",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._apply_defaults",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EXPORT_RATE_WINDOW_START",
+      "key": "export_rate_window_start",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._apply_defaults",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_FORCE_DISCHARGE_FINISH",
+      "key": "force_discharge_finish",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._apply_defaults",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_FORCE_DISCHARGE_OFFSET_MINUTES",
+      "key": "force_discharge_offset_minutes",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._apply_defaults",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_FOXESS_CONTROL_OWNER",
+      "key": "foxess_control_owner",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._apply_defaults",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_FREE_CHARGE_END",
+      "key": "free_charge_window_end",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._apply_defaults",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_FREE_CHARGE_SCHEDULE_CONFIRMED",
+      "key": "free_charge_schedule_confirmed",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._apply_defaults",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_FREE_CHARGE_START",
+      "key": "free_charge_window_start",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._apply_defaults",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_GRID_IMPORT_POSITIVE",
+      "key": "grid_import_positive",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._apply_defaults",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_GRID_POWER_DIRECTION",
+      "key": "grid_power_positive_direction",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._apply_defaults",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_HOUSE_AWAY_CONFIRMATION_HOURS",
+      "key": "house_away_confirmation_hours",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._apply_defaults",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_HOUSE_AWAY_FALLBACK",
+      "key": "house_away_fallback_kwh",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._apply_defaults",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_HOUSE_LEARNING_FALLBACK",
+      "key": "house_learning_fallback_kwh",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._apply_defaults",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_HOUSE_LOAD_INCLUDES_EV",
+      "key": "house_load_includes_ev",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._apply_defaults",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_HOUSE_OCCUPANCY_MODE",
+      "key": "house_occupancy_mode",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._apply_defaults",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_INVERTER_CHARGE_LIMIT_KW",
+      "key": "inverter_charge_limit_kw",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._apply_defaults",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_INVERTER_DISCHARGE_LIMIT_KW",
+      "key": "inverter_discharge_limit_kw",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._apply_defaults",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_OFFPEAK_BALANCE_RATE",
+      "key": "offpeak_balance_rate_per_kwh",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._apply_defaults",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_OFFPEAK_EXPORT_RATE",
+      "key": "offpeak_export_rate_per_kwh",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._apply_defaults",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_OFFPEAK_RATE",
+      "key": "offpeak_rate_per_kwh",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._apply_defaults",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_PEAK_RATE",
+      "key": "peak_rate_per_kwh",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._apply_defaults",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_PEAK_WINDOW_END",
+      "key": "peak_window_end",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._apply_defaults",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_PEAK_WINDOW_START",
+      "key": "peak_window_start",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._apply_defaults",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_REHEARSAL_MODE",
+      "key": "rehearsal_mode",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._apply_defaults",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_SERVICE_IMPORT_LIMIT_A",
+      "key": "service_import_limit_a",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._apply_defaults",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_SHOULDER_RATE",
+      "key": "shoulder_rate_per_kwh",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._apply_defaults",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_SIGN_CONVENTIONS_VERIFIED",
+      "key": "sign_conventions_verified",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._apply_defaults",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_SITE_GRID_CURRENT_DIRECTION",
+      "key": "site_grid_current_positive_direction",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._apply_defaults",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_SITE_GRID_HEADROOM_CURRENT",
+      "key": "site_grid_headroom_current_a",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._apply_defaults",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_SITE_PHASE_COUNT",
+      "key": "site_phase_count",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._apply_defaults",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_SOLAR_POWER_DIRECTION",
+      "key": "solar_power_generation_direction",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._apply_defaults",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_SUPER_EXPORT_RATE",
+      "key": "super_export_rate_per_kwh",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._apply_defaults",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_TELEMETRY_MAX_AGE_SECONDS",
+      "key": "telemetry_max_age_seconds",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._apply_defaults",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_ZEROHERO_DAILY_CREDIT",
+      "key": "zerohero_daily_credit",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._apply_defaults",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_ZERO_IMPORT_CONFIRM_MINUTES",
+      "key": "zero_import_confirm_minutes",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._apply_defaults",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_ZERO_IMPORT_THRESHOLD_KW",
+      "key": "zero_import_threshold_kw",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._apply_defaults",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_AUTOMATIC_CHARGE_ENABLED",
+      "key": "automatic_charge_enabled",
+      "layer": "boundary",
+      "receiver": "pending",
+      "scope": "ConfigFlow._async_finish_review",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "subscript_store",
+      "constant": "CONF_SIGN_CONVENTIONS_VERIFIED",
+      "key": "sign_conventions_verified",
+      "layer": "boundary",
+      "receiver": "pending",
+      "scope": "ConfigFlow._async_finish_review",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "subscript_store",
+      "constant": "CONF_EV_AUTOMATIC_CONTROL_ENABLED",
+      "key": "ev_automatic_control_enabled",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._capability_safe_data",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "subscript_store",
+      "constant": "CONF_EV_BEFORE_EXPORT_ENABLED",
+      "key": "ev_before_export_enabled",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._capability_safe_data",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "subscript_store",
+      "constant": "CONF_EV_CONTROL_COMMISSIONED",
+      "key": "ev_control_commissioned",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._capability_safe_data",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "subscript_store",
+      "constant": "CONF_EV_FREE_WINDOW_MINIMUM_CURRENT",
+      "key": "ev_free_window_minimum_current_a",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._capability_safe_data",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "subscript_store",
+      "constant": "CONF_EV_MAX_CURRENT",
+      "key": "ev_max_current",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._capability_safe_data",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "subscript_store",
+      "constant": "CONF_EV_MIN_CURRENT",
+      "key": "ev_min_current",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._capability_safe_data",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "subscript_store",
+      "constant": "CONF_EV_PRE_FREE_ENABLED",
+      "key": "ev_pre_free_backfill_enabled",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._capability_safe_data",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "subscript_store",
+      "constant": "CONF_EV_PROTECTED_BASELINE_A",
+      "key": "ev_protected_baseline_a",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._capability_safe_data",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "subscript_store",
+      "constant": "CONF_EV_SOLAR_SPILL_ENABLED",
+      "key": "ev_solar_spill_enabled",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._capability_safe_data",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "subscript_store",
+      "constant": "CONF_EV_SOLAR_SPILL_ENABLED",
+      "key": "ev_solar_spill_enabled",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._capability_safe_data",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "subscript_store",
+      "constant": "CONF_BATTERY_CAPACITY",
+      "key": "battery_capacity_kwh",
+      "layer": "boundary",
+      "receiver": "defaults",
+      "scope": "ConfigFlow._discovery_defaults",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_BATTERY_CAPACITY_ENTITY",
+      "key": "battery_capacity_entity",
+      "layer": "boundary",
+      "receiver": "defaults",
+      "scope": "ConfigFlow._discovery_defaults",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_BATTERY_CAPACITY",
+      "key": "battery_capacity_kwh",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._page_limit_error",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_BATTERY_CAPACITY",
+      "key": "battery_capacity_kwh",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._page_limit_error",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "subscript_store",
+      "constant": "CONF_BATTERY_CAPACITY",
+      "key": "battery_capacity_kwh",
+      "layer": "boundary",
+      "receiver": "checks",
+      "scope": "ConfigFlow._page_limit_error",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_BATTERY_CAPACITY_ENTITY",
+      "key": "battery_capacity_entity",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._page_limit_error",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "subscript_store",
+      "constant": "CONF_EV_SMART_RECOVERY_IDLE_CURRENT_A",
+      "key": "ev_smart_recovery_idle_current_a",
+      "layer": "boundary",
+      "receiver": "checks",
+      "scope": "ConfigFlow._page_limit_error",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_AUTOMATIC_CHARGE_ENABLED",
+      "key": "automatic_charge_enabled",
+      "layer": "boundary",
+      "receiver": "defaults",
+      "scope": "ConfigFlow._schema",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_AUTOMATIC_CONTROL_ENABLED",
+      "key": "automatic_control_enabled",
+      "layer": "boundary",
+      "receiver": "defaults",
+      "scope": "ConfigFlow._schema",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_AUTOMATIC_EXPORT_ENABLED",
+      "key": "automatic_export_enabled",
+      "layer": "boundary",
+      "receiver": "defaults",
+      "scope": "ConfigFlow._schema",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_AUTOMATIC_EXPORT_LIMIT_KWH",
+      "key": "automatic_export_limit_kwh",
+      "layer": "boundary",
+      "receiver": "defaults",
+      "scope": "ConfigFlow._schema",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_BATTERY_CHARGE_EFFICIENCY",
+      "key": "battery_charge_efficiency_percent",
+      "layer": "boundary",
+      "receiver": "defaults",
+      "scope": "ConfigFlow._schema",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_BATTERY_FLOOR",
+      "key": "battery_floor_percent",
+      "layer": "boundary",
+      "receiver": "defaults",
+      "scope": "ConfigFlow._schema",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_BATTERY_FREE_WINDOW_TARGET",
+      "key": "battery_free_window_target_percent",
+      "layer": "boundary",
+      "receiver": "defaults",
+      "scope": "ConfigFlow._schema",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_BATTERY_POWER_DIRECTION",
+      "key": "battery_power_positive_direction",
+      "layer": "boundary",
+      "receiver": "defaults",
+      "scope": "ConfigFlow._schema",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_BATTERY_SOC",
+      "key": "battery_soc_entity",
+      "layer": "boundary",
+      "receiver": "defaults",
+      "scope": "ConfigFlow._schema",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_BONUS_WINDOW_END",
+      "key": "bonus_window_end",
+      "layer": "boundary",
+      "receiver": "defaults",
+      "scope": "ConfigFlow._schema",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_BONUS_WINDOW_START",
+      "key": "bonus_window_start",
+      "layer": "boundary",
+      "receiver": "defaults",
+      "scope": "ConfigFlow._schema",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_DAILY_CHARGE",
+      "key": "daily_charge",
+      "layer": "boundary",
+      "receiver": "defaults",
+      "scope": "ConfigFlow._schema",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_DAILY_FREE_ALLOWANCE_KWH",
+      "key": "daily_free_allowance_kwh",
+      "layer": "boundary",
+      "receiver": "defaults",
+      "scope": "ConfigFlow._schema",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_DISCHARGE_EFFICIENCY_PERCENT",
+      "key": "discharge_efficiency_percent",
+      "layer": "boundary",
+      "receiver": "defaults",
+      "scope": "ConfigFlow._schema",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_ALLOWANCE_GUARD_ENABLED",
+      "key": "ev_allowance_guard_enabled",
+      "layer": "boundary",
+      "receiver": "defaults",
+      "scope": "ConfigFlow._schema",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_ALLOWANCE_SAFETY_MARGIN",
+      "key": "ev_allowance_safety_margin_kwh",
+      "layer": "boundary",
+      "receiver": "defaults",
+      "scope": "ConfigFlow._schema",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_ARRIVAL_RESERVE_SOC",
+      "key": "ev_arrival_reserve_soc_percent",
+      "layer": "boundary",
+      "receiver": "defaults",
+      "scope": "ConfigFlow._schema",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_AUTOMATIC_CONTROL_ENABLED",
+      "key": "ev_automatic_control_enabled",
+      "layer": "boundary",
+      "receiver": "defaults",
+      "scope": "ConfigFlow._schema",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_BACKFILL_BUFFER_MINUTES",
+      "key": "ev_backfill_buffer_minutes",
+      "layer": "boundary",
+      "receiver": "defaults",
+      "scope": "ConfigFlow._schema",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_BEFORE_EXPORT_ENABLED",
+      "key": "ev_before_export_enabled",
+      "layer": "boundary",
+      "receiver": "defaults",
+      "scope": "ConfigFlow._schema",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_BEFORE_EXPORT_SOC_TARGET",
+      "key": "ev_before_export_soc_target_percent",
+      "layer": "boundary",
+      "receiver": "defaults",
+      "scope": "ConfigFlow._schema",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_CHARGE_EFFICIENCY",
+      "key": "ev_charge_efficiency_percent",
+      "layer": "boundary",
+      "receiver": "defaults",
+      "scope": "ConfigFlow._schema",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_CHARGE_PATH",
+      "key": "ev_charge_path",
+      "layer": "boundary",
+      "receiver": "defaults",
+      "scope": "ConfigFlow._schema",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_CHARGE_TO_FULL_MAX_HOURS",
+      "key": "ev_charge_to_full_max_hours",
+      "layer": "boundary",
+      "receiver": "defaults",
+      "scope": "ConfigFlow._schema",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_CONTROL_COMMISSIONED",
+      "key": "ev_control_commissioned",
+      "layer": "boundary",
+      "receiver": "defaults",
+      "scope": "ConfigFlow._schema",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_DAILY_BACKFILL_ENERGY",
+      "key": "ev_daily_backfill_energy_kwh",
+      "layer": "boundary",
+      "receiver": "defaults",
+      "scope": "ConfigFlow._schema",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_DAILY_READY_TIME",
+      "key": "ev_daily_ready_time",
+      "layer": "boundary",
+      "receiver": "defaults",
+      "scope": "ConfigFlow._schema",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_DIRECT_LIMIT_HEADROOM",
+      "key": "ev_direct_limit_headroom_percent",
+      "layer": "boundary",
+      "receiver": "defaults",
+      "scope": "ConfigFlow._schema",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_FREE_WINDOW_CHARGE_LIMIT",
+      "key": "ev_free_window_charge_limit_percent",
+      "layer": "boundary",
+      "receiver": "defaults",
+      "scope": "ConfigFlow._schema",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_FREE_WINDOW_MINIMUM_CURRENT",
+      "key": "ev_free_window_minimum_current_a",
+      "layer": "boundary",
+      "receiver": "defaults",
+      "scope": "ConfigFlow._schema",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_FREE_WINDOW_PRIORITY",
+      "key": "ev_free_window_priority",
+      "layer": "boundary",
+      "receiver": "defaults",
+      "scope": "ConfigFlow._schema",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_FREE_WINDOW_SETTLE_MINUTES",
+      "key": "ev_free_window_settle_minutes",
+      "layer": "boundary",
+      "receiver": "defaults",
+      "scope": "ConfigFlow._schema",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_LEARNING_MINIMUM_SAMPLES",
+      "key": "ev_learning_minimum_samples",
+      "layer": "boundary",
+      "receiver": "defaults",
+      "scope": "ConfigFlow._schema",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_LOCATION_MODE",
+      "key": "ev_location_mode",
+      "layer": "boundary",
+      "receiver": "defaults",
+      "scope": "ConfigFlow._schema",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_MAX_CURRENT",
+      "key": "ev_max_current",
+      "layer": "boundary",
+      "receiver": "defaults",
+      "scope": "ConfigFlow._schema",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_MIN_CURRENT",
+      "key": "ev_min_current",
+      "layer": "boundary",
+      "receiver": "defaults",
+      "scope": "ConfigFlow._schema",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_OUTSIDE_INVERTER_PERCENT",
+      "key": "ev_outside_inverter_percent",
+      "layer": "boundary",
+      "receiver": "defaults",
+      "scope": "ConfigFlow._schema",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_PHASE_COUNT",
+      "key": "ev_phase_count",
+      "layer": "boundary",
+      "receiver": "defaults",
+      "scope": "ConfigFlow._schema",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_PRE_FREE_ENABLED",
+      "key": "ev_pre_free_backfill_enabled",
+      "layer": "boundary",
+      "receiver": "defaults",
+      "scope": "ConfigFlow._schema",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_PROTECTED_BASELINE_A",
+      "key": "ev_protected_baseline_a",
+      "layer": "boundary",
+      "receiver": "defaults",
+      "scope": "ConfigFlow._schema",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_SMART_RECOVERY_CHARGING_CONFIRM_SECONDS",
+      "key": "ev_smart_recovery_charging_confirm_seconds",
+      "layer": "boundary",
+      "receiver": "defaults",
+      "scope": "ConfigFlow._schema",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_SMART_RECOVERY_CURRENT_CONFIRM_SECONDS",
+      "key": "ev_smart_recovery_current_confirm_seconds",
+      "layer": "boundary",
+      "receiver": "defaults",
+      "scope": "ConfigFlow._schema",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_SMART_RECOVERY_IDLE_CURRENT_A",
+      "key": "ev_smart_recovery_idle_current_a",
+      "layer": "boundary",
+      "receiver": "defaults",
+      "scope": "ConfigFlow._schema",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_SMART_RECOVERY_NO_POWER_SECONDS",
+      "key": "ev_smart_recovery_no_power_seconds",
+      "layer": "boundary",
+      "receiver": "defaults",
+      "scope": "ConfigFlow._schema",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_SMART_RECOVERY_POST_POWER_SECONDS",
+      "key": "ev_smart_recovery_post_power_seconds",
+      "layer": "boundary",
+      "receiver": "defaults",
+      "scope": "ConfigFlow._schema",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_SMART_RECOVERY_POWER_OFF_SECONDS",
+      "key": "ev_smart_recovery_power_off_seconds",
+      "layer": "boundary",
+      "receiver": "defaults",
+      "scope": "ConfigFlow._schema",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_SMART_RECOVERY_REARM_SECONDS",
+      "key": "ev_smart_recovery_rearm_seconds",
+      "layer": "boundary",
+      "receiver": "defaults",
+      "scope": "ConfigFlow._schema",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_SMART_RECOVERY_SOCKET_CONFIRM_SECONDS",
+      "key": "ev_smart_recovery_socket_confirm_seconds",
+      "layer": "boundary",
+      "receiver": "defaults",
+      "scope": "ConfigFlow._schema",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_SMART_SOCKET_CURRENT_LIMIT",
+      "key": "ev_smart_socket_current_limit_a",
+      "layer": "boundary",
+      "receiver": "defaults",
+      "scope": "ConfigFlow._schema",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_SMART_SOCKET_POWER_SWITCHING",
+      "key": "ev_smart_socket_power_switching",
+      "layer": "boundary",
+      "receiver": "defaults",
+      "scope": "ConfigFlow._schema",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_SMART_SOCKET_RETRY_SECONDS",
+      "key": "ev_smart_socket_retry_seconds",
+      "layer": "boundary",
+      "receiver": "defaults",
+      "scope": "ConfigFlow._schema",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_SMART_SOCKET_SETTLE_SECONDS",
+      "key": "ev_smart_socket_settle_seconds",
+      "layer": "boundary",
+      "receiver": "defaults",
+      "scope": "ConfigFlow._schema",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_SOLAR_SPILL_BATTERY_SOC",
+      "key": "ev_solar_spill_battery_soc_percent",
+      "layer": "boundary",
+      "receiver": "defaults",
+      "scope": "ConfigFlow._schema",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_SOLAR_SPILL_ENABLED",
+      "key": "ev_solar_spill_enabled",
+      "layer": "boundary",
+      "receiver": "defaults",
+      "scope": "ConfigFlow._schema",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_TELEMETRY_MAX_AGE_SECONDS",
+      "key": "ev_telemetry_max_age_seconds",
+      "layer": "boundary",
+      "receiver": "defaults",
+      "scope": "ConfigFlow._schema",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_TELEMETRY_MAX_SKEW_SECONDS",
+      "key": "ev_telemetry_max_skew_seconds",
+      "layer": "boundary",
+      "receiver": "defaults",
+      "scope": "ConfigFlow._schema",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_VOLTAGE",
+      "key": "ev_voltage",
+      "layer": "boundary",
+      "receiver": "defaults",
+      "scope": "ConfigFlow._schema",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EXPORT_ALLOWANCE_KWH",
+      "key": "export_allowance_kwh",
+      "layer": "boundary",
+      "receiver": "defaults",
+      "scope": "ConfigFlow._schema",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EXPORT_ALLOWANCE_KWH",
+      "key": "export_allowance_kwh",
+      "layer": "boundary",
+      "receiver": "defaults",
+      "scope": "ConfigFlow._schema",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EXPORT_DISCHARGE_POWER_KW",
+      "key": "export_discharge_power_kw",
+      "layer": "boundary",
+      "receiver": "defaults",
+      "scope": "ConfigFlow._schema",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EXPORT_LIMIT_KW",
+      "key": "export_limit_kw",
+      "layer": "boundary",
+      "receiver": "defaults",
+      "scope": "ConfigFlow._schema",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EXPORT_RATE",
+      "key": "export_rate_per_kwh",
+      "layer": "boundary",
+      "receiver": "defaults",
+      "scope": "ConfigFlow._schema",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EXPORT_RATE_WINDOW_END",
+      "key": "export_rate_window_end",
+      "layer": "boundary",
+      "receiver": "defaults",
+      "scope": "ConfigFlow._schema",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EXPORT_RATE_WINDOW_START",
+      "key": "export_rate_window_start",
+      "layer": "boundary",
+      "receiver": "defaults",
+      "scope": "ConfigFlow._schema",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_FORCE_DISCHARGE_FINISH",
+      "key": "force_discharge_finish",
+      "layer": "boundary",
+      "receiver": "defaults",
+      "scope": "ConfigFlow._schema",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_FORCE_DISCHARGE_OFFSET_MINUTES",
+      "key": "force_discharge_offset_minutes",
+      "layer": "boundary",
+      "receiver": "defaults",
+      "scope": "ConfigFlow._schema",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_FOXESS_CONTROL_OWNER",
+      "key": "foxess_control_owner",
+      "layer": "boundary",
+      "receiver": "defaults",
+      "scope": "ConfigFlow._schema",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_FREE_CHARGE_END",
+      "key": "free_charge_window_end",
+      "layer": "boundary",
+      "receiver": "defaults",
+      "scope": "ConfigFlow._schema",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_FREE_CHARGE_START",
+      "key": "free_charge_window_start",
+      "layer": "boundary",
+      "receiver": "defaults",
+      "scope": "ConfigFlow._schema",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_GRID_POWER",
+      "key": "grid_power_entity",
+      "layer": "boundary",
+      "receiver": "defaults",
+      "scope": "ConfigFlow._schema",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_GRID_POWER_DIRECTION",
+      "key": "grid_power_positive_direction",
+      "layer": "boundary",
+      "receiver": "defaults",
+      "scope": "ConfigFlow._schema",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_HOUSE_AWAY_CONFIRMATION_HOURS",
+      "key": "house_away_confirmation_hours",
+      "layer": "boundary",
+      "receiver": "defaults",
+      "scope": "ConfigFlow._schema",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_HOUSE_AWAY_FALLBACK",
+      "key": "house_away_fallback_kwh",
+      "layer": "boundary",
+      "receiver": "defaults",
+      "scope": "ConfigFlow._schema",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_HOUSE_LEARNING_FALLBACK",
+      "key": "house_learning_fallback_kwh",
+      "layer": "boundary",
+      "receiver": "defaults",
+      "scope": "ConfigFlow._schema",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_HOUSE_LOAD_INCLUDES_EV",
+      "key": "house_load_includes_ev",
+      "layer": "boundary",
+      "receiver": "defaults",
+      "scope": "ConfigFlow._schema",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_HOUSE_OCCUPANCY_MODE",
+      "key": "house_occupancy_mode",
+      "layer": "boundary",
+      "receiver": "defaults",
+      "scope": "ConfigFlow._schema",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_INVERTER_CHARGE_LIMIT_KW",
+      "key": "inverter_charge_limit_kw",
+      "layer": "boundary",
+      "receiver": "defaults",
+      "scope": "ConfigFlow._schema",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_INVERTER_DISCHARGE_LIMIT_KW",
+      "key": "inverter_discharge_limit_kw",
+      "layer": "boundary",
+      "receiver": "defaults",
+      "scope": "ConfigFlow._schema",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_OFFPEAK_BALANCE_RATE",
+      "key": "offpeak_balance_rate_per_kwh",
+      "layer": "boundary",
+      "receiver": "defaults",
+      "scope": "ConfigFlow._schema",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_OFFPEAK_EXPORT_RATE",
+      "key": "offpeak_export_rate_per_kwh",
+      "layer": "boundary",
+      "receiver": "defaults",
+      "scope": "ConfigFlow._schema",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_OFFPEAK_RATE",
+      "key": "offpeak_rate_per_kwh",
+      "layer": "boundary",
+      "receiver": "defaults",
+      "scope": "ConfigFlow._schema",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_PEAK_RATE",
+      "key": "peak_rate_per_kwh",
+      "layer": "boundary",
+      "receiver": "defaults",
+      "scope": "ConfigFlow._schema",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_PEAK_WINDOW_END",
+      "key": "peak_window_end",
+      "layer": "boundary",
+      "receiver": "defaults",
+      "scope": "ConfigFlow._schema",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_PEAK_WINDOW_START",
+      "key": "peak_window_start",
+      "layer": "boundary",
+      "receiver": "defaults",
+      "scope": "ConfigFlow._schema",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_REHEARSAL_MODE",
+      "key": "rehearsal_mode",
+      "layer": "boundary",
+      "receiver": "defaults",
+      "scope": "ConfigFlow._schema",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_RESERVE",
+      "key": "reserve_kwh",
+      "layer": "boundary",
+      "receiver": "defaults",
+      "scope": "ConfigFlow._schema",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_SERVICE_IMPORT_LIMIT_A",
+      "key": "service_import_limit_a",
+      "layer": "boundary",
+      "receiver": "defaults",
+      "scope": "ConfigFlow._schema",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_SHOULDER_RATE",
+      "key": "shoulder_rate_per_kwh",
+      "layer": "boundary",
+      "receiver": "defaults",
+      "scope": "ConfigFlow._schema",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_SIGN_CONVENTIONS_VERIFIED",
+      "key": "sign_conventions_verified",
+      "layer": "boundary",
+      "receiver": "defaults",
+      "scope": "ConfigFlow._schema",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_SITE_GRID_CURRENT_DIRECTION",
+      "key": "site_grid_current_positive_direction",
+      "layer": "boundary",
+      "receiver": "defaults",
+      "scope": "ConfigFlow._schema",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_SITE_GRID_HEADROOM_CURRENT",
+      "key": "site_grid_headroom_current_a",
+      "layer": "boundary",
+      "receiver": "defaults",
+      "scope": "ConfigFlow._schema",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_SITE_PHASE_COUNT",
+      "key": "site_phase_count",
+      "layer": "boundary",
+      "receiver": "defaults",
+      "scope": "ConfigFlow._schema",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_SOLAR_POWER_DIRECTION",
+      "key": "solar_power_generation_direction",
+      "layer": "boundary",
+      "receiver": "defaults",
+      "scope": "ConfigFlow._schema",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_SUPER_EXPORT_RATE",
+      "key": "super_export_rate_per_kwh",
+      "layer": "boundary",
+      "receiver": "defaults",
+      "scope": "ConfigFlow._schema",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_TELEMETRY_MAX_AGE_SECONDS",
+      "key": "telemetry_max_age_seconds",
+      "layer": "boundary",
+      "receiver": "defaults",
+      "scope": "ConfigFlow._schema",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_ZEROHERO_DAILY_CREDIT",
+      "key": "zerohero_daily_credit",
+      "layer": "boundary",
+      "receiver": "defaults",
+      "scope": "ConfigFlow._schema",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_ZERO_IMPORT_CONFIRM_MINUTES",
+      "key": "zero_import_confirm_minutes",
+      "layer": "boundary",
+      "receiver": "defaults",
+      "scope": "ConfigFlow._schema",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_ZERO_IMPORT_THRESHOLD_KW",
+      "key": "zero_import_threshold_kw",
+      "layer": "boundary",
+      "receiver": "defaults",
+      "scope": "ConfigFlow._schema",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "subscript_load",
+      "constant": "CONF_FREE_CHARGE_END",
+      "key": "free_charge_window_end",
+      "layer": "boundary",
+      "receiver": "self._draft_input",
+      "scope": "ConfigFlow._show_review",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "subscript_load",
+      "constant": "CONF_FREE_CHARGE_START",
+      "key": "free_charge_window_start",
+      "layer": "boundary",
+      "receiver": "self._draft_input",
+      "scope": "ConfigFlow._show_review",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_REHEARSAL_MODE",
+      "key": "rehearsal_mode",
+      "layer": "boundary",
+      "receiver": "self._draft_input",
+      "scope": "ConfigFlow._show_review",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "subscript_load",
+      "constant": "CONF_FREE_CHARGE_END",
+      "key": "free_charge_window_end",
+      "layer": "boundary",
+      "receiver": "user_input",
+      "scope": "ConfigFlow._show_schedule_confirmation",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "subscript_load",
+      "constant": "CONF_FREE_CHARGE_START",
+      "key": "free_charge_window_start",
+      "layer": "boundary",
+      "receiver": "user_input",
+      "scope": "ConfigFlow._show_schedule_confirmation",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_AUTOMATIC_CHARGE_ENABLED",
+      "key": "automatic_charge_enabled",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._validate_input",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_AUTOMATIC_EXPORT_ENABLED",
+      "key": "automatic_export_enabled",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._validate_input",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "subscript_load",
+      "constant": "CONF_AUTOMATIC_EXPORT_LIMIT_KWH",
+      "key": "automatic_export_limit_kwh",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._validate_input",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_BATTERY_CAPACITY",
+      "key": "battery_capacity_kwh",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._validate_input",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "subscript_load",
+      "constant": "CONF_BATTERY_CAPACITY",
+      "key": "battery_capacity_kwh",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._validate_input",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_BATTERY_CAPACITY_ENTITY",
+      "key": "battery_capacity_entity",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._validate_input",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "subscript_load",
+      "constant": "CONF_BATTERY_CHARGE_EFFICIENCY",
+      "key": "battery_charge_efficiency_percent",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._validate_input",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_BATTERY_CHARGE_POWER",
+      "key": "battery_charge_power_entity",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._validate_input",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_BATTERY_DISCHARGE_POWER",
+      "key": "battery_discharge_power_entity",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._validate_input",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "subscript_load",
+      "constant": "CONF_BATTERY_FLOOR",
+      "key": "battery_floor_percent",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._validate_input",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "subscript_load",
+      "constant": "CONF_BATTERY_FREE_WINDOW_TARGET",
+      "key": "battery_free_window_target_percent",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._validate_input",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_BATTERY_POWER",
+      "key": "battery_power_entity",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._validate_input",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_BATTERY_POWER_DIRECTION",
+      "key": "battery_power_positive_direction",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._validate_input",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "subscript_load",
+      "constant": "CONF_BONUS_WINDOW_END",
+      "key": "bonus_window_end",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._validate_input",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "subscript_load",
+      "constant": "CONF_BONUS_WINDOW_START",
+      "key": "bonus_window_start",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._validate_input",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "subscript_load",
+      "constant": "CONF_DAILY_CHARGE",
+      "key": "daily_charge",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._validate_input",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "subscript_load",
+      "constant": "CONF_DAILY_FREE_ALLOWANCE_KWH",
+      "key": "daily_free_allowance_kwh",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._validate_input",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "subscript_load",
+      "constant": "CONF_DISCHARGE_EFFICIENCY_PERCENT",
+      "key": "discharge_efficiency_percent",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._validate_input",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_ACTUAL_CURRENT",
+      "key": "ev_actual_current_entity",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._validate_input",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "subscript_load",
+      "constant": "CONF_EV_ALLOWANCE_SAFETY_MARGIN",
+      "key": "ev_allowance_safety_margin_kwh",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._validate_input",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "subscript_load",
+      "constant": "CONF_EV_ARRIVAL_RESERVE_SOC",
+      "key": "ev_arrival_reserve_soc_percent",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._validate_input",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_AT_HOME",
+      "key": "ev_at_home_entity",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._validate_input",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "subscript_load",
+      "constant": "CONF_EV_BACKFILL_BUFFER_MINUTES",
+      "key": "ev_backfill_buffer_minutes",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._validate_input",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "subscript_load",
+      "constant": "CONF_EV_BEFORE_EXPORT_SOC_TARGET",
+      "key": "ev_before_export_soc_target_percent",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._validate_input",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_CABLE_CONNECTED",
+      "key": "ev_cable_connected_entity",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._validate_input",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "subscript_load",
+      "constant": "CONF_EV_CHARGE_EFFICIENCY",
+      "key": "ev_charge_efficiency_percent",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._validate_input",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_CHARGE_LIMIT",
+      "key": "ev_charge_limit_entity",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._validate_input",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_CHARGE_PATH",
+      "key": "ev_charge_path",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._validate_input",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_CHARGE_PATH",
+      "key": "ev_charge_path",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._validate_input",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_CHARGE_SWITCH",
+      "key": "ev_charge_switch_entity",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._validate_input",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "subscript_load",
+      "constant": "CONF_EV_CHARGE_TO_FULL_MAX_HOURS",
+      "key": "ev_charge_to_full_max_hours",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._validate_input",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_CHARGING_STATE",
+      "key": "ev_charging_state_entity",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._validate_input",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_CONTROL_COMMISSIONED",
+      "key": "ev_control_commissioned",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._validate_input",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_CONTROL_COMMISSIONED",
+      "key": "ev_control_commissioned",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._validate_input",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_CONTROL_COMMISSIONED",
+      "key": "ev_control_commissioned",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._validate_input",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_CONTROL_COMMISSIONED",
+      "key": "ev_control_commissioned",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._validate_input",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_CURRENT_LIMIT",
+      "key": "ev_current_limit_entity",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._validate_input",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "subscript_load",
+      "constant": "CONF_EV_DAILY_BACKFILL_ENERGY",
+      "key": "ev_daily_backfill_energy_kwh",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._validate_input",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "subscript_load",
+      "constant": "CONF_EV_DAILY_READY_TIME",
+      "key": "ev_daily_ready_time",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._validate_input",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "subscript_load",
+      "constant": "CONF_EV_DIRECT_LIMIT_HEADROOM",
+      "key": "ev_direct_limit_headroom_percent",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._validate_input",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "subscript_load",
+      "constant": "CONF_EV_FREE_WINDOW_CHARGE_LIMIT",
+      "key": "ev_free_window_charge_limit_percent",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._validate_input",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "subscript_load",
+      "constant": "CONF_EV_FREE_WINDOW_MINIMUM_CURRENT",
+      "key": "ev_free_window_minimum_current_a",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._validate_input",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_FREE_WINDOW_PRIORITY",
+      "key": "ev_free_window_priority",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._validate_input",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "subscript_load",
+      "constant": "CONF_EV_FREE_WINDOW_SETTLE_MINUTES",
+      "key": "ev_free_window_settle_minutes",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._validate_input",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "subscript_load",
+      "constant": "CONF_EV_LEARNING_MINIMUM_SAMPLES",
+      "key": "ev_learning_minimum_samples",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._validate_input",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_LOCATION_MODE",
+      "key": "ev_location_mode",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._validate_input",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "subscript_load",
+      "constant": "CONF_EV_MAX_CURRENT",
+      "key": "ev_max_current",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._validate_input",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "subscript_load",
+      "constant": "CONF_EV_MIN_CURRENT",
+      "key": "ev_min_current",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._validate_input",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "subscript_load",
+      "constant": "CONF_EV_OUTSIDE_INVERTER_PERCENT",
+      "key": "ev_outside_inverter_percent",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._validate_input",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "subscript_load",
+      "constant": "CONF_EV_PHASE_COUNT",
+      "key": "ev_phase_count",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._validate_input",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_PRE_FREE_ENABLED",
+      "key": "ev_pre_free_backfill_enabled",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._validate_input",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "subscript_load",
+      "constant": "CONF_EV_PROTECTED_BASELINE_A",
+      "key": "ev_protected_baseline_a",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._validate_input",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "subscript_load",
+      "constant": "CONF_EV_SMART_RECOVERY_CHARGING_CONFIRM_SECONDS",
+      "key": "ev_smart_recovery_charging_confirm_seconds",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._validate_input",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "subscript_load",
+      "constant": "CONF_EV_SMART_RECOVERY_CURRENT_CONFIRM_SECONDS",
+      "key": "ev_smart_recovery_current_confirm_seconds",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._validate_input",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "subscript_load",
+      "constant": "CONF_EV_SMART_RECOVERY_IDLE_CURRENT_A",
+      "key": "ev_smart_recovery_idle_current_a",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._validate_input",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "subscript_load",
+      "constant": "CONF_EV_SMART_RECOVERY_NO_POWER_SECONDS",
+      "key": "ev_smart_recovery_no_power_seconds",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._validate_input",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "subscript_load",
+      "constant": "CONF_EV_SMART_RECOVERY_POST_POWER_SECONDS",
+      "key": "ev_smart_recovery_post_power_seconds",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._validate_input",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "subscript_load",
+      "constant": "CONF_EV_SMART_RECOVERY_POWER_OFF_SECONDS",
+      "key": "ev_smart_recovery_power_off_seconds",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._validate_input",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "subscript_load",
+      "constant": "CONF_EV_SMART_RECOVERY_REARM_SECONDS",
+      "key": "ev_smart_recovery_rearm_seconds",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._validate_input",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "subscript_load",
+      "constant": "CONF_EV_SMART_RECOVERY_SOCKET_CONFIRM_SECONDS",
+      "key": "ev_smart_recovery_socket_confirm_seconds",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._validate_input",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_SMART_SOCKET",
+      "key": "ev_smart_socket_entity",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._validate_input",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "subscript_load",
+      "constant": "CONF_EV_SMART_SOCKET_CURRENT_LIMIT",
+      "key": "ev_smart_socket_current_limit_a",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._validate_input",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "subscript_load",
+      "constant": "CONF_EV_SMART_SOCKET_RETRY_SECONDS",
+      "key": "ev_smart_socket_retry_seconds",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._validate_input",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "subscript_load",
+      "constant": "CONF_EV_SMART_SOCKET_SETTLE_SECONDS",
+      "key": "ev_smart_socket_settle_seconds",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._validate_input",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_SOC",
+      "key": "ev_soc_entity",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._validate_input",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "subscript_load",
+      "constant": "CONF_EV_SOLAR_SPILL_BATTERY_SOC",
+      "key": "ev_solar_spill_battery_soc_percent",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._validate_input",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_SOLAR_SPILL_ENABLED",
+      "key": "ev_solar_spill_enabled",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._validate_input",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_SOLAR_SPILL_ENABLED",
+      "key": "ev_solar_spill_enabled",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._validate_input",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_STORED_ENERGY",
+      "key": "ev_stored_energy_entity",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._validate_input",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "subscript_load",
+      "constant": "CONF_EV_TELEMETRY_MAX_AGE_SECONDS",
+      "key": "ev_telemetry_max_age_seconds",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._validate_input",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "subscript_load",
+      "constant": "CONF_EV_TELEMETRY_MAX_SKEW_SECONDS",
+      "key": "ev_telemetry_max_skew_seconds",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._validate_input",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "subscript_load",
+      "constant": "CONF_EV_VOLTAGE",
+      "key": "ev_voltage",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._validate_input",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "subscript_load",
+      "constant": "CONF_EXPORT_ALLOWANCE_KWH",
+      "key": "export_allowance_kwh",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._validate_input",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "subscript_load",
+      "constant": "CONF_EXPORT_LIMIT_KW",
+      "key": "export_limit_kw",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._validate_input",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "subscript_load",
+      "constant": "CONF_EXPORT_RATE",
+      "key": "export_rate_per_kwh",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._validate_input",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "subscript_load",
+      "constant": "CONF_EXPORT_RATE_WINDOW_END",
+      "key": "export_rate_window_end",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._validate_input",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "subscript_load",
+      "constant": "CONF_EXPORT_RATE_WINDOW_START",
+      "key": "export_rate_window_start",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._validate_input",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "subscript_load",
+      "constant": "CONF_FORCE_DISCHARGE_OFFSET_MINUTES",
+      "key": "force_discharge_offset_minutes",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._validate_input",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_FOXESS_CONTROL_OWNER",
+      "key": "foxess_control_owner",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._validate_input",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_FOXESS_CONTROL_OWNER",
+      "key": "foxess_control_owner",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._validate_input",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_FOXESS_FORCE_CHARGE_POWER",
+      "key": "foxess_force_charge_power_entity",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._validate_input",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_FOXESS_FORCE_DISCHARGE_POWER",
+      "key": "foxess_force_discharge_power_entity",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._validate_input",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_FOXESS_WORK_MODE",
+      "key": "foxess_work_mode_entity",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._validate_input",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "subscript_load",
+      "constant": "CONF_FREE_CHARGE_END",
+      "key": "free_charge_window_end",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._validate_input",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "subscript_load",
+      "constant": "CONF_FREE_CHARGE_START",
+      "key": "free_charge_window_start",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._validate_input",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_GRID_POWER_DIRECTION",
+      "key": "grid_power_positive_direction",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._validate_input",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "subscript_load",
+      "constant": "CONF_HOUSE_AWAY_CONFIRMATION_HOURS",
+      "key": "house_away_confirmation_hours",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._validate_input",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "subscript_load",
+      "constant": "CONF_HOUSE_AWAY_FALLBACK",
+      "key": "house_away_fallback_kwh",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._validate_input",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "subscript_load",
+      "constant": "CONF_HOUSE_LEARNING_FALLBACK",
+      "key": "house_learning_fallback_kwh",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._validate_input",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_HOUSE_OCCUPANCY_MODE",
+      "key": "house_occupancy_mode",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._validate_input",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "subscript_load",
+      "constant": "CONF_INVERTER_CHARGE_LIMIT_KW",
+      "key": "inverter_charge_limit_kw",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._validate_input",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "subscript_load",
+      "constant": "CONF_INVERTER_DISCHARGE_LIMIT_KW",
+      "key": "inverter_discharge_limit_kw",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._validate_input",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "subscript_load",
+      "constant": "CONF_OFFPEAK_BALANCE_RATE",
+      "key": "offpeak_balance_rate_per_kwh",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._validate_input",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "subscript_load",
+      "constant": "CONF_OFFPEAK_EXPORT_RATE",
+      "key": "offpeak_export_rate_per_kwh",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._validate_input",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "subscript_load",
+      "constant": "CONF_OFFPEAK_RATE",
+      "key": "offpeak_rate_per_kwh",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._validate_input",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "subscript_load",
+      "constant": "CONF_PEAK_RATE",
+      "key": "peak_rate_per_kwh",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._validate_input",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "subscript_load",
+      "constant": "CONF_PEAK_WINDOW_END",
+      "key": "peak_window_end",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._validate_input",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "subscript_load",
+      "constant": "CONF_PEAK_WINDOW_START",
+      "key": "peak_window_start",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._validate_input",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "subscript_load",
+      "constant": "CONF_RESERVE",
+      "key": "reserve_kwh",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._validate_input",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "subscript_load",
+      "constant": "CONF_SERVICE_IMPORT_LIMIT_A",
+      "key": "service_import_limit_a",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._validate_input",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "subscript_load",
+      "constant": "CONF_SHOULDER_RATE",
+      "key": "shoulder_rate_per_kwh",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._validate_input",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_SITE_GRID_CURRENT",
+      "key": "site_grid_current_entity",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._validate_input",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_SITE_GRID_CURRENT",
+      "key": "site_grid_current_entity",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._validate_input",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_SITE_GRID_CURRENT_DIRECTION",
+      "key": "site_grid_current_positive_direction",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._validate_input",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "subscript_load",
+      "constant": "CONF_SITE_GRID_HEADROOM_CURRENT",
+      "key": "site_grid_headroom_current_a",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._validate_input",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "subscript_load",
+      "constant": "CONF_SITE_PHASE_COUNT",
+      "key": "site_phase_count",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._validate_input",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_SOLAR_POWER_DIRECTION",
+      "key": "solar_power_generation_direction",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._validate_input",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "subscript_load",
+      "constant": "CONF_SUPER_EXPORT_RATE",
+      "key": "super_export_rate_per_kwh",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._validate_input",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "subscript_load",
+      "constant": "CONF_TELEMETRY_MAX_AGE_SECONDS",
+      "key": "telemetry_max_age_seconds",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._validate_input",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "subscript_load",
+      "constant": "CONF_ZEROHERO_DAILY_CREDIT",
+      "key": "zerohero_daily_credit",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._validate_input",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "subscript_load",
+      "constant": "CONF_ZERO_IMPORT_CONFIRM_MINUTES",
+      "key": "zero_import_confirm_minutes",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._validate_input",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "subscript_load",
+      "constant": "CONF_ZERO_IMPORT_THRESHOLD_KW",
+      "key": "zero_import_threshold_kw",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._validate_input",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "subscript_load",
+      "constant": "CONF_FREE_CHARGE_END",
+      "key": "free_charge_window_end",
+      "layer": "boundary",
+      "receiver": "self._pending_input",
+      "scope": "ConfigFlow.async_step_confirm_schedule",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "subscript_store",
+      "constant": "CONF_FREE_CHARGE_SCHEDULE_CONFIRMED",
+      "key": "free_charge_schedule_confirmed",
+      "layer": "boundary",
+      "receiver": "pending",
+      "scope": "ConfigFlow.async_step_confirm_schedule",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "subscript_load",
+      "constant": "CONF_FREE_CHARGE_START",
+      "key": "free_charge_window_start",
+      "layer": "boundary",
+      "receiver": "self._pending_input",
+      "scope": "ConfigFlow.async_step_confirm_schedule",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_AUTOMATIC_CHARGE_ENABLED",
+      "key": "automatic_charge_enabled",
+      "layer": "boundary",
+      "receiver": "user_input",
+      "scope": "ConfigFlow.async_step_reconfigure",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "subscript_load",
+      "constant": "CONF_EV_CHARGE_TO_FULL",
+      "key": "ev_charge_to_full_entity",
+      "layer": "boundary",
+      "receiver": "entry.data",
+      "scope": "ConfigFlow.async_step_reconfigure",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "subscript_store",
+      "constant": "CONF_EV_CHARGE_TO_FULL",
+      "key": "ev_charge_to_full_entity",
+      "layer": "boundary",
+      "receiver": "user_input",
+      "scope": "ConfigFlow.async_step_reconfigure",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "subscript_load",
+      "constant": "CONF_EV_CHARGE_TO_FULL_ENABLED",
+      "key": "ev_charge_to_full_enabled",
+      "layer": "boundary",
+      "receiver": "entry.data",
+      "scope": "ConfigFlow.async_step_reconfigure",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "subscript_store",
+      "constant": "CONF_EV_CHARGE_TO_FULL_ENABLED",
+      "key": "ev_charge_to_full_enabled",
+      "layer": "boundary",
+      "receiver": "user_input",
+      "scope": "ConfigFlow.async_step_reconfigure",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "subscript_store",
+      "constant": "CONF_SIGN_CONVENTIONS_VERIFIED",
+      "key": "sign_conventions_verified",
+      "layer": "boundary",
+      "receiver": "user_input",
+      "scope": "ConfigFlow.async_step_reconfigure",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_SOLAR_POWER",
+      "key": "solar_power_entity",
+      "layer": "boundary",
+      "receiver": "self._draft_input",
+      "scope": "ConfigFlow.async_step_reconfigure",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_AUTOMATIC_CHARGE_ENABLED",
+      "key": "automatic_charge_enabled",
+      "layer": "boundary",
+      "receiver": "user_input",
+      "scope": "ConfigFlow.async_step_user",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_SOLAR_POWER",
+      "key": "solar_power_entity",
+      "layer": "boundary",
+      "receiver": "discovered",
+      "scope": "ConfigFlow.async_step_user",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_DAILY_IMPORT_ENTITY",
+      "key": "daily_import_entity",
+      "layer": "runtime",
+      "receiver": "self.config",
+      "scope": "EnergyCoordinator._apply_tariff_guard",
+      "source": "custom_components/home_energy_orchestrator/coordinator.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_HEATER_POWER",
+      "key": "heater_power_entity",
+      "layer": "runtime",
+      "receiver": "self.config",
+      "scope": "EnergyCoordinator._async_sample_house_load",
+      "source": "custom_components/home_energy_orchestrator/coordinator.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_BATTERY_CAPACITY_ENTITY",
+      "key": "battery_capacity_entity",
+      "layer": "runtime",
+      "receiver": "self.config",
+      "scope": "EnergyCoordinator._async_update_data",
+      "source": "custom_components/home_energy_orchestrator/coordinator.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_BATTERY_SOC",
+      "key": "battery_soc_entity",
+      "layer": "runtime",
+      "receiver": "self.config",
+      "scope": "EnergyCoordinator._async_update_data",
+      "source": "custom_components/home_energy_orchestrator/coordinator.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_SOC",
+      "key": "ev_soc_entity",
+      "layer": "runtime",
+      "receiver": "self.config",
+      "scope": "EnergyCoordinator._async_update_data",
+      "source": "custom_components/home_energy_orchestrator/coordinator.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_BONUS_WINDOW_END",
+      "key": "bonus_window_end",
+      "layer": "runtime",
+      "receiver": "self.config",
+      "scope": "EnergyCoordinator._bonus_window_active",
+      "source": "custom_components/home_energy_orchestrator/coordinator.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_BONUS_WINDOW_START",
+      "key": "bonus_window_start",
+      "layer": "runtime",
+      "receiver": "self.config",
+      "scope": "EnergyCoordinator._bonus_window_active",
+      "source": "custom_components/home_energy_orchestrator/coordinator.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_PHASE_COUNT",
+      "key": "ev_phase_count",
+      "layer": "runtime",
+      "receiver": "self.config",
+      "scope": "EnergyCoordinator._configured_phase_count",
+      "source": "custom_components/home_energy_orchestrator/coordinator.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_SITE_PHASE_COUNT",
+      "key": "site_phase_count",
+      "layer": "runtime",
+      "receiver": "self.config",
+      "scope": "EnergyCoordinator._configured_site_phase_count",
+      "source": "custom_components/home_energy_orchestrator/coordinator.py"
+    },
+    {
+      "access": "subscript_load",
+      "constant": "CONF_FREE_CHARGE_END",
+      "key": "free_charge_window_end",
+      "layer": "runtime",
+      "receiver": "config",
+      "scope": "EnergyCoordinator._create_demand_sampler",
+      "source": "custom_components/home_energy_orchestrator/coordinator.py"
+    },
+    {
+      "access": "subscript_load",
+      "constant": "CONF_FREE_CHARGE_START",
+      "key": "free_charge_window_start",
+      "layer": "runtime",
+      "receiver": "config",
+      "scope": "EnergyCoordinator._create_demand_sampler",
+      "source": "custom_components/home_energy_orchestrator/coordinator.py"
+    },
+    {
+      "access": "subscript_load",
+      "constant": "CONF_FREE_CHARGE_START",
+      "key": "free_charge_window_start",
+      "layer": "runtime",
+      "receiver": "config",
+      "scope": "EnergyCoordinator._create_heater_sampler",
+      "source": "custom_components/home_energy_orchestrator/coordinator.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_HEATER_POWER",
+      "key": "heater_power_entity",
+      "layer": "runtime",
+      "receiver": "config",
+      "scope": "EnergyCoordinator._create_heater_sampler",
+      "source": "custom_components/home_energy_orchestrator/coordinator.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_GLOBIRD_LATEST_DAILY_COST",
+      "key": "globird_latest_daily_cost_entity",
+      "layer": "runtime",
+      "receiver": "self.config",
+      "scope": "EnergyCoordinator._match_retailer_scorecard",
+      "source": "custom_components/home_energy_orchestrator/coordinator.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_GLOBIRD_ZEROHERO_STATUS",
+      "key": "globird_zerohero_status_entity",
+      "layer": "runtime",
+      "receiver": "self.config",
+      "scope": "EnergyCoordinator._match_retailer_scorecard",
+      "source": "custom_components/home_energy_orchestrator/coordinator.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_TELEMETRY_MAX_AGE_SECONDS",
+      "key": "telemetry_max_age_seconds",
+      "layer": "runtime",
+      "receiver": "self.config",
+      "scope": "EnergyCoordinator._max_telemetry_age",
+      "source": "custom_components/home_energy_orchestrator/coordinator.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_BATTERY_CHARGE_POSITIVE",
+      "key": "battery_charge_positive",
+      "layer": "runtime",
+      "receiver": "self.config",
+      "scope": "EnergyCoordinator._normalized_telemetry",
+      "source": "custom_components/home_energy_orchestrator/coordinator.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_BATTERY_CHARGE_POWER",
+      "key": "battery_charge_power_entity",
+      "layer": "runtime",
+      "receiver": "self.config",
+      "scope": "EnergyCoordinator._normalized_telemetry",
+      "source": "custom_components/home_energy_orchestrator/coordinator.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_BATTERY_DISCHARGE_POWER",
+      "key": "battery_discharge_power_entity",
+      "layer": "runtime",
+      "receiver": "self.config",
+      "scope": "EnergyCoordinator._normalized_telemetry",
+      "source": "custom_components/home_energy_orchestrator/coordinator.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_CONFIGURE_SOLAR",
+      "key": "configure_solar",
+      "layer": "runtime",
+      "receiver": "self.config",
+      "scope": "EnergyCoordinator._normalized_telemetry",
+      "source": "custom_components/home_energy_orchestrator/coordinator.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_SITE_GRID_CURRENT",
+      "key": "site_grid_current_entity",
+      "layer": "runtime",
+      "receiver": "self.config",
+      "scope": "EnergyCoordinator._normalized_telemetry",
+      "source": "custom_components/home_energy_orchestrator/coordinator.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_HEATER_POWER",
+      "key": "heater_power_entity",
+      "layer": "runtime",
+      "receiver": "self.config",
+      "scope": "EnergyCoordinator._protected_house_learning_power_kw",
+      "source": "custom_components/home_energy_orchestrator/coordinator.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_HEATER_POWER",
+      "key": "heater_power_entity",
+      "layer": "runtime",
+      "receiver": "self.config",
+      "scope": "EnergyCoordinator._protected_house_learning_power_kw",
+      "source": "custom_components/home_energy_orchestrator/coordinator.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_HOUSE_LOAD_INCLUDES_EV",
+      "key": "house_load_includes_ev",
+      "layer": "runtime",
+      "receiver": "self.config",
+      "scope": "EnergyCoordinator._protected_house_learning_power_kw",
+      "source": "custom_components/home_energy_orchestrator/coordinator.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_ACTUAL_CURRENT",
+      "key": "ev_actual_current_entity",
+      "layer": "runtime",
+      "receiver": "self.config",
+      "scope": "EnergyCoordinator._state_qualified_ev_power_kw",
+      "source": "custom_components/home_energy_orchestrator/coordinator.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_CHARGING_STATE",
+      "key": "ev_charging_state_entity",
+      "layer": "runtime",
+      "receiver": "self.config",
+      "scope": "EnergyCoordinator._state_qualified_ev_power_kw",
+      "source": "custom_components/home_energy_orchestrator/coordinator.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_HOUSE_LEARNING_FALLBACK",
+      "key": "house_learning_fallback_kwh",
+      "layer": "runtime",
+      "receiver": "self.config",
+      "scope": "EnergyCoordinator.base_learning_result",
+      "source": "custom_components/home_energy_orchestrator/coordinator.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_HOUSE_AWAY_FALLBACK",
+      "key": "house_away_fallback_kwh",
+      "layer": "runtime",
+      "receiver": "self.config",
+      "scope": "EnergyCoordinator.learning_result",
+      "source": "custom_components/home_energy_orchestrator/coordinator.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_HOUSE_LEARNING_FALLBACK",
+      "key": "house_learning_fallback_kwh",
+      "layer": "runtime",
+      "receiver": "self.config",
+      "scope": "EnergyCoordinator.learning_result",
+      "source": "custom_components/home_energy_orchestrator/coordinator.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_HOUSE_AWAY_CONFIRMATION_HOURS",
+      "key": "house_away_confirmation_hours",
+      "layer": "runtime",
+      "receiver": "self.config",
+      "scope": "EnergyCoordinator.occupancy_result",
+      "source": "custom_components/home_energy_orchestrator/coordinator.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_HOUSE_OCCUPANCY_MODE",
+      "key": "house_occupancy_mode",
+      "layer": "runtime",
+      "receiver": "self.config",
+      "scope": "EnergyCoordinator.occupancy_result",
+      "source": "custom_components/home_energy_orchestrator/coordinator.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_AUTOMATIC_CHARGE_ENABLED",
+      "key": "automatic_charge_enabled",
+      "layer": "runtime",
+      "receiver": "entry.data",
+      "scope": "async_get_config_entry_diagnostics",
+      "source": "custom_components/home_energy_orchestrator/diagnostics.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_AUTOMATIC_CONTROL_ENABLED",
+      "key": "automatic_control_enabled",
+      "layer": "runtime",
+      "receiver": "entry.data",
+      "scope": "async_get_config_entry_diagnostics",
+      "source": "custom_components/home_energy_orchestrator/diagnostics.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_AUTOMATIC_EXPORT_ENABLED",
+      "key": "automatic_export_enabled",
+      "layer": "runtime",
+      "receiver": "entry.data",
+      "scope": "async_get_config_entry_diagnostics",
+      "source": "custom_components/home_energy_orchestrator/diagnostics.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_AUTOMATIC_CONTROL_ENABLED",
+      "key": "ev_automatic_control_enabled",
+      "layer": "runtime",
+      "receiver": "entry.data",
+      "scope": "async_get_config_entry_diagnostics",
+      "source": "custom_components/home_energy_orchestrator/diagnostics.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_BEFORE_EXPORT_ENABLED",
+      "key": "ev_before_export_enabled",
+      "layer": "runtime",
+      "receiver": "entry.data",
+      "scope": "async_get_config_entry_diagnostics",
+      "source": "custom_components/home_energy_orchestrator/diagnostics.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_BEFORE_EXPORT_SOC_TARGET",
+      "key": "ev_before_export_soc_target_percent",
+      "layer": "runtime",
+      "receiver": "entry.data",
+      "scope": "async_get_config_entry_diagnostics",
+      "source": "custom_components/home_energy_orchestrator/diagnostics.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_FOXESS_CONTROL_OWNER",
+      "key": "foxess_control_owner",
+      "layer": "runtime",
+      "receiver": "entry.data",
+      "scope": "async_get_config_entry_diagnostics",
+      "source": "custom_components/home_energy_orchestrator/diagnostics.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_FREE_CHARGE_SCHEDULE_CONFIRMED",
+      "key": "free_charge_schedule_confirmed",
+      "layer": "runtime",
+      "receiver": "entry.data",
+      "scope": "async_get_config_entry_diagnostics",
+      "source": "custom_components/home_energy_orchestrator/diagnostics.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_REHEARSAL_MODE",
+      "key": "rehearsal_mode",
+      "layer": "runtime",
+      "receiver": "entry.data",
+      "scope": "async_get_config_entry_diagnostics",
+      "source": "custom_components/home_energy_orchestrator/diagnostics.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_SIGN_CONVENTIONS_VERIFIED",
+      "key": "sign_conventions_verified",
+      "layer": "runtime",
+      "receiver": "entry.data",
+      "scope": "async_get_config_entry_diagnostics",
+      "source": "custom_components/home_energy_orchestrator/diagnostics.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_ACTUAL_CURRENT",
+      "key": "ev_actual_current_entity",
+      "layer": "runtime",
+      "receiver": "self.coordinator.config",
+      "scope": "ActiveEvController._actual_ev_current_a",
+      "source": "custom_components/home_energy_orchestrator/ev_active.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_HOUSE_LOAD_INCLUDES_EV",
+      "key": "house_load_includes_ev",
+      "layer": "runtime",
+      "receiver": "self.coordinator.config",
+      "scope": "ActiveEvController._allowance_target",
+      "source": "custom_components/home_energy_orchestrator/ev_active.py"
+    },
+    {
+      "access": "pop",
+      "constant": "CONF_EV_CHARGE_TO_FULL",
+      "key": "ev_charge_to_full_entity",
+      "layer": "runtime",
+      "receiver": "self.coordinator.config",
+      "scope": "ActiveEvController._async_clear_charge_to_full",
+      "source": "custom_components/home_energy_orchestrator/ev_active.py"
+    },
+    {
+      "access": "subscript_store",
+      "constant": "CONF_EV_CHARGE_TO_FULL_ENABLED",
+      "key": "ev_charge_to_full_enabled",
+      "layer": "runtime",
+      "receiver": "config",
+      "scope": "ActiveEvController._async_clear_charge_to_full",
+      "source": "custom_components/home_energy_orchestrator/ev_active.py"
+    },
+    {
+      "access": "subscript_store",
+      "constant": "CONF_EV_CHARGE_TO_FULL_ENABLED",
+      "key": "ev_charge_to_full_enabled",
+      "layer": "runtime",
+      "receiver": "self.coordinator.config",
+      "scope": "ActiveEvController._async_clear_charge_to_full",
+      "source": "custom_components/home_energy_orchestrator/ev_active.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_SMART_SOCKET_POWER_SWITCHING",
+      "key": "ev_smart_socket_power_switching",
+      "layer": "runtime",
+      "receiver": "self.coordinator.config",
+      "scope": "ActiveEvController._async_reconcile_disconnected_smart_socket",
+      "source": "custom_components/home_energy_orchestrator/ev_active.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_SMART_SOCKET_POWER_SWITCHING",
+      "key": "ev_smart_socket_power_switching",
+      "layer": "runtime",
+      "receiver": "self.coordinator.config",
+      "scope": "ActiveEvController._async_reconcile_smart_socket",
+      "source": "custom_components/home_energy_orchestrator/ev_active.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_CONFIGURE_SOLAR",
+      "key": "configure_solar",
+      "layer": "runtime",
+      "receiver": "self.coordinator.config",
+      "scope": "ActiveEvController._calculate_outside_target",
+      "source": "custom_components/home_energy_orchestrator/ev_active.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_PRE_FREE_ENABLED",
+      "key": "ev_pre_free_backfill_enabled",
+      "layer": "runtime",
+      "receiver": "self.coordinator.config",
+      "scope": "ActiveEvController._calculate_outside_target",
+      "source": "custom_components/home_energy_orchestrator/ev_active.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_SOLAR_SPILL_ENABLED",
+      "key": "ev_solar_spill_enabled",
+      "layer": "runtime",
+      "receiver": "self.coordinator.config",
+      "scope": "ActiveEvController._calculate_outside_target",
+      "source": "custom_components/home_energy_orchestrator/ev_active.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_ALLOWANCE_GUARD_ENABLED",
+      "key": "ev_allowance_guard_enabled",
+      "layer": "runtime",
+      "receiver": "self.coordinator.config",
+      "scope": "ActiveEvController._calculate_target",
+      "source": "custom_components/home_energy_orchestrator/ev_active.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_FREE_WINDOW_PRIORITY",
+      "key": "ev_free_window_priority",
+      "layer": "runtime",
+      "receiver": "self.coordinator.config",
+      "scope": "ActiveEvController._calculate_target",
+      "source": "custom_components/home_energy_orchestrator/ev_active.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_CHARGE_TO_FULL_ENABLED",
+      "key": "ev_charge_to_full_enabled",
+      "layer": "runtime",
+      "receiver": "self.coordinator.config",
+      "scope": "ActiveEvController._charge_to_full_requested",
+      "source": "custom_components/home_energy_orchestrator/ev_active.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_LOCATION_MODE",
+      "key": "ev_location_mode",
+      "layer": "runtime",
+      "receiver": "self.coordinator.config",
+      "scope": "ActiveEvController._connected_at_home",
+      "source": "custom_components/home_energy_orchestrator/ev_active.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_CHARGE_LIMIT",
+      "key": "ev_charge_limit_entity",
+      "layer": "runtime",
+      "receiver": "config",
+      "scope": "ActiveEvController._create_adapter",
+      "source": "custom_components/home_energy_orchestrator/ev_active.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_CHARGE_SWITCH",
+      "key": "ev_charge_switch_entity",
+      "layer": "runtime",
+      "receiver": "config",
+      "scope": "ActiveEvController._create_adapter",
+      "source": "custom_components/home_energy_orchestrator/ev_active.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_CURRENT_LIMIT",
+      "key": "ev_current_limit_entity",
+      "layer": "runtime",
+      "receiver": "config",
+      "scope": "ActiveEvController._create_adapter",
+      "source": "custom_components/home_energy_orchestrator/ev_active.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_SMART_SOCKET",
+      "key": "ev_smart_socket_entity",
+      "layer": "runtime",
+      "receiver": "config",
+      "scope": "ActiveEvController._create_adapter",
+      "source": "custom_components/home_energy_orchestrator/ev_active.py"
+    },
+    {
+      "access": "subscript_load",
+      "constant": "CONF_EV_SMART_SOCKET",
+      "key": "ev_smart_socket_entity",
+      "layer": "runtime",
+      "receiver": "config",
+      "scope": "ActiveEvController._create_adapter",
+      "source": "custom_components/home_energy_orchestrator/ev_active.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_LOCATION_MODE",
+      "key": "ev_location_mode",
+      "layer": "runtime",
+      "receiver": "self.coordinator.config",
+      "scope": "ActiveEvController._home_control_active",
+      "source": "custom_components/home_energy_orchestrator/ev_active.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_CHARGE_LIMIT",
+      "key": "ev_charge_limit_entity",
+      "layer": "runtime",
+      "receiver": "self.coordinator.config",
+      "scope": "ActiveEvController._observation",
+      "source": "custom_components/home_energy_orchestrator/ev_active.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_CURRENT_LIMIT",
+      "key": "ev_current_limit_entity",
+      "layer": "runtime",
+      "receiver": "self.coordinator.config",
+      "scope": "ActiveEvController._observation",
+      "source": "custom_components/home_energy_orchestrator/ev_active.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_CHARGE_PATH",
+      "key": "ev_charge_path",
+      "layer": "runtime",
+      "receiver": "self.coordinator.config",
+      "scope": "ActiveEvController._path_ceiling_a",
+      "source": "custom_components/home_energy_orchestrator/ev_active.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_AT_HOME",
+      "key": "ev_at_home_entity",
+      "layer": "runtime",
+      "receiver": "self.coordinator.config",
+      "scope": "ActiveEvController._smart_recovery_observation",
+      "source": "custom_components/home_energy_orchestrator/ev_active.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_CABLE_CONNECTED",
+      "key": "ev_cable_connected_entity",
+      "layer": "runtime",
+      "receiver": "self.coordinator.config",
+      "scope": "ActiveEvController._smart_recovery_observation",
+      "source": "custom_components/home_energy_orchestrator/ev_active.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_CHARGE_SWITCH",
+      "key": "ev_charge_switch_entity",
+      "layer": "runtime",
+      "receiver": "self.coordinator.config",
+      "scope": "ActiveEvController._smart_recovery_observation",
+      "source": "custom_components/home_energy_orchestrator/ev_active.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_CHARGING_STATE",
+      "key": "ev_charging_state_entity",
+      "layer": "runtime",
+      "receiver": "self.coordinator.config",
+      "scope": "ActiveEvController._smart_recovery_observation",
+      "source": "custom_components/home_energy_orchestrator/ev_active.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_SMART_SOCKET",
+      "key": "ev_smart_socket_entity",
+      "layer": "runtime",
+      "receiver": "self.coordinator.config",
+      "scope": "ActiveEvController._smart_socket_observation",
+      "source": "custom_components/home_energy_orchestrator/ev_active.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_BATTERY_SOC",
+      "key": "battery_soc_entity",
+      "layer": "runtime",
+      "receiver": "self.coordinator.config",
+      "scope": "ActiveEvController._solar_spill_decision",
+      "source": "custom_components/home_energy_orchestrator/ev_active.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_ACTUAL_CURRENT",
+      "key": "ev_actual_current_entity",
+      "layer": "runtime",
+      "receiver": "self.coordinator.config",
+      "scope": "ActiveEvController._solar_spill_decision",
+      "source": "custom_components/home_energy_orchestrator/ev_active.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_ALLOWANCE_GUARD_ENABLED",
+      "key": "ev_allowance_guard_enabled",
+      "layer": "runtime",
+      "receiver": "self.coordinator.config",
+      "scope": "ActiveEvController.async_reconcile",
+      "source": "custom_components/home_energy_orchestrator/ev_active.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_CHARGE_PATH",
+      "key": "ev_charge_path",
+      "layer": "runtime",
+      "receiver": "self.coordinator.config",
+      "scope": "ActiveEvController.async_reconcile",
+      "source": "custom_components/home_energy_orchestrator/ev_active.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_FREE_WINDOW_PRIORITY",
+      "key": "ev_free_window_priority",
+      "layer": "runtime",
+      "receiver": "self.coordinator.config",
+      "scope": "ActiveEvController.async_reconcile",
+      "source": "custom_components/home_energy_orchestrator/ev_active.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_PRE_FREE_ENABLED",
+      "key": "ev_pre_free_backfill_enabled",
+      "layer": "runtime",
+      "receiver": "self.coordinator.config",
+      "scope": "ActiveEvController.async_reconcile",
+      "source": "custom_components/home_energy_orchestrator/ev_active.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_SOLAR_SPILL_ENABLED",
+      "key": "ev_solar_spill_enabled",
+      "layer": "runtime",
+      "receiver": "self.coordinator.config",
+      "scope": "ActiveEvController.async_reconcile",
+      "source": "custom_components/home_energy_orchestrator/ev_active.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_SOLAR_SPILL_ENABLED",
+      "key": "ev_solar_spill_enabled",
+      "layer": "runtime",
+      "receiver": "self.coordinator.config",
+      "scope": "ActiveEvController.async_reconcile",
+      "source": "custom_components/home_energy_orchestrator/ev_active.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_FOXESS_CONTROL_OWNER",
+      "key": "foxess_control_owner",
+      "layer": "runtime",
+      "receiver": "self.coordinator.config",
+      "scope": "ActiveEvController.async_reconcile",
+      "source": "custom_components/home_energy_orchestrator/ev_active.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_HOUSE_LOAD_INCLUDES_EV",
+      "key": "house_load_includes_ev",
+      "layer": "runtime",
+      "receiver": "self.coordinator.config",
+      "scope": "ActiveEvController.async_reconcile",
+      "source": "custom_components/home_energy_orchestrator/ev_active.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_CONFIGURE_EV",
+      "key": "configure_ev",
+      "layer": "runtime",
+      "receiver": "config",
+      "scope": "ev_control_gate_status",
+      "source": "custom_components/home_energy_orchestrator/ev_adapter.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_AUTOMATIC_CONTROL_ENABLED",
+      "key": "ev_automatic_control_enabled",
+      "layer": "runtime",
+      "receiver": "config",
+      "scope": "ev_control_gate_status",
+      "source": "custom_components/home_energy_orchestrator/ev_adapter.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_CHARGE_PATH",
+      "key": "ev_charge_path",
+      "layer": "runtime",
+      "receiver": "config",
+      "scope": "ev_control_gate_status",
+      "source": "custom_components/home_energy_orchestrator/ev_adapter.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_CONTROL_COMMISSIONED",
+      "key": "ev_control_commissioned",
+      "layer": "runtime",
+      "receiver": "config",
+      "scope": "ev_control_gate_status",
+      "source": "custom_components/home_energy_orchestrator/ev_adapter.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_SMART_SOCKET",
+      "key": "ev_smart_socket_entity",
+      "layer": "runtime",
+      "receiver": "config",
+      "scope": "ev_control_gate_status",
+      "source": "custom_components/home_energy_orchestrator/ev_adapter.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_SMART_SOCKET_CURRENT_LIMIT",
+      "key": "ev_smart_socket_current_limit_a",
+      "layer": "runtime",
+      "receiver": "config",
+      "scope": "ev_control_gate_status",
+      "source": "custom_components/home_energy_orchestrator/ev_adapter.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_REHEARSAL_MODE",
+      "key": "rehearsal_mode",
+      "layer": "runtime",
+      "receiver": "config",
+      "scope": "ev_control_gate_status",
+      "source": "custom_components/home_energy_orchestrator/ev_adapter.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_SIGN_CONVENTIONS_VERIFIED",
+      "key": "sign_conventions_verified",
+      "layer": "runtime",
+      "receiver": "config",
+      "scope": "ev_control_gate_status",
+      "source": "custom_components/home_energy_orchestrator/ev_adapter.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_SITE_GRID_CURRENT",
+      "key": "site_grid_current_entity",
+      "layer": "runtime",
+      "receiver": "config",
+      "scope": "ev_control_gate_status",
+      "source": "custom_components/home_energy_orchestrator/ev_adapter.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_SITE_PHASE_COUNT",
+      "key": "site_phase_count",
+      "layer": "runtime",
+      "receiver": "config",
+      "scope": "ev_control_gate_status",
+      "source": "custom_components/home_energy_orchestrator/ev_adapter.py"
+    },
+    {
+      "access": "subscript_load",
+      "constant": "CONF_FOXESS_FORCE_CHARGE_POWER",
+      "key": "foxess_force_charge_power_entity",
+      "layer": "runtime",
+      "receiver": "self.coordinator.config",
+      "scope": "ManualTestController._get_adapter",
+      "source": "custom_components/home_energy_orchestrator/manual_test.py"
+    },
+    {
+      "access": "subscript_load",
+      "constant": "CONF_FOXESS_FORCE_DISCHARGE_POWER",
+      "key": "foxess_force_discharge_power_entity",
+      "layer": "runtime",
+      "receiver": "self.coordinator.config",
+      "scope": "ManualTestController._get_adapter",
+      "source": "custom_components/home_energy_orchestrator/manual_test.py"
+    },
+    {
+      "access": "subscript_load",
+      "constant": "CONF_FOXESS_WORK_MODE",
+      "key": "foxess_work_mode_entity",
+      "layer": "runtime",
+      "receiver": "self.coordinator.config",
+      "scope": "ManualTestController._get_adapter",
+      "source": "custom_components/home_energy_orchestrator/manual_test.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_FOXESS_FORCE_CHARGE_POWER",
+      "key": "foxess_force_charge_power_entity",
+      "layer": "runtime",
+      "receiver": "self.coordinator.config",
+      "scope": "ManualTestController._observation",
+      "source": "custom_components/home_energy_orchestrator/manual_test.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_FOXESS_FORCE_DISCHARGE_POWER",
+      "key": "foxess_force_discharge_power_entity",
+      "layer": "runtime",
+      "receiver": "self.coordinator.config",
+      "scope": "ManualTestController._observation",
+      "source": "custom_components/home_energy_orchestrator/manual_test.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_FOXESS_WORK_MODE",
+      "key": "foxess_work_mode_entity",
+      "layer": "runtime",
+      "receiver": "self.coordinator.config",
+      "scope": "ManualTestController._observation",
+      "source": "custom_components/home_energy_orchestrator/manual_test.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_FOXESS_CONTROL_OWNER",
+      "key": "foxess_control_owner",
+      "layer": "runtime",
+      "receiver": "self.coordinator.config",
+      "scope": "ManualTestController._require_gate",
+      "source": "custom_components/home_energy_orchestrator/manual_test.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_REHEARSAL_MODE",
+      "key": "rehearsal_mode",
+      "layer": "runtime",
+      "receiver": "self.coordinator.config",
+      "scope": "ManualTestController._require_gate",
+      "source": "custom_components/home_energy_orchestrator/manual_test.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_FOXESS_CONTROL_OWNER",
+      "key": "foxess_control_owner",
+      "layer": "runtime",
+      "receiver": "self.coordinator.config",
+      "scope": "ManualTestController._restore_gate_reason",
+      "source": "custom_components/home_energy_orchestrator/manual_test.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_REHEARSAL_MODE",
+      "key": "rehearsal_mode",
+      "layer": "runtime",
+      "receiver": "self.coordinator.config",
+      "scope": "ManualTestController._restore_gate_reason",
+      "source": "custom_components/home_energy_orchestrator/manual_test.py"
+    },
+    {
+      "access": "subscript_store",
+      "constant": "CONF_EV_BEFORE_EXPORT_SOC_TARGET",
+      "key": "ev_before_export_soc_target_percent",
+      "layer": "runtime",
+      "receiver": "self.coordinator.config",
+      "scope": "EvBeforeExportTargetNumber.async_set_native_value",
+      "source": "custom_components/home_energy_orchestrator/number.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_BEFORE_EXPORT_SOC_TARGET",
+      "key": "ev_before_export_soc_target_percent",
+      "layer": "runtime",
+      "receiver": "self.coordinator.config",
+      "scope": "EvBeforeExportTargetNumber.native_value",
+      "source": "custom_components/home_energy_orchestrator/number.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_INVERTER_CHARGE_LIMIT_KW",
+      "key": "inverter_charge_limit_kw",
+      "layer": "runtime",
+      "receiver": "self.coordinator.config",
+      "scope": "TestNumber._max_value",
+      "source": "custom_components/home_energy_orchestrator/number.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_INVERTER_DISCHARGE_LIMIT_KW",
+      "key": "inverter_discharge_limit_kw",
+      "layer": "runtime",
+      "receiver": "self.coordinator.config",
+      "scope": "TestNumber._max_value",
+      "source": "custom_components/home_energy_orchestrator/number.py"
+    },
+    {
+      "access": "subscript_store",
+      "constant": "CONF_HOUSE_OCCUPANCY_MODE",
+      "key": "house_occupancy_mode",
+      "layer": "runtime",
+      "receiver": "self.coordinator.config",
+      "scope": "HouseOccupancyModeSelect.async_select_option",
+      "source": "custom_components/home_energy_orchestrator/select.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_HOUSE_OCCUPANCY_MODE",
+      "key": "house_occupancy_mode",
+      "layer": "runtime",
+      "receiver": "self.coordinator.config",
+      "scope": "HouseOccupancyModeSelect.current_option",
+      "source": "custom_components/home_energy_orchestrator/select.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_AUTOMATIC_CHARGE_ENABLED",
+      "key": "automatic_charge_enabled",
+      "layer": "runtime",
+      "receiver": "config",
+      "scope": "EnergySensor._control_mode",
+      "source": "custom_components/home_energy_orchestrator/sensor.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_AUTOMATIC_EXPORT_ENABLED",
+      "key": "automatic_export_enabled",
+      "layer": "runtime",
+      "receiver": "config",
+      "scope": "EnergySensor._control_mode",
+      "source": "custom_components/home_energy_orchestrator/sensor.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_FOXESS_CONTROL_OWNER",
+      "key": "foxess_control_owner",
+      "layer": "runtime",
+      "receiver": "config",
+      "scope": "EnergySensor._control_mode",
+      "source": "custom_components/home_energy_orchestrator/sensor.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_AUTOMATIC_EXPORT_ENABLED",
+      "key": "automatic_export_enabled",
+      "layer": "runtime",
+      "receiver": "self.coordinator.config",
+      "scope": "EnergySensor._export_status",
+      "source": "custom_components/home_energy_orchestrator/sensor.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_AUTOMATIC_CHARGE_ENABLED",
+      "key": "automatic_charge_enabled",
+      "layer": "runtime",
+      "receiver": "self.coordinator.config",
+      "scope": "EnergySensor.extra_state_attributes",
+      "source": "custom_components/home_energy_orchestrator/sensor.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_AUTOMATIC_CONTROL_ENABLED",
+      "key": "automatic_control_enabled",
+      "layer": "runtime",
+      "receiver": "self.coordinator.config",
+      "scope": "EnergySensor.extra_state_attributes",
+      "source": "custom_components/home_energy_orchestrator/sensor.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_AUTOMATIC_EXPORT_ENABLED",
+      "key": "automatic_export_enabled",
+      "layer": "runtime",
+      "receiver": "self.coordinator.config",
+      "scope": "EnergySensor.extra_state_attributes",
+      "source": "custom_components/home_energy_orchestrator/sensor.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_AUTOMATIC_CONTROL_ENABLED",
+      "key": "ev_automatic_control_enabled",
+      "layer": "runtime",
+      "receiver": "self.coordinator.config",
+      "scope": "EnergySensor.extra_state_attributes",
+      "source": "custom_components/home_energy_orchestrator/sensor.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EXPORT_RATE",
+      "key": "export_rate_per_kwh",
+      "layer": "runtime",
+      "receiver": "self.coordinator.config",
+      "scope": "EnergySensor.extra_state_attributes",
+      "source": "custom_components/home_energy_orchestrator/sensor.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_FOXESS_CONTROL_OWNER",
+      "key": "foxess_control_owner",
+      "layer": "runtime",
+      "receiver": "self.coordinator.config",
+      "scope": "EnergySensor.extra_state_attributes",
+      "source": "custom_components/home_energy_orchestrator/sensor.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_FREE_CHARGE_SCHEDULE_CONFIRMED",
+      "key": "free_charge_schedule_confirmed",
+      "layer": "runtime",
+      "receiver": "self.coordinator.config",
+      "scope": "EnergySensor.extra_state_attributes",
+      "source": "custom_components/home_energy_orchestrator/sensor.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_OFFPEAK_EXPORT_RATE",
+      "key": "offpeak_export_rate_per_kwh",
+      "layer": "runtime",
+      "receiver": "self.coordinator.config",
+      "scope": "EnergySensor.extra_state_attributes",
+      "source": "custom_components/home_energy_orchestrator/sensor.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_REHEARSAL_MODE",
+      "key": "rehearsal_mode",
+      "layer": "runtime",
+      "receiver": "self.coordinator.config",
+      "scope": "EnergySensor.extra_state_attributes",
+      "source": "custom_components/home_energy_orchestrator/sensor.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_SIGN_CONVENTIONS_VERIFIED",
+      "key": "sign_conventions_verified",
+      "layer": "runtime",
+      "receiver": "self.coordinator.config",
+      "scope": "EnergySensor.extra_state_attributes",
+      "source": "custom_components/home_energy_orchestrator/sensor.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_SUPER_EXPORT_RATE",
+      "key": "super_export_rate_per_kwh",
+      "layer": "runtime",
+      "receiver": "self.coordinator.config",
+      "scope": "EnergySensor.extra_state_attributes",
+      "source": "custom_components/home_energy_orchestrator/sensor.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_ZERO_IMPORT_THRESHOLD_KW",
+      "key": "zero_import_threshold_kw",
+      "layer": "runtime",
+      "receiver": "self.coordinator.config",
+      "scope": "EnergySensor.extra_state_attributes",
+      "source": "custom_components/home_energy_orchestrator/sensor.py"
+    },
+    {
+      "access": "subscript_store",
+      "constant": "CONF_AUTOMATIC_CHARGE_ENABLED",
+      "key": "automatic_charge_enabled",
+      "layer": "runtime",
+      "receiver": "self.coordinator.config",
+      "scope": "AutomaticChargeSwitch._set_enabled",
+      "source": "custom_components/home_energy_orchestrator/switch.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_FREE_CHARGE_SCHEDULE_CONFIRMED",
+      "key": "free_charge_schedule_confirmed",
+      "layer": "runtime",
+      "receiver": "self.coordinator.config",
+      "scope": "AutomaticChargeSwitch.async_turn_on",
+      "source": "custom_components/home_energy_orchestrator/switch.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_AUTOMATIC_CHARGE_ENABLED",
+      "key": "automatic_charge_enabled",
+      "layer": "runtime",
+      "receiver": "self.coordinator.config",
+      "scope": "AutomaticChargeSwitch.is_on",
+      "source": "custom_components/home_energy_orchestrator/switch.py"
+    },
+    {
+      "access": "subscript_store",
+      "constant": "CONF_EV_AUTOMATIC_CONTROL_ENABLED",
+      "key": "ev_automatic_control_enabled",
+      "layer": "runtime",
+      "receiver": "self.coordinator.config",
+      "scope": "AutomaticEvControlSwitch._set_enabled",
+      "source": "custom_components/home_energy_orchestrator/switch.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_AUTOMATIC_CONTROL_ENABLED",
+      "key": "ev_automatic_control_enabled",
+      "layer": "runtime",
+      "receiver": "self.coordinator.config",
+      "scope": "AutomaticEvControlSwitch.is_on",
+      "source": "custom_components/home_energy_orchestrator/switch.py"
+    },
+    {
+      "access": "subscript_store",
+      "constant": "CONF_AUTOMATIC_EXPORT_ENABLED",
+      "key": "automatic_export_enabled",
+      "layer": "runtime",
+      "receiver": "self.coordinator.config",
+      "scope": "AutomaticExportSwitch._set_enabled",
+      "source": "custom_components/home_energy_orchestrator/switch.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_AUTOMATIC_EXPORT_ENABLED",
+      "key": "automatic_export_enabled",
+      "layer": "runtime",
+      "receiver": "self.coordinator.config",
+      "scope": "AutomaticExportSwitch.is_on",
+      "source": "custom_components/home_energy_orchestrator/switch.py"
+    },
+    {
+      "access": "subscript_store",
+      "constant": "CONF_EV_BEFORE_EXPORT_ENABLED",
+      "key": "ev_before_export_enabled",
+      "layer": "runtime",
+      "receiver": "self.coordinator.config",
+      "scope": "EvBeforeExportSwitch._set_enabled",
+      "source": "custom_components/home_energy_orchestrator/switch.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_BEFORE_EXPORT_ENABLED",
+      "key": "ev_before_export_enabled",
+      "layer": "runtime",
+      "receiver": "self.coordinator.config",
+      "scope": "EvBeforeExportSwitch.is_on",
+      "source": "custom_components/home_energy_orchestrator/switch.py"
+    },
+    {
+      "access": "pop",
+      "constant": "CONF_EV_CHARGE_TO_FULL",
+      "key": "ev_charge_to_full_entity",
+      "layer": "runtime",
+      "receiver": "self.coordinator.config",
+      "scope": "EvChargeToFullSwitch._set_enabled",
+      "source": "custom_components/home_energy_orchestrator/switch.py"
+    },
+    {
+      "access": "subscript_store",
+      "constant": "CONF_EV_CHARGE_TO_FULL_ENABLED",
+      "key": "ev_charge_to_full_enabled",
+      "layer": "runtime",
+      "receiver": "config",
+      "scope": "EvChargeToFullSwitch._set_enabled",
+      "source": "custom_components/home_energy_orchestrator/switch.py"
+    },
+    {
+      "access": "subscript_store",
+      "constant": "CONF_EV_CHARGE_TO_FULL_ENABLED",
+      "key": "ev_charge_to_full_enabled",
+      "layer": "runtime",
+      "receiver": "self.coordinator.config",
+      "scope": "EvChargeToFullSwitch._set_enabled",
+      "source": "custom_components/home_energy_orchestrator/switch.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_CHARGE_TO_FULL",
+      "key": "ev_charge_to_full_entity",
+      "layer": "runtime",
+      "receiver": "self.coordinator.config",
+      "scope": "EvChargeToFullSwitch.is_on",
+      "source": "custom_components/home_energy_orchestrator/switch.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_CHARGE_TO_FULL_ENABLED",
+      "key": "ev_charge_to_full_enabled",
+      "layer": "runtime",
+      "receiver": "self.coordinator.config",
+      "scope": "EvChargeToFullSwitch.is_on",
+      "source": "custom_components/home_energy_orchestrator/switch.py"
+    },
+    {
+      "access": "subscript_store",
+      "constant": "CONF_REHEARSAL_MODE",
+      "key": "rehearsal_mode",
+      "layer": "runtime",
+      "receiver": "self.coordinator.config",
+      "scope": "SafetyLockSwitch._set_locked",
+      "source": "custom_components/home_energy_orchestrator/switch.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_REHEARSAL_MODE",
+      "key": "rehearsal_mode",
+      "layer": "runtime",
+      "receiver": "self.coordinator.config",
+      "scope": "SafetyLockSwitch.is_on",
+      "source": "custom_components/home_energy_orchestrator/switch.py"
+    }
+  ],
+  "accesses_by_layer": {
+    "boundary": 371,
+    "runtime": 167
+  },
+  "accesses_by_source": {
+    "custom_components/home_energy_orchestrator/__init__.py": 24,
+    "custom_components/home_energy_orchestrator/active.py": 25,
+    "custom_components/home_energy_orchestrator/binary_sensor.py": 5,
+    "custom_components/home_energy_orchestrator/config_flow.py": 347,
+    "custom_components/home_energy_orchestrator/coordinator.py": 31,
+    "custom_components/home_energy_orchestrator/diagnostics.py": 10,
+    "custom_components/home_energy_orchestrator/ev_active.py": 38,
+    "custom_components/home_energy_orchestrator/ev_adapter.py": 10,
+    "custom_components/home_energy_orchestrator/manual_test.py": 10,
+    "custom_components/home_energy_orchestrator/number.py": 4,
+    "custom_components/home_energy_orchestrator/select.py": 2,
+    "custom_components/home_energy_orchestrator/sensor.py": 16,
+    "custom_components/home_energy_orchestrator/switch.py": 16
+  },
+  "key_count": 129,
+  "release_baseline": "0.12.26",
+  "schema_version": 1
+}
