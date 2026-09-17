@@ -50,8 +50,8 @@ The retained Home Assistant storage keys, schema versions and privacy flags are
 frozen in the
 [v0.12.26 persistence contract](persistence-contract-v0.12.26.json). Any change
 to that contract requires an explicit migration and compatibility review.
-The unresolved ownership boundary for missing or malformed session state is
-specified separately in
+The approved fail-closed ownership boundary for missing or malformed session
+state, plus the remaining persistence-hardening proposal, is specified in
 [malformed session storage safety decision](malformed-session-storage.md).
 
 ### OM-004 — Lifecycle harness core
@@ -130,11 +130,14 @@ tests remain green.
 - Registry and configuration snapshots exist.
 - Safety Lock, exclusive owner and bounded restoration invariants are enforced
   at system level.
-- No production policy or actuator behaviour changed during the phase.
+- No unapproved production policy or actuator behaviour changed during the
+  phase; the owner-approved malformed-storage safety gate is the explicit
+  exception.
 
 The ordinary-day restart-equivalence gate and every currently resolved
-incident class now have deterministic evidence. Phase 0 remains open only at
-the documented malformed-session ownership boundary: actuator feedback cannot
-prove ownership after wholly missing or unreadable persistence, so that
-behaviour requires the explicit safety decision recorded in
-[malformed session storage safety decision](malformed-session-storage.md).
+incident class now have deterministic evidence. Missing or malformed session
+evidence is covered by the owner-approved fail-closed gate and system fixtures:
+actuator feedback alone never proves ownership, unknown ownership never writes,
+and Self Use is the checkpoint boundary. A previous-valid-snapshot envelope
+remains optional persistence hardening and must pass the rollback gate before
+implementation.

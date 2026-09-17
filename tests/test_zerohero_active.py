@@ -97,10 +97,23 @@ def _coordinator(**config):
     )
 
 
+def _loaded_controller(hass, coordinator):
+    """Construct a controller with explicit valid unit-test storage evidence."""
+    coordinator.manual_test = SimpleNamespace(
+        is_active=False,
+        active_kind=None,
+        storage_status="valid",
+    )
+    controller = ActiveFoxessController(hass, coordinator)
+    controller._charge_storage_status = "valid"  # noqa: SLF001
+    controller._export_storage_status = "valid"  # noqa: SLF001
+    return controller
+
+
 async def test_controller_is_inert_when_automatic_control_is_disabled(hass):
     calls = []
     hass.bus.async_listen(EVENT_CALL_SERVICE, calls.append)
-    controller = ActiveFoxessController(hass, _coordinator())
+    controller = _loaded_controller(hass, _coordinator())
 
     await controller.async_reconcile()
 
@@ -110,7 +123,7 @@ async def test_controller_is_inert_when_automatic_control_is_disabled(hass):
 async def test_cloud_scheduler_owner_blocks_all_modbus_automation_writes(hass):
     calls = []
     hass.bus.async_listen(EVENT_CALL_SERVICE, calls.append)
-    controller = ActiveFoxessController(
+    controller = _loaded_controller(
         hass,
         _coordinator(
             **{
@@ -133,7 +146,7 @@ async def test_cloud_scheduler_owner_blocks_all_modbus_automation_writes(hass):
 async def test_rehearsal_mode_is_an_absolute_no_write_gate(hass):
     calls = []
     hass.bus.async_listen(EVENT_CALL_SERVICE, calls.append)
-    controller = ActiveFoxessController(
+    controller = _loaded_controller(
         hass,
         _coordinator(
             **{
@@ -149,7 +162,7 @@ async def test_rehearsal_mode_is_an_absolute_no_write_gate(hass):
 
 
 async def test_unverified_signs_block_modbus_automation(hass):
-    controller = ActiveFoxessController(
+    controller = _loaded_controller(
         hass,
         _coordinator(
             **{
@@ -185,7 +198,7 @@ async def test_master_gate_alone_cannot_write_at_midnight(hass, monkeypatch):
         "custom_components.home_energy_orchestrator.active.dt_util.now",
         lambda: datetime(2026, 9, 6, 0, 1, tzinfo=UTC),
     )
-    controller = ActiveFoxessController(
+    controller = _loaded_controller(
         hass,
         _coordinator(
             **{
@@ -224,7 +237,7 @@ async def test_unconfirmed_charge_schedule_is_an_absolute_no_start_gate(
         "custom_components.home_energy_orchestrator.active.dt_util.now",
         lambda: datetime(2026, 9, 10, 12, 30, tzinfo=UTC),
     )
-    controller = ActiveFoxessController(
+    controller = _loaded_controller(
         hass,
         _coordinator(
             **{
@@ -287,7 +300,7 @@ async def test_pilot_site_export_starts_at_latest_start_and_latches(hass, monkey
         }
     )
     coordinator.data.available_after_reserve_kwh = 30.0
-    controller = ActiveFoxessController(hass, coordinator)
+    controller = _loaded_controller(hass, coordinator)
 
     await controller.async_reconcile()
     await hass.async_block_till_done()
@@ -328,7 +341,7 @@ def test_zerohero_finish_offset_wraps_midnight(hass):
             CONF_FORCE_DISCHARGE_OFFSET_MINUTES: 5.0,
         }
     )
-    controller = ActiveFoxessController(hass, coordinator)
+    controller = _loaded_controller(hass, coordinator)
 
     start, finish = controller._export_bounds(  # noqa: SLF001
         datetime(2026, 9, 5, 23, 0, tzinfo=UTC)
@@ -389,7 +402,7 @@ async def test_automatic_export_cap_is_independent_of_boosted_tariff_cap(
         }
     )
     coordinator.data.available_after_reserve_kwh = 30.0
-    controller = ActiveFoxessController(hass, coordinator)
+    controller = _loaded_controller(hass, coordinator)
 
     await controller.async_reconcile()
     await hass.async_block_till_done()
@@ -444,7 +457,7 @@ async def test_ev_before_export_prevents_new_session_below_target(hass, monkeypa
     )
     coordinator.snapshot.ev_soc = 25.0
     coordinator.data.available_after_reserve_kwh = 30.0
-    controller = ActiveFoxessController(hass, coordinator)
+    controller = _loaded_controller(hass, coordinator)
 
     await controller.async_reconcile()
 
@@ -494,7 +507,7 @@ async def test_ev_before_export_stops_active_heo_export_below_target(hass, monke
         }
     )
     coordinator.snapshot.ev_soc = 25.0
-    controller = ActiveFoxessController(hass, coordinator)
+    controller = _loaded_controller(hass, coordinator)
     controller.export_session = ExportSessionState("active", 10.0, 0)
 
     await controller.async_reconcile()
@@ -515,13 +528,13 @@ async def test_ev_before_export_stops_active_heo_export_below_target(hass, monke
 async def test_export_session_latch_round_trips_through_ha_storage(hass):
     coordinator = _coordinator()
     coordinator.entry_id = "persisted-export-test"
-    first = ActiveFoxessController(hass, coordinator)
+    first = _loaded_controller(hass, coordinator)
     first.export_session = ExportSessionState(
         "recovering", 8.5, 2, datetime(2026, 9, 5, 20, 0, tzinfo=UTC)
     )
     await first._export_store.async_save(first._export_state_payload())
 
-    restored = ActiveFoxessController(hass, coordinator)
+    restored = _loaded_controller(hass, coordinator)
     await restored._async_load_export_session()
 
     assert restored.export_session == first.export_session
@@ -530,7 +543,7 @@ async def test_export_session_latch_round_trips_through_ha_storage(hass):
 async def test_export_protects_only_explicit_connected_ev_baseline(hass):
     hass.states.async_set("device_tracker.car", "home")
     hass.states.async_set("binary_sensor.car_cable", "on")
-    controller = ActiveFoxessController(
+    controller = _loaded_controller(
         hass,
         _coordinator(
             **{
@@ -550,7 +563,7 @@ async def test_export_protects_only_explicit_connected_ev_baseline(hass):
 
 
 async def test_nonzero_ev_baseline_fails_closed_without_explicit_evidence(hass):
-    controller = ActiveFoxessController(
+    controller = _loaded_controller(
         hass,
         _coordinator(
             **{
@@ -564,7 +577,7 @@ async def test_nonzero_ev_baseline_fails_closed_without_explicit_evidence(hass):
 
 
 async def test_battery_only_site_ignores_retained_ev_baseline(hass):
-    controller = ActiveFoxessController(
+    controller = _loaded_controller(
         hass,
         _coordinator(
             **{
@@ -619,7 +632,7 @@ async def test_local_modbus_free_charge_starts_at_noon_boundary(hass, monkeypatc
         }
     )
     coordinator.snapshot.battery_soc = 20.0
-    controller = ActiveFoxessController(hass, coordinator)
+    controller = _loaded_controller(hass, coordinator)
 
     await controller.async_reconcile()
     await hass.async_block_till_done()
@@ -664,7 +677,7 @@ async def test_local_modbus_charge_cannot_misread_noon_as_midnight(hass, monkeyp
             CONF_INVERTER_CHARGE_LIMIT_KW: 15.0,
         }
     )
-    controller = ActiveFoxessController(hass, coordinator)
+    controller = _loaded_controller(hass, coordinator)
 
     await controller.async_reconcile()
 
@@ -700,7 +713,7 @@ async def test_free_charge_does_not_start_without_fresh_soc(hass, monkeypatch):
         }
     )
     coordinator.snapshot.battery_soc = None
-    controller = ActiveFoxessController(hass, coordinator)
+    controller = _loaded_controller(hass, coordinator)
 
     await controller.async_reconcile()
 
@@ -743,7 +756,7 @@ async def test_runtime_blocks_overlapping_enabled_charge_and_export_windows(
         }
     )
     coordinator.snapshot.battery_soc = 20.0
-    controller = ActiveFoxessController(hass, coordinator)
+    controller = _loaded_controller(hass, coordinator)
 
     await controller.async_reconcile()
 
@@ -783,7 +796,7 @@ async def test_free_charge_requires_below_target_soc_and_live_force_charge_optio
         }
     )
     coordinator.snapshot.battery_soc = 90.0
-    controller = ActiveFoxessController(hass, coordinator)
+    controller = _loaded_controller(hass, coordinator)
 
     await controller.async_reconcile()
     assert calls == []
@@ -822,12 +835,13 @@ async def test_free_charge_does_not_adopt_an_unlatched_forced_mode(hass, monkeyp
         }
     )
     coordinator.snapshot.battery_soc = 20.0
-    controller = ActiveFoxessController(hass, coordinator)
+    controller = _loaded_controller(hass, coordinator)
 
     await controller.async_reconcile()
 
     assert controller.charge_session.phase == "idle"
-    assert controller.last_reason == "charge_start_mode_not_self_use"
+    assert controller.last_reason == "external_forced_mode"
+    assert controller.ownership_status == "verified_external_owner"
     assert calls == []
 
 
@@ -869,7 +883,7 @@ async def test_latched_free_charge_restores_self_use_after_window(hass, monkeypa
             CONF_INVERTER_CHARGE_LIMIT_KW: 10.0,
         }
     )
-    controller = ActiveFoxessController(hass, coordinator)
+    controller = _loaded_controller(hass, coordinator)
     controller.charge_session = ChargeSessionState("active", 10.0, 0)
 
     await controller.async_reconcile()
@@ -889,13 +903,13 @@ async def test_latched_free_charge_restores_self_use_after_window(hass, monkeypa
 async def test_charge_session_latch_round_trips_through_ha_storage(hass):
     coordinator = _coordinator()
     coordinator.entry_id = "persisted-charge-test"
-    first = ActiveFoxessController(hass, coordinator)
+    first = _loaded_controller(hass, coordinator)
     first.charge_session = ChargeSessionState(
         "recovering", 8.5, 2, datetime(2026, 9, 10, 13, 0, tzinfo=UTC)
     )
     await first._charge_store.async_save(first._charge_state_payload())
 
-    restored = ActiveFoxessController(hass, coordinator)
+    restored = _loaded_controller(hass, coordinator)
     await restored._async_load_charge_session()
 
     assert restored.charge_session == first.charge_session
@@ -904,11 +918,11 @@ async def test_charge_session_latch_round_trips_through_ha_storage(hass):
 async def test_completed_charge_session_round_trips_through_ha_storage(hass):
     coordinator = _coordinator()
     coordinator.entry_id = "persisted-completed-charge-test"
-    first = ActiveFoxessController(hass, coordinator)
+    first = _loaded_controller(hass, coordinator)
     first.charge_session = ChargeSessionState("completed", 8.0, 0, None)
     await first._charge_store.async_save(first._charge_state_payload())
 
-    restored = ActiveFoxessController(hass, coordinator)
+    restored = _loaded_controller(hass, coordinator)
     await restored._async_load_charge_session()
 
     assert restored.charge_session == first.charge_session
@@ -956,7 +970,7 @@ async def test_active_free_charge_restarts_from_self_use_while_still_eligible(
         }
     )
     coordinator.snapshot.battery_soc = 96.0
-    controller = ActiveFoxessController(hass, coordinator)
+    controller = _loaded_controller(hass, coordinator)
     controller.charge_session = ChargeSessionState("active", 10.0, 0)
 
     await controller.async_reconcile()
@@ -1003,7 +1017,7 @@ async def test_free_charge_does_not_start_after_allowance_is_exhausted(
     )
     coordinator.snapshot.battery_soc = 20.0
     coordinator.data.free_energy_remaining_kwh = 0.0
-    controller = ActiveFoxessController(hass, coordinator)
+    controller = _loaded_controller(hass, coordinator)
 
     await controller.async_reconcile()
 
@@ -1055,7 +1069,7 @@ async def test_active_free_charge_restores_self_use_when_allowance_is_exhausted(
     )
     coordinator.snapshot.battery_soc = 96.0
     coordinator.data.free_energy_remaining_kwh = 0.0
-    controller = ActiveFoxessController(hass, coordinator)
+    controller = _loaded_controller(hass, coordinator)
     controller.charge_session = ChargeSessionState("active", 8.0, 0)
 
     await controller.async_reconcile()
@@ -1111,7 +1125,7 @@ async def test_persisted_active_charge_restarts_after_ha_restart_feedback_settle
     )
     coordinator.entry_id = "restart-during-free-window"
     coordinator.snapshot.battery_soc = 96.0
-    before_restart = ActiveFoxessController(hass, coordinator)
+    before_restart = _loaded_controller(hass, coordinator)
     before_restart.charge_session = ChargeSessionState(
         "active", 8.0, 0, now - timedelta(minutes=45)
     )
@@ -1119,7 +1133,7 @@ async def test_persisted_active_charge_restarts_after_ha_restart_feedback_settle
         before_restart._charge_state_payload()  # noqa: SLF001
     )
 
-    restored = ActiveFoxessController(hass, coordinator)
+    restored = _loaded_controller(hass, coordinator)
     await restored._async_load_charge_session()  # noqa: SLF001
     await restored.async_reconcile()
     await hass.async_block_till_done()
@@ -1143,7 +1157,7 @@ async def test_latched_charge_marks_recovering_when_feedback_is_unavailable(hass
     hass.states.async_set(
         "number.foxess_discharge", "0", {"unit_of_measurement": "kW", "max": 10}
     )
-    controller = ActiveFoxessController(
+    controller = _loaded_controller(
         hass,
         _coordinator(
             **{

@@ -1,8 +1,31 @@
 # Malformed session storage safety decision
 
-This work item records a safety boundary; it does not authorize a production
-change. It applies to the charge, export and manual-diagnostic restoration
+The project owner approved the conservative fail-closed behaviour on
+2026-09-17: when the inverter is forced and retained ownership evidence is
+missing or unreadable, HEO reports `ownership_unknown` and issues no hardware
+command until Self Use or a verified external owner establishes a safe mode.
+This applies to the charge, export and manual-diagnostic restoration
 obligations persisted by HEO.
+
+## Implemented safety slice
+
+- Each legacy version-1 loader now classifies its evidence as valid, missing or
+  malformed without changing the existing key or payload format.
+- A forced mode with degraded evidence is read-only and surfaces
+  `ownership_unknown` through Orchestrator Status and Fleet Summary.
+- Malformed payloads are retained unchanged while the inverter remains forced.
+- Observed Self Use establishes a safe boundary, checkpoints idle legacy
+  payloads, and permits normal evaluation from that verified baseline.
+- A forced mode with complete valid idle evidence is treated as externally
+  owned and is not adopted or altered.
+- A valid unfinished obligation remains authoritative when its matching mode,
+  or Self Use during restoration, is observed; unrelated missing stores do not
+  erase that obligation.
+
+System lifecycle fixtures cover missing evidence, semantic corruption in all
+three stores, safe-mode recovery, external forced mode, and retained active
+obligations. The versioned previous-snapshot envelope below remains a separate
+persistence-hardening proposal rather than part of this compatibility slice.
 
 ## Concrete problem and evidence
 
@@ -57,7 +80,7 @@ retain stronger ownership evidence; guessing from the current mode is unsafe.
 - Combining independent state families into one persistence payload.
 - Changing charge, export or manual-test policy.
 
-## Candidate design
+## Remaining candidate design
 
 Implement this only in the versioned-persistence phase:
 
@@ -70,9 +93,8 @@ Implement this only in the versioned-persistence phase:
 4. On a semantically malformed current snapshot, restore the previous valid
    snapshot, expose a repair/diagnostic condition and retain the malformed
    evidence until a successful checkpoint.
-5. If no trustworthy ownership snapshot exists, remain read-only, expose
-   `ownership_unknown`, and require an operator or verified external owner to
-   establish the safe work mode. Do not infer ownership from actuator mode.
+5. The approved fail-closed gate remains authoritative if neither snapshot is
+   trustworthy; do not infer ownership from actuator mode.
 6. Demonstrate upgrade and one-version rollback using valid legacy, malformed
    current, valid previous, missing and future-version fixtures.
 
@@ -105,6 +127,7 @@ command.
 
 ## Acceptance evidence
 
-This item is complete only when the lifecycle suite proves that valid retained
-ownership is never lost, unknown ownership never writes, corrupt evidence is
-diagnosable, and rollback preserves the last trustworthy obligation.
+The approved fail-closed slice is complete when the lifecycle suite proves
+that valid retained ownership is not erased, unknown ownership never writes,
+and corrupt evidence remains inspectable. The wider persistence-hardening item
+is complete only when rollback also preserves the last trustworthy obligation.

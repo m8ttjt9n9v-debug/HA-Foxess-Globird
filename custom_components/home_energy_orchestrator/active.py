@@ -110,6 +110,9 @@ class ActiveFoxessController:
         self.export_protected_ev_kwh: float | None = None
         self.ev_before_export_decision = EvBeforeExportDecision(True, "disabled")
         self.export_effective_enabled = False
+        self.ownership_status = "not_evaluated"
+        self._charge_storage_status = "not_loaded"
+        self._export_storage_status = "not_loaded"
         self._export_store: Store[dict[str, object]] = Store(
             hass,
             1,
@@ -161,6 +164,7 @@ class ActiveFoxessController:
             )
         await self.async_reconcile()
         await self.coordinator.async_update_forecast()
+        self.coordinator.async_update_listeners()
 
     async def async_stop(self) -> None:
         """Stop the timer without changing inverter state."""
@@ -225,6 +229,8 @@ class ActiveFoxessController:
             self.last_reason = "foxess_feedback_unavailable"
             return
         observation = FoxessObservation(mode, charge_power, discharge_power)
+        if await self._async_hold_unverified_ownership(observation):
+            return
         # Finish a latched policy before considering another direction. With
         # ordinary non-overlapping windows this also guarantees that Self Use
         # feedback is confirmed before the next session may start.
@@ -521,6 +527,9 @@ class ActiveFoxessController:
     async def _async_load_charge_session(self) -> None:
         payload = await self._charge_store.async_load()
         if not isinstance(payload, dict):
+            self._charge_storage_status = (
+                "missing" if payload is None else "malformed"
+            )
             return
         try:
             phase = str(payload["phase"])
@@ -541,8 +550,10 @@ class ActiveFoxessController:
             if power < 0 or attempts < 0:
                 raise ValueError
             self.charge_session = restored
+            self._charge_storage_status = "valid"
         except (KeyError, TypeError, ValueError):
             self.charge_session = ChargeSessionState()
+            self._charge_storage_status = "malformed"
 
     def _charge_state_payload(self) -> dict[str, object]:
         return {
@@ -559,6 +570,9 @@ class ActiveFoxessController:
     async def _async_load_export_session(self) -> None:
         payload = await self._export_store.async_load()
         if not isinstance(payload, dict):
+            self._export_storage_status = (
+                "missing" if payload is None else "malformed"
+            )
             return
         try:
             phase = str(payload["phase"])
@@ -572,8 +586,89 @@ class ActiveFoxessController:
             if power < 0 or attempts < 0:
                 raise ValueError
             self.export_session = restored
+            self._export_storage_status = "valid"
         except (KeyError, TypeError, ValueError):
             self.export_session = ExportSessionState()
+            self._export_storage_status = "malformed"
+
+    async def _async_hold_unverified_ownership(
+        self, observation: FoxessObservation
+    ) -> bool:
+        """Refuse hardware writes until forced-mode ownership is trustworthy."""
+        manual = getattr(self.coordinator, "manual_test", None)
+        manual_status = getattr(manual, "storage_status", "missing")
+        degraded = any(
+            status in {"missing", "malformed", "not_loaded"}
+            for status in (
+                self._charge_storage_status,
+                self._export_storage_status,
+                manual_status,
+            )
+        )
+        charge_owned = self.charge_session.phase in {
+            "starting",
+            "active",
+            "stopping",
+            "recovering",
+        }
+        export_owned = self.export_session.phase in {
+            "starting",
+            "active",
+            "stopping",
+            "recovering",
+        }
+        manual_kind_for_mode = {
+            "Force Charge": "charge",
+            "Force Discharge": "discharge",
+        }.get(observation.mode)
+        manual_owned = bool(
+            manual is not None
+            and manual.is_active
+            and manual.active_kind == manual_kind_for_mode
+        )
+        matching_owner = (
+            observation.mode == "Force Charge" and charge_owned
+            or observation.mode == "Force Discharge" and export_owned
+            or manual_owned
+        )
+        if matching_owner:
+            self.ownership_status = "verified_session"
+            return False
+        if observation.mode == "Self Use" and (
+            charge_owned or export_owned or manual_owned
+        ):
+            # A valid retained obligation may observe Self Use while it resumes
+            # or confirms restoration. Missing evidence from an unrelated
+            # family must not erase that trustworthy obligation.
+            self.ownership_status = "verified_session"
+            return False
+        if observation.mode == "Self Use":
+            if degraded:
+                self.charge_session = ChargeSessionState()
+                self.export_session = ExportSessionState()
+                await self._charge_store.async_save(self._charge_state_payload())
+                await self._export_store.async_save(self._export_state_payload())
+                self._charge_storage_status = "valid"
+                self._export_storage_status = "valid"
+                if manual is not None:
+                    await manual.async_checkpoint_safe_idle()
+                self.ownership_status = "verified_safe_mode"
+                self.last_reason = "ownership_reestablished_self_use"
+                self.last_actions = ()
+                # The observed Self Use state itself establishes the safe
+                # boundary. Continue normal evaluation from that verified
+                # baseline; no extra reconciliation interval is required.
+                return False
+            self.ownership_status = "verified"
+            return False
+        self.last_actions = ()
+        if degraded:
+            self.ownership_status = "ownership_unknown"
+            self.last_reason = "ownership_unknown"
+        else:
+            self.ownership_status = "verified_external_owner"
+            self.last_reason = "external_forced_mode"
+        return True
 
     def _export_state_payload(self) -> dict[str, object]:
         return {

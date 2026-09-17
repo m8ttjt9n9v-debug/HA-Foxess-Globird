@@ -84,6 +84,7 @@ class ManualTestController:
         self.restore_attempts = 0
         self.last_restore_at: datetime | None = None
         self.last_reason = "idle"
+        self.storage_status = "not_loaded"
         self._cancel_timer = None
         self._cancel_restore = None
         self._adapter: FoxessServiceAdapter | None = None
@@ -385,7 +386,17 @@ class ManualTestController:
 
     async def _async_load(self) -> None:
         payload = await self._store.async_load()
-        if not isinstance(payload, dict) or payload.get("active_kind") is None:
+        if payload is None:
+            self.storage_status = "missing"
+            return
+        if not isinstance(payload, dict):
+            self.storage_status = "malformed"
+            return
+        if payload.get("active_kind") is None:
+            if payload.get("phase", "idle") != "idle":
+                self.storage_status = "malformed"
+                return
+            self.storage_status = "valid"
             return
         try:
             kind = str(payload["active_kind"])
@@ -409,7 +420,7 @@ class ManualTestController:
             ):
                 raise ValueError
         except (KeyError, TypeError, ValueError):
-            await self._async_save()
+            self.storage_status = "malformed"
             return
         self.active_kind = kind
         self.phase = phase
@@ -417,6 +428,15 @@ class ManualTestController:
         self.ends_at = ends_at
         self.restore_attempts = attempts
         self.last_restore_at = last_restore_at
+        self.storage_status = "valid"
+
+    async def async_checkpoint_safe_idle(self) -> None:
+        """Replace degraded evidence only after externally verified Self Use."""
+        if self.is_active:
+            return
+        self.phase = "idle"
+        await self._async_save()
+        self.storage_status = "valid"
 
     async def _async_save(self) -> None:
         await self._store.async_save(

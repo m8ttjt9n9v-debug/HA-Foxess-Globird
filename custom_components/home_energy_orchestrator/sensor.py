@@ -56,6 +56,11 @@ class EnergySensor(CoordinatorEntity[EnergyCoordinator], SensorEntity):
         automation = self.coordinator.runtime_config.automation
         owner = automation.control_owner
         controller = self.coordinator.active_controller
+        if (
+            controller is not None
+            and getattr(controller, "ownership_status", None) == "ownership_unknown"
+        ):
+            return "ownership_unknown"
         foxess_ready = controller is not None and controller.gate_status == "ready"
         charge_enabled = automation.battery_charge_enabled
         export_enabled = automation.battery_export_enabled

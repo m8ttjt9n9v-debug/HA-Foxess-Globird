@@ -1007,33 +1007,14 @@ async def test_active_export_rejects_external_force_charge_across_reload(
 
     await harness.setup(entry)
 
-    observed_calls = [
-        (call.domain, call.service, call.service_data)
-        for call in harness.service_calls
-    ]
-    assert observed_calls == [
-        (
-            "number",
-            "set_value",
-            {"value": 0.0, "entity_id": "number.test_force_charge"},
-        ),
-        (
-            "number",
-            "set_value",
-            {"value": 10.0, "entity_id": "number.test_force_discharge"},
-        ),
-        (
-            "select",
-            "select_option",
-            {"option": "Force Discharge", "entity_id": "select.test_work_mode"},
-        ),
-    ]
+    assert harness.service_calls == ()
     controller = entry.runtime_data.active_controller
-    assert controller.last_reason == "export_start_requested"
-    assert controller.export_session.phase == "starting"
+    assert controller.last_reason == "ownership_unknown"
+    assert controller.ownership_status == "ownership_unknown"
+    assert controller.export_session.phase == "active"
     persisted = await harness.load_store(store_key)
     assert persisted is not None
-    assert persisted["phase"] == "starting"
+    assert persisted["phase"] == "active"
 
     await harness.set_state(
         "number.test_force_charge",
@@ -2509,6 +2490,206 @@ async def test_safety_lock_blocks_persisted_manual_restore_on_setup_and_unload(
 
     await harness.unload(entry)
     assert harness.service_calls == ()
+    hass.services.async_remove("number", "set_value")
+    hass.services.async_remove("select", "select_option")
+    harness.close()
+
+
+@pytest.mark.freeze_time("2026-09-17 03:00:00+00:00")
+async def test_missing_session_evidence_holds_forced_mode_until_self_use(
+    hass, monkeypatch
+) -> None:
+    """A forced inverter with no retained owner stays read-only until safe."""
+    harness = LifecycleHarness(hass)
+    _register_foxess_services(harness, monkeypatch)
+    await _seed_foxess_states(harness, 50)
+    await harness.set_state(
+        "select.test_work_mode",
+        "Force Charge",
+        {"options": ["Self Use", "Force Discharge", "Force Charge"]},
+    )
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Missing ownership evidence",
+        version=6,
+        data=_active_entry_data(
+            automatic_charge_enabled=False,
+            automatic_export_enabled=False,
+        ),
+    )
+    entry.add_to_hass(hass)
+    charge_store = f"home_energy_orchestrator.{entry.entry_id}.charge_session"
+    export_store = f"home_energy_orchestrator.{entry.entry_id}.export_session"
+    manual_store = f"home_energy_orchestrator.{entry.entry_id}.manual_test"
+
+    await harness.setup(entry)
+
+    controller = entry.runtime_data.active_controller
+    assert controller.ownership_status == "ownership_unknown"
+    assert controller.last_reason == "ownership_unknown"
+    assert hass.states.get("sensor.home_energy_status").state == "ownership_unknown"
+    assert harness.service_calls == ()
+    assert await harness.load_store(charge_store) is None
+    assert await harness.load_store(export_store) is None
+    assert await harness.load_store(manual_store) is None
+
+    await harness.set_state(
+        "select.test_work_mode",
+        "Self Use",
+        {"options": ["Self Use", "Force Discharge", "Force Charge"]},
+    )
+    await controller.async_reconcile()
+    entry.runtime_data.async_update_listeners()
+    await hass.async_block_till_done()
+
+    assert controller.ownership_status == "verified_safe_mode"
+    assert hass.states.get("sensor.home_energy_status").state == "local_modbus_ready"
+    assert harness.service_calls == ()
+    for store_key in (charge_store, export_store, manual_store):
+        persisted = await harness.load_store(store_key)
+        assert persisted is not None
+        assert persisted["phase"] == "idle"
+
+    await harness.unload(entry)
+    hass.services.async_remove("number", "set_value")
+    hass.services.async_remove("select", "select_option")
+    harness.close()
+
+
+@pytest.mark.freeze_time("2026-09-17 03:15:00+00:00")
+@pytest.mark.parametrize(
+    ("store_suffix", "malformed"),
+    [
+        (
+            "charge_session",
+            {
+                "phase": "active",
+                "requested_power_kw": "not-a-number",
+                "attempts": 0,
+                "last_command_at": None,
+            },
+        ),
+        (
+            "export_session",
+            {
+                "phase": "active",
+                "requested_power_kw": "not-a-number",
+                "attempts": 0,
+                "last_command_at": None,
+            },
+        ),
+        (
+            "manual_test",
+            {
+                "active_kind": None,
+                "phase": "running",
+                "started_at": None,
+                "ends_at": None,
+                "restore_attempts": 0,
+                "last_restore_at": None,
+            },
+        ),
+    ],
+)
+async def test_malformed_session_evidence_is_not_overwritten_while_forced(
+    hass, monkeypatch, store_suffix: str, malformed: dict[str, object]
+) -> None:
+    """Malformed ownership evidence remains inspectable and authorizes no write."""
+    harness = LifecycleHarness(hass)
+    _register_foxess_services(harness, monkeypatch)
+    await _seed_foxess_states(harness, 50)
+    await harness.set_state(
+        "select.test_work_mode",
+        "Force Charge",
+        {"options": ["Self Use", "Force Discharge", "Force Charge"]},
+    )
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Malformed ownership evidence",
+        version=6,
+        data=_active_entry_data(
+            automatic_charge_enabled=True,
+            automatic_export_enabled=False,
+        ),
+    )
+    entry.add_to_hass(hass)
+    target_store = f"home_energy_orchestrator.{entry.entry_id}.{store_suffix}"
+    await harness.save_store(target_store, malformed)
+
+    await harness.setup(entry)
+
+    controller = entry.runtime_data.active_controller
+    assert controller.ownership_status == "ownership_unknown"
+    assert controller.last_reason == "ownership_unknown"
+    assert hass.states.get("sensor.home_energy_status").state == "ownership_unknown"
+    assert harness.service_calls == ()
+    assert await harness.load_store(target_store) == malformed
+
+    await harness.unload(entry)
+    hass.services.async_remove("number", "set_value")
+    hass.services.async_remove("select", "select_option")
+    harness.close()
+
+
+@pytest.mark.freeze_time("2026-09-17 03:30:00+00:00")
+async def test_valid_idle_evidence_treats_unowned_forced_mode_as_external(
+    hass, monkeypatch
+) -> None:
+    """Complete idle evidence must not adopt or alter an external forced mode."""
+    harness = LifecycleHarness(hass)
+    _register_foxess_services(harness, monkeypatch)
+    await _seed_foxess_states(harness, 50)
+    await harness.set_state(
+        "select.test_work_mode",
+        "Force Discharge",
+        {"options": ["Self Use", "Force Discharge", "Force Charge"]},
+    )
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="External forced mode",
+        version=6,
+        data=_active_entry_data(
+            automatic_charge_enabled=True,
+            automatic_export_enabled=True,
+        ),
+    )
+    entry.add_to_hass(hass)
+    idle_automatic = {
+        "phase": "idle",
+        "requested_power_kw": 0.0,
+        "attempts": 0,
+        "last_command_at": None,
+    }
+    idle_manual = {
+        "active_kind": None,
+        "phase": "idle",
+        "started_at": None,
+        "ends_at": None,
+        "restore_attempts": 0,
+        "last_restore_at": None,
+    }
+    await harness.save_store(
+        f"home_energy_orchestrator.{entry.entry_id}.charge_session",
+        idle_automatic,
+    )
+    await harness.save_store(
+        f"home_energy_orchestrator.{entry.entry_id}.export_session",
+        idle_automatic,
+    )
+    await harness.save_store(
+        f"home_energy_orchestrator.{entry.entry_id}.manual_test",
+        idle_manual,
+    )
+
+    await harness.setup(entry)
+
+    controller = entry.runtime_data.active_controller
+    assert controller.ownership_status == "verified_external_owner"
+    assert controller.last_reason == "external_forced_mode"
+    assert hass.states.get("sensor.home_energy_status").state != "ownership_unknown"
+    assert harness.service_calls == ()
+
+    await harness.unload(entry)
     hass.services.async_remove("number", "set_value")
     hass.services.async_remove("select", "select_option")
     harness.close()
