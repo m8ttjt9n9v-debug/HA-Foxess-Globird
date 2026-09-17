@@ -156,6 +156,96 @@ async def test_observer_public_state_is_equivalent_after_reload(hass) -> None:
 
 
 @pytest.mark.freeze_time("2026-09-17 02:30:00+00:00")
+async def test_battery_telemetry_recovers_after_delay_outage_and_reload(hass) -> None:
+    """Canonical battery power survives delay fallback and recovers after outage."""
+    harness = LifecycleHarness(hass)
+    await _seed_foxess_states(harness, 60)
+    now = datetime.now(UTC)
+    await harness.set_state(
+        "sensor.test_battery_charge",
+        "9.713",
+        {"unit_of_measurement": "kW"},
+    )
+    hass.states.async_set(
+        "sensor.test_battery_discharge",
+        "0",
+        {"unit_of_measurement": "kW"},
+        timestamp=(now - timedelta(minutes=10)).timestamp(),
+    )
+    await harness.set_state(
+        "sensor.test_signed_battery",
+        "-9.713",
+        {"unit_of_measurement": "kW"},
+    )
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Battery telemetry recovery",
+        version=6,
+        data=_active_entry_data(
+            automatic_control_enabled=False,
+            battery_power_entity="sensor.test_signed_battery",
+            battery_power_positive_direction="positive_discharge",
+            battery_charge_power_entity="sensor.test_battery_charge",
+            battery_discharge_power_entity="sensor.test_battery_discharge",
+        ),
+    )
+    entry.add_to_hass(hass)
+
+    await harness.setup(entry)
+
+    battery = hass.states.get("sensor.home_energy_battery_power")
+    assert battery is not None
+    assert battery.state == "9.713"
+    assert battery.attributes["reason"] == "signed_fallback_pair_stale"
+    healthy_states = harness.states(
+        {
+            "sensor.home_energy_battery_soc",
+            "sensor.home_energy_grid_power",
+            "sensor.home_energy_house_load",
+        },
+        ignored_attributes=frozenset({"last_update"}),
+    )
+
+    await harness.set_unavailable("sensor.test_battery_discharge")
+
+    battery = hass.states.get("sensor.home_energy_battery_power")
+    assert battery is not None
+    assert battery.state == "unknown"
+    assert battery.attributes["reason"] == "discharge_source_unavailable"
+    assert harness.states(
+        {
+            "sensor.home_energy_battery_soc",
+            "sensor.home_energy_grid_power",
+            "sensor.home_energy_house_load",
+        },
+        ignored_attributes=frozenset({"last_update"}),
+    ) == healthy_states
+
+    await harness.reload(entry)
+
+    battery = hass.states.get("sensor.home_energy_battery_power")
+    assert battery is not None
+    assert battery.state == "unknown"
+    assert battery.attributes["reason"] == "discharge_source_unavailable"
+    assert harness.service_calls == ()
+
+    await harness.set_state(
+        "sensor.test_battery_discharge",
+        "0",
+        {"unit_of_measurement": "kW"},
+    )
+
+    battery = hass.states.get("sensor.home_energy_battery_power")
+    assert battery is not None
+    assert battery.state == "9.713"
+    assert battery.attributes["reason"] == "ok"
+    assert len(battery.attributes["sources"]) == 2
+    assert harness.service_calls == ()
+    await harness.unload(entry)
+    harness.close()
+
+
+@pytest.mark.freeze_time("2026-09-17 02:30:00+00:00")
 async def test_safety_lock_blocks_all_commands_across_reload(hass) -> None:
     """Requested automation cannot write before or after a locked reload."""
     harness = LifecycleHarness(hass)
