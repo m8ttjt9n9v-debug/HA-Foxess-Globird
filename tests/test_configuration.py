@@ -11,9 +11,11 @@ from custom_components.home_energy_orchestrator.configuration import RuntimeConf
 from custom_components.home_energy_orchestrator.const import (
     CONF_AUTOMATIC_CHARGE_ENABLED,
     CONF_EV_BEFORE_EXPORT_SOC_TARGET,
+    CONF_FOXESS_CONTROL_OWNER,
     CONF_GRID_POWER_DIRECTION,
     CONF_HOUSE_OCCUPANCY_MODE,
     DEFAULT_EV_BEFORE_EXPORT_SOC_TARGET,
+    DEFAULT_FOXESS_CONTROL_OWNER,
     DEFAULT_GRID_POWER_DIRECTION,
     DEFAULT_HOUSE_OCCUPANCY_MODE,
 )
@@ -26,6 +28,7 @@ def test_runtime_configuration_uses_established_defaults() -> None:
     assert parsed.automation.battery_charge_enabled is False
     assert parsed.automation.battery_export_enabled is False
     assert parsed.automation.ev_control_enabled is False
+    assert parsed.automation.control_owner == DEFAULT_FOXESS_CONTROL_OWNER
     assert parsed.ev_preferences.before_export_enabled is False
     assert parsed.ev_preferences.before_export_soc_target == (
         DEFAULT_EV_BEFORE_EXPORT_SOC_TARGET
@@ -45,6 +48,7 @@ def test_runtime_configuration_preserves_existing_coercion_behavior() -> None:
             CONF_AUTOMATIC_CHARGE_ENABLED: "non-empty",
             CONF_EV_BEFORE_EXPORT_SOC_TARGET: "invalid",
             CONF_GRID_POWER_DIRECTION: None,
+            CONF_FOXESS_CONTROL_OWNER: None,
             CONF_HOUSE_OCCUPANCY_MODE: "invalid",
         }
     )
@@ -54,6 +58,7 @@ def test_runtime_configuration_preserves_existing_coercion_behavior() -> None:
     )
     assert parsed.house.occupancy_mode == DEFAULT_HOUSE_OCCUPANCY_MODE
     assert parsed.electrical.grid_power_positive_direction is None
+    assert parsed.automation.control_owner is None
 
 
 def test_runtime_configuration_is_immutable() -> None:

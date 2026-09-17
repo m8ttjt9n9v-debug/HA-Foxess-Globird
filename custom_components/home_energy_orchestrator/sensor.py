@@ -12,23 +12,13 @@ from homeassistant.util import dt as dt_util
 
 from . import EnergyConfigEntry
 from .const import (
-    CONF_AUTOMATIC_CHARGE_ENABLED,
-    CONF_AUTOMATIC_CONTROL_ENABLED,
-    CONF_AUTOMATIC_EXPORT_ENABLED,
-    CONF_EV_AUTOMATIC_CONTROL_ENABLED,
     CONF_EXPORT_RATE,
-    CONF_FOXESS_CONTROL_OWNER,
     CONF_FREE_CHARGE_SCHEDULE_CONFIRMED,
     CONF_OFFPEAK_EXPORT_RATE,
-    CONF_REHEARSAL_MODE,
-    CONF_SIGN_CONVENTIONS_VERIFIED,
     CONF_SUPER_EXPORT_RATE,
     CONF_ZERO_IMPORT_THRESHOLD_KW,
-    DEFAULT_AUTOMATIC_CHARGE_ENABLED,
     DEFAULT_EXPORT_RATE,
-    DEFAULT_FOXESS_CONTROL_OWNER,
     DEFAULT_OFFPEAK_EXPORT_RATE,
-    DEFAULT_SIGN_CONVENTIONS_VERIFIED,
     DEFAULT_SUPER_EXPORT_RATE,
     DEFAULT_ZERO_IMPORT_THRESHOLD_KW,
     DOMAIN,
@@ -75,17 +65,12 @@ class EnergySensor(CoordinatorEntity[EnergyCoordinator], SensorEntity):
 
     def _control_mode(self) -> str:
         """Return the commissioned control surface, not the ledger reason."""
-        config = self.coordinator.config
-        owner = config.get(CONF_FOXESS_CONTROL_OWNER, DEFAULT_FOXESS_CONTROL_OWNER)
+        automation = self.coordinator.runtime_config.automation
+        owner = automation.control_owner
         controller = self.coordinator.active_controller
         foxess_ready = controller is not None and controller.gate_status == "ready"
-        charge_enabled = bool(
-            config.get(
-                CONF_AUTOMATIC_CHARGE_ENABLED,
-                DEFAULT_AUTOMATIC_CHARGE_ENABLED,
-            )
-        )
-        export_enabled = bool(config.get(CONF_AUTOMATIC_EXPORT_ENABLED, False))
+        charge_enabled = automation.battery_charge_enabled
+        export_enabled = automation.battery_export_enabled
         if owner == FOXESS_CONTROL_OWNER_CLOUD:
             return "foxcloud_scheduler"
         if foxess_ready and charge_enabled and export_enabled:
@@ -114,7 +99,7 @@ class EnergySensor(CoordinatorEntity[EnergyCoordinator], SensorEntity):
         controller = self.coordinator.active_controller
         if controller is None:
             return "unavailable"
-        if not self.coordinator.config.get(CONF_AUTOMATIC_EXPORT_ENABLED, False):
+        if not self.coordinator.runtime_config.automation.battery_export_enabled:
             return "disabled"
         decision = controller.ev_before_export_decision
         if not decision.export_allowed:
@@ -733,24 +718,18 @@ class EnergySensor(CoordinatorEntity[EnergyCoordinator], SensorEntity):
         if self.entity_description.key != "status":
             return None
         learning = self.coordinator.learning_result
-        foxess_requested = bool(self.coordinator.config.get(CONF_AUTOMATIC_CONTROL_ENABLED, False))
-        charge_enabled = bool(
-            self.coordinator.config.get(
-                CONF_AUTOMATIC_CHARGE_ENABLED,
-                DEFAULT_AUTOMATIC_CHARGE_ENABLED,
-            )
-        )
-        foxess_owner = self.coordinator.config.get(
-            CONF_FOXESS_CONTROL_OWNER, DEFAULT_FOXESS_CONTROL_OWNER
-        )
+        automation = self.coordinator.runtime_config.automation
+        foxess_requested = automation.master_enabled
+        charge_enabled = automation.battery_charge_enabled
+        foxess_owner = automation.control_owner
         foxess_gate = (
             self.coordinator.active_controller.gate_status
             if self.coordinator.active_controller
             else "unavailable"
         )
         foxess_enabled = foxess_gate == "ready"
-        export_enabled = bool(self.coordinator.config.get(CONF_AUTOMATIC_EXPORT_ENABLED, False))
-        ev_requested = bool(self.coordinator.config.get(CONF_EV_AUTOMATIC_CONTROL_ENABLED, False))
+        export_enabled = automation.battery_export_enabled
+        ev_requested = automation.ev_control_enabled
         ev_controller = self.coordinator.ev_controller
         ev_gate = (
             ev_controller.gate_status
@@ -781,12 +760,7 @@ class EnergySensor(CoordinatorEntity[EnergyCoordinator], SensorEntity):
             "free_charge_schedule_confirmed": bool(
                 self.coordinator.config.get(CONF_FREE_CHARGE_SCHEDULE_CONFIRMED, False)
             ),
-            "sign_conventions_verified": bool(
-                self.coordinator.config.get(
-                    CONF_SIGN_CONVENTIONS_VERIFIED,
-                    DEFAULT_SIGN_CONVENTIONS_VERIFIED,
-                )
-            ),
+            "sign_conventions_verified": self.coordinator.runtime_config.electrical.verified,
             "foxess_modbus_control_effective": foxess_enabled,
             "foxess_control_owner": foxess_owner,
             "automatic_export_enabled": export_enabled,
@@ -877,7 +851,7 @@ class EnergySensor(CoordinatorEntity[EnergyCoordinator], SensorEntity):
                 if self.coordinator.active_controller
                 else None
             ),
-            "rehearsal_mode": self.coordinator.config.get(CONF_REHEARSAL_MODE, True),
+            "rehearsal_mode": automation.safety_lock,
             "integration": DOMAIN,
             "learning_model": learning.model,
             "learning_samples": learning.sample_count,

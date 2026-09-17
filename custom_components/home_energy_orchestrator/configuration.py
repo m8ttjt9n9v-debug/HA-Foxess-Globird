@@ -15,6 +15,7 @@ from .const import (
     CONF_EV_BEFORE_EXPORT_ENABLED,
     CONF_EV_BEFORE_EXPORT_SOC_TARGET,
     CONF_EV_CHARGE_TO_FULL_ENABLED,
+    CONF_FOXESS_CONTROL_OWNER,
     CONF_GRID_POWER_DIRECTION,
     CONF_HOUSE_OCCUPANCY_MODE,
     CONF_REHEARSAL_MODE,
@@ -29,6 +30,7 @@ from .const import (
     DEFAULT_EV_BEFORE_EXPORT_ENABLED,
     DEFAULT_EV_BEFORE_EXPORT_SOC_TARGET,
     DEFAULT_EV_CHARGE_TO_FULL_ENABLED,
+    DEFAULT_FOXESS_CONTROL_OWNER,
     DEFAULT_GRID_POWER_DIRECTION,
     DEFAULT_HOUSE_OCCUPANCY_MODE,
     DEFAULT_REHEARSAL_MODE,
@@ -55,6 +57,7 @@ class AutomationSettings:
     battery_export_enabled: bool
     ev_control_enabled: bool
     safety_lock: bool
+    control_owner: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -129,6 +132,13 @@ class RuntimeConfiguration:
                 ),
                 safety_lock=bool(
                     data.get(CONF_REHEARSAL_MODE, DEFAULT_REHEARSAL_MODE)
+                ),
+                control_owner=cast(
+                    str,
+                    data.get(
+                        CONF_FOXESS_CONTROL_OWNER,
+                        DEFAULT_FOXESS_CONTROL_OWNER,
+                    ),
                 ),
             ),
             ev_preferences=EvPreferenceSettings(

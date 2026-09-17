@@ -1,5 +1,6 @@
 from types import SimpleNamespace
 
+from custom_components.home_energy_orchestrator.configuration import RuntimeConfiguration
 from custom_components.home_energy_orchestrator.const import (
     CONF_AUTOMATIC_CHARGE_ENABLED,
     CONF_AUTOMATIC_CONTROL_ENABLED,
@@ -14,6 +15,7 @@ def _sensor(*, config, controller):
     sensor = object.__new__(EnergySensor)
     sensor.coordinator = SimpleNamespace(
         config=config,
+        runtime_config=RuntimeConfiguration.from_mapping(config),
         active_controller=controller,
     )
     return sensor
