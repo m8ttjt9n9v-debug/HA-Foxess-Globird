@@ -1,0 +1,322 @@
+{
+  "entities": [
+    {
+      "custom_attributes": [
+        "fresh",
+        "positive_direction",
+        "reason",
+        "sources",
+        "valid"
+      ],
+      "default_entity_id": "sensor.home_energy_battery_power",
+      "entity_key": "battery_power"
+    },
+    {
+      "custom_attributes": [
+        "additional_boost_rate_per_kwh",
+        "boosted_bonus_revenue",
+        "boosted_rate_export_kwh",
+        "boosted_window_export_kwh",
+        "offpeak_export_revenue",
+        "offpeak_rate_export_kwh",
+        "offpeak_rate_per_kwh",
+        "standard_export_revenue",
+        "standard_rate_export_kwh",
+        "standard_rate_per_kwh",
+        "standard_window_export_kwh"
+      ],
+      "default_entity_id": "sensor.home_energy_estimated_export_revenue",
+      "entity_key": "estimated_export_revenue"
+    },
+    {
+      "custom_attributes": [
+        "assumed_zerohero_credit",
+        "export_realisation_percent",
+        "forecast_additional_export_revenue",
+        "forecast_remaining_export_kwh",
+        "gross_cost",
+        "learned_cost_bias",
+        "measured_export_revenue",
+        "measured_net_cost",
+        "measured_zerohero_credit",
+        "raw_optimistic_forecast"
+      ],
+      "default_entity_id": "sensor.home_energy_estimated_net_cost",
+      "entity_key": "estimated_net_cost"
+    },
+    {
+      "custom_attributes": [
+        "actual_current_a",
+        "allowance_ev_power_kw",
+        "allowance_house_load_kw",
+        "allowance_phase",
+        "applied_limit_percent",
+        "charge_switch_on",
+        "charge_to_full_started_at",
+        "daily_backfill_active",
+        "daily_backfill_cycle_ready_at",
+        "daily_backfill_delivered_kwh",
+        "daily_backfill_frozen_start",
+        "daily_backfill_session_target_kwh",
+        "decision_phase",
+        "driving_learning_mode",
+        "driving_learning_samples",
+        "driving_p85_kwh",
+        "ev_average_source_valid",
+        "gate",
+        "grid_average_coverage",
+        "grid_source_valid",
+        "last_actions",
+        "last_write_at",
+        "learned_general_limit_percent",
+        "maximum_reconciliation_attempts",
+        "outside_control_active",
+        "pre_free_current_a",
+        "pre_free_frozen_start",
+        "pre_free_phase",
+        "pre_free_planned_energy_kwh",
+        "pre_free_planned_start",
+        "pre_free_session_active",
+        "reconciliation_attempts",
+        "reconciliation_phase",
+        "requested_current_a",
+        "smart_socket_recovery_attempted",
+        "smart_socket_recovery_current_a",
+        "smart_socket_recovery_phase",
+        "smart_socket_recovery_started_at",
+        "solar_spill_current_a",
+        "solar_spill_phase",
+        "solar_spill_reconstructed_kw",
+        "target_current_a",
+        "target_limit_percent",
+        "writes_performed"
+      ],
+      "default_entity_id": "sensor.home_energy_ev_control_status",
+      "entity_key": "ev_control_status"
+    },
+    {
+      "custom_attributes": [
+        "battery_power_kw",
+        "battery_soc",
+        "charging_status",
+        "ev_control_status",
+        "ev_learning_samples",
+        "export_status",
+        "forecast_cost",
+        "forecast_error",
+        "forecast_scorecard_status",
+        "foxess_control_gate",
+        "grid_power_kw",
+        "house_learning_samples",
+        "house_load_kw",
+        "last_update",
+        "latest_actual_cost",
+        "latest_zerohero_status",
+        "ledger_status",
+        "measured_cost",
+        "orchestrator_status",
+        "planned_export_kwh",
+        "sellable_energy_kwh",
+        "solar_power_kw",
+        "summary_schema_version",
+        "tariff_status",
+        "zerohero_status"
+      ],
+      "default_entity_id": "sensor.home_energy_fleet_summary",
+      "entity_key": "fleet_summary"
+    },
+    {
+      "custom_attributes": [
+        "actual_cost",
+        "export_realisation_ratio",
+        "forecast_cost",
+        "forecast_error",
+        "forecast_feedback_applied",
+        "learned_cost_bias",
+        "learned_export_realisation_percent",
+        "planned_export_kwh",
+        "raw_forecast_cost",
+        "realised_export_kwh",
+        "result_date",
+        "zerohero_status"
+      ],
+      "default_entity_id": "sensor.home_energy_forecast_error_yesterday",
+      "entity_key": "forecast_error_yesterday"
+    },
+    {
+      "custom_attributes": [
+        "actual_cost",
+        "export_realisation_ratio",
+        "forecast_cost",
+        "forecast_error",
+        "forecast_feedback_applied",
+        "learned_cost_bias",
+        "learned_export_realisation_percent",
+        "planned_export_kwh",
+        "raw_forecast_cost",
+        "realised_export_kwh",
+        "result_date",
+        "zerohero_status"
+      ],
+      "default_entity_id": "sensor.home_energy_forecast_scorecard_status",
+      "entity_key": "forecast_scorecard_status"
+    },
+    {
+      "custom_attributes": [
+        "actual_cost",
+        "export_realisation_ratio",
+        "forecast_cost",
+        "forecast_error",
+        "forecast_feedback_applied",
+        "learned_cost_bias",
+        "learned_export_realisation_percent",
+        "planned_export_kwh",
+        "raw_forecast_cost",
+        "realised_export_kwh",
+        "result_date",
+        "zerohero_status"
+      ],
+      "default_entity_id": "sensor.home_energy_forecast_yesterday_cost",
+      "entity_key": "forecast_yesterday_cost"
+    },
+    {
+      "custom_attributes": [
+        "actual_cost",
+        "export_realisation_ratio",
+        "forecast_cost",
+        "forecast_error",
+        "forecast_feedback_applied",
+        "learned_cost_bias",
+        "learned_export_realisation_percent",
+        "planned_export_kwh",
+        "raw_forecast_cost",
+        "realised_export_kwh",
+        "result_date",
+        "zerohero_status"
+      ],
+      "default_entity_id": "sensor.home_energy_globird_yesterday_actual_cost",
+      "entity_key": "globird_yesterday_actual_cost"
+    },
+    {
+      "custom_attributes": [
+        "fresh",
+        "positive_direction",
+        "reason",
+        "sources",
+        "valid"
+      ],
+      "default_entity_id": "sensor.home_energy_grid_power",
+      "entity_key": "grid_power"
+    },
+    {
+      "custom_attributes": [
+        "fresh",
+        "positive_direction",
+        "reason",
+        "sources",
+        "valid"
+      ],
+      "default_entity_id": "sensor.home_energy_house_load",
+      "entity_key": "house_load"
+    },
+    {
+      "custom_attributes": [
+        "all_people_away_for_hours",
+        "people_home",
+        "person_entities_found",
+        "reason",
+        "selected_mode"
+      ],
+      "default_entity_id": "sensor.home_energy_house_occupancy_state",
+      "entity_key": "house_occupancy_state"
+    },
+    {
+      "custom_attributes": [
+        "fresh",
+        "positive_direction",
+        "reason",
+        "sources",
+        "valid"
+      ],
+      "default_entity_id": "sensor.home_energy_site_grid_current",
+      "entity_key": "site_grid_current"
+    },
+    {
+      "custom_attributes": [
+        "fresh",
+        "positive_direction",
+        "reason",
+        "sources",
+        "valid"
+      ],
+      "default_entity_id": "sensor.home_energy_solar_power",
+      "entity_key": "solar_power"
+    },
+    {
+      "custom_attributes": [
+        "automatic_charge_enabled",
+        "automatic_control_enabled",
+        "automatic_export_effective",
+        "automatic_export_enabled",
+        "automatic_export_remaining_kwh",
+        "charge_power_target_kw",
+        "charge_session_phase",
+        "control_gate",
+        "ev_allowance_phase",
+        "ev_automatic_control_enabled",
+        "ev_before_export_status",
+        "ev_control_gate",
+        "ev_decision_phase",
+        "ev_driving_learning_mode",
+        "ev_driving_learning_samples",
+        "ev_last_control_actions",
+        "ev_last_control_reason",
+        "ev_last_write_at",
+        "ev_learned_general_limit_percent",
+        "ev_reconciliation_attempts",
+        "ev_reconciliation_phase",
+        "ev_target_current_a",
+        "ev_target_limit_percent",
+        "ev_writes_enabled",
+        "ev_writes_performed",
+        "export_allowance_remaining_kwh",
+        "export_protected_ev_kwh",
+        "export_session_phase",
+        "foxess_control_owner",
+        "foxess_modbus_control_effective",
+        "free_charge_schedule_confirmed",
+        "heater_learning_samples",
+        "house_occupancy",
+        "house_occupancy_reason",
+        "integration",
+        "last_control_actions",
+        "last_control_reason",
+        "learning_max_age_days",
+        "learning_model",
+        "learning_sample_limit",
+        "learning_sampler_enabled",
+        "learning_samples",
+        "ledger_status",
+        "mode",
+        "rehearsal_mode",
+        "sign_conventions_verified",
+        "writes_performed"
+      ],
+      "default_entity_id": "sensor.home_energy_status",
+      "entity_key": "status"
+    },
+    {
+      "custom_attributes": [
+        "accumulator_date",
+        "hourly_import_kwh",
+        "last_sample",
+        "threshold_kwh_per_hour"
+      ],
+      "default_entity_id": "sensor.home_energy_zerohero_import_window",
+      "entity_key": "zerohero_import_window"
+    }
+  ],
+  "entity_count": 16,
+  "release_baseline": "0.12.26",
+  "schema_version": 1
+}

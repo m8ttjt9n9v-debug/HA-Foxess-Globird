@@ -149,6 +149,9 @@ misused, a branded term is inconsistent, or an unexplained duplicate appears.
 **Exit gate:** 100% of the public surface is inventoried and the project owner
 has approved the glossary and proposed display-name table.
 
+Current work package and completion evidence:
+[Phase 1 entity and configuration contract](maintainability/phase-1-entity-contract.md).
+
 ### Phase 2 — compatibility foundation and naming-only release
 
 Estimated effort: 4–6 engineer-days.
