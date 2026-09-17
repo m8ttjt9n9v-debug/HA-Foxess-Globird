@@ -68,8 +68,10 @@ separate reviewable work items.
 - The generated [clean-install usability audit](clean-install-usability-audit-v0.12.26.md)
   records dashboard coverage, translation coverage and category-review gaps
   without silently treating any presentation proposal as approved.
-- Nine display-label proposals await project-owner approval; no label is
-  inferred as approved from engineering analysis.
+- The project owner approved all nine display-label proposals on 2026-09-17.
+  They are implemented as catalogue-only name changes, while keys, unique IDs,
+  default entity IDs, states, attributes, units and classes remain frozen.
+  Full translation-key adoption remains a separate compatibility work item.
 
 ## Exit gate
 

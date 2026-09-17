@@ -22,10 +22,6 @@ from .const import (
     CONF_EXPORT_RATE,
     CONF_EXPORT_RATE_WINDOW_END,
     CONF_EXPORT_RATE_WINDOW_START,
-    CONF_FOXESS_CONTROL_OWNER,
-    CONF_FOXESS_FORCE_CHARGE_POWER,
-    CONF_FOXESS_FORCE_DISCHARGE_POWER,
-    CONF_FOXESS_WORK_MODE,
     CONF_INVERTER_CHARGE_LIMIT_KW,
     CONF_INVERTER_DISCHARGE_LIMIT_KW,
     CONF_OFFPEAK_BALANCE_RATE,
@@ -34,7 +30,6 @@ from .const import (
     CONF_PEAK_RATE,
     CONF_PEAK_WINDOW_END,
     CONF_PEAK_WINDOW_START,
-    CONF_REHEARSAL_MODE,
     CONF_SHOULDER_RATE,
     CONF_SUPER_EXPORT_RATE,
     DEFAULT_BONUS_WINDOW_END,
@@ -42,7 +37,6 @@ from .const import (
     DEFAULT_EXPORT_RATE,
     DEFAULT_EXPORT_RATE_WINDOW_END,
     DEFAULT_EXPORT_RATE_WINDOW_START,
-    DEFAULT_FOXESS_CONTROL_OWNER,
     DEFAULT_OFFPEAK_EXPORT_RATE,
     DEFAULT_SUPER_EXPORT_RATE,
     FOXESS_CONTROL_OWNER_MODBUS,
@@ -453,23 +447,14 @@ class ManualTestController:
         )
 
     def _require_gate(self) -> None:
-        owner = self.coordinator.config.get(
-            CONF_FOXESS_CONTROL_OWNER, DEFAULT_FOXESS_CONTROL_OWNER
-        )
-        if owner != FOXESS_CONTROL_OWNER_MODBUS:
+        runtime = self.coordinator.runtime_config
+        if runtime.automation.control_owner != FOXESS_CONTROL_OWNER_MODBUS:
             raise ManualTestError(
                 "select Local Modbus as the FoxESS control owner before a diagnostic test"
             )
-        if self.coordinator.config.get(CONF_REHEARSAL_MODE, True):
+        if runtime.automation.safety_lock:
             raise ManualTestError("disable Rehearsal mode before running a diagnostic test")
-        if not all(
-            self.coordinator.config.get(key)
-            for key in (
-                CONF_FOXESS_WORK_MODE,
-                CONF_FOXESS_FORCE_CHARGE_POWER,
-                CONF_FOXESS_FORCE_DISCHARGE_POWER,
-            )
-        ):
+        if not runtime.inverter.actuator_mapping_complete:
             raise ManualTestError("complete the three FoxESS actuator mappings first")
         if self.coordinator.snapshot is None or self.coordinator.data is None:
             raise ManualTestError("live telemetry is unavailable")
@@ -484,21 +469,12 @@ class ManualTestController:
 
     def _restore_gate_reason(self) -> str | None:
         """Return the no-write reason for a persisted restoration obligation."""
-        owner = self.coordinator.config.get(
-            CONF_FOXESS_CONTROL_OWNER, DEFAULT_FOXESS_CONTROL_OWNER
-        )
-        if owner != FOXESS_CONTROL_OWNER_MODBUS:
+        runtime = self.coordinator.runtime_config
+        if runtime.automation.control_owner != FOXESS_CONTROL_OWNER_MODBUS:
             return "restore_blocked_control_owner"
-        if self.coordinator.config.get(CONF_REHEARSAL_MODE, True):
+        if runtime.automation.safety_lock:
             return "restore_blocked_safety_lock"
-        if not all(
-            self.coordinator.config.get(key)
-            for key in (
-                CONF_FOXESS_WORK_MODE,
-                CONF_FOXESS_FORCE_CHARGE_POWER,
-                CONF_FOXESS_FORCE_DISCHARGE_POWER,
-            )
-        ):
+        if not runtime.inverter.actuator_mapping_complete:
             return "restore_blocked_incomplete_mapping"
         return None
 
@@ -529,21 +505,28 @@ class ManualTestController:
 
     def _get_adapter(self) -> FoxessServiceAdapter:
         if self._adapter is None:
+            inverter = self.coordinator.runtime_config.inverter
+            if not inverter.actuator_mapping_complete:
+                raise ManualTestError("complete the three FoxESS actuator mappings first")
+            assert inverter.work_mode_entity is not None
+            assert inverter.force_charge_power_entity is not None
+            assert inverter.force_discharge_power_entity is not None
             self._adapter = FoxessServiceAdapter(
                 self.hass,
                 FoxessEntityMap(
-                    str(self.coordinator.config[CONF_FOXESS_WORK_MODE]),
-                    str(self.coordinator.config[CONF_FOXESS_FORCE_CHARGE_POWER]),
-                    str(self.coordinator.config[CONF_FOXESS_FORCE_DISCHARGE_POWER]),
+                    inverter.work_mode_entity,
+                    inverter.force_charge_power_entity,
+                    inverter.force_discharge_power_entity,
                 ),
                 allow_writes=True,
             )
         return self._adapter
 
     def _observation(self) -> FoxessObservation:
-        mode_id = self.coordinator.config.get(CONF_FOXESS_WORK_MODE)
-        charge_id = self.coordinator.config.get(CONF_FOXESS_FORCE_CHARGE_POWER)
-        discharge_id = self.coordinator.config.get(CONF_FOXESS_FORCE_DISCHARGE_POWER)
+        inverter = self.coordinator.runtime_config.inverter
+        mode_id = inverter.work_mode_entity
+        charge_id = inverter.force_charge_power_entity
+        discharge_id = inverter.force_discharge_power_entity
         mode_state = self.hass.states.get(str(mode_id))
         charge_state = self.hass.states.get(str(charge_id))
         discharge_state = self.hass.states.get(str(discharge_id))
@@ -561,10 +544,14 @@ class ManualTestController:
         return FoxessObservation(mode_state.state, charge, discharge)
 
     def _limit(self, key: str) -> float:
-        try:
-            value = float(self.coordinator.config.get(key, 0.0))
-        except (TypeError, ValueError):
-            return 0.0
+        inverter = self.coordinator.runtime_config.inverter
+        value = (
+            inverter.charge_limit_kw
+            if key == CONF_INVERTER_CHARGE_LIMIT_KW
+            else inverter.discharge_limit_kw
+            if key == CONF_INVERTER_DISCHARGE_LIMIT_KW
+            else 0.0
+        )
         return value if isfinite(value) and value >= 0 else 0.0
 
     def _rate(self, key: str, default: float) -> float:

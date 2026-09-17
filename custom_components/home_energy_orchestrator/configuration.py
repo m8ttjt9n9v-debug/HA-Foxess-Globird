@@ -17,6 +17,9 @@ from .const import (
     CONF_EV_CHARGE_TO_FULL_ENABLED,
     CONF_EXPORT_RATE,
     CONF_FOXESS_CONTROL_OWNER,
+    CONF_FOXESS_FORCE_CHARGE_POWER,
+    CONF_FOXESS_FORCE_DISCHARGE_POWER,
+    CONF_FOXESS_WORK_MODE,
     CONF_FREE_CHARGE_SCHEDULE_CONFIRMED,
     CONF_GRID_POWER_DIRECTION,
     CONF_HOUSE_OCCUPANCY_MODE,
@@ -117,6 +120,20 @@ class InverterSettings:
 
     charge_limit_kw: float
     discharge_limit_kw: float
+    work_mode_entity: str | None
+    force_charge_power_entity: str | None
+    force_discharge_power_entity: str | None
+
+    @property
+    def actuator_mapping_complete(self) -> bool:
+        """Return whether every FoxESS command/feedback entity is mapped."""
+        return all(
+            (
+                self.work_mode_entity,
+                self.force_charge_power_entity,
+                self.force_discharge_power_entity,
+            )
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -138,6 +155,9 @@ class RuntimeConfiguration:
         ).lower()
         if occupancy not in HOUSE_OCCUPANCY_MODES:
             occupancy = DEFAULT_HOUSE_OCCUPANCY_MODE
+        work_mode_entity = data.get(CONF_FOXESS_WORK_MODE)
+        force_charge_power_entity = data.get(CONF_FOXESS_FORCE_CHARGE_POWER)
+        force_discharge_power_entity = data.get(CONF_FOXESS_FORCE_DISCHARGE_POWER)
         return cls(
             automation=AutomationSettings(
                 master_enabled=bool(
@@ -266,6 +286,17 @@ class RuntimeConfiguration:
                     data,
                     CONF_INVERTER_DISCHARGE_LIMIT_KW,
                     DEFAULT_INVERTER_DISCHARGE_LIMIT_KW,
+                ),
+                work_mode_entity=(str(work_mode_entity) if work_mode_entity else None),
+                force_charge_power_entity=(
+                    str(force_charge_power_entity)
+                    if force_charge_power_entity
+                    else None
+                ),
+                force_discharge_power_entity=(
+                    str(force_discharge_power_entity)
+                    if force_discharge_power_entity
+                    else None
                 ),
             ),
         )

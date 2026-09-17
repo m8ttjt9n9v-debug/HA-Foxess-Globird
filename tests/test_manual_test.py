@@ -8,6 +8,7 @@ from types import SimpleNamespace
 import pytest
 from homeassistant.const import EVENT_CALL_SERVICE
 
+from custom_components.home_energy_orchestrator.configuration import RuntimeConfiguration
 from custom_components.home_energy_orchestrator.const import (
     CONF_AUTOMATIC_CONTROL_ENABLED,
     CONF_BONUS_WINDOW_END,
@@ -129,6 +130,7 @@ def _coordinator(**config):
     return SimpleNamespace(
         entry_id="manual-test-entry",
         config=values,
+        runtime_config=RuntimeConfiguration.from_mapping(values),
         snapshot=SimpleNamespace(battery_soc=70.0, battery_floor_percent=10.0),
         data=SimpleNamespace(free_energy_remaining_kwh=49.0),
         _free_window_hours_remaining=lambda _now: free_window_hours,

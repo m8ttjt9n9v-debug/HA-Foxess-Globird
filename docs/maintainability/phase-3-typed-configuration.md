@@ -15,6 +15,12 @@ selectors, validation, migration behavior and the multi-page draft workflow.
   reads/writes, separates Home Assistant boundaries from runtime consumers,
   and distinguishes raw mapping access from the centralized managed-mutation
   API.
+- Incremental consumer migrations have reduced direct AST-visible runtime raw
+  access from the frozen 167-access baseline to 106 without changing the
+  serialized configuration surface. Sensor presentation and diagnostics use
+  typed projections, operator mutations rebuild the immutable snapshot, and
+  manual FoxESS diagnostics now use typed ownership, Safety Lock, actuator
+  mapping and inverter-limit values.
 
 ## Work packages
 

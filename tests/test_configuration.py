@@ -13,6 +13,9 @@ from custom_components.home_energy_orchestrator.const import (
     CONF_EV_BEFORE_EXPORT_SOC_TARGET,
     CONF_EXPORT_RATE,
     CONF_FOXESS_CONTROL_OWNER,
+    CONF_FOXESS_FORCE_CHARGE_POWER,
+    CONF_FOXESS_FORCE_DISCHARGE_POWER,
+    CONF_FOXESS_WORK_MODE,
     CONF_FREE_CHARGE_SCHEDULE_CONFIRMED,
     CONF_GRID_POWER_DIRECTION,
     CONF_HOUSE_OCCUPANCY_MODE,
@@ -54,6 +57,10 @@ def test_runtime_configuration_uses_established_defaults() -> None:
         == DEFAULT_ZERO_IMPORT_THRESHOLD_KW
     )
     assert parsed.inverter.charge_limit_kw == DEFAULT_INVERTER_CHARGE_LIMIT_KW
+    assert parsed.inverter.work_mode_entity is None
+    assert parsed.inverter.force_charge_power_entity is None
+    assert parsed.inverter.force_discharge_power_entity is None
+    assert parsed.inverter.actuator_mapping_complete is False
 
 
 def test_runtime_configuration_preserves_existing_coercion_behavior() -> None:
@@ -68,6 +75,9 @@ def test_runtime_configuration_preserves_existing_coercion_behavior() -> None:
             CONF_INVERTER_CHARGE_LIMIT_KW: "12.5",
             CONF_EXPORT_RATE: "0.075",
             CONF_ZERO_IMPORT_THRESHOLD_KW: "invalid",
+            CONF_FOXESS_WORK_MODE: "select.foxess_mode",
+            CONF_FOXESS_FORCE_CHARGE_POWER: "number.foxess_charge",
+            CONF_FOXESS_FORCE_DISCHARGE_POWER: "number.foxess_discharge",
         }
     )
     assert parsed.automation.battery_charge_enabled is True
@@ -84,6 +94,10 @@ def test_runtime_configuration_preserves_existing_coercion_behavior() -> None:
         == DEFAULT_ZERO_IMPORT_THRESHOLD_KW
     )
     assert parsed.inverter.charge_limit_kw == 12.5
+    assert parsed.inverter.work_mode_entity == "select.foxess_mode"
+    assert parsed.inverter.force_charge_power_entity == "number.foxess_charge"
+    assert parsed.inverter.force_discharge_power_entity == "number.foxess_discharge"
+    assert parsed.inverter.actuator_mapping_complete is True
 
 
 def test_runtime_configuration_is_immutable() -> None:
