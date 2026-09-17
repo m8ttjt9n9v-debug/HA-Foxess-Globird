@@ -32,6 +32,8 @@ non-finite behavior, unlike general mapped-number reads.
 ## Deliverables
 
 - Explicit immutable entity map for every EV-related source.
+- One typed runtime-to-map constructor, including lifetime driving energy and
+  battery-SoC presence evidence.
 - Immutable composite snapshot with actual-current and direct-actuator views.
 - Unique-ID read cache and characterization.
 
@@ -55,8 +57,8 @@ stored data or state conversion is involved.
 
 ## Acceptance evidence
 
-- 112 focused composite observation, EV controller, adapter and lifecycle tests
-  passed.
+- 199 focused composite observation, typed configuration, EV controller and
+  lifecycle tests passed after completing the entity map.
 - Full repository suite and Ruff passed.
 - All nine frozen compatibility contracts passed.
 - The `v0.12.26` previous-release compatibility rehearsal passed.

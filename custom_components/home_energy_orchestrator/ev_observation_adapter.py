@@ -8,6 +8,7 @@ from math import isfinite
 
 from homeassistant.core import HomeAssistant, State
 
+from .configuration import RuntimeConfiguration
 from .normalise import current_to_a, energy_to_kwh
 from .planner.ev import DirectEvseObservation
 
@@ -44,6 +45,7 @@ class EvObservationEntityMap:
     actual_current_entity: str | None = None
     soc_entity: str | None = None
     stored_energy_entity: str | None = None
+    lifetime_energy_entity: str | None = None
     current_limit_entity: str | None = None
     charge_limit_entity: str | None = None
     charge_switch_entity: str | None = None
@@ -62,6 +64,7 @@ class EvFeedbackSnapshot:
     actual_current: EvEntityFeedback
     soc: EvEntityFeedback
     stored_energy: EvEntityFeedback
+    lifetime_energy: EvEntityFeedback
     current_limit: EvEntityFeedback
     charge_limit: EvEntityFeedback
     charge_switch: EvEntityFeedback
@@ -171,12 +174,36 @@ def capture_ev_feedback(
         actual_current=capture(entities.actual_current_entity),
         soc=capture(entities.soc_entity),
         stored_energy=capture(entities.stored_energy_entity),
+        lifetime_energy=capture(entities.lifetime_energy_entity),
         current_limit=capture(entities.current_limit_entity),
         charge_limit=capture(entities.charge_limit_entity),
         charge_switch=capture(entities.charge_switch_entity),
         smart_socket=capture(entities.smart_socket_entity),
         legacy_charge_to_full=capture(entities.legacy_charge_to_full_entity),
         battery_soc=capture(entities.battery_soc_entity),
+    )
+
+
+def ev_observation_entity_map(
+    runtime: RuntimeConfiguration,
+) -> EvObservationEntityMap:
+    """Build the complete explicit EV observation map from typed runtime config."""
+    return EvObservationEntityMap(
+        at_home_entity=runtime.ev_connection.at_home_entity,
+        cable_connected_entity=runtime.ev_connection.cable_connected_entity,
+        charging_state_entity=runtime.ev_telemetry.charging_state_entity,
+        actual_current_entity=runtime.ev_telemetry.actual_current_entity,
+        soc_entity=runtime.ev_telemetry.soc_entity,
+        stored_energy_entity=runtime.ev_telemetry.stored_energy_entity,
+        lifetime_energy_entity=runtime.ev_telemetry.lifetime_energy_entity,
+        current_limit_entity=runtime.ev_actuators.current_limit_entity,
+        charge_limit_entity=runtime.ev_actuators.charge_limit_entity,
+        charge_switch_entity=runtime.ev_actuators.charge_switch_entity,
+        smart_socket_entity=runtime.ev_actuators.smart_socket_entity,
+        legacy_charge_to_full_entity=(
+            runtime.ev_preferences.legacy_charge_to_full_entity
+        ),
+        battery_soc_entity=runtime.battery.soc_entity,
     )
 
 

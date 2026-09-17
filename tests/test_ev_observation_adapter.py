@@ -5,10 +5,12 @@ from math import isnan
 
 import pytest
 
+from custom_components.home_energy_orchestrator.configuration import RuntimeConfiguration
 from custom_components.home_energy_orchestrator.ev_observation_adapter import (
     EvObservationEntityMap,
     capture_ev_entity_feedback,
     capture_ev_feedback,
+    ev_observation_entity_map,
 )
 from custom_components.home_energy_orchestrator.planner.ev import (
     DirectEvseObservation,
@@ -205,3 +207,39 @@ def test_composite_capture_reads_duplicate_entity_only_once(hass, monkeypatch) -
 
     assert result.at_home is result.cable_connected is result.charging_state
     assert calls == ["sensor.shared"]
+
+
+def test_typed_runtime_map_includes_every_ev_related_source() -> None:
+    runtime = RuntimeConfiguration.from_mapping(
+        {
+            "ev_at_home_entity": "device_tracker.car",
+            "ev_cable_connected_entity": "binary_sensor.cable",
+            "ev_charging_state_entity": "sensor.charging",
+            "ev_actual_current_entity": "sensor.current",
+            "ev_soc_entity": "sensor.soc",
+            "ev_stored_energy_entity": "sensor.stored",
+            "ev_lifetime_energy_entity": "sensor.lifetime",
+            "ev_current_limit_entity": "number.current",
+            "ev_charge_limit_entity": "number.limit",
+            "ev_charge_switch_entity": "switch.charge",
+            "ev_smart_socket_entity": "switch.socket",
+            "ev_charge_to_full_entity": "input_boolean.full",
+            "battery_soc_entity": "sensor.battery_soc",
+        }
+    )
+
+    assert ev_observation_entity_map(runtime) == EvObservationEntityMap(
+        at_home_entity="device_tracker.car",
+        cable_connected_entity="binary_sensor.cable",
+        charging_state_entity="sensor.charging",
+        actual_current_entity="sensor.current",
+        soc_entity="sensor.soc",
+        stored_energy_entity="sensor.stored",
+        lifetime_energy_entity="sensor.lifetime",
+        current_limit_entity="number.current",
+        charge_limit_entity="number.limit",
+        charge_switch_entity="switch.charge",
+        smart_socket_entity="switch.socket",
+        legacy_charge_to_full_entity="input_boolean.full",
+        battery_soc_entity="sensor.battery_soc",
+    )
