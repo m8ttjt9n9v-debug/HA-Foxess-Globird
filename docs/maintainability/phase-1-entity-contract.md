@@ -37,11 +37,13 @@ blast radius.
 ## Deliverables
 
 1. Immutable v0.12.26 identity and custom-attribute baselines.
-2. Mechanical drift checks run by the ordinary test suite.
-3. A semantic worksheet covering every entity and attribute: definition,
+2. Immutable wizard-field page/order, required/default, input-kind and selector
+   configuration baseline.
+3. Mechanical drift checks run by the ordinary test suite.
+4. A semantic worksheet covering every entity and attribute: definition,
    producer, role, unit/sign/time basis, availability, vocabulary, audience,
    equivalents, consumers and retain/relabel/deprecate decision.
-4. A terminology review table for project-owner approval before display names
+5. A terminology review table for project-owner approval before display names
    change.
 
 The semantic worksheet is deliberately completed in reviewed domain slices.
@@ -75,6 +77,7 @@ new contract without changing runtime data, registry state or hardware mode.
 ## Acceptance evidence
 
 - `PYTHONPATH=. python -m scripts.entity_attribute_contract --check`
+- `PYTHONPATH=. python -m scripts.config_field_contract --check`
 - `pytest -q -p no:cacheprovider tests/test_entity_attribute_contract.py`
 - full test suite and Ruff
 
@@ -82,6 +85,7 @@ new contract without changing runtime data, registry state or hardware mode.
 
 - [x] Existing entity identity characterised
 - [x] Custom public attributes characterised
+- [x] Existing wizard field mechanics characterised
 - [ ] Semantic worksheet complete (9 of 107 entities drafted)
 - [ ] Project-owner terminology review complete
 - [ ] Compatibility checks passed for any proposed naming release

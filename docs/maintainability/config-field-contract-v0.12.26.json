@@ -1,0 +1,1611 @@
+{
+  "config_entry_version": 6,
+  "field_count": 124,
+  "fields": [
+    {
+      "default": "Home Energy",
+      "has_default": true,
+      "input_config": {
+        "multiline": false,
+        "multiple": false
+      },
+      "input_kind": "text",
+      "key": "name",
+      "order": 1,
+      "page": "site",
+      "required": true
+    },
+    {
+      "default": false,
+      "has_default": true,
+      "input_config": null,
+      "input_kind": "boolean",
+      "key": "configure_solar",
+      "order": 2,
+      "page": "site",
+      "required": true
+    },
+    {
+      "default": false,
+      "has_default": true,
+      "input_config": null,
+      "input_kind": "boolean",
+      "key": "configure_ev",
+      "order": 3,
+      "page": "site",
+      "required": true
+    },
+    {
+      "default": null,
+      "has_default": true,
+      "input_config": {
+        "domain": [
+          "sensor"
+        ],
+        "multiple": false,
+        "reorder": false
+      },
+      "input_kind": "entity",
+      "key": "battery_soc_entity",
+      "order": 1,
+      "page": "battery",
+      "required": true
+    },
+    {
+      "default": null,
+      "has_default": false,
+      "input_config": {
+        "domain": [
+          "sensor"
+        ],
+        "multiple": false,
+        "reorder": false
+      },
+      "input_kind": "entity",
+      "key": "battery_power_entity",
+      "order": 2,
+      "page": "battery",
+      "required": false
+    },
+    {
+      "default": null,
+      "has_default": false,
+      "input_config": {
+        "domain": [
+          "sensor"
+        ],
+        "multiple": false,
+        "reorder": false
+      },
+      "input_kind": "entity",
+      "key": "battery_charge_power_entity",
+      "order": 3,
+      "page": "battery",
+      "required": false
+    },
+    {
+      "default": null,
+      "has_default": false,
+      "input_config": {
+        "domain": [
+          "sensor"
+        ],
+        "multiple": false,
+        "reorder": false
+      },
+      "input_kind": "entity",
+      "key": "battery_discharge_power_entity",
+      "order": 4,
+      "page": "battery",
+      "required": false
+    },
+    {
+      "default": "positive_charge",
+      "has_default": true,
+      "input_config": {
+        "custom_value": false,
+        "multiple": false,
+        "options": [
+          "positive_charge",
+          "positive_discharge"
+        ],
+        "sort": false
+      },
+      "input_kind": "select",
+      "key": "battery_power_positive_direction",
+      "order": 5,
+      "page": "battery",
+      "required": true
+    },
+    {
+      "default": null,
+      "has_default": false,
+      "input_config": {
+        "domain": [
+          "sensor"
+        ],
+        "multiple": false,
+        "reorder": false
+      },
+      "input_kind": "entity",
+      "key": "battery_capacity_entity",
+      "order": 6,
+      "page": "battery",
+      "required": false
+    },
+    {
+      "default": null,
+      "has_default": false,
+      "input_config": {
+        "coerce": "float"
+      },
+      "input_kind": "number",
+      "key": "battery_capacity_kwh",
+      "order": 7,
+      "page": "battery",
+      "required": false
+    },
+    {
+      "default": 10.0,
+      "has_default": true,
+      "input_config": {
+        "coerce": "float"
+      },
+      "input_kind": "number",
+      "key": "battery_floor_percent",
+      "order": 8,
+      "page": "battery",
+      "required": true
+    },
+    {
+      "default": 0.0,
+      "has_default": true,
+      "input_config": {
+        "coerce": "float"
+      },
+      "input_kind": "number",
+      "key": "reserve_kwh",
+      "order": 9,
+      "page": "battery",
+      "required": true
+    },
+    {
+      "default": 100.0,
+      "has_default": true,
+      "input_config": {
+        "coerce": "float"
+      },
+      "input_kind": "number",
+      "key": "battery_free_window_target_percent",
+      "order": 10,
+      "page": "battery",
+      "required": true
+    },
+    {
+      "default": 95.0,
+      "has_default": true,
+      "input_config": {
+        "coerce": "float"
+      },
+      "input_kind": "number",
+      "key": "battery_charge_efficiency_percent",
+      "order": 11,
+      "page": "battery",
+      "required": true
+    },
+    {
+      "default": 95.0,
+      "has_default": true,
+      "input_config": {
+        "coerce": "float"
+      },
+      "input_kind": "number",
+      "key": "discharge_efficiency_percent",
+      "order": 12,
+      "page": "battery",
+      "required": true
+    },
+    {
+      "default": null,
+      "has_default": false,
+      "input_config": {
+        "domain": [
+          "select"
+        ],
+        "multiple": false,
+        "reorder": false
+      },
+      "input_kind": "entity",
+      "key": "foxess_work_mode_entity",
+      "order": 1,
+      "page": "inverter",
+      "required": false
+    },
+    {
+      "default": null,
+      "has_default": false,
+      "input_config": {
+        "domain": [
+          "number"
+        ],
+        "multiple": false,
+        "reorder": false
+      },
+      "input_kind": "entity",
+      "key": "foxess_force_charge_power_entity",
+      "order": 2,
+      "page": "inverter",
+      "required": false
+    },
+    {
+      "default": null,
+      "has_default": false,
+      "input_config": {
+        "domain": [
+          "number"
+        ],
+        "multiple": false,
+        "reorder": false
+      },
+      "input_kind": "entity",
+      "key": "foxess_force_discharge_power_entity",
+      "order": 3,
+      "page": "inverter",
+      "required": false
+    },
+    {
+      "default": 0.0,
+      "has_default": true,
+      "input_config": {
+        "coerce": "float"
+      },
+      "input_kind": "number",
+      "key": "inverter_charge_limit_kw",
+      "order": 4,
+      "page": "inverter",
+      "required": true
+    },
+    {
+      "default": 0.0,
+      "has_default": true,
+      "input_config": {
+        "coerce": "float"
+      },
+      "input_kind": "number",
+      "key": "inverter_discharge_limit_kw",
+      "order": 5,
+      "page": "inverter",
+      "required": true
+    },
+    {
+      "default": 0.0,
+      "has_default": true,
+      "input_config": {
+        "coerce": "float"
+      },
+      "input_kind": "number",
+      "key": "export_limit_kw",
+      "order": 6,
+      "page": "inverter",
+      "required": true
+    },
+    {
+      "default": null,
+      "has_default": true,
+      "input_config": {
+        "domain": [
+          "sensor"
+        ],
+        "multiple": false,
+        "reorder": false
+      },
+      "input_kind": "entity",
+      "key": "grid_power_entity",
+      "order": 1,
+      "page": "grid",
+      "required": true
+    },
+    {
+      "default": "positive_import",
+      "has_default": true,
+      "input_config": {
+        "custom_value": false,
+        "multiple": false,
+        "options": [
+          "positive_import",
+          "positive_export"
+        ],
+        "sort": false
+      },
+      "input_kind": "select",
+      "key": "grid_power_positive_direction",
+      "order": 2,
+      "page": "grid",
+      "required": true
+    },
+    {
+      "default": 1,
+      "has_default": true,
+      "input_config": {
+        "coerce": "float"
+      },
+      "input_kind": "number",
+      "key": "site_phase_count",
+      "order": 3,
+      "page": "grid",
+      "required": true
+    },
+    {
+      "default": 0.0,
+      "has_default": true,
+      "input_config": {
+        "coerce": "float"
+      },
+      "input_kind": "number",
+      "key": "service_import_limit_a",
+      "order": 4,
+      "page": "grid",
+      "required": true
+    },
+    {
+      "default": null,
+      "has_default": false,
+      "input_config": {
+        "device_class": [
+          "current"
+        ],
+        "domain": [
+          "sensor"
+        ],
+        "multiple": false,
+        "reorder": false
+      },
+      "input_kind": "entity",
+      "key": "site_grid_current_entity",
+      "order": 5,
+      "page": "grid",
+      "required": false
+    },
+    {
+      "default": "positive_import",
+      "has_default": true,
+      "input_config": {
+        "custom_value": false,
+        "multiple": false,
+        "options": [
+          "positive_import",
+          "positive_export"
+        ],
+        "sort": false
+      },
+      "input_kind": "select",
+      "key": "site_grid_current_positive_direction",
+      "order": 6,
+      "page": "grid",
+      "required": true
+    },
+    {
+      "default": 1.0,
+      "has_default": true,
+      "input_config": {
+        "coerce": "float"
+      },
+      "input_kind": "number",
+      "key": "site_grid_headroom_current_a",
+      "order": 7,
+      "page": "grid",
+      "required": true
+    },
+    {
+      "default": 90.0,
+      "has_default": true,
+      "input_config": {
+        "coerce": "float"
+      },
+      "input_kind": "number",
+      "key": "telemetry_max_age_seconds",
+      "order": 8,
+      "page": "grid",
+      "required": true
+    },
+    {
+      "default": 0.03,
+      "has_default": true,
+      "input_config": {
+        "coerce": "float"
+      },
+      "input_kind": "number",
+      "key": "zero_import_threshold_kw",
+      "order": 9,
+      "page": "grid",
+      "required": true
+    },
+    {
+      "default": 5.0,
+      "has_default": true,
+      "input_config": {
+        "coerce": "float"
+      },
+      "input_kind": "number",
+      "key": "zero_import_confirm_minutes",
+      "order": 10,
+      "page": "grid",
+      "required": true
+    },
+    {
+      "default": null,
+      "has_default": false,
+      "input_config": {
+        "domain": [
+          "sensor"
+        ],
+        "multiple": false,
+        "reorder": false
+      },
+      "input_kind": "entity",
+      "key": "daily_import_entity",
+      "order": 1,
+      "page": "tariff",
+      "required": false
+    },
+    {
+      "default": null,
+      "has_default": false,
+      "input_config": {
+        "domain": [
+          "sensor"
+        ],
+        "multiple": false,
+        "reorder": false
+      },
+      "input_kind": "entity",
+      "key": "globird_latest_daily_cost_entity",
+      "order": 2,
+      "page": "tariff",
+      "required": false
+    },
+    {
+      "default": null,
+      "has_default": false,
+      "input_config": {
+        "domain": [
+          "sensor"
+        ],
+        "multiple": false,
+        "reorder": false
+      },
+      "input_kind": "entity",
+      "key": "globird_zerohero_status_entity",
+      "order": 3,
+      "page": "tariff",
+      "required": false
+    },
+    {
+      "default": 2.035,
+      "has_default": true,
+      "input_config": {
+        "coerce": "float"
+      },
+      "input_kind": "number",
+      "key": "daily_charge",
+      "order": 4,
+      "page": "tariff",
+      "required": true
+    },
+    {
+      "default": 0.594,
+      "has_default": true,
+      "input_config": {
+        "coerce": "float"
+      },
+      "input_kind": "number",
+      "key": "peak_rate_per_kwh",
+      "order": 5,
+      "page": "tariff",
+      "required": true
+    },
+    {
+      "default": 0.0,
+      "has_default": true,
+      "input_config": {
+        "coerce": "float"
+      },
+      "input_kind": "number",
+      "key": "offpeak_rate_per_kwh",
+      "order": 6,
+      "page": "tariff",
+      "required": true
+    },
+    {
+      "default": 0.308,
+      "has_default": true,
+      "input_config": {
+        "coerce": "float"
+      },
+      "input_kind": "number",
+      "key": "offpeak_balance_rate_per_kwh",
+      "order": 7,
+      "page": "tariff",
+      "required": true
+    },
+    {
+      "default": 0.528,
+      "has_default": true,
+      "input_config": {
+        "coerce": "float"
+      },
+      "input_kind": "number",
+      "key": "shoulder_rate_per_kwh",
+      "order": 8,
+      "page": "tariff",
+      "required": true
+    },
+    {
+      "default": 0.0,
+      "has_default": true,
+      "input_config": {
+        "coerce": "float"
+      },
+      "input_kind": "number",
+      "key": "export_rate_per_kwh",
+      "order": 9,
+      "page": "tariff",
+      "required": true
+    },
+    {
+      "default": 0.0,
+      "has_default": true,
+      "input_config": {
+        "coerce": "float"
+      },
+      "input_kind": "number",
+      "key": "offpeak_export_rate_per_kwh",
+      "order": 10,
+      "page": "tariff",
+      "required": true
+    },
+    {
+      "default": 0.1,
+      "has_default": true,
+      "input_config": {
+        "coerce": "float"
+      },
+      "input_kind": "number",
+      "key": "super_export_rate_per_kwh",
+      "order": 11,
+      "page": "tariff",
+      "required": true
+    },
+    {
+      "default": 1.0,
+      "has_default": true,
+      "input_config": {
+        "coerce": "float"
+      },
+      "input_kind": "number",
+      "key": "zerohero_daily_credit",
+      "order": 12,
+      "page": "tariff",
+      "required": true
+    },
+    {
+      "default": 50.0,
+      "has_default": true,
+      "input_config": {
+        "coerce": "float"
+      },
+      "input_kind": "number",
+      "key": "daily_free_allowance_kwh",
+      "order": 13,
+      "page": "tariff",
+      "required": true
+    },
+    {
+      "default": 15.0,
+      "has_default": true,
+      "input_config": {
+        "coerce": "float"
+      },
+      "input_kind": "number",
+      "key": "export_allowance_kwh",
+      "order": 14,
+      "page": "tariff",
+      "required": true
+    },
+    {
+      "default": 15.0,
+      "has_default": true,
+      "input_config": {
+        "coerce": "float"
+      },
+      "input_kind": "number",
+      "key": "automatic_export_limit_kwh",
+      "order": 15,
+      "page": "tariff",
+      "required": true
+    },
+    {
+      "default": "16:00:00",
+      "has_default": true,
+      "input_config": null,
+      "input_kind": "time",
+      "key": "peak_window_start",
+      "order": 16,
+      "page": "tariff",
+      "required": true
+    },
+    {
+      "default": "23:00:00",
+      "has_default": true,
+      "input_config": null,
+      "input_kind": "time",
+      "key": "peak_window_end",
+      "order": 17,
+      "page": "tariff",
+      "required": true
+    },
+    {
+      "default": "12:01:00",
+      "has_default": true,
+      "input_config": null,
+      "input_kind": "time",
+      "key": "free_charge_window_start",
+      "order": 18,
+      "page": "tariff",
+      "required": true
+    },
+    {
+      "default": "14:59:00",
+      "has_default": true,
+      "input_config": null,
+      "input_kind": "time",
+      "key": "free_charge_window_end",
+      "order": 19,
+      "page": "tariff",
+      "required": true
+    },
+    {
+      "default": "18:00:00",
+      "has_default": true,
+      "input_config": null,
+      "input_kind": "time",
+      "key": "bonus_window_start",
+      "order": 20,
+      "page": "tariff",
+      "required": true
+    },
+    {
+      "default": "21:00:00",
+      "has_default": true,
+      "input_config": null,
+      "input_kind": "time",
+      "key": "bonus_window_end",
+      "order": 21,
+      "page": "tariff",
+      "required": true
+    },
+    {
+      "default": 1.0,
+      "has_default": true,
+      "input_config": {
+        "coerce": "float"
+      },
+      "input_kind": "number",
+      "key": "force_discharge_offset_minutes",
+      "order": 22,
+      "page": "tariff",
+      "required": true
+    },
+    {
+      "default": "16:00:00",
+      "has_default": true,
+      "input_config": null,
+      "input_kind": "time",
+      "key": "export_rate_window_start",
+      "order": 23,
+      "page": "tariff",
+      "required": true
+    },
+    {
+      "default": "23:00:00",
+      "has_default": true,
+      "input_config": null,
+      "input_kind": "time",
+      "key": "export_rate_window_end",
+      "order": 24,
+      "page": "tariff",
+      "required": true
+    },
+    {
+      "default": null,
+      "has_default": false,
+      "input_config": {
+        "domain": [
+          "sensor"
+        ],
+        "multiple": false,
+        "reorder": false
+      },
+      "input_kind": "entity",
+      "key": "solar_power_entity",
+      "order": 1,
+      "page": "solar",
+      "required": false
+    },
+    {
+      "default": "generation_positive",
+      "has_default": true,
+      "input_config": {
+        "custom_value": false,
+        "multiple": false,
+        "options": [
+          "generation_positive",
+          "generation_negative"
+        ],
+        "sort": false
+      },
+      "input_kind": "select",
+      "key": "solar_power_generation_direction",
+      "order": 2,
+      "page": "solar",
+      "required": true
+    },
+    {
+      "default": null,
+      "has_default": false,
+      "input_config": {
+        "domain": [
+          "sensor"
+        ],
+        "multiple": false,
+        "reorder": false
+      },
+      "input_kind": "entity",
+      "key": "house_load_entity",
+      "order": 1,
+      "page": "house",
+      "required": false
+    },
+    {
+      "default": false,
+      "has_default": true,
+      "input_config": null,
+      "input_kind": "boolean",
+      "key": "house_load_includes_ev",
+      "order": 2,
+      "page": "house",
+      "required": true
+    },
+    {
+      "default": null,
+      "has_default": false,
+      "input_config": {
+        "domain": [
+          "sensor"
+        ],
+        "multiple": false,
+        "reorder": false
+      },
+      "input_kind": "entity",
+      "key": "heater_power_entity",
+      "order": 3,
+      "page": "house",
+      "required": false
+    },
+    {
+      "default": 17.5,
+      "has_default": true,
+      "input_config": {
+        "coerce": "float"
+      },
+      "input_kind": "number",
+      "key": "house_learning_fallback_kwh",
+      "order": 4,
+      "page": "house",
+      "required": true
+    },
+    {
+      "default": 6.5,
+      "has_default": true,
+      "input_config": {
+        "coerce": "float"
+      },
+      "input_kind": "number",
+      "key": "house_away_fallback_kwh",
+      "order": 5,
+      "page": "house",
+      "required": true
+    },
+    {
+      "default": 6.0,
+      "has_default": true,
+      "input_config": {
+        "coerce": "float"
+      },
+      "input_kind": "number",
+      "key": "house_away_confirmation_hours",
+      "order": 6,
+      "page": "house",
+      "required": true
+    },
+    {
+      "default": "auto",
+      "has_default": true,
+      "input_config": {
+        "custom_value": false,
+        "multiple": false,
+        "options": [
+          "auto",
+          "home",
+          "away"
+        ],
+        "sort": false
+      },
+      "input_kind": "select",
+      "key": "house_occupancy_mode",
+      "order": 7,
+      "page": "house",
+      "required": true
+    },
+    {
+      "default": null,
+      "has_default": false,
+      "input_config": {
+        "domain": [
+          "sensor"
+        ],
+        "multiple": false,
+        "reorder": false
+      },
+      "input_kind": "entity",
+      "key": "ev_soc_entity",
+      "order": 1,
+      "page": "car",
+      "required": false
+    },
+    {
+      "default": null,
+      "has_default": false,
+      "input_config": {
+        "multiple": false,
+        "reorder": false
+      },
+      "input_kind": "entity",
+      "key": "ev_at_home_entity",
+      "order": 2,
+      "page": "car",
+      "required": false
+    },
+    {
+      "default": null,
+      "has_default": false,
+      "input_config": {
+        "multiple": false,
+        "reorder": false
+      },
+      "input_kind": "entity",
+      "key": "ev_cable_connected_entity",
+      "order": 3,
+      "page": "car",
+      "required": false
+    },
+    {
+      "default": null,
+      "has_default": false,
+      "input_config": {
+        "domain": [
+          "sensor"
+        ],
+        "multiple": false,
+        "reorder": false
+      },
+      "input_kind": "entity",
+      "key": "ev_charging_state_entity",
+      "order": 4,
+      "page": "car",
+      "required": false
+    },
+    {
+      "default": null,
+      "has_default": false,
+      "input_config": {
+        "domain": [
+          "sensor"
+        ],
+        "multiple": false,
+        "reorder": false
+      },
+      "input_kind": "entity",
+      "key": "ev_actual_current_entity",
+      "order": 5,
+      "page": "car",
+      "required": false
+    },
+    {
+      "default": null,
+      "has_default": false,
+      "input_config": {
+        "domain": [
+          "sensor"
+        ],
+        "multiple": false,
+        "reorder": false
+      },
+      "input_kind": "entity",
+      "key": "ev_stored_energy_entity",
+      "order": 6,
+      "page": "car",
+      "required": false
+    },
+    {
+      "default": null,
+      "has_default": false,
+      "input_config": {
+        "domain": [
+          "sensor"
+        ],
+        "multiple": false,
+        "reorder": false
+      },
+      "input_kind": "entity",
+      "key": "ev_lifetime_energy_entity",
+      "order": 7,
+      "page": "car",
+      "required": false
+    },
+    {
+      "default": null,
+      "has_default": false,
+      "input_config": {
+        "domain": [
+          "number"
+        ],
+        "multiple": false,
+        "reorder": false
+      },
+      "input_kind": "entity",
+      "key": "ev_current_limit_entity",
+      "order": 1,
+      "page": "charger",
+      "required": false
+    },
+    {
+      "default": null,
+      "has_default": false,
+      "input_config": {
+        "domain": [
+          "number"
+        ],
+        "multiple": false,
+        "reorder": false
+      },
+      "input_kind": "entity",
+      "key": "ev_charge_limit_entity",
+      "order": 2,
+      "page": "charger",
+      "required": false
+    },
+    {
+      "default": null,
+      "has_default": false,
+      "input_config": {
+        "domain": [
+          "switch"
+        ],
+        "multiple": false,
+        "reorder": false
+      },
+      "input_kind": "entity",
+      "key": "ev_charge_switch_entity",
+      "order": 3,
+      "page": "charger",
+      "required": false
+    },
+    {
+      "default": "direct_evse",
+      "has_default": true,
+      "input_config": {
+        "custom_value": false,
+        "multiple": false,
+        "options": [
+          "direct_evse",
+          "smart_socket"
+        ],
+        "sort": false
+      },
+      "input_kind": "select",
+      "key": "ev_charge_path",
+      "order": 4,
+      "page": "charger",
+      "required": true
+    },
+    {
+      "default": null,
+      "has_default": false,
+      "input_config": {
+        "domain": [
+          "switch"
+        ],
+        "multiple": false,
+        "reorder": false
+      },
+      "input_kind": "entity",
+      "key": "ev_smart_socket_entity",
+      "order": 5,
+      "page": "charger",
+      "required": false
+    },
+    {
+      "default": 0.0,
+      "has_default": true,
+      "input_config": {
+        "coerce": "float"
+      },
+      "input_kind": "number",
+      "key": "ev_smart_socket_current_limit_a",
+      "order": 6,
+      "page": "charger",
+      "required": true
+    },
+    {
+      "default": 15.0,
+      "has_default": true,
+      "input_config": {
+        "coerce": "float"
+      },
+      "input_kind": "number",
+      "key": "ev_smart_socket_settle_seconds",
+      "order": 7,
+      "page": "charger",
+      "required": true
+    },
+    {
+      "default": 300.0,
+      "has_default": true,
+      "input_config": {
+        "coerce": "float"
+      },
+      "input_kind": "number",
+      "key": "ev_smart_socket_retry_seconds",
+      "order": 8,
+      "page": "charger",
+      "required": true
+    },
+    {
+      "default": false,
+      "has_default": true,
+      "input_config": null,
+      "input_kind": "boolean",
+      "key": "ev_smart_socket_power_switching",
+      "order": 9,
+      "page": "charger",
+      "required": true
+    },
+    {
+      "default": 230.0,
+      "has_default": true,
+      "input_config": {
+        "coerce": "float"
+      },
+      "input_kind": "number",
+      "key": "ev_voltage",
+      "order": 10,
+      "page": "charger",
+      "required": true
+    },
+    {
+      "default": 1,
+      "has_default": true,
+      "input_config": {
+        "coerce": "float"
+      },
+      "input_kind": "number",
+      "key": "ev_phase_count",
+      "order": 11,
+      "page": "charger",
+      "required": true
+    },
+    {
+      "default": 0.0,
+      "has_default": true,
+      "input_config": {
+        "coerce": "float"
+      },
+      "input_kind": "number",
+      "key": "ev_min_current",
+      "order": 12,
+      "page": "charger",
+      "required": true
+    },
+    {
+      "default": 0.0,
+      "has_default": true,
+      "input_config": {
+        "coerce": "float"
+      },
+      "input_kind": "number",
+      "key": "ev_max_current",
+      "order": 13,
+      "page": "charger",
+      "required": true
+    },
+    {
+      "default": false,
+      "has_default": true,
+      "input_config": null,
+      "input_kind": "boolean",
+      "key": "ev_control_commissioned",
+      "order": 14,
+      "page": "charger",
+      "required": true
+    },
+    {
+      "default": "auto",
+      "has_default": true,
+      "input_config": {
+        "custom_value": false,
+        "multiple": false,
+        "options": [
+          "auto",
+          "home",
+          "away"
+        ],
+        "sort": false
+      },
+      "input_kind": "select",
+      "key": "ev_location_mode",
+      "order": 1,
+      "page": "ev_policies",
+      "required": true
+    },
+    {
+      "default": "ev",
+      "has_default": true,
+      "input_config": {
+        "custom_value": false,
+        "multiple": false,
+        "options": [
+          "house_battery",
+          "ev"
+        ],
+        "sort": false
+      },
+      "input_kind": "select",
+      "key": "ev_free_window_priority",
+      "order": 2,
+      "page": "ev_policies",
+      "required": true
+    },
+    {
+      "default": 90.0,
+      "has_default": true,
+      "input_config": {
+        "coerce": "float"
+      },
+      "input_kind": "number",
+      "key": "ev_free_window_charge_limit_percent",
+      "order": 3,
+      "page": "ev_policies",
+      "required": true
+    },
+    {
+      "default": 1.0,
+      "has_default": true,
+      "input_config": {
+        "coerce": "float"
+      },
+      "input_kind": "number",
+      "key": "ev_free_window_minimum_current_a",
+      "order": 4,
+      "page": "ev_policies",
+      "required": true
+    },
+    {
+      "default": 5.0,
+      "has_default": true,
+      "input_config": {
+        "coerce": "float"
+      },
+      "input_kind": "number",
+      "key": "ev_free_window_settle_minutes",
+      "order": 5,
+      "page": "ev_policies",
+      "required": true
+    },
+    {
+      "default": 2.0,
+      "has_default": true,
+      "input_config": {
+        "coerce": "float"
+      },
+      "input_kind": "number",
+      "key": "ev_direct_limit_headroom_percent",
+      "order": 6,
+      "page": "ev_policies",
+      "required": true
+    },
+    {
+      "default": 12.0,
+      "has_default": true,
+      "input_config": {
+        "coerce": "float"
+      },
+      "input_kind": "number",
+      "key": "ev_charge_to_full_max_hours",
+      "order": 7,
+      "page": "ev_policies",
+      "required": true
+    },
+    {
+      "default": 90.0,
+      "has_default": true,
+      "input_config": {
+        "coerce": "float"
+      },
+      "input_kind": "number",
+      "key": "ev_charge_efficiency_percent",
+      "order": 8,
+      "page": "ev_policies",
+      "required": true
+    },
+    {
+      "default": 20.0,
+      "has_default": true,
+      "input_config": {
+        "coerce": "float"
+      },
+      "input_kind": "number",
+      "key": "ev_arrival_reserve_soc_percent",
+      "order": 9,
+      "page": "ev_policies",
+      "required": true
+    },
+    {
+      "default": 14,
+      "has_default": true,
+      "input_config": {
+        "coerce": "int"
+      },
+      "input_kind": "number",
+      "key": "ev_learning_minimum_samples",
+      "order": 10,
+      "page": "ev_policies",
+      "required": true
+    },
+    {
+      "default": true,
+      "has_default": true,
+      "input_config": null,
+      "input_kind": "boolean",
+      "key": "ev_allowance_guard_enabled",
+      "order": 11,
+      "page": "ev_policies",
+      "required": true
+    },
+    {
+      "default": 0.0,
+      "has_default": true,
+      "input_config": {
+        "coerce": "float"
+      },
+      "input_kind": "number",
+      "key": "ev_allowance_safety_margin_kwh",
+      "order": 12,
+      "page": "ev_policies",
+      "required": true
+    },
+    {
+      "default": false,
+      "has_default": true,
+      "input_config": null,
+      "input_kind": "boolean",
+      "key": "ev_solar_spill_enabled",
+      "order": 13,
+      "page": "ev_policies",
+      "required": true
+    },
+    {
+      "default": 100.0,
+      "has_default": true,
+      "input_config": {
+        "coerce": "float"
+      },
+      "input_kind": "number",
+      "key": "ev_solar_spill_battery_soc_percent",
+      "order": 14,
+      "page": "ev_policies",
+      "required": true
+    },
+    {
+      "default": false,
+      "has_default": true,
+      "input_config": null,
+      "input_kind": "boolean",
+      "key": "ev_pre_free_backfill_enabled",
+      "order": 15,
+      "page": "ev_policies",
+      "required": true
+    },
+    {
+      "default": 0.0,
+      "has_default": true,
+      "input_config": {
+        "coerce": "float"
+      },
+      "input_kind": "number",
+      "key": "ev_daily_backfill_energy_kwh",
+      "order": 16,
+      "page": "ev_policies",
+      "required": true
+    },
+    {
+      "default": "08:00:00",
+      "has_default": true,
+      "input_config": null,
+      "input_kind": "time",
+      "key": "ev_daily_ready_time",
+      "order": 17,
+      "page": "ev_policies",
+      "required": true
+    },
+    {
+      "default": 0.0,
+      "has_default": true,
+      "input_config": {
+        "coerce": "float"
+      },
+      "input_kind": "number",
+      "key": "ev_outside_inverter_percent",
+      "order": 18,
+      "page": "ev_policies",
+      "required": true
+    },
+    {
+      "default": 0.0,
+      "has_default": true,
+      "input_config": {
+        "coerce": "float"
+      },
+      "input_kind": "number",
+      "key": "ev_backfill_buffer_minutes",
+      "order": 19,
+      "page": "ev_policies",
+      "required": true
+    },
+    {
+      "default": 90.0,
+      "has_default": true,
+      "input_config": {
+        "coerce": "float"
+      },
+      "input_kind": "number",
+      "key": "ev_telemetry_max_age_seconds",
+      "order": 20,
+      "page": "ev_policies",
+      "required": true
+    },
+    {
+      "default": 30.0,
+      "has_default": true,
+      "input_config": {
+        "coerce": "float"
+      },
+      "input_kind": "number",
+      "key": "ev_telemetry_max_skew_seconds",
+      "order": 21,
+      "page": "ev_policies",
+      "required": true
+    },
+    {
+      "default": 0.0,
+      "has_default": true,
+      "input_config": {
+        "coerce": "float"
+      },
+      "input_kind": "number",
+      "key": "ev_protected_baseline_a",
+      "order": 22,
+      "page": "ev_policies",
+      "required": true
+    },
+    {
+      "default": false,
+      "has_default": true,
+      "input_config": null,
+      "input_kind": "boolean",
+      "key": "ev_before_export_enabled",
+      "order": 23,
+      "page": "ev_policies",
+      "required": true
+    },
+    {
+      "default": 40.0,
+      "has_default": true,
+      "input_config": {
+        "coerce": "float"
+      },
+      "input_kind": "number",
+      "key": "ev_before_export_soc_target_percent",
+      "order": 24,
+      "page": "ev_policies",
+      "required": true
+    },
+    {
+      "default": 120.0,
+      "has_default": true,
+      "input_config": {
+        "coerce": "float"
+      },
+      "input_kind": "number",
+      "key": "ev_smart_recovery_no_power_seconds",
+      "order": 1,
+      "page": "recovery",
+      "required": true
+    },
+    {
+      "default": 60.0,
+      "has_default": true,
+      "input_config": {
+        "coerce": "float"
+      },
+      "input_kind": "number",
+      "key": "ev_smart_recovery_current_confirm_seconds",
+      "order": 2,
+      "page": "recovery",
+      "required": true
+    },
+    {
+      "default": 15.0,
+      "has_default": true,
+      "input_config": {
+        "coerce": "float"
+      },
+      "input_kind": "number",
+      "key": "ev_smart_recovery_socket_confirm_seconds",
+      "order": 3,
+      "page": "recovery",
+      "required": true
+    },
+    {
+      "default": 30.0,
+      "has_default": true,
+      "input_config": {
+        "coerce": "float"
+      },
+      "input_kind": "number",
+      "key": "ev_smart_recovery_power_off_seconds",
+      "order": 4,
+      "page": "recovery",
+      "required": true
+    },
+    {
+      "default": 20.0,
+      "has_default": true,
+      "input_config": {
+        "coerce": "float"
+      },
+      "input_kind": "number",
+      "key": "ev_smart_recovery_post_power_seconds",
+      "order": 5,
+      "page": "recovery",
+      "required": true
+    },
+    {
+      "default": 180.0,
+      "has_default": true,
+      "input_config": {
+        "coerce": "float"
+      },
+      "input_kind": "number",
+      "key": "ev_smart_recovery_charging_confirm_seconds",
+      "order": 6,
+      "page": "recovery",
+      "required": true
+    },
+    {
+      "default": 120.0,
+      "has_default": true,
+      "input_config": {
+        "coerce": "float"
+      },
+      "input_kind": "number",
+      "key": "ev_smart_recovery_rearm_seconds",
+      "order": 7,
+      "page": "recovery",
+      "required": true
+    },
+    {
+      "default": 0.5,
+      "has_default": true,
+      "input_config": {
+        "coerce": "float"
+      },
+      "input_kind": "number",
+      "key": "ev_smart_recovery_idle_current_a",
+      "order": 8,
+      "page": "recovery",
+      "required": true
+    },
+    {
+      "default": false,
+      "has_default": true,
+      "input_config": null,
+      "input_kind": "boolean",
+      "key": "sign_conventions_verified",
+      "order": 1,
+      "page": "verification",
+      "required": true
+    },
+    {
+      "default": "observer_only",
+      "has_default": true,
+      "input_config": {
+        "custom_value": false,
+        "multiple": false,
+        "options": [
+          "observer_only",
+          "local_modbus",
+          "foxcloud_scheduler"
+        ],
+        "sort": false
+      },
+      "input_kind": "select",
+      "key": "foxess_control_owner",
+      "order": 1,
+      "page": "automation",
+      "required": true
+    },
+    {
+      "default": false,
+      "has_default": true,
+      "input_config": null,
+      "input_kind": "boolean",
+      "key": "automatic_control_enabled",
+      "order": 2,
+      "page": "automation",
+      "required": true
+    },
+    {
+      "default": false,
+      "has_default": true,
+      "input_config": null,
+      "input_kind": "boolean",
+      "key": "automatic_charge_enabled",
+      "order": 3,
+      "page": "automation",
+      "required": true
+    },
+    {
+      "default": false,
+      "has_default": true,
+      "input_config": null,
+      "input_kind": "boolean",
+      "key": "automatic_export_enabled",
+      "order": 4,
+      "page": "automation",
+      "required": true
+    },
+    {
+      "default": false,
+      "has_default": true,
+      "input_config": null,
+      "input_kind": "boolean",
+      "key": "ev_automatic_control_enabled",
+      "order": 5,
+      "page": "automation",
+      "required": true
+    },
+    {
+      "default": true,
+      "has_default": true,
+      "input_config": null,
+      "input_kind": "boolean",
+      "key": "rehearsal_mode",
+      "order": 6,
+      "page": "automation",
+      "required": true
+    }
+  ],
+  "release_baseline": "0.12.26",
+  "schema_version": 1
+}
