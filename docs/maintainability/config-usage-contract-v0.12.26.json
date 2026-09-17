@@ -243,56 +243,6 @@
     },
     {
       "access": "get",
-      "constant": "CONF_CONFIGURE_EV",
-      "key": "configure_ev",
-      "kind": "raw_mapping",
-      "layer": "runtime",
-      "receiver": "self.coordinator.config",
-      "scope": "ActiveFoxessController._protected_keepalive_energy_kwh",
-      "source": "custom_components/home_energy_orchestrator/active.py"
-    },
-    {
-      "access": "get",
-      "constant": "CONF_EV_AT_HOME",
-      "key": "ev_at_home_entity",
-      "kind": "raw_mapping",
-      "layer": "runtime",
-      "receiver": "self.coordinator.config",
-      "scope": "ActiveFoxessController._protected_keepalive_energy_kwh",
-      "source": "custom_components/home_energy_orchestrator/active.py"
-    },
-    {
-      "access": "get",
-      "constant": "CONF_EV_CABLE_CONNECTED",
-      "key": "ev_cable_connected_entity",
-      "kind": "raw_mapping",
-      "layer": "runtime",
-      "receiver": "self.coordinator.config",
-      "scope": "ActiveFoxessController._protected_keepalive_energy_kwh",
-      "source": "custom_components/home_energy_orchestrator/active.py"
-    },
-    {
-      "access": "get",
-      "constant": "CONF_EV_CONTROL_COMMISSIONED",
-      "key": "ev_control_commissioned",
-      "kind": "raw_mapping",
-      "layer": "runtime",
-      "receiver": "self.coordinator.config",
-      "scope": "ActiveFoxessController._protected_keepalive_energy_kwh",
-      "source": "custom_components/home_energy_orchestrator/active.py"
-    },
-    {
-      "access": "get",
-      "constant": "CONF_EV_CONTROL_COMMISSIONED",
-      "key": "ev_control_commissioned",
-      "kind": "raw_mapping",
-      "layer": "runtime",
-      "receiver": "self.coordinator.config",
-      "scope": "ActiveFoxessController._protected_keepalive_energy_kwh",
-      "source": "custom_components/home_energy_orchestrator/active.py"
-    },
-    {
-      "access": "get",
       "constant": "CONF_AUTOMATIC_CHARGE_ENABLED",
       "key": "automatic_charge_enabled",
       "kind": "raw_mapping",
@@ -3803,6 +3753,26 @@
     },
     {
       "access": "get",
+      "constant": "CONF_CONFIGURE_EV",
+      "key": "configure_ev",
+      "kind": "raw_mapping",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "RuntimeConfiguration.from_mapping",
+      "source": "custom_components/home_energy_orchestrator/configuration.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_AT_HOME",
+      "key": "ev_at_home_entity",
+      "kind": "raw_mapping",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "RuntimeConfiguration.from_mapping",
+      "source": "custom_components/home_energy_orchestrator/configuration.py"
+    },
+    {
+      "access": "get",
       "constant": "CONF_EV_AUTOMATIC_CONTROL_ENABLED",
       "key": "ev_automatic_control_enabled",
       "kind": "raw_mapping",
@@ -3823,8 +3793,38 @@
     },
     {
       "access": "get",
+      "constant": "CONF_EV_CABLE_CONNECTED",
+      "key": "ev_cable_connected_entity",
+      "kind": "raw_mapping",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "RuntimeConfiguration.from_mapping",
+      "source": "custom_components/home_energy_orchestrator/configuration.py"
+    },
+    {
+      "access": "get",
       "constant": "CONF_EV_CHARGE_TO_FULL_ENABLED",
       "key": "ev_charge_to_full_enabled",
+      "kind": "raw_mapping",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "RuntimeConfiguration.from_mapping",
+      "source": "custom_components/home_energy_orchestrator/configuration.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_CONTROL_COMMISSIONED",
+      "key": "ev_control_commissioned",
+      "kind": "raw_mapping",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "RuntimeConfiguration.from_mapping",
+      "source": "custom_components/home_energy_orchestrator/configuration.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_CONTROL_COMMISSIONED",
+      "key": "ev_control_commissioned",
       "kind": "raw_mapping",
       "layer": "boundary",
       "receiver": "data",
@@ -4847,14 +4847,13 @@
     "raw_mapping": 475
   },
   "accesses_by_layer": {
-    "boundary": 389,
-    "runtime": 95
+    "boundary": 394,
+    "runtime": 90
   },
   "accesses_by_source": {
     "custom_components/home_energy_orchestrator/__init__.py": 24,
-    "custom_components/home_energy_orchestrator/active.py": 5,
     "custom_components/home_energy_orchestrator/config_flow.py": 347,
-    "custom_components/home_energy_orchestrator/configuration.py": 18,
+    "custom_components/home_energy_orchestrator/configuration.py": 23,
     "custom_components/home_energy_orchestrator/coordinator.py": 31,
     "custom_components/home_energy_orchestrator/ev_active.py": 38,
     "custom_components/home_energy_orchestrator/ev_adapter.py": 10,
@@ -4864,8 +4863,8 @@
   },
   "key_count": 129,
   "raw_accesses_by_layer": {
-    "boundary": 389,
-    "runtime": 86
+    "boundary": 394,
+    "runtime": 81
   },
   "release_baseline": "0.12.26",
   "schema_version": 2

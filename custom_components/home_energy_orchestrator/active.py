@@ -21,14 +21,7 @@ from .const import (
     CONF_BATTERY_FREE_WINDOW_TARGET,
     CONF_BONUS_WINDOW_END,
     CONF_BONUS_WINDOW_START,
-    CONF_CONFIGURE_EV,
     CONF_DISCHARGE_EFFICIENCY_PERCENT,
-    CONF_EV_AT_HOME,
-    CONF_EV_CABLE_CONNECTED,
-    CONF_EV_CONTROL_COMMISSIONED,
-    CONF_EV_PHASE_COUNT,
-    CONF_EV_PROTECTED_BASELINE_A,
-    CONF_EV_VOLTAGE,
     CONF_FORCE_DISCHARGE_FINISH,
     CONF_FORCE_DISCHARGE_OFFSET_MINUTES,
     CONF_FREE_CHARGE_END,
@@ -40,10 +33,6 @@ from .const import (
     DEFAULT_BONUS_WINDOW_END,
     DEFAULT_BONUS_WINDOW_START,
     DEFAULT_DISCHARGE_EFFICIENCY_PERCENT,
-    DEFAULT_EV_CONTROL_COMMISSIONED,
-    DEFAULT_EV_PHASE_COUNT,
-    DEFAULT_EV_PROTECTED_BASELINE_A,
-    DEFAULT_EV_VOLTAGE,
     DEFAULT_FORCE_DISCHARGE_FINISH,
     DEFAULT_FORCE_DISCHARGE_OFFSET_MINUTES,
     DEFAULT_FREE_CHARGE_END,
@@ -719,27 +708,17 @@ class ActiveFoxessController:
         Presence and cable state are explicitly mapped. Missing evidence blocks
         a new export whenever a non-zero baseline is commissioned.
         """
-        if not self.coordinator.config.get(
-            CONF_CONFIGURE_EV,
-            self.coordinator.config.get(
-                CONF_EV_CONTROL_COMMISSIONED,
-                DEFAULT_EV_CONTROL_COMMISSIONED,
-            ),
-        ) or not self.coordinator.config.get(
-            CONF_EV_CONTROL_COMMISSIONED,
-            DEFAULT_EV_CONTROL_COMMISSIONED,
-        ):
+        ev = self.coordinator.runtime_config.ev_connection
+        if not ev.configured or not ev.control_commissioned:
             # A battery-only installation has no EV demand to protect.  Do not
             # let retained/default EV fields turn an otherwise valid export
             # plan into ``unknown``.
             return 0.0
-        baseline_a = self._configured(
-            CONF_EV_PROTECTED_BASELINE_A, DEFAULT_EV_PROTECTED_BASELINE_A
-        )
+        baseline_a = ev.protected_baseline_a
         if baseline_a <= 0:
             return 0.0
-        home_entity = self.coordinator.config.get(CONF_EV_AT_HOME)
-        cable_entity = self.coordinator.config.get(CONF_EV_CABLE_CONNECTED)
+        home_entity = ev.at_home_entity
+        cable_entity = ev.cable_connected_entity
         if not home_entity or not cable_entity:
             return None
         home = self._state(str(home_entity))
@@ -748,8 +727,8 @@ class ActiveFoxessController:
             return None
         if home not in {"home", "on"} or cable != "on":
             return 0.0
-        voltage = self._configured(CONF_EV_VOLTAGE, DEFAULT_EV_VOLTAGE)
-        phases = self._configured(CONF_EV_PHASE_COUNT, DEFAULT_EV_PHASE_COUNT)
+        voltage = ev.voltage_v
+        phases = ev.phase_count
         return round(max(hours_until_free, 0.0) * baseline_a * voltage * phases / 1000, 3)
 
     def _export_source_available(self, mode_entity: str) -> bool:

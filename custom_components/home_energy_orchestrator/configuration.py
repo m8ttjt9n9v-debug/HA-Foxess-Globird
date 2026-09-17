@@ -11,10 +11,17 @@ from .const import (
     CONF_AUTOMATIC_CONTROL_ENABLED,
     CONF_AUTOMATIC_EXPORT_ENABLED,
     CONF_BATTERY_POWER_DIRECTION,
+    CONF_CONFIGURE_EV,
+    CONF_EV_AT_HOME,
     CONF_EV_AUTOMATIC_CONTROL_ENABLED,
     CONF_EV_BEFORE_EXPORT_ENABLED,
     CONF_EV_BEFORE_EXPORT_SOC_TARGET,
+    CONF_EV_CABLE_CONNECTED,
     CONF_EV_CHARGE_TO_FULL_ENABLED,
+    CONF_EV_CONTROL_COMMISSIONED,
+    CONF_EV_PHASE_COUNT,
+    CONF_EV_PROTECTED_BASELINE_A,
+    CONF_EV_VOLTAGE,
     CONF_EXPORT_RATE,
     CONF_FOXESS_CONTROL_OWNER,
     CONF_FOXESS_FORCE_CHARGE_POWER,
@@ -40,6 +47,10 @@ from .const import (
     DEFAULT_EV_BEFORE_EXPORT_ENABLED,
     DEFAULT_EV_BEFORE_EXPORT_SOC_TARGET,
     DEFAULT_EV_CHARGE_TO_FULL_ENABLED,
+    DEFAULT_EV_CONTROL_COMMISSIONED,
+    DEFAULT_EV_PHASE_COUNT,
+    DEFAULT_EV_PROTECTED_BASELINE_A,
+    DEFAULT_EV_VOLTAGE,
     DEFAULT_EXPORT_RATE,
     DEFAULT_FOXESS_CONTROL_OWNER,
     DEFAULT_GRID_POWER_DIRECTION,
@@ -84,6 +95,19 @@ class EvPreferenceSettings:
     before_export_enabled: bool
     before_export_soc_target: float
     charge_to_full_enabled: bool
+
+
+@dataclass(frozen=True, slots=True)
+class EvConnectionSettings:
+    """EV commissioning and electrical inputs used by battery protection."""
+
+    configured: bool
+    control_commissioned: bool
+    at_home_entity: str | None
+    cable_connected_entity: str | None
+    protected_baseline_a: float
+    voltage_v: float
+    phase_count: float
 
 
 @dataclass(frozen=True, slots=True)
@@ -142,6 +166,7 @@ class RuntimeConfiguration:
 
     automation: AutomationSettings
     ev_preferences: EvPreferenceSettings
+    ev_connection: EvConnectionSettings
     house: HouseSettings
     electrical: ElectricalSettings
     tariff: TariffSettings
@@ -158,6 +183,14 @@ class RuntimeConfiguration:
         work_mode_entity = data.get(CONF_FOXESS_WORK_MODE)
         force_charge_power_entity = data.get(CONF_FOXESS_FORCE_CHARGE_POWER)
         force_discharge_power_entity = data.get(CONF_FOXESS_FORCE_DISCHARGE_POWER)
+        ev_at_home_entity = data.get(CONF_EV_AT_HOME)
+        ev_cable_connected_entity = data.get(CONF_EV_CABLE_CONNECTED)
+        ev_control_commissioned = bool(
+            data.get(
+                CONF_EV_CONTROL_COMMISSIONED,
+                DEFAULT_EV_CONTROL_COMMISSIONED,
+            )
+        )
         return cls(
             automation=AutomationSettings(
                 master_enabled=bool(
@@ -215,6 +248,42 @@ class RuntimeConfiguration:
                         CONF_EV_CHARGE_TO_FULL_ENABLED,
                         DEFAULT_EV_CHARGE_TO_FULL_ENABLED,
                     )
+                ),
+            ),
+            ev_connection=EvConnectionSettings(
+                configured=bool(
+                    data.get(
+                        CONF_CONFIGURE_EV,
+                        data.get(
+                            CONF_EV_CONTROL_COMMISSIONED,
+                            DEFAULT_EV_CONTROL_COMMISSIONED,
+                        ),
+                    )
+                ),
+                control_commissioned=ev_control_commissioned,
+                at_home_entity=(
+                    str(ev_at_home_entity) if ev_at_home_entity else None
+                ),
+                cable_connected_entity=(
+                    str(ev_cable_connected_entity)
+                    if ev_cable_connected_entity
+                    else None
+                ),
+                protected_baseline_a=max(
+                    _number(
+                        data,
+                        CONF_EV_PROTECTED_BASELINE_A,
+                        DEFAULT_EV_PROTECTED_BASELINE_A,
+                    ),
+                    0.0,
+                ),
+                voltage_v=max(
+                    _number(data, CONF_EV_VOLTAGE, DEFAULT_EV_VOLTAGE),
+                    0.0,
+                ),
+                phase_count=max(
+                    _number(data, CONF_EV_PHASE_COUNT, DEFAULT_EV_PHASE_COUNT),
+                    0.0,
                 ),
             ),
             house=HouseSettings(occupancy_mode=occupancy),

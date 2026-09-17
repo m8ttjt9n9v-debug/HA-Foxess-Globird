@@ -12,7 +12,14 @@ from custom_components.home_energy_orchestrator.const import (
     CONF_AUTOMATIC_CHARGE_ENABLED,
     CONF_AUTOMATIC_CONTROL_ENABLED,
     CONF_AUTOMATIC_EXPORT_ENABLED,
+    CONF_CONFIGURE_EV,
+    CONF_EV_AT_HOME,
     CONF_EV_BEFORE_EXPORT_SOC_TARGET,
+    CONF_EV_CABLE_CONNECTED,
+    CONF_EV_CONTROL_COMMISSIONED,
+    CONF_EV_PHASE_COUNT,
+    CONF_EV_PROTECTED_BASELINE_A,
+    CONF_EV_VOLTAGE,
     CONF_EXPORT_RATE,
     CONF_FOXESS_CONTROL_OWNER,
     CONF_FOXESS_FORCE_CHARGE_POWER,
@@ -26,6 +33,9 @@ from custom_components.home_energy_orchestrator.const import (
     CONF_SIGN_CONVENTIONS_VERIFIED,
     CONF_ZERO_IMPORT_THRESHOLD_KW,
     DEFAULT_EV_BEFORE_EXPORT_SOC_TARGET,
+    DEFAULT_EV_PHASE_COUNT,
+    DEFAULT_EV_PROTECTED_BASELINE_A,
+    DEFAULT_EV_VOLTAGE,
     DEFAULT_EXPORT_RATE,
     DEFAULT_FOXESS_CONTROL_OWNER,
     DEFAULT_GRID_POWER_DIRECTION,
@@ -95,6 +105,16 @@ def test_runtime_configuration_uses_established_defaults() -> None:
         DEFAULT_EV_BEFORE_EXPORT_SOC_TARGET
     )
     assert parsed.ev_preferences.charge_to_full_enabled is False
+    assert parsed.ev_connection.configured is False
+    assert parsed.ev_connection.control_commissioned is False
+    assert parsed.ev_connection.at_home_entity is None
+    assert parsed.ev_connection.cable_connected_entity is None
+    assert (
+        parsed.ev_connection.protected_baseline_a
+        == DEFAULT_EV_PROTECTED_BASELINE_A
+    )
+    assert parsed.ev_connection.voltage_v == DEFAULT_EV_VOLTAGE
+    assert parsed.ev_connection.phase_count == DEFAULT_EV_PHASE_COUNT
     assert parsed.house.occupancy_mode == DEFAULT_HOUSE_OCCUPANCY_MODE
     assert parsed.electrical.verified is False
     assert (
@@ -148,6 +168,58 @@ def test_runtime_configuration_preserves_existing_coercion_behavior() -> None:
     assert parsed.inverter.force_charge_power_entity == "number.foxess_charge"
     assert parsed.inverter.force_discharge_power_entity == "number.foxess_discharge"
     assert parsed.inverter.actuator_mapping_complete is True
+
+
+@pytest.mark.parametrize(
+    ("data", "expected"),
+    [
+        ({}, (False, False, None, None, 0.0, 230.0, 1.0)),
+        (
+            {
+                CONF_EV_CONTROL_COMMISSIONED: True,
+                CONF_EV_AT_HOME: "device_tracker.car",
+                CONF_EV_CABLE_CONNECTED: "binary_sensor.car_cable",
+                CONF_EV_PROTECTED_BASELINE_A: "1",
+                CONF_EV_VOLTAGE: "230",
+                CONF_EV_PHASE_COUNT: "3",
+            },
+            (
+                True,
+                True,
+                "device_tracker.car",
+                "binary_sensor.car_cable",
+                1.0,
+                230.0,
+                3.0,
+            ),
+        ),
+        (
+            {
+                CONF_CONFIGURE_EV: False,
+                CONF_EV_CONTROL_COMMISSIONED: True,
+                CONF_EV_PROTECTED_BASELINE_A: -1,
+                CONF_EV_VOLTAGE: "invalid",
+                CONF_EV_PHASE_COUNT: -3,
+            },
+            (False, True, None, None, 0.0, 230.0, 0.0),
+        ),
+    ],
+)
+def test_ev_connection_snapshot_preserves_keepalive_input_semantics(
+    data: dict[str, object],
+    expected: tuple[bool, bool, str | None, str | None, float, float, float],
+) -> None:
+    """Characterize legacy fallback, coercion and non-negative clamping."""
+    ev = RuntimeConfiguration.from_mapping(data).ev_connection
+    assert (
+        ev.configured,
+        ev.control_commissioned,
+        ev.at_home_entity,
+        ev.cable_connected_entity,
+        ev.protected_baseline_a,
+        ev.voltage_v,
+        ev.phase_count,
+    ) == expected
 
 
 @pytest.mark.parametrize(

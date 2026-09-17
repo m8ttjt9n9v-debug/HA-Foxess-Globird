@@ -20,8 +20,8 @@ selectors, validation, migration behavior and the multi-page draft workflow.
   serialized configuration surface. Sensor presentation and diagnostics use
   typed projections, operator mutations rebuild the immutable snapshot, and
   manual plus automatic FoxESS control gates now use typed ownership, Safety
-  Lock, actuator mapping and independent request values. Direct AST-visible
-  runtime raw access is now 86.
+  Lock, actuator mapping, independent request values and automatic-export EV
+  protection inputs. Direct AST-visible runtime raw access is now 81.
 
 ## Work packages
 

@@ -18,6 +18,7 @@ from custom_components.home_energy_orchestrator.const import (
     CONF_BATTERY_FREE_WINDOW_TARGET,
     CONF_BONUS_WINDOW_END,
     CONF_BONUS_WINDOW_START,
+    CONF_CONFIGURE_EV,
     CONF_DISCHARGE_EFFICIENCY_PERCENT,
     CONF_EV_AT_HOME,
     CONF_EV_BEFORE_EXPORT_ENABLED,
@@ -650,6 +651,23 @@ async def test_battery_only_site_ignores_retained_ev_baseline(hass):
             **{
                 CONF_EV_CONTROL_COMMISSIONED: False,
                 CONF_EV_PROTECTED_BASELINE_A: 1.0,
+            }
+        ),
+    )
+
+    assert controller._protected_keepalive_energy_kwh(15) == 0.0
+
+
+async def test_explicit_no_ev_site_overrides_retained_commissioning_fields(hass):
+    controller = _loaded_controller(
+        hass,
+        _coordinator(
+            **{
+                CONF_CONFIGURE_EV: False,
+                CONF_EV_CONTROL_COMMISSIONED: True,
+                CONF_EV_PROTECTED_BASELINE_A: 1.0,
+                CONF_EV_AT_HOME: "device_tracker.car",
+                CONF_EV_CABLE_CONNECTED: "binary_sensor.car_cable",
             }
         ),
     )
