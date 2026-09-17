@@ -66,6 +66,15 @@ def test_ev_persistence_state_round_trips_complete_existing_payload() -> None:
     assert state.to_payload() == payload
 
 
+def test_ev_persistence_retains_stable_feedback_wait_across_restart() -> None:
+    payload = complete_payload()
+    payload["reconciliation"]["phase"] = "awaiting_stable_current_feedback"
+
+    state = EvPersistenceState.from_payload(payload, NOW)
+
+    assert state.to_payload() == payload
+
+
 def test_ev_persistence_state_retains_driving_evidence_when_control_block_is_bad() -> None:
     payload = deepcopy(complete_payload())
     payload["reconciliation"]["phase"] = "invalid"

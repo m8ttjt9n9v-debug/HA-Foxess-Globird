@@ -23,7 +23,7 @@ def test_config_field_contract_covers_every_wizard_field_once() -> None:
     contract = build_config_field_contract()
     expected = [key for fields in ConfigFlow._PAGE_FIELDS.values() for key in fields]
     actual = [item["key"] for item in contract["fields"]]
-    assert contract["field_count"] == 124
+    assert contract["field_count"] == 125
     assert actual == expected
     assert len(actual) == len(set(actual))
     assert all(item["setup_label"] for item in contract["fields"])

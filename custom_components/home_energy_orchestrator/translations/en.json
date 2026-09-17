@@ -121,6 +121,7 @@
           "export_discharge_power_kw": "Fixed ZEROHERO discharge power (kW)",
           "discharge_efficiency_percent": "Battery discharge efficiency (%)",
           "ev_protected_baseline_a": "Mandatory connected-EV baseline until free power (A; 0 if none)",
+          "ev_outside_battery_reserve_percent": "Minimum house-battery SoC for outside-window EV charging and recovery (%)",
           "zero_import_threshold_kw": "ZEROHERO average import threshold (kWh/hour; contract says 0.03)",
           "zero_import_confirm_minutes": "Local telemetry debounce only (minutes)",
           "foxess_control_owner": "FoxESS control owner (never mix cloud scheduler and Modbus)",
@@ -269,6 +270,7 @@
           "export_discharge_power_kw": "Fixed ZEROHERO discharge power (kW)",
           "discharge_efficiency_percent": "Battery discharge efficiency (%)",
           "ev_protected_baseline_a": "Mandatory connected-EV baseline until free power (A; 0 if none)",
+          "ev_outside_battery_reserve_percent": "Minimum house-battery SoC for outside-window EV charging and recovery (%)",
           "zero_import_threshold_kw": "ZEROHERO average import threshold (kWh/hour; contract says 0.03)",
           "zero_import_confirm_minutes": "Local telemetry debounce only (minutes)",
           "foxess_control_owner": "FoxESS control owner (never mix cloud scheduler and Modbus)",
@@ -468,11 +470,13 @@
             "ev_telemetry_max_age_seconds": "Maximum age for outside-window power telemetry (seconds)",
             "ev_telemetry_max_skew_seconds": "Maximum timestamp skew between outside-window power sensors (seconds)",
             "ev_protected_baseline_a": "Mandatory connected-EV baseline until free power (A; 0 if none)",
+            "ev_outside_battery_reserve_percent": "Minimum house-battery SoC for outside-window EV charging and recovery (%)",
             "ev_before_export_enabled": "Prioritise EV before automatic export",
             "ev_before_export_soc_target_percent": "Withhold export while EV SoC is below (%)"
           },
           "data_description": {
-            "ev_allowance_guard_enabled": "When enabled, HEO reduces or stops EV charging when the daily free grid-import allowance is exhausted. Solar may continue supplying the EV. When disabled, EV charging may continue using normally priced grid power."
+            "ev_allowance_guard_enabled": "When enabled, HEO reduces or stops EV charging when the daily free grid-import allowance is exhausted. Solar may continue supplying the EV. When disabled, EV charging may continue using normally priced grid power.",
+            "ev_outside_battery_reserve_percent": "Outside the free-power window, HEO stops automatic EV charging and recovery at this house-battery level. Set it above the inverter's hard minimum to retain a safety buffer."
           }
         },
       "recovery": {
@@ -695,11 +699,13 @@
             "ev_telemetry_max_age_seconds": "Maximum age for outside-window power telemetry (seconds)",
             "ev_telemetry_max_skew_seconds": "Maximum timestamp skew between outside-window power sensors (seconds)",
             "ev_protected_baseline_a": "Mandatory connected-EV baseline until free power (A; 0 if none)",
+            "ev_outside_battery_reserve_percent": "Minimum house-battery SoC for outside-window EV charging and recovery (%)",
             "ev_before_export_enabled": "Prioritise EV before automatic export",
             "ev_before_export_soc_target_percent": "Withhold export while EV SoC is below (%)"
           },
           "data_description": {
-            "ev_allowance_guard_enabled": "When enabled, HEO reduces or stops EV charging when the daily free grid-import allowance is exhausted. Solar may continue supplying the EV. When disabled, EV charging may continue using normally priced grid power."
+            "ev_allowance_guard_enabled": "When enabled, HEO reduces or stops EV charging when the daily free grid-import allowance is exhausted. Solar may continue supplying the EV. When disabled, EV charging may continue using normally priced grid power.",
+            "ev_outside_battery_reserve_percent": "Outside the free-power window, HEO stops automatic EV charging and recovery at this house-battery level. Set it above the inverter's hard minimum to retain a safety buffer."
           }
         },
       "reconfigure_recovery": {

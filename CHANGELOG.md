@@ -18,6 +18,15 @@
   SoC, stored-energy, actuator-metadata and retained-history inputs, while all
   existing location, cable, Safety Lock and commissioning gates continue to
   control actuation.
+- Rearm bounded EV current reconciliation after a 30-minute cooldown instead
+  of latching a recoverable actuator mismatch forever. When Tessie overwrites
+  a current command during connector start-up, wait for its reported setting
+  to remain stable for 30 seconds before retrying, preventing a phase-locked
+  5 A/1 A loop while preserving the powered charger-recovery path.
+- Add a separate configurable outside-window EV battery reserve (20% default).
+  Automatic EV charging and recovery stop at that reserve instead of draining
+  the house battery to its general 10% hard floor. Free-window charging and an
+  explicit Charge to Full request retain their existing exceptions.
 
 ## 0.12.26 — restore GloBird scorecard mappings on upgrade
 

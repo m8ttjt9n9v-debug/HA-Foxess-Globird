@@ -494,7 +494,7 @@ async def test_ev_outside_charge_stops_at_house_battery_floor(hass, monkeypatch)
     await harness.setup(entry)
 
     controller = entry.runtime_data.ev_controller
-    assert controller.decision_phase == "battery_floor_reached"
+    assert controller.decision_phase == "ev_battery_reserve_reached"
     assert controller.target_current_a == 0
     entry.runtime_data.async_update_listeners()
     await hass.async_block_till_done()
@@ -529,7 +529,7 @@ async def test_ev_outside_charge_stops_at_house_battery_floor(hass, monkeypatch)
     await harness.reload(entry)
 
     controller = entry.runtime_data.ev_controller
-    assert controller.decision_phase == "battery_floor_reached"
+    assert controller.decision_phase == "ev_battery_reserve_reached"
     assert controller.target_current_a == 0
     assert harness.service_calls == ()
     assert hass.states.get("sensor.home_energy_grid_import").state == "0.0"

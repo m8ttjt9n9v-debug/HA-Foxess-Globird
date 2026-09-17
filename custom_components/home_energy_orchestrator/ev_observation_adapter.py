@@ -136,6 +136,7 @@ class EvFeedbackSnapshot:
             limit_minimum_percent=limit.minimum,
             limit_maximum_percent=limit.maximum,
             limit_step_percent=limit.step,
+            requested_current_changed_at=current.last_changed,
         )
 
 

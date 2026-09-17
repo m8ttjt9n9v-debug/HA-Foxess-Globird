@@ -246,6 +246,7 @@ async def test_user_flow_creates_a_config_entry(hass):
     assert result["title"] == "Test Site"
     assert result["data"] == {
         **ENTRY_DATA,
+        "ev_outside_battery_reserve_percent": 20.0,
         "offpeak_export_rate_per_kwh": 0.0,
         "force_discharge_offset_minutes": 1.0,
     }
@@ -865,6 +866,22 @@ async def test_user_flow_rejects_unsafe_limits(hass):
     assert result["errors"] == {"base": "invalid_site_limits"}
 
 
+async def test_user_flow_rejects_ev_reserve_below_general_battery_floor(hass):
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": SOURCE_USER},
+        data={
+            "name": "Unsafe EV reserve",
+            **ENTRY_DATA,
+            "battery_floor_percent": 10,
+            "ev_outside_battery_reserve_percent": 9,
+        },
+    )
+
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"] == {"base": "invalid_site_limits"}
+
+
 async def test_user_flow_accepts_configured_phase_counts_without_a_profile_table(hass):
     result = await hass.config_entries.flow.async_init(
         DOMAIN,
@@ -957,6 +974,7 @@ async def test_reconfigure_updates_and_reloads_an_entry(hass):
     assert entry.title == "Updated Site"
     assert entry.data == {
         **updated_data,
+        "ev_outside_battery_reserve_percent": 20.0,
         "offpeak_export_rate_per_kwh": 0.0,
         "force_discharge_offset_minutes": 1.0,
     }

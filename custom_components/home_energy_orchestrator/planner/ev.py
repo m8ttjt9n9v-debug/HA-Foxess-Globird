@@ -14,6 +14,19 @@ from math import ceil, floor, isfinite
 
 DIRECT_EVSE_MAX_ATTEMPTS = 3
 DIRECT_EVSE_RETRY_INTERVAL = timedelta(seconds=30)
+DIRECT_EVSE_FEEDBACK_SETTLE_INTERVAL = timedelta(seconds=30)
+DIRECT_EVSE_FAULT_REARM_INTERVAL = timedelta(minutes=30)
+DIRECT_EVSE_RECONCILIATION_PHASES = frozenset(
+    {
+        "idle",
+        "target_changed",
+        "awaiting_feedback",
+        "awaiting_stable_current_feedback",
+        "confirmed",
+        "fault_maximum_attempts",
+        "blocked",
+    }
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -174,6 +187,7 @@ class DirectEvseObservation:
     limit_minimum_percent: float | None
     limit_maximum_percent: float | None
     limit_step_percent: float | None
+    requested_current_changed_at: datetime | None = None
 
 
 def physical_charging_minimum_a(
@@ -858,12 +872,19 @@ def reconcile_direct_evse(
     physical_ceiling_a: float,
     now: datetime,
     retry_interval: timedelta = DIRECT_EVSE_RETRY_INTERVAL,
+    feedback_settle_interval: timedelta = DIRECT_EVSE_FEEDBACK_SETTLE_INTERVAL,
+    fault_rearm_interval: timedelta = DIRECT_EVSE_FAULT_REARM_INTERVAL,
     maximum_attempts: int = DIRECT_EVSE_MAX_ATTEMPTS,
 ) -> DirectEvseReconciliation:
     """Bound feedback retries so another writer cannot cause endless flapping."""
     if now.tzinfo is None or now.utcoffset() is None:
         raise ValueError("reconciliation time must be timezone-aware")
-    if retry_interval < timedelta(0) or maximum_attempts < 1:
+    if (
+        retry_interval < timedelta(0)
+        or feedback_settle_interval < timedelta(0)
+        or fault_rearm_interval <= timedelta(0)
+        or maximum_attempts < 1
+    ):
         raise ValueError("retry policy must be non-negative and have attempts")
     target_changed = (
         state.target_current_a != target_current_a
@@ -874,6 +895,21 @@ def reconcile_direct_evse(
             target_current_a=target_current_a,
             target_limit_percent=target_limit_percent,
             phase="target_changed",
+        )
+    elif (
+        state.attempts > 0
+        and state.last_command_at is not None
+        and state.phase
+        in {
+            "confirmed",
+            "fault_maximum_attempts",
+        }
+        and now - state.last_command_at >= fault_rearm_interval
+    ):
+        state = DirectEvseReconciliationState(
+            target_current_a=target_current_a,
+            target_limit_percent=target_limit_percent,
+            phase="cooldown_rearmed",
         )
     if direct_evse_response_matches(
         observation,
@@ -920,6 +956,29 @@ def reconcile_direct_evse(
         physical_ceiling_a=physical_ceiling_a,
         start_allowed=True,
     )
+    current_feedback_changed_after_command = (
+        state.attempts > 0
+        and state.last_command_at is not None
+        and observation.requested_current_changed_at is not None
+        and observation.requested_current_changed_at <= now
+        and observation.requested_current_changed_at > state.last_command_at
+    )
+    current_feedback_is_settling = (
+        current_feedback_changed_after_command
+        and now - observation.requested_current_changed_at < feedback_settle_interval
+        and any(command.action == "set_charge_current" for command in plan.commands)
+    )
+    if current_feedback_is_settling:
+        return DirectEvseReconciliation(
+            DirectEvseReconciliationState(
+                target_current_a,
+                target_limit_percent,
+                state.attempts,
+                state.last_command_at,
+                "awaiting_stable_current_feedback",
+            ),
+            EvCommandPlan((), "awaiting_stable_current_feedback"),
+        )
     if not plan.commands:
         return DirectEvseReconciliation(
             DirectEvseReconciliationState(

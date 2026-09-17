@@ -934,6 +934,96 @@ def test_direct_reconciliation_retries_are_bounded_and_fault_visible():
     assert fault.state.attempts == 3
 
 
+def test_confirmed_attempt_budget_rearms_after_thirty_minutes():
+    now = datetime(2026, 9, 7, 20, tzinfo=UTC)
+    matched = replace(
+        DIRECT,
+        requested_current_a=1,
+        charge_limit_percent=78,
+        charge_switch_on=True,
+    )
+    stale = DirectEvseReconciliationState(
+        1,
+        78,
+        3,
+        now - timedelta(minutes=30),
+        "confirmed",
+    )
+
+    rearmed = reconcile_direct_evse(
+        stale,
+        matched,
+        target_current_a=1,
+        target_limit_percent=78,
+        physical_ceiling_a=15,
+        now=now,
+    )
+
+    assert rearmed.plan.reason == "feedback_confirmed"
+    assert rearmed.state.phase == "confirmed"
+    assert rearmed.state.attempts == 0
+    assert rearmed.state.last_command_at is None
+
+
+def test_maximum_attempts_rearm_after_thirty_minutes():
+    now = datetime(2026, 9, 7, 20, tzinfo=UTC)
+    coerced = replace(
+        DIRECT,
+        requested_current_a=5,
+        charge_limit_percent=78,
+        charge_switch_on=True,
+    )
+    exhausted = DirectEvseReconciliationState(
+        1,
+        78,
+        3,
+        now - timedelta(minutes=30),
+        "fault_maximum_attempts",
+    )
+
+    rearmed = reconcile_direct_evse(
+        exhausted,
+        coerced,
+        target_current_a=1,
+        target_limit_percent=78,
+        physical_ceiling_a=15,
+        now=now,
+    )
+
+    assert rearmed.plan.commands == (EvCommand("set_charge_current", 1),)
+    assert rearmed.state.phase == "awaiting_feedback"
+    assert rearmed.state.attempts == 1
+
+
+def test_maximum_attempts_remain_latched_during_cooldown():
+    now = datetime(2026, 9, 7, 20, tzinfo=UTC)
+    exhausted = DirectEvseReconciliationState(
+        1,
+        78,
+        3,
+        now - timedelta(minutes=29, seconds=59),
+        "fault_maximum_attempts",
+    )
+
+    retained = reconcile_direct_evse(
+        exhausted,
+        replace(
+            DIRECT,
+            requested_current_a=5,
+            charge_limit_percent=78,
+            charge_switch_on=True,
+        ),
+        target_current_a=1,
+        target_limit_percent=78,
+        physical_ceiling_a=15,
+        now=now,
+    )
+
+    assert retained.plan.commands == ()
+    assert retained.plan.reason == "maximum_attempts_reached"
+    assert retained.state.phase == "fault_maximum_attempts"
+
+
 def test_direct_reconciliation_waits_for_feedback_between_attempts():
     now = datetime(2026, 9, 7, 12, 1, tzinfo=UTC)
     first = reconcile_direct_evse(
@@ -955,6 +1045,62 @@ def test_direct_reconciliation_waits_for_feedback_between_attempts():
     assert waiting.plan.commands == ()
     assert waiting.plan.reason == "awaiting_feedback"
     assert waiting.state.attempts == 1
+
+
+def test_direct_reconciliation_waits_for_overwritten_current_to_settle():
+    """Do not phase-lock retries to a connector that reasserts its start current."""
+    first_at = datetime(2026, 9, 17, 19, 26, 34, tzinfo=UTC)
+    first = reconcile_direct_evse(
+        DirectEvseReconciliationState(),
+        replace(
+            DIRECT,
+            requested_current_a=5,
+            charge_limit_percent=78,
+            charge_switch_on=True,
+            requested_current_changed_at=first_at - timedelta(seconds=25),
+        ),
+        target_current_a=1,
+        target_limit_percent=78,
+        physical_ceiling_a=15,
+        now=first_at,
+    )
+    assert first.plan.commands == (EvCommand("set_charge_current", 1),)
+
+    overwritten_at = first_at + timedelta(seconds=5)
+    premature = reconcile_direct_evse(
+        first.state,
+        replace(
+            DIRECT,
+            requested_current_a=5,
+            charge_limit_percent=78,
+            charge_switch_on=True,
+            requested_current_changed_at=overwritten_at,
+        ),
+        target_current_a=1,
+        target_limit_percent=78,
+        physical_ceiling_a=15,
+        now=first_at + timedelta(seconds=30),
+    )
+    assert premature.plan.commands == ()
+    assert premature.plan.reason == "awaiting_stable_current_feedback"
+    assert premature.state.attempts == 1
+
+    settled = reconcile_direct_evse(
+        premature.state,
+        replace(
+            DIRECT,
+            requested_current_a=5,
+            charge_limit_percent=78,
+            charge_switch_on=True,
+            requested_current_changed_at=overwritten_at,
+        ),
+        target_current_a=1,
+        target_limit_percent=78,
+        physical_ceiling_a=15,
+        now=overwritten_at + timedelta(seconds=30),
+    )
+    assert settled.plan.commands == (EvCommand("set_charge_current", 1),)
+    assert settled.state.attempts == 2
 
 
 def test_new_target_rearms_bounded_reconciliation():

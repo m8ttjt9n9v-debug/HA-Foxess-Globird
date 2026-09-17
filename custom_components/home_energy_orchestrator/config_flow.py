@@ -71,6 +71,7 @@ from .const import (
     CONF_EV_LOCATION_MODE,
     CONF_EV_MAX_CURRENT,
     CONF_EV_MIN_CURRENT,
+    CONF_EV_OUTSIDE_BATTERY_RESERVE_PERCENT,
     CONF_EV_OUTSIDE_INVERTER_PERCENT,
     CONF_EV_PHASE_COUNT,
     CONF_EV_PRE_FREE_ENABLED,
@@ -183,6 +184,7 @@ from .const import (
     DEFAULT_EV_LOCATION_MODE,
     DEFAULT_EV_MAX_CURRENT,
     DEFAULT_EV_MIN_CURRENT,
+    DEFAULT_EV_OUTSIDE_BATTERY_RESERVE_PERCENT,
     DEFAULT_EV_OUTSIDE_INVERTER_PERCENT,
     DEFAULT_EV_PHASE_COUNT,
     DEFAULT_EV_PRE_FREE_ENABLED,
@@ -672,6 +674,10 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         number(CONF_EV_DAILY_BACKFILL_ENERGY) >= 0,
                     CONF_EV_OUTSIDE_INVERTER_PERCENT:
                         0 <= number(CONF_EV_OUTSIDE_INVERTER_PERCENT) <= 100,
+                    CONF_EV_OUTSIDE_BATTERY_RESERVE_PERCENT:
+                        number(CONF_EV_OUTSIDE_BATTERY_RESERVE_PERCENT)
+                        >= number(CONF_BATTERY_FLOOR)
+                        and number(CONF_EV_OUTSIDE_BATTERY_RESERVE_PERCENT) <= 100,
                     CONF_EV_BACKFILL_BUFFER_MINUTES:
                         number(CONF_EV_BACKFILL_BUFFER_MINUTES) >= 0,
                     CONF_EV_TELEMETRY_MAX_AGE_SECONDS:
@@ -1527,6 +1533,13 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     ),
                 ): vol.Coerce(float),
                 vol.Required(
+                    CONF_EV_OUTSIDE_BATTERY_RESERVE_PERCENT,
+                    default=defaults.get(
+                        CONF_EV_OUTSIDE_BATTERY_RESERVE_PERCENT,
+                        DEFAULT_EV_OUTSIDE_BATTERY_RESERVE_PERCENT,
+                    ),
+                ): vol.Coerce(float),
+                vol.Required(
                     CONF_ZERO_IMPORT_THRESHOLD_KW,
                     default=defaults.get(
                         CONF_ZERO_IMPORT_THRESHOLD_KW, DEFAULT_ZERO_IMPORT_THRESHOLD_KW
@@ -1885,6 +1898,10 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             CONF_EV_PROTECTED_BASELINE_A: data.get(
                 CONF_EV_PROTECTED_BASELINE_A, DEFAULT_EV_PROTECTED_BASELINE_A
             ),
+            CONF_EV_OUTSIDE_BATTERY_RESERVE_PERCENT: data.get(
+                CONF_EV_OUTSIDE_BATTERY_RESERVE_PERCENT,
+                DEFAULT_EV_OUTSIDE_BATTERY_RESERVE_PERCENT,
+            ),
             CONF_ZERO_IMPORT_THRESHOLD_KW: data.get(
                 CONF_ZERO_IMPORT_THRESHOLD_KW, DEFAULT_ZERO_IMPORT_THRESHOLD_KW
             ),
@@ -2066,6 +2083,9 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             force_discharge_offset = float(data[CONF_FORCE_DISCHARGE_OFFSET_MINUTES])
             discharge_efficiency = float(data[CONF_DISCHARGE_EFFICIENCY_PERCENT])
             protected_ev_baseline = float(data[CONF_EV_PROTECTED_BASELINE_A])
+            ev_outside_battery_reserve = float(
+                data[CONF_EV_OUTSIDE_BATTERY_RESERVE_PERCENT]
+            )
             daily_backfill_energy = float(data[CONF_EV_DAILY_BACKFILL_ENERGY])
             outside_inverter_percent = float(data[CONF_EV_OUTSIDE_INVERTER_PERCENT])
             backfill_buffer_minutes = float(data[CONF_EV_BACKFILL_BUFFER_MINUTES])
@@ -2174,6 +2194,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             force_discharge_offset,
             discharge_efficiency,
             protected_ev_baseline,
+            ev_outside_battery_reserve,
             daily_backfill_energy,
             outside_inverter_percent,
             backfill_buffer_minutes,
@@ -2230,6 +2251,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             or force_discharge_offset < 0
             or not 50 <= discharge_efficiency <= 100
             or protected_ev_baseline < 0
+            or not floor <= ev_outside_battery_reserve <= 100
             or daily_backfill_energy < 0
             or not 0 <= outside_inverter_percent <= 100
             or backfill_buffer_minutes < 0

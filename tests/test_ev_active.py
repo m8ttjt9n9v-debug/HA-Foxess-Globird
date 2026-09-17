@@ -61,6 +61,7 @@ def _controller_config(**changes):
         "ev_charge_efficiency_percent": 90,
         "ev_allowance_guard_enabled": False,
         "ev_protected_baseline_a": 0,
+        "ev_outside_battery_reserve_percent": 10,
         "ev_max_current": 16,
         "ev_voltage": 230,
         "ev_phase_count": 1,
@@ -1401,7 +1402,7 @@ async def test_outside_policy_stops_owned_free_window_charge_when_baseline_is_ze
     assert stopped == ["switch.car_charge"]
 
 
-async def test_battery_floor_stops_automatic_outside_charge(
+async def test_ev_battery_reserve_stops_automatic_outside_charge(
     hass: HomeAssistant,
 ) -> None:
     _set_ev_states(hass)
@@ -1415,13 +1416,14 @@ async def test_battery_floor_stops_automatic_outside_charge(
     coordinator = _coordinator(
         _controller_config(
             battery_floor_percent=10,
+            ev_outside_battery_reserve_percent=20,
             ev_daily_backfill_energy_kwh=2,
             ev_daily_ready_time="08:00:00",
             ev_outside_inverter_percent=30,
             inverter_discharge_limit_kw=15,
         )
     )
-    coordinator.snapshot = replace(coordinator.snapshot, battery_soc=10)
+    coordinator.snapshot = replace(coordinator.snapshot, battery_soc=20)
     coordinator.data = SimpleNamespace(available_after_reserve_kwh=0)
     coordinator.learning_remaining_kwh = 3
     controller = ActiveEvController(hass, coordinator)
@@ -1437,14 +1439,14 @@ async def test_battery_floor_stops_automatic_outside_charge(
 
     await controller.async_reconcile(now)
 
-    assert controller.decision_phase == "battery_floor_reached"
+    assert controller.decision_phase == "ev_battery_reserve_reached"
     assert controller.target_current_a == 0
     assert controller.daily_backfill_active is False
     assert controller.daily_backfill_session_target_kwh == 0
     assert controller.daily_backfill_session_start_delivered_kwh == 0
     assert controller.daily_backfill_frozen_start is None
     assert controller.pre_free_session == PreFreeSessionState()
-    assert controller.pre_free_phase == "battery_floor_reached"
+    assert controller.pre_free_phase == "ev_battery_reserve_reached"
     assert controller.daily_backfill_stop_pending is True
     assert controller.daily_backfill_stop_attempts == 1
     assert controller.daily_backfill_last_stop_at == now
@@ -1906,6 +1908,129 @@ async def test_runtime_does_not_flap_forever_when_feedback_never_changes(
     assert controller.reconciliation.attempts == 3
     assert controller.reconciliation.phase == "fault_maximum_attempts"
     assert controller.last_reason == "maximum_attempts_reached"
+
+
+async def test_coerced_one_amp_baseline_retries_after_cooldown_without_stopping(
+    hass: HomeAssistant,
+) -> None:
+    """Preserve the powered recovery path with bounded 30-minute laps."""
+    _set_ev_states(hass)
+    hass.states.async_set("sensor.car_charging", "charging")
+    hass.states.async_set("sensor.car_actual_current", "5", {"unit_of_measurement": "A"})
+    hass.states.async_set(
+        "number.car_current",
+        "5",
+        {"min": 1, "max": 16, "step": 1, "unit_of_measurement": "A"},
+    )
+    hass.states.async_set("number.car_limit", "76", {"min": 50, "max": 100, "step": 1})
+    hass.states.async_set("switch.car_charge", "on")
+    hass.states.async_set("sensor.site_grid", "0", {"unit_of_measurement": "kW"})
+    hass.states.async_set("sensor.battery_power", "0", {"unit_of_measurement": "kW"})
+    current_commands = []
+
+    async def set_value(call):
+        if call.data["entity_id"] == "number.car_current":
+            current_commands.append(call.data["value"])
+
+    hass.services.async_register("number", "set_value", set_value)
+    coordinator = _coordinator(
+        _controller_config(
+            foxess_control_owner="local_modbus",
+            ev_solar_spill_enabled=True,
+            ev_protected_baseline_a=1,
+            battery_power_entity="sensor.battery_power",
+            grid_power_entity="sensor.site_grid",
+            bonus_window_start="21:00:00",
+            bonus_window_end="22:00:00",
+        )
+    )
+    _set_power_telemetry(coordinator, hass, grid_kw=0, battery_kw=0)
+    controller = ActiveEvController(hass, coordinator)
+    start = datetime(2026, 9, 7, 19, 26, 4, tzinfo=UTC)
+
+    for offset in (0, 30, 60, 90, 1860, 1890, 1920, 1950, 3720):
+        await controller.async_reconcile(start + timedelta(seconds=offset))
+        # The charger keeps returning to 5 A between HEO's recovery attempts.
+        hass.states.async_set(
+            "number.car_current",
+            "5",
+            {"min": 1, "max": 16, "step": 1, "unit_of_measurement": "A"},
+        )
+    assert current_commands == [1, 1, 1, 1, 1, 1, 1]
+    assert hass.states.get("switch.car_charge").state == "on"
+    assert controller.target_current_a == 1
+    assert controller.reconciliation.phase == "awaiting_feedback"
+    assert controller.reconciliation.attempts == 1
+
+
+async def test_runtime_waits_for_overwritten_tessie_current_to_settle(
+    hass: HomeAssistant,
+) -> None:
+    """Reproduce the connector-start 5 A → 1 A → 5 A timing sequence."""
+    _set_ev_states(hass)
+    start = datetime(2026, 9, 17, 19, 26, 34, tzinfo=UTC)
+    current_attributes = {
+        "min": 1,
+        "max": 16,
+        "step": 1,
+        "unit_of_measurement": "A",
+    }
+    hass.states.async_set(
+        "number.car_current",
+        "5",
+        current_attributes,
+        timestamp=(start - timedelta(seconds=25)).timestamp(),
+    )
+    hass.states.async_set("sensor.car_charging", "charging")
+    hass.states.async_set("sensor.car_actual_current", "5", {"unit_of_measurement": "A"})
+    hass.states.async_set("number.car_limit", "76", {"min": 50, "max": 100, "step": 1})
+    hass.states.async_set("switch.car_charge", "on")
+    hass.states.async_set("sensor.site_grid", "0", {"unit_of_measurement": "kW"})
+    hass.states.async_set("sensor.battery_power", "0", {"unit_of_measurement": "kW"})
+    current_commands = []
+
+    async def set_value(call):
+        if call.data["entity_id"] == "number.car_current":
+            current_commands.append(call.data["value"])
+            hass.states.async_set(
+                "number.car_current",
+                str(call.data["value"]),
+                current_attributes,
+                timestamp=start.timestamp(),
+            )
+
+    hass.services.async_register("number", "set_value", set_value)
+    coordinator = _coordinator(
+        _controller_config(
+            foxess_control_owner="local_modbus",
+            ev_solar_spill_enabled=True,
+            ev_protected_baseline_a=1,
+            battery_power_entity="sensor.battery_power",
+            grid_power_entity="sensor.site_grid",
+            bonus_window_start="21:00:00",
+            bonus_window_end="22:00:00",
+        )
+    )
+    _set_power_telemetry(coordinator, hass, grid_kw=0, battery_kw=0)
+    controller = ActiveEvController(hass, coordinator)
+
+    await controller.async_reconcile(start)
+    assert current_commands == [1]
+
+    overwritten_at = start + timedelta(seconds=5)
+    hass.states.async_set(
+        "number.car_current",
+        "5",
+        current_attributes,
+        timestamp=overwritten_at.timestamp(),
+    )
+    await controller.async_reconcile(start + timedelta(seconds=30))
+    assert current_commands == [1]
+    assert controller.last_reason == "awaiting_stable_current_feedback"
+
+    await controller.async_reconcile(overwritten_at + timedelta(seconds=30))
+    assert current_commands == [1, 1]
+    assert controller.reconciliation.attempts == 2
 
 
 async def test_runtime_fails_closed_when_vehicle_soc_is_unavailable(

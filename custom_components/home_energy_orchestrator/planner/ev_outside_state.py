@@ -220,13 +220,13 @@ def cleanup_disconnected_ev(
     )
 
 
-def abort_outside_charge_at_battery_floor(
+def abort_outside_charge_at_battery_reserve(
     daily_state: DailyBackfillCycleState,
     *,
     charge_switch_on: bool,
     charge_limit_percent: float,
 ) -> BatteryFloorAbortTransition:
-    """Preserve the retained battery-floor abort and stop-latch semantics."""
+    """Stop automatic outside-window EV charging at its configured reserve."""
     next_daily = replace(
         daily_state,
         active=False,
@@ -238,9 +238,9 @@ def abort_outside_charge_at_battery_floor(
         last_stop_at=(None if charge_switch_on else daily_state.last_stop_at),
     )
     candidate = build_ev_stage_candidate(
-        "battery_floor",
+        "battery_reserve",
         eligible=charge_switch_on,
-        reason="battery_floor_reached",
+        reason="ev_battery_reserve_reached",
         target_current_a=0.0,
         target_limit_percent=charge_limit_percent,
         command_intent=("stop_charging",) if charge_switch_on else (),
@@ -251,15 +251,15 @@ def abort_outside_charge_at_battery_floor(
     return BatteryFloorAbortTransition(
         daily_state=next_daily,
         pre_free_state=PreFreeSessionState(),
-        pre_free_phase="battery_floor_reached",
+        pre_free_phase="ev_battery_reserve_reached",
         target_current_a=0.0,
         target_limit_percent=charge_limit_percent,
-        decision_phase="battery_floor_reached",
+        decision_phase="ev_battery_reserve_reached",
         allowance_phase="outside_free_window",
         outside_target_active=False,
         outside_stop_requested=charge_switch_on,
         outside_control_active=charge_switch_on,
         candidates=(candidate,),
         continue_reconciliation=charge_switch_on,
-        last_reason=None if charge_switch_on else "battery_floor_reached",
+        last_reason=None if charge_switch_on else "ev_battery_reserve_reached",
     )

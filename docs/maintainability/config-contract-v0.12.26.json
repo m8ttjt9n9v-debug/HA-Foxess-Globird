@@ -56,6 +56,7 @@
     "ev_location_mode",
     "ev_max_current",
     "ev_min_current",
+    "ev_outside_battery_reserve_percent",
     "ev_outside_inverter_percent",
     "ev_phase_count",
     "ev_pre_free_backfill_enabled",
@@ -141,7 +142,7 @@
     "free_charge_schedule_confirmed",
     "grid_import_positive"
   ],
-  "page_field_count": 124,
+  "page_field_count": 125,
   "pages": {
     "automation": [
       "foxess_control_owner",
@@ -213,6 +214,7 @@
       "ev_telemetry_max_age_seconds",
       "ev_telemetry_max_skew_seconds",
       "ev_protected_baseline_a",
+      "ev_outside_battery_reserve_percent",
       "ev_before_export_enabled",
       "ev_before_export_soc_target_percent"
     ],
@@ -296,5 +298,5 @@
   },
   "release_baseline": "0.12.26",
   "schema_version": 1,
-  "unique_page_field_count": 124
+  "unique_page_field_count": 125
 }

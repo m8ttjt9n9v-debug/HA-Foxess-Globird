@@ -18,6 +18,15 @@ state transition is extracted from the controller.
 
 No production code changes in this work item.
 
+## Later evolution
+
+Automatic outside-window EV charging now uses a separate
+`ev_outside_battery_reserve_percent` setting (20% default) rather than sharing
+the general battery floor. Its diagnostic reason is
+`ev_battery_reserve_reached`. The general battery floor retains its wider
+inverter and energy-planning responsibilities. Free-window charging and an
+explicit Charge to Full request remain exceptions.
+
 ## Completion evidence
 
 - Focused unchanged-controller battery-floor trace: `2 passed`.

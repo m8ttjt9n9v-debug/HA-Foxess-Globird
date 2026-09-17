@@ -8,6 +8,7 @@ from math import isfinite
 
 from .ev import (
     DIRECT_EVSE_MAX_ATTEMPTS,
+    DIRECT_EVSE_RECONCILIATION_PHASES,
     DirectEvseReconciliationState,
     SmartSocketRecoveryState,
 )
@@ -235,15 +236,7 @@ def _reconciliation(payload: object, now: datetime) -> DirectEvseReconciliationS
         and (not isfinite(target_current) or target_current < 0)
         or target_limit is not None
         and (not isfinite(target_limit) or target_limit < 0)
-        or phase
-        not in {
-            "idle",
-            "target_changed",
-            "awaiting_feedback",
-            "confirmed",
-            "fault_maximum_attempts",
-            "blocked",
-        }
+        or phase not in DIRECT_EVSE_RECONCILIATION_PHASES
     ):
         raise ValueError
     return DirectEvseReconciliationState(

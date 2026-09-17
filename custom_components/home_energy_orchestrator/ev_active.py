@@ -15,7 +15,6 @@ from homeassistant.util import dt as dt_util
 
 from .const import (
     CONF_BATTERY_CHARGE_EFFICIENCY,
-    CONF_BATTERY_FLOOR,
     CONF_BATTERY_FREE_WINDOW_TARGET,
     CONF_BONUS_WINDOW_END,
     CONF_BONUS_WINDOW_START,
@@ -36,6 +35,7 @@ from .const import (
     CONF_EV_FREE_WINDOW_SETTLE_MINUTES,
     CONF_EV_LEARNING_MINIMUM_SAMPLES,
     CONF_EV_MAX_CURRENT,
+    CONF_EV_OUTSIDE_BATTERY_RESERVE_PERCENT,
     CONF_EV_OUTSIDE_INVERTER_PERCENT,
     CONF_EV_PHASE_COUNT,
     CONF_EV_PROTECTED_BASELINE_A,
@@ -62,7 +62,6 @@ from .const import (
     CONF_SITE_GRID_HEADROOM_CURRENT,
     CONF_SITE_PHASE_COUNT,
     DEFAULT_BATTERY_CHARGE_EFFICIENCY,
-    DEFAULT_BATTERY_FLOOR,
     DEFAULT_BATTERY_FREE_WINDOW_TARGET,
     DEFAULT_BONUS_WINDOW_END,
     DEFAULT_BONUS_WINDOW_START,
@@ -80,6 +79,7 @@ from .const import (
     DEFAULT_EV_FREE_WINDOW_MINIMUM_CURRENT,
     DEFAULT_EV_FREE_WINDOW_SETTLE_MINUTES,
     DEFAULT_EV_LEARNING_MINIMUM_SAMPLES,
+    DEFAULT_EV_OUTSIDE_BATTERY_RESERVE_PERCENT,
     DEFAULT_EV_OUTSIDE_INVERTER_PERCENT,
     DEFAULT_EV_PHASE_COUNT,
     DEFAULT_EV_PROTECTED_BASELINE_A,
@@ -127,6 +127,7 @@ from .planner.control_windows import (
 )
 from .planner.ev import (
     DIRECT_EVSE_MAX_ATTEMPTS,
+    DIRECT_EVSE_RECONCILIATION_PHASES,
     DIRECT_EVSE_RETRY_INTERVAL,
     AllowanceCeilingInputs,
     ChargeLimitInputs,
@@ -197,7 +198,7 @@ from .planner.ev_learning import (
     snapshot_daily_driving_energy,
 )
 from .planner.ev_outside_state import (
-    abort_outside_charge_at_battery_floor,
+    abort_outside_charge_at_battery_reserve,
     advance_charge_to_full,
     cleanup_disconnected_ev,
     cleanup_outside_ownership_for_free_window,
@@ -1500,9 +1501,12 @@ class ActiveEvController:
             and snapshot is not None
             and snapshot.battery_soc is not None
             and snapshot.battery_soc
-            <= self._float(CONF_BATTERY_FLOOR, DEFAULT_BATTERY_FLOOR)
+            <= self._float(
+                CONF_EV_OUTSIDE_BATTERY_RESERVE_PERCENT,
+                DEFAULT_EV_OUTSIDE_BATTERY_RESERVE_PERCENT,
+            )
         ):
-            abort = abort_outside_charge_at_battery_floor(
+            abort = abort_outside_charge_at_battery_reserve(
                 self._daily_backfill_cycle_state(),
                 charge_switch_on=observation.charge_switch_on,
                 charge_limit_percent=observation.charge_limit_percent,
@@ -2257,6 +2261,7 @@ class ActiveEvController:
             limit_minimum_percent=limit.minimum,
             limit_maximum_percent=limit.maximum,
             limit_step_percent=limit.step,
+            requested_current_changed_at=current.last_changed,
         )
 
     @staticmethod
@@ -2407,15 +2412,7 @@ class ActiveEvController:
                     and (not isfinite(target_current) or target_current < 0)
                 )
                 or (target_limit is not None and (not isfinite(target_limit) or target_limit < 0))
-                or phase
-                not in {
-                    "idle",
-                    "target_changed",
-                    "awaiting_feedback",
-                    "confirmed",
-                    "fault_maximum_attempts",
-                    "blocked",
-                }
+                or phase not in DIRECT_EVSE_RECONCILIATION_PHASES
             ):
                 raise ValueError
             self.reconciliation = DirectEvseReconciliationState(

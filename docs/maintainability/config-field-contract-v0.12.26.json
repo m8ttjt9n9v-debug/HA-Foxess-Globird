@@ -1,6 +1,6 @@
 {
   "config_entry_version": 6,
-  "field_count": 124,
+  "field_count": 125,
   "fields": [
     {
       "default": "Home Energy",
@@ -234,6 +234,359 @@
       "reconfigure_label": "Battery discharge efficiency (%)",
       "required": true,
       "setup_label": "Battery discharge efficiency (%)"
+    },
+    {
+      "default": "auto",
+      "has_default": true,
+      "input_config": {
+        "custom_value": false,
+        "multiple": false,
+        "options": [
+          "auto",
+          "home",
+          "away"
+        ],
+        "sort": false
+      },
+      "input_kind": "select",
+      "key": "ev_location_mode",
+      "order": 1,
+      "page": "ev_policies",
+      "reconfigure_label": "EV location policy",
+      "required": true,
+      "setup_label": "EV location policy"
+    },
+    {
+      "default": "ev",
+      "has_default": true,
+      "input_config": {
+        "custom_value": false,
+        "multiple": false,
+        "options": [
+          "house_battery",
+          "ev"
+        ],
+        "sort": false
+      },
+      "input_kind": "select",
+      "key": "ev_free_window_priority",
+      "order": 2,
+      "page": "ev_policies",
+      "reconfigure_label": "Free-window charging priority",
+      "required": true,
+      "setup_label": "Free-window charging priority"
+    },
+    {
+      "default": 90.0,
+      "has_default": true,
+      "input_config": {
+        "coerce": "float"
+      },
+      "input_kind": "number",
+      "key": "ev_free_window_charge_limit_percent",
+      "order": 3,
+      "page": "ev_policies",
+      "reconfigure_label": "Free-window EV charge target (%)",
+      "required": true,
+      "setup_label": "Free-window EV charge target (%)"
+    },
+    {
+      "default": 1.0,
+      "has_default": true,
+      "input_config": {
+        "coerce": "float"
+      },
+      "input_kind": "number",
+      "key": "ev_free_window_minimum_current_a",
+      "order": 4,
+      "page": "ev_policies",
+      "reconfigure_label": "Guaranteed free-window EV current (A)",
+      "required": true,
+      "setup_label": "Guaranteed free-window EV current (A)"
+    },
+    {
+      "default": 5.0,
+      "has_default": true,
+      "input_config": {
+        "coerce": "float"
+      },
+      "input_kind": "number",
+      "key": "ev_free_window_settle_minutes",
+      "order": 5,
+      "page": "ev_policies",
+      "reconfigure_label": "Battery-charging settle time before house-priority control (minutes)",
+      "required": true,
+      "setup_label": "Battery-charging settle time before house-priority control (minutes)"
+    },
+    {
+      "default": 2.0,
+      "has_default": true,
+      "input_config": {
+        "coerce": "float"
+      },
+      "input_kind": "number",
+      "key": "ev_direct_limit_headroom_percent",
+      "order": 6,
+      "page": "ev_policies",
+      "reconfigure_label": "Powered-connector charge-limit headroom (%)",
+      "required": true,
+      "setup_label": "Powered-connector charge-limit headroom (%)"
+    },
+    {
+      "default": 12.0,
+      "has_default": true,
+      "input_config": {
+        "coerce": "float"
+      },
+      "input_kind": "number",
+      "key": "ev_charge_to_full_max_hours",
+      "order": 7,
+      "page": "ev_policies",
+      "reconfigure_label": "Charge to Full automatic timeout (hours)",
+      "required": true,
+      "setup_label": "Charge to Full automatic timeout (hours)"
+    },
+    {
+      "default": 90.0,
+      "has_default": true,
+      "input_config": {
+        "coerce": "float"
+      },
+      "input_kind": "number",
+      "key": "ev_charge_efficiency_percent",
+      "order": 8,
+      "page": "ev_policies",
+      "reconfigure_label": "EV wall-to-battery charging efficiency (%)",
+      "required": true,
+      "setup_label": "EV wall-to-battery charging efficiency (%)"
+    },
+    {
+      "default": 20.0,
+      "has_default": true,
+      "input_config": {
+        "coerce": "float"
+      },
+      "input_kind": "number",
+      "key": "ev_arrival_reserve_soc_percent",
+      "order": 9,
+      "page": "ev_policies",
+      "reconfigure_label": "EV learned-policy arrival reserve (%)",
+      "required": true,
+      "setup_label": "EV learned-policy arrival reserve (%)"
+    },
+    {
+      "default": 14,
+      "has_default": true,
+      "input_config": {
+        "coerce": "int"
+      },
+      "input_kind": "number",
+      "key": "ev_learning_minimum_samples",
+      "order": 10,
+      "page": "ev_policies",
+      "reconfigure_label": "EV driving samples required for P85 learning",
+      "required": true,
+      "setup_label": "EV driving samples required for P85 learning"
+    },
+    {
+      "default": true,
+      "has_default": true,
+      "input_config": null,
+      "input_kind": "boolean",
+      "key": "ev_allowance_guard_enabled",
+      "order": 11,
+      "page": "ev_policies",
+      "reconfigure_label": "Keep free-window EV charging within the free-energy allowance",
+      "required": true,
+      "setup_label": "Keep free-window EV charging within the free-energy allowance"
+    },
+    {
+      "default": 0.0,
+      "has_default": true,
+      "input_config": {
+        "coerce": "float"
+      },
+      "input_kind": "number",
+      "key": "ev_allowance_safety_margin_kwh",
+      "order": 12,
+      "page": "ev_policies",
+      "reconfigure_label": "Free-energy allowance safety margin (kWh)",
+      "required": true,
+      "setup_label": "Free-energy allowance safety margin (kWh)"
+    },
+    {
+      "default": false,
+      "has_default": true,
+      "input_config": null,
+      "input_kind": "boolean",
+      "key": "ev_solar_spill_enabled",
+      "order": 13,
+      "page": "ev_policies",
+      "reconfigure_label": "Enable measured solar-spill EV charging",
+      "required": true,
+      "setup_label": "Enable measured solar-spill EV charging"
+    },
+    {
+      "default": 100.0,
+      "has_default": true,
+      "input_config": {
+        "coerce": "float"
+      },
+      "input_kind": "number",
+      "key": "ev_solar_spill_battery_soc_percent",
+      "order": 14,
+      "page": "ev_policies",
+      "reconfigure_label": "Battery SoC required for solar-spill charging (%)",
+      "required": true,
+      "setup_label": "Battery SoC required for solar-spill charging (%)"
+    },
+    {
+      "default": false,
+      "has_default": true,
+      "input_config": null,
+      "input_kind": "boolean",
+      "key": "ev_pre_free_backfill_enabled",
+      "order": 15,
+      "page": "ev_policies",
+      "reconfigure_label": "Enable latest-start reserve-aware pre-free EV backfill",
+      "required": true,
+      "setup_label": "Enable latest-start reserve-aware pre-free EV backfill"
+    },
+    {
+      "default": 0.0,
+      "has_default": true,
+      "input_config": {
+        "coerce": "float"
+      },
+      "input_kind": "number",
+      "key": "ev_daily_backfill_energy_kwh",
+      "order": 16,
+      "page": "ev_policies",
+      "reconfigure_label": "Daily EV energy protected for ready-by backfill (wall-side kWh; 0 disables)",
+      "required": true,
+      "setup_label": "Daily EV energy protected for ready-by backfill (wall-side kWh; 0 disables)"
+    },
+    {
+      "default": "08:00:00",
+      "has_default": true,
+      "input_config": null,
+      "input_kind": "time",
+      "key": "ev_daily_ready_time",
+      "order": 17,
+      "page": "ev_policies",
+      "reconfigure_label": "Daily EV ready-by time (must be before free-power window)",
+      "required": true,
+      "setup_label": "Daily EV ready-by time (must be before free-power window)"
+    },
+    {
+      "default": 0.0,
+      "has_default": true,
+      "input_config": {
+        "coerce": "float"
+      },
+      "input_kind": "number",
+      "key": "ev_outside_inverter_percent",
+      "order": 18,
+      "page": "ev_policies",
+      "reconfigure_label": "Maximum EV charging power outside free power (% of inverter output)",
+      "required": true,
+      "setup_label": "Maximum EV charging power outside free power (% of inverter output)"
+    },
+    {
+      "default": 0.0,
+      "has_default": true,
+      "input_config": {
+        "coerce": "float"
+      },
+      "input_kind": "number",
+      "key": "ev_backfill_buffer_minutes",
+      "order": 19,
+      "page": "ev_policies",
+      "reconfigure_label": "Ready-by planning buffer (minutes)",
+      "required": true,
+      "setup_label": "Ready-by planning buffer (minutes)"
+    },
+    {
+      "default": 90.0,
+      "has_default": true,
+      "input_config": {
+        "coerce": "float"
+      },
+      "input_kind": "number",
+      "key": "ev_telemetry_max_age_seconds",
+      "order": 20,
+      "page": "ev_policies",
+      "reconfigure_label": "Maximum age for outside-window power telemetry (seconds)",
+      "required": true,
+      "setup_label": "Maximum age for outside-window power telemetry (seconds)"
+    },
+    {
+      "default": 30.0,
+      "has_default": true,
+      "input_config": {
+        "coerce": "float"
+      },
+      "input_kind": "number",
+      "key": "ev_telemetry_max_skew_seconds",
+      "order": 21,
+      "page": "ev_policies",
+      "reconfigure_label": "Maximum timestamp skew between outside-window power sensors (seconds)",
+      "required": true,
+      "setup_label": "Maximum timestamp skew between outside-window power sensors (seconds)"
+    },
+    {
+      "default": 0.0,
+      "has_default": true,
+      "input_config": {
+        "coerce": "float"
+      },
+      "input_kind": "number",
+      "key": "ev_protected_baseline_a",
+      "order": 22,
+      "page": "ev_policies",
+      "reconfigure_label": "Mandatory connected-EV baseline until free power (A; 0 if none)",
+      "required": true,
+      "setup_label": "Mandatory connected-EV baseline until free power (A; 0 if none)"
+    },
+    {
+      "default": 20.0,
+      "has_default": true,
+      "input_config": {
+        "coerce": "float"
+      },
+      "input_kind": "number",
+      "key": "ev_outside_battery_reserve_percent",
+      "order": 23,
+      "page": "ev_policies",
+      "reconfigure_label": "Minimum house-battery SoC for outside-window EV charging and recovery (%)",
+      "required": true,
+      "setup_label": "Minimum house-battery SoC for outside-window EV charging and recovery (%)"
+    },
+    {
+      "default": false,
+      "has_default": true,
+      "input_config": null,
+      "input_kind": "boolean",
+      "key": "ev_before_export_enabled",
+      "order": 24,
+      "page": "ev_policies",
+      "reconfigure_label": "Prioritise EV before automatic export",
+      "required": true,
+      "setup_label": "Prioritise EV before automatic export"
+    },
+    {
+      "default": 40.0,
+      "has_default": true,
+      "input_config": {
+        "coerce": "float"
+      },
+      "input_kind": "number",
+      "key": "ev_before_export_soc_target_percent",
+      "order": 25,
+      "page": "ev_policies",
+      "reconfigure_label": "Withhold export while EV SoC is below (%)",
+      "required": true,
+      "setup_label": "Withhold export while EV SoC is below (%)"
     },
     {
       "default": null,
@@ -1308,345 +1661,6 @@
       "reconfigure_label": "EV mappings and electrical limits commissioned",
       "required": true,
       "setup_label": "EV mappings and electrical limits commissioned"
-    },
-    {
-      "default": "auto",
-      "has_default": true,
-      "input_config": {
-        "custom_value": false,
-        "multiple": false,
-        "options": [
-          "auto",
-          "home",
-          "away"
-        ],
-        "sort": false
-      },
-      "input_kind": "select",
-      "key": "ev_location_mode",
-      "order": 1,
-      "page": "ev_policies",
-      "reconfigure_label": "EV location policy",
-      "required": true,
-      "setup_label": "EV location policy"
-    },
-    {
-      "default": "ev",
-      "has_default": true,
-      "input_config": {
-        "custom_value": false,
-        "multiple": false,
-        "options": [
-          "house_battery",
-          "ev"
-        ],
-        "sort": false
-      },
-      "input_kind": "select",
-      "key": "ev_free_window_priority",
-      "order": 2,
-      "page": "ev_policies",
-      "reconfigure_label": "Free-window charging priority",
-      "required": true,
-      "setup_label": "Free-window charging priority"
-    },
-    {
-      "default": 90.0,
-      "has_default": true,
-      "input_config": {
-        "coerce": "float"
-      },
-      "input_kind": "number",
-      "key": "ev_free_window_charge_limit_percent",
-      "order": 3,
-      "page": "ev_policies",
-      "reconfigure_label": "Free-window EV charge target (%)",
-      "required": true,
-      "setup_label": "Free-window EV charge target (%)"
-    },
-    {
-      "default": 1.0,
-      "has_default": true,
-      "input_config": {
-        "coerce": "float"
-      },
-      "input_kind": "number",
-      "key": "ev_free_window_minimum_current_a",
-      "order": 4,
-      "page": "ev_policies",
-      "reconfigure_label": "Guaranteed free-window EV current (A)",
-      "required": true,
-      "setup_label": "Guaranteed free-window EV current (A)"
-    },
-    {
-      "default": 5.0,
-      "has_default": true,
-      "input_config": {
-        "coerce": "float"
-      },
-      "input_kind": "number",
-      "key": "ev_free_window_settle_minutes",
-      "order": 5,
-      "page": "ev_policies",
-      "reconfigure_label": "Battery-charging settle time before house-priority control (minutes)",
-      "required": true,
-      "setup_label": "Battery-charging settle time before house-priority control (minutes)"
-    },
-    {
-      "default": 2.0,
-      "has_default": true,
-      "input_config": {
-        "coerce": "float"
-      },
-      "input_kind": "number",
-      "key": "ev_direct_limit_headroom_percent",
-      "order": 6,
-      "page": "ev_policies",
-      "reconfigure_label": "Powered-connector charge-limit headroom (%)",
-      "required": true,
-      "setup_label": "Powered-connector charge-limit headroom (%)"
-    },
-    {
-      "default": 12.0,
-      "has_default": true,
-      "input_config": {
-        "coerce": "float"
-      },
-      "input_kind": "number",
-      "key": "ev_charge_to_full_max_hours",
-      "order": 7,
-      "page": "ev_policies",
-      "reconfigure_label": "Charge to Full automatic timeout (hours)",
-      "required": true,
-      "setup_label": "Charge to Full automatic timeout (hours)"
-    },
-    {
-      "default": 90.0,
-      "has_default": true,
-      "input_config": {
-        "coerce": "float"
-      },
-      "input_kind": "number",
-      "key": "ev_charge_efficiency_percent",
-      "order": 8,
-      "page": "ev_policies",
-      "reconfigure_label": "EV wall-to-battery charging efficiency (%)",
-      "required": true,
-      "setup_label": "EV wall-to-battery charging efficiency (%)"
-    },
-    {
-      "default": 20.0,
-      "has_default": true,
-      "input_config": {
-        "coerce": "float"
-      },
-      "input_kind": "number",
-      "key": "ev_arrival_reserve_soc_percent",
-      "order": 9,
-      "page": "ev_policies",
-      "reconfigure_label": "EV learned-policy arrival reserve (%)",
-      "required": true,
-      "setup_label": "EV learned-policy arrival reserve (%)"
-    },
-    {
-      "default": 14,
-      "has_default": true,
-      "input_config": {
-        "coerce": "int"
-      },
-      "input_kind": "number",
-      "key": "ev_learning_minimum_samples",
-      "order": 10,
-      "page": "ev_policies",
-      "reconfigure_label": "EV driving samples required for P85 learning",
-      "required": true,
-      "setup_label": "EV driving samples required for P85 learning"
-    },
-    {
-      "default": true,
-      "has_default": true,
-      "input_config": null,
-      "input_kind": "boolean",
-      "key": "ev_allowance_guard_enabled",
-      "order": 11,
-      "page": "ev_policies",
-      "reconfigure_label": "Keep free-window EV charging within the free-energy allowance",
-      "required": true,
-      "setup_label": "Keep free-window EV charging within the free-energy allowance"
-    },
-    {
-      "default": 0.0,
-      "has_default": true,
-      "input_config": {
-        "coerce": "float"
-      },
-      "input_kind": "number",
-      "key": "ev_allowance_safety_margin_kwh",
-      "order": 12,
-      "page": "ev_policies",
-      "reconfigure_label": "Free-energy allowance safety margin (kWh)",
-      "required": true,
-      "setup_label": "Free-energy allowance safety margin (kWh)"
-    },
-    {
-      "default": false,
-      "has_default": true,
-      "input_config": null,
-      "input_kind": "boolean",
-      "key": "ev_solar_spill_enabled",
-      "order": 13,
-      "page": "ev_policies",
-      "reconfigure_label": "Enable measured solar-spill EV charging",
-      "required": true,
-      "setup_label": "Enable measured solar-spill EV charging"
-    },
-    {
-      "default": 100.0,
-      "has_default": true,
-      "input_config": {
-        "coerce": "float"
-      },
-      "input_kind": "number",
-      "key": "ev_solar_spill_battery_soc_percent",
-      "order": 14,
-      "page": "ev_policies",
-      "reconfigure_label": "Battery SoC required for solar-spill charging (%)",
-      "required": true,
-      "setup_label": "Battery SoC required for solar-spill charging (%)"
-    },
-    {
-      "default": false,
-      "has_default": true,
-      "input_config": null,
-      "input_kind": "boolean",
-      "key": "ev_pre_free_backfill_enabled",
-      "order": 15,
-      "page": "ev_policies",
-      "reconfigure_label": "Enable latest-start reserve-aware pre-free EV backfill",
-      "required": true,
-      "setup_label": "Enable latest-start reserve-aware pre-free EV backfill"
-    },
-    {
-      "default": 0.0,
-      "has_default": true,
-      "input_config": {
-        "coerce": "float"
-      },
-      "input_kind": "number",
-      "key": "ev_daily_backfill_energy_kwh",
-      "order": 16,
-      "page": "ev_policies",
-      "reconfigure_label": "Daily EV energy protected for ready-by backfill (wall-side kWh; 0 disables)",
-      "required": true,
-      "setup_label": "Daily EV energy protected for ready-by backfill (wall-side kWh; 0 disables)"
-    },
-    {
-      "default": "08:00:00",
-      "has_default": true,
-      "input_config": null,
-      "input_kind": "time",
-      "key": "ev_daily_ready_time",
-      "order": 17,
-      "page": "ev_policies",
-      "reconfigure_label": "Daily EV ready-by time (must be before free-power window)",
-      "required": true,
-      "setup_label": "Daily EV ready-by time (must be before free-power window)"
-    },
-    {
-      "default": 0.0,
-      "has_default": true,
-      "input_config": {
-        "coerce": "float"
-      },
-      "input_kind": "number",
-      "key": "ev_outside_inverter_percent",
-      "order": 18,
-      "page": "ev_policies",
-      "reconfigure_label": "Maximum EV charging power outside free power (% of inverter output)",
-      "required": true,
-      "setup_label": "Maximum EV charging power outside free power (% of inverter output)"
-    },
-    {
-      "default": 0.0,
-      "has_default": true,
-      "input_config": {
-        "coerce": "float"
-      },
-      "input_kind": "number",
-      "key": "ev_backfill_buffer_minutes",
-      "order": 19,
-      "page": "ev_policies",
-      "reconfigure_label": "Ready-by planning buffer (minutes)",
-      "required": true,
-      "setup_label": "Ready-by planning buffer (minutes)"
-    },
-    {
-      "default": 90.0,
-      "has_default": true,
-      "input_config": {
-        "coerce": "float"
-      },
-      "input_kind": "number",
-      "key": "ev_telemetry_max_age_seconds",
-      "order": 20,
-      "page": "ev_policies",
-      "reconfigure_label": "Maximum age for outside-window power telemetry (seconds)",
-      "required": true,
-      "setup_label": "Maximum age for outside-window power telemetry (seconds)"
-    },
-    {
-      "default": 30.0,
-      "has_default": true,
-      "input_config": {
-        "coerce": "float"
-      },
-      "input_kind": "number",
-      "key": "ev_telemetry_max_skew_seconds",
-      "order": 21,
-      "page": "ev_policies",
-      "reconfigure_label": "Maximum timestamp skew between outside-window power sensors (seconds)",
-      "required": true,
-      "setup_label": "Maximum timestamp skew between outside-window power sensors (seconds)"
-    },
-    {
-      "default": 0.0,
-      "has_default": true,
-      "input_config": {
-        "coerce": "float"
-      },
-      "input_kind": "number",
-      "key": "ev_protected_baseline_a",
-      "order": 22,
-      "page": "ev_policies",
-      "reconfigure_label": "Mandatory connected-EV baseline until free power (A; 0 if none)",
-      "required": true,
-      "setup_label": "Mandatory connected-EV baseline until free power (A; 0 if none)"
-    },
-    {
-      "default": false,
-      "has_default": true,
-      "input_config": null,
-      "input_kind": "boolean",
-      "key": "ev_before_export_enabled",
-      "order": 23,
-      "page": "ev_policies",
-      "reconfigure_label": "Prioritise EV before automatic export",
-      "required": true,
-      "setup_label": "Prioritise EV before automatic export"
-    },
-    {
-      "default": 40.0,
-      "has_default": true,
-      "input_config": {
-        "coerce": "float"
-      },
-      "input_kind": "number",
-      "key": "ev_before_export_soc_target_percent",
-      "order": 24,
-      "page": "ev_policies",
-      "reconfigure_label": "Withhold export while EV SoC is below (%)",
-      "required": true,
-      "setup_label": "Withhold export while EV SoC is below (%)"
     },
     {
       "default": 120.0,

@@ -22,7 +22,7 @@ def test_field_catalogue_exactly_covers_the_frozen_ui_contract() -> None:
     contract = build_config_field_contract()
     fields = contract["fields"]
     assert CATALOGUE_BASELINE == contract["release_baseline"]
-    assert len(FIELD_SPECS) == contract["field_count"] == 124
+    assert len(FIELD_SPECS) == contract["field_count"] == 125
     assert tuple(spec.key for spec in FIELD_SPECS) == tuple(
         field["key"] for field in fields
     )

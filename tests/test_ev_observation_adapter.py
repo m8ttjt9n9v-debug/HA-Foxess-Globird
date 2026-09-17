@@ -163,6 +163,7 @@ def test_composite_snapshot_preserves_actual_current_and_direct_actuator_views(
         limit_minimum_percent=50.0,
         limit_maximum_percent=100.0,
         limit_step_percent=1.0,
+        requested_current_changed_at=result.current_limit.last_changed,
     )
 
 

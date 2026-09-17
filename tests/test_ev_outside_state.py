@@ -4,7 +4,7 @@ from custom_components.home_energy_orchestrator.planner.ev_daily_backfill import
     DailyBackfillCycleState,
 )
 from custom_components.home_energy_orchestrator.planner.ev_outside_state import (
-    abort_outside_charge_at_battery_floor,
+    abort_outside_charge_at_battery_reserve,
     advance_charge_to_full,
     cleanup_disconnected_ev,
     cleanup_outside_ownership_for_free_window,
@@ -25,7 +25,7 @@ def test_battery_floor_abort_clears_sessions_and_creates_stop_obligation():
         last_stop_at=datetime(2026, 9, 7, 5, 30, tzinfo=UTC),
     )
 
-    transition = abort_outside_charge_at_battery_floor(
+    transition = abort_outside_charge_at_battery_reserve(
         state,
         charge_switch_on=True,
         charge_limit_percent=80,
@@ -56,7 +56,7 @@ def test_battery_floor_abort_without_active_charge_retains_existing_stop_state()
         last_stop_at=last_stop,
     )
 
-    transition = abort_outside_charge_at_battery_floor(
+    transition = abort_outside_charge_at_battery_reserve(
         state,
         charge_switch_on=False,
         charge_limit_percent=80,
@@ -67,7 +67,7 @@ def test_battery_floor_abort_without_active_charge_retains_existing_stop_state()
     assert transition.daily_state.last_stop_at == last_stop
     assert transition.outside_control_active is False
     assert transition.continue_reconciliation is False
-    assert transition.last_reason == "battery_floor_reached"
+    assert transition.last_reason == "ev_battery_reserve_reached"
     assert transition.candidates[0].command_intent == ()
 
 
