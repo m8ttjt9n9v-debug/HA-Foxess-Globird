@@ -142,6 +142,11 @@ class HourlyWindowImportAccumulator:
         if self.hourly_import_kwh is None:
             self.hourly_import_kwh = {}
 
+    @property
+    def imported_kwh(self) -> float:
+        """Return the single authoritative total across hourly buckets."""
+        return sum(self.hourly_import_kwh.values())
+
     def restore(self, payload: dict[str, object] | None, now: datetime) -> None:
         """Restore same-day buckets and discard malformed state."""
         self.local_date = now.date()

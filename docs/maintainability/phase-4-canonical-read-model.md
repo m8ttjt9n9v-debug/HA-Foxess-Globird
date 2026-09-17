@@ -77,6 +77,14 @@ The thirteenth seam moves the remaining battery/EV actuator and ledger support
 payloads onto the control and operational models. Support diagnostics now
 contain only entry metadata plus canonical read-model projections.
 
+The fourteenth seam makes the ZEROHERO hourly accumulator the single producer
+of its total import. Coordinator persistence and presentation now consume the
+same `imported_kwh` aggregate.
+
+The exit audit adds a static presentation-boundary contract. It prevents
+sensor states, custom attributes and calculated diagnostic sections from
+silently bypassing the canonical read model or regaining business arithmetic.
+
 Work-item evidence:
 
 - [core SiteReadModel projection](work-item-core-read-model.md)
@@ -92,6 +100,7 @@ Work-item evidence:
 - [canonical telemetry presentation](work-item-telemetry-read-model.md)
 - [ZEROHERO accumulator presentation](work-item-zerohero-accumulator-read-model.md)
 - [complete support diagnostics model](work-item-support-diagnostics-read-model.md)
+- [Phase 4 exit audit](phase-4-exit-audit.md)
 
 ## Work packages
 
@@ -112,6 +121,8 @@ Individual entities, diagnostics and Fleet Summary project one immutable read
 model; presentation code contains no business calculation; every shared concept
 has one producer; and frozen entity, attribute, Fleet, lifecycle and
 previous-release contracts remain unchanged.
+
+**Status: complete.** See the [Phase 4 exit audit](phase-4-exit-audit.md).
 
 ## Rollback
 

@@ -1321,7 +1321,7 @@ def build_site_read_model(
         zerohero_import_window_kwh=(
             None
             if zerohero_import.last_at is None
-            else round(sum(zerohero_import.hourly_import_kwh.values()), 3)
+            else round(zerohero_import.imported_kwh, 3)
         ),
         zerohero_hourly_import_kwh=tuple(
             zerohero_import.hourly_import_kwh.items()

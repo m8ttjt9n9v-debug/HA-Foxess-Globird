@@ -1263,7 +1263,7 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
                 await self._peak_import_store.async_save(self.peak_import.to_payload())
                 self._peak_import_last_saved = self.peak_import.imported_kwh
         if self.zerohero_import.observe(grid, now):
-            zerohero_total = sum(self.zerohero_import.hourly_import_kwh.values())
+            zerohero_total = self.zerohero_import.imported_kwh
             last_zerohero_total = self._zerohero_import_last_saved or 0.0
             if (
                 self._zerohero_import_last_saved is None

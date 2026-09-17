@@ -19,11 +19,15 @@ owned by the canonical read model. The frozen attribute-contract generator no
 longer parses `sensor.py`; it derives all mappings from canonical methods and
 continues to match the unchanged baseline.
 
+The accumulator also now owns its total through `imported_kwh`. Persistence,
+coordinator checkpointing and presentation therefore consume the same
+authoritative aggregate instead of independently summing hourly buckets.
+
 ## Verification
 
 - Exact characterization covers hourly values, date, timestamp and threshold.
-- Focused read-model, setup and entity-contract suite: 62 passed.
-- Full repository suite: 641 passed.
+- Focused read-model, setup and daily-meter suite: 63 passed.
+- Full repository suite: 644 passed.
 - Ruff and the frozen entity, attribute, configuration and persistence
   contracts passed.
 - The `v0.12.26` previous-release compatibility rehearsal passed.

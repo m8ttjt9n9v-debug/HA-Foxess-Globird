@@ -206,6 +206,7 @@ def _coordinator() -> SimpleNamespace:
             last_at=datetime(2026, 9, 17, 10, 0, tzinfo=UTC),
             local_date=date(2026, 9, 17),
             hourly_import_kwh={"16": 0.1, "17": 0.2},
+            imported_kwh=0.3,
         ),
         zerohero_export=SimpleNamespace(imported_kwh=0.12345),
         manual_test=SimpleNamespace(

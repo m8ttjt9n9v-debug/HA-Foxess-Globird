@@ -5,6 +5,7 @@ from zoneinfo import ZoneInfo
 
 from custom_components.home_energy_orchestrator.planner.daily_meter import (
     DailyImportAccumulator,
+    HourlyWindowImportAccumulator,
     WindowImportAccumulator,
 )
 
@@ -66,3 +67,13 @@ def test_window_accumulator_counts_only_window_overlap() -> None:
     meter.observe(4.0, datetime(2026, 9, 3, 13, 30, tzinfo=TZ))
     meter.observe(4.0, datetime(2026, 9, 3, 16, tzinfo=TZ))
     assert meter.imported_kwh == 12.0
+
+
+def test_hourly_window_accumulator_owns_total_import() -> None:
+    meter = HourlyWindowImportAccumulator(
+        window_start=datetime(2026, 9, 3, 16, tzinfo=TZ).timetz().replace(tzinfo=None),
+        window_end=datetime(2026, 9, 3, 19, tzinfo=TZ).timetz().replace(tzinfo=None),
+        hourly_import_kwh={"16": 0.01, "17": 0.02, "18": 0.03},
+    )
+
+    assert meter.imported_kwh == 0.06
