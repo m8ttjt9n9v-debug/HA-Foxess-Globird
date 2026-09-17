@@ -32,7 +32,7 @@ Status meanings:
 | EV current cycles between minimum and maximum | `test_allowance_does_not_cycle_when_whole_house_meter_includes_ev`; transition-hold tests; `test_runtime_does_not_flap_forever_when_feedback_never_changes` | Focused | Replay target, setting and actual-current convergence over timed updates |
 | EV policy drains protected house battery | `test_battery_floor_stops_automatic_outside_charge`; sellable-energy shrink/stop tests | Focused | Add full battery/EV/grid timeline with forbidden paid import |
 | Vehicle update races current convergence | `test_soc_update_does_not_recalculate_whole_house_allowance_during_current_ramp`; safety-boundary tests | Focused | Move into deterministic state-event replay |
-| Sign-verification or owner change during reconfiguration | migration and gate tests | Gap | Reconfigure each gate during idle and active sessions; assert atomic apply |
+| Sign-verification or owner change during reconfiguration | migration and gate tests; `test_owner_and_sign_gate_reconfiguration_is_atomic` | System | Retain idle/active blocked-and-restored traces as a mandatory regression gate |
 | Battery-only site retains stale EV reservation | `test_battery_only_site_ignores_retained_ev_baseline` | Focused | Add clean setup and upgraded-entry system snapshots |
 | Learning becomes unavailable while valid EV samples remain | confirmed roadmap bug; existing learning arithmetic and restart tests | Open bug | First add disconnected setup/unplug/restart failing regressions; connection gates actuation only |
 | House learning loses or duplicates EV/heater subtraction | source-composition tests in `test_setup.py` | Focused | Add multi-cycle persisted sampler replay |

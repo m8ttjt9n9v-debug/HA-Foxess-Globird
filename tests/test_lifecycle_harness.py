@@ -315,6 +315,105 @@ async def test_safety_lock_blocks_all_commands_across_reload(hass) -> None:
 
 
 @pytest.mark.freeze_time("2026-09-17 02:30:00+00:00")
+@pytest.mark.parametrize("active_session", [False, True])
+@pytest.mark.parametrize(
+    ("gate_key", "blocked_value", "blocked_status"),
+    [
+        ("sign_conventions_verified", False, "sign_conventions_unverified"),
+        ("foxess_control_owner", "observer_only", "observer_owner"),
+    ],
+)
+async def test_owner_and_sign_gate_reconfiguration_is_atomic(
+    hass,
+    monkeypatch,
+    active_session: bool,
+    gate_key: str,
+    blocked_value: bool | str,
+    blocked_status: str,
+) -> None:
+    """Gate changes apply without writes or loss of persisted ownership."""
+    harness = LifecycleHarness(hass)
+    _register_foxess_services(harness, monkeypatch)
+    await _seed_foxess_states(harness, 80 if active_session else 100)
+    if active_session:
+        await harness.set_state(
+            "number.test_force_charge",
+            "10",
+            {"unit_of_measurement": "kW", "max": 10},
+        )
+        await harness.set_state(
+            "select.test_work_mode",
+            "Force Charge",
+            {"options": ["Self Use", "Force Discharge", "Force Charge"]},
+        )
+    configured = _active_entry_data(
+        automatic_charge_enabled=True,
+        free_charge_schedule_confirmed=True,
+        free_charge_window_start="00:00:00",
+        free_charge_window_end="23:59:00",
+        inverter_charge_limit_kw=10.0,
+    )
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title=f"{gate_key} {'active' if active_session else 'idle'}",
+        version=6,
+        data=configured,
+    )
+    entry.add_to_hass(hass)
+    store_key = f"home_energy_orchestrator.{entry.entry_id}.charge_session"
+    if active_session:
+        await harness.save_store(
+            store_key,
+            {
+                "phase": "active",
+                "requested_power_kw": 10.0,
+                "attempts": 0,
+                "last_command_at": "2026-09-17T01:45:00+00:00",
+            },
+        )
+
+    await harness.setup(entry)
+
+    expected_phase = "active" if active_session else "idle"
+    assert entry.runtime_data.active_controller.charge_session.phase == expected_phase
+    assert harness.service_calls == ()
+
+    await _apply_reconfiguration(
+        hass,
+        entry,
+        {**configured, gate_key: blocked_value},
+        name=f"{gate_key} blocked",
+    )
+
+    status = hass.states.get("sensor.home_energy_status")
+    assert status is not None
+    assert status.attributes["control_gate"] == blocked_status
+    assert entry.runtime_data.active_controller.charge_session.phase == expected_phase
+    assert harness.service_calls == ()
+    if active_session:
+        persisted = await harness.load_store(store_key)
+        assert persisted is not None
+        assert persisted["phase"] == "active"
+
+    await _apply_reconfiguration(
+        hass,
+        entry,
+        configured,
+        name=f"{gate_key} restored",
+    )
+
+    status = hass.states.get("sensor.home_energy_status")
+    assert status is not None
+    assert status.attributes["control_gate"] == "ready"
+    assert entry.runtime_data.active_controller.charge_session.phase == expected_phase
+    assert harness.service_calls == ()
+    await harness.unload(entry)
+    hass.services.async_remove("number", "set_value")
+    hass.services.async_remove("select", "select_option")
+    harness.close()
+
+
+@pytest.mark.freeze_time("2026-09-17 02:30:00+00:00")
 async def test_active_free_charge_is_reasserted_then_adopted_after_reload(
     hass, monkeypatch
 ) -> None:
