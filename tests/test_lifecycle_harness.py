@@ -1003,6 +1003,108 @@ async def test_active_export_survives_safety_lock_reconfiguration(
     harness.close()
 
 
+@pytest.mark.freeze_time("2026-09-17 02:30:00+00:00")
+@pytest.mark.parametrize("direction", ["charge", "export"])
+@pytest.mark.parametrize("phase", ["starting", "stopping", "recovering"])
+async def test_inflight_session_phase_survives_unrelated_reconfiguration(
+    hass, monkeypatch, direction: str, phase: str
+) -> None:
+    """Config reloads preserve every unfinished automatic-session obligation."""
+    harness = LifecycleHarness(hass)
+    _register_foxess_services(harness, monkeypatch)
+    await _seed_foxess_states(harness, 80 if direction == "charge" else 100)
+    enabled = phase != "stopping"
+    if phase == "stopping":
+        await harness.set_state(
+            f"number.test_force_{direction}",
+            "10",
+            {"unit_of_measurement": "kW", "max": 10},
+        )
+        await harness.set_state(
+            "select.test_work_mode",
+            "Force Charge" if direction == "charge" else "Force Discharge",
+            {"options": ["Self Use", "Force Discharge", "Force Charge"]},
+        )
+    elif phase == "recovering":
+        await harness.set_unavailable("select.test_work_mode")
+
+    if direction == "charge":
+        configured = _active_entry_data(
+            automatic_charge_enabled=enabled,
+            free_charge_schedule_confirmed=True,
+            free_charge_window_start="00:00:00",
+            free_charge_window_end="23:59:00",
+            inverter_charge_limit_kw=10.0,
+        )
+        store_suffix = "charge_session"
+    else:
+        configured = _active_entry_data(
+            automatic_export_enabled=enabled,
+            automatic_export_limit_kwh=25.0,
+            bonus_window_start="00:00:00",
+            bonus_window_end="23:58:00",
+            force_discharge_offset_minutes=1.0,
+            inverter_discharge_limit_kw=10.0,
+            house_learning_fallback_kwh=0.0,
+        )
+        store_suffix = "export_session"
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title=f"{direction.title()} {phase} reconfigure",
+        version=6,
+        data=configured,
+    )
+    entry.add_to_hass(hass)
+    store_key = f"home_energy_orchestrator.{entry.entry_id}.{store_suffix}"
+    await harness.save_store(
+        store_key,
+        {
+            "phase": phase,
+            "requested_power_kw": 10.0,
+            "attempts": 1,
+            "last_command_at": "2026-09-17T02:29:50+00:00",
+        },
+    )
+
+    await harness.setup(entry)
+
+    controller = entry.runtime_data.active_controller
+    session = (
+        controller.charge_session
+        if direction == "charge"
+        else controller.export_session
+    )
+    assert session.phase == phase
+    assert harness.service_calls == ()
+    persisted = await harness.load_store(store_key)
+    assert persisted is not None
+    assert persisted["phase"] == phase
+
+    await _apply_reconfiguration(
+        hass,
+        entry,
+        {**configured, "battery_capacity_kwh": 25.0},
+        name=f"{direction.title()} {phase} reconfigured",
+    )
+
+    controller = entry.runtime_data.active_controller
+    session = (
+        controller.charge_session
+        if direction == "charge"
+        else controller.export_session
+    )
+    assert entry.data["battery_capacity_kwh"] == 25.0
+    assert session.phase == phase
+    assert harness.service_calls == ()
+    persisted = await harness.load_store(store_key)
+    assert persisted is not None
+    assert persisted["phase"] == phase
+    await harness.unload(entry)
+    hass.services.async_remove("number", "set_value")
+    hass.services.async_remove("select", "select_option")
+    harness.close()
+
+
 @pytest.mark.freeze_time("2026-09-17 00:30:00+00:00")
 async def test_export_cap_reconfiguration_keeps_sellable_energy_available(
     hass, monkeypatch
