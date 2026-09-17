@@ -100,6 +100,7 @@ from .planner.forecast import (
     ForecastFinancialInputs,
     OptimisticCostForecast,
     calculate_tariffed_optimistic_forecast,
+    match_retailer_scorecard,
     window_overlap_fraction,
 )
 from .planner.learning import (
@@ -140,6 +141,7 @@ from .telemetry import (
 )
 from .telemetry_adapter import (
     TelemetryEntityIds,
+    capture_retailer_scorecard,
     capture_site_telemetry,
     capture_telemetry_source,
     state_reported_at,
@@ -887,75 +889,17 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
     def _match_retailer_scorecard(self) -> bool:
         """Match only complete, same-date GloBird results to retained forecasts."""
         accounting = self.runtime_config.accounting
-        cost_entity = accounting.retailer_daily_cost_entity
-        status_entity = accounting.retailer_zerohero_status_entity
-        self.forecast_scorecard_date = None
-        if not cost_entity and not status_entity:
-            self.forecast_scorecard_status = "not_configured"
-            return False
-        if not cost_entity or not status_entity:
-            self.forecast_scorecard_status = "incomplete_mapping"
-            return False
-        cost_state = self.hass.states.get(str(cost_entity))
-        status_state = self.hass.states.get(str(status_entity))
-        if cost_state is None or status_state is None:
-            self.forecast_scorecard_status = "retailer_data_unavailable"
-            return False
-        cost_complete = bool(
-            cost_state.attributes.get("latest_available_day_complete", False)
+        result = match_retailer_scorecard(
+            self.forecast_feedback,
+            capture_retailer_scorecard(
+                self.hass,
+                cost_entity=accounting.retailer_daily_cost_entity,
+                status_entity=accounting.retailer_zerohero_status_entity,
+            ),
         )
-        status_complete = bool(
-            status_state.attributes.get("latest_available_day_complete", False)
-        )
-        if not cost_complete or not status_complete:
-            self.forecast_scorecard_status = "retailer_day_incomplete"
-            return False
-        cost_date = self._retailer_result_date(cost_state)
-        status_date = self._retailer_result_date(status_state)
-        if cost_date is None or status_date is None or cost_date != status_date:
-            self.forecast_scorecard_status = "retailer_date_mismatch"
-            return False
-        try:
-            actual_cost = float(cost_state.state)
-        except (TypeError, ValueError):
-            self.forecast_scorecard_status = "retailer_cost_invalid"
-            return False
-        zerohero_status = {
-            "achieved": "achieved",
-            "missed": "not_achieved",
-            # Retain compatibility with scorecard fixtures and any older
-            # GloBird integration version that exposed this spelling.
-            "not_achieved": "not_achieved",
-        }.get(str(status_state.state).casefold())
-        if zerohero_status is None:
-            self.forecast_scorecard_status = "retailer_status_unrecognized"
-            return False
-        previous = self.forecast_feedback.record_for(cost_date)
-        previous_payload = previous.to_payload() if previous is not None else None
-        previous_bias = self.forecast_feedback.learned_cost_bias
-        self.forecast_scorecard_status = self.forecast_feedback.match_retailer(
-            result_date=cost_date,
-            actual_cost=actual_cost,
-            zerohero_status=zerohero_status,
-        )
-        self.forecast_scorecard_date = cost_date
-        current = self.forecast_feedback.record_for(cost_date)
-        return (
-            previous_payload != (current.to_payload() if current is not None else None)
-            or previous_bias != self.forecast_feedback.learned_cost_bias
-        )
-
-    @staticmethod
-    def _retailer_result_date(state: State) -> date | None:
-        value = state.attributes.get("latest_available_day") or state.attributes.get(
-            "latest_day"
-        )
-        if not value:
-            return None
-        try:
-            return date.fromisoformat(str(value).replace("/", "-"))
-        except ValueError:
-            return None
+        self.forecast_scorecard_status = result.status
+        self.forecast_scorecard_date = result.result_date
+        return result.changed
 
     async def _async_save_forecast_feedback(self, *, force: bool = False) -> None:
         """Checkpoint forecast evidence without writing on every 30-second tick."""

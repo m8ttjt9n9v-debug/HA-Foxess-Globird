@@ -5,13 +5,69 @@ from datetime import date
 import pytest
 
 from custom_components.home_energy_orchestrator.planner.forecast import (
+    ForecastDayRecord,
     ForecastFeedbackState,
     ForecastFinancialInputs,
+    RetailerScorecardObservation,
     calculate_optimistic_cost_forecast,
     calculate_tariffed_optimistic_forecast,
+    match_retailer_scorecard,
     update_cost_bias,
     update_export_realisation_fraction,
 )
+
+
+def test_retailer_scorecard_requires_complete_same_date_evidence() -> None:
+    feedback = ForecastFeedbackState.restore(None, today=date(2026, 9, 17))
+    result = match_retailer_scorecard(
+        feedback,
+        RetailerScorecardObservation(
+            cost_configured=True,
+            status_configured=True,
+            cost_available=True,
+            status_available=True,
+            cost_complete=True,
+            status_complete=True,
+            cost_date="2026/09/16",
+            status_date="2026/09/15",
+            cost_value="2.00",
+            status_value="achieved",
+        ),
+    )
+
+    assert result.status == "retailer_date_mismatch"
+    assert result.result_date is None
+    assert not result.changed
+
+
+def test_retailer_scorecard_matches_and_normalizes_missed_status() -> None:
+    result_date = date(2026, 9, 16)
+    feedback = ForecastFeedbackState(
+        current=ForecastDayRecord(date(2026, 9, 17)),
+        history=[ForecastDayRecord(result_date, frozen_forecast_cost=1.25)],
+    )
+    result = match_retailer_scorecard(
+        feedback,
+        RetailerScorecardObservation(
+            cost_configured=True,
+            status_configured=True,
+            cost_available=True,
+            status_available=True,
+            cost_complete=True,
+            status_complete=True,
+            cost_date="2026/09/16",
+            status_date="2026/09/16",
+            cost_value="2.00",
+            status_value="missed",
+        ),
+    )
+
+    assert result.status == "matched_credit_not_achieved"
+    assert result.result_date == result_date
+    assert result.changed
+    record = feedback.record_for(result_date)
+    assert record is not None
+    assert record.retailer_zerohero_status == "not_achieved"
 
 
 def _financial_inputs(**overrides: float) -> ForecastFinancialInputs:

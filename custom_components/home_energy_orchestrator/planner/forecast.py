@@ -52,6 +52,31 @@ class ForecastFinancialInputs:
 
 
 @dataclass(frozen=True, slots=True)
+class RetailerScorecardObservation:
+    """Raw but privacy-minimal retailer evidence captured by the HA adapter."""
+
+    cost_configured: bool
+    status_configured: bool
+    cost_available: bool
+    status_available: bool
+    cost_complete: bool
+    status_complete: bool
+    cost_date: object = None
+    status_date: object = None
+    cost_value: object = None
+    status_value: object = None
+
+
+@dataclass(frozen=True, slots=True)
+class RetailerScorecardResult:
+    """One scorecard match outcome returned to the coordinator facade."""
+
+    status: str
+    result_date: date | None
+    changed: bool
+
+
+@dataclass(frozen=True, slots=True)
 class ForecastDayRecord:
     """One privacy-minimal daily prediction and later retailer score."""
 
@@ -296,6 +321,61 @@ class ForecastFeedbackState:
             "learned_cost_bias": self.learned_cost_bias,
             "history": [record.to_payload() for record in self.history],
         }
+
+
+def match_retailer_scorecard(
+    feedback: ForecastFeedbackState,
+    observation: RetailerScorecardObservation,
+) -> RetailerScorecardResult:
+    """Match complete same-date retailer evidence to retained forecasts."""
+    if not observation.cost_configured and not observation.status_configured:
+        return RetailerScorecardResult("not_configured", None, False)
+    if not observation.cost_configured or not observation.status_configured:
+        return RetailerScorecardResult("incomplete_mapping", None, False)
+    if not observation.cost_available or not observation.status_available:
+        return RetailerScorecardResult("retailer_data_unavailable", None, False)
+    if not observation.cost_complete or not observation.status_complete:
+        return RetailerScorecardResult("retailer_day_incomplete", None, False)
+    cost_date = _retailer_result_date(observation.cost_date)
+    status_date = _retailer_result_date(observation.status_date)
+    if cost_date is None or status_date is None or cost_date != status_date:
+        return RetailerScorecardResult("retailer_date_mismatch", None, False)
+    try:
+        actual_cost = float(observation.cost_value)
+    except (TypeError, ValueError):
+        return RetailerScorecardResult("retailer_cost_invalid", None, False)
+    zerohero_status = {
+        "achieved": "achieved",
+        "missed": "not_achieved",
+        "not_achieved": "not_achieved",
+    }.get(str(observation.status_value).casefold())
+    if zerohero_status is None:
+        return RetailerScorecardResult(
+            "retailer_status_unrecognized", None, False
+        )
+    previous = feedback.record_for(cost_date)
+    previous_payload = previous.to_payload() if previous is not None else None
+    previous_bias = feedback.learned_cost_bias
+    status = feedback.match_retailer(
+        result_date=cost_date,
+        actual_cost=actual_cost,
+        zerohero_status=zerohero_status,
+    )
+    current = feedback.record_for(cost_date)
+    changed = (
+        previous_payload != (current.to_payload() if current is not None else None)
+        or previous_bias != feedback.learned_cost_bias
+    )
+    return RetailerScorecardResult(status, cost_date, changed)
+
+
+def _retailer_result_date(value: object) -> date | None:
+    if not value:
+        return None
+    try:
+        return date.fromisoformat(str(value).replace("/", "-"))
+    except ValueError:
+        return None
 
 
 def _optional_finite(value: object) -> float | None:
