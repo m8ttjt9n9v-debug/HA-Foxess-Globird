@@ -60,6 +60,9 @@ separate reviewable work items.
   untouched.
 - The generated [entity reference](entity-reference-v0.12.26.md) joins the
   catalogue to the semantic worksheet and is checked for drift in CI.
+- The generated [clean-install usability audit](clean-install-usability-audit-v0.12.26.md)
+  records dashboard coverage, translation coverage and category-review gaps
+  without silently treating any presentation proposal as approved.
 - Nine display-label proposals await project-owner approval; no label is
   inferred as approved from engineering analysis.
 
