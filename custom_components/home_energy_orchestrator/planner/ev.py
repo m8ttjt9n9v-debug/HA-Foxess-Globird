@@ -228,6 +228,44 @@ class SmartSocketRecoveryTransition:
     plan: EvCommandPlan
 
 
+@dataclass(frozen=True, slots=True)
+class SmartSocketRecoveryRuntimeDecision:
+    """Controller-facing recovery activity and persistence decision."""
+
+    transition: SmartSocketRecoveryTransition
+    active: bool
+    state_changed: bool
+    persistence_transition: str
+    save_required: bool
+
+
+def finalize_smart_socket_recovery(
+    transition: SmartSocketRecoveryTransition,
+    *,
+    previous_state: SmartSocketRecoveryState,
+) -> SmartSocketRecoveryRuntimeDecision:
+    """Derive recovery ownership and save intent without controller mutation."""
+    active = transition.state.phase in {
+        "confirming_current",
+        "confirming_socket_off",
+        "power_off_dwell",
+        "confirming_socket_on",
+        "post_power_settle",
+        "awaiting_actuator",
+        "confirming_charging",
+    }
+    changed = transition.state != previous_state
+    return SmartSocketRecoveryRuntimeDecision(
+        transition=transition,
+        active=active,
+        state_changed=changed,
+        persistence_transition=(
+            "smart_recovery_state_changed" if changed else "none"
+        ),
+        save_required=changed,
+    )
+
+
 def reconcile_smart_socket_recovery(
     state: SmartSocketRecoveryState,
     observation: SmartSocketRecoveryObservation,

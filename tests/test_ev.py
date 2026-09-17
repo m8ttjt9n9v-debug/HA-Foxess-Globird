@@ -23,6 +23,7 @@ from custom_components.home_energy_orchestrator.planner.ev import (
     estimate_other_free_window_import_kwh,
     estimate_vehicle_energy_to_target_kwh,
     finalize_direct_evse_reconciliation,
+    finalize_smart_socket_recovery,
     house_load_excluding_ev_kw,
     plan_charge_limit_target,
     plan_direct_evse_commands,
@@ -544,6 +545,48 @@ def test_smart_socket_recovery_latch_survives_failure_and_blocks_second_cycle():
     assert repeated.state == transition.state
     assert repeated.plan.commands == ()
     assert repeated.plan.reason == "recovery_episode_latched"
+
+
+def test_smart_socket_recovery_runtime_decision_preserves_activity_and_save_intent():
+    now = datetime(2026, 9, 7, 8, tzinfo=UTC)
+    previous = SmartSocketRecoveryState()
+    active_transition = _recover(previous, RECOVERY, now)
+
+    active = finalize_smart_socket_recovery(
+        active_transition,
+        previous_state=previous,
+    )
+    assert active.transition is active_transition
+    assert active.active is True
+    assert active.state_changed is True
+    assert active.persistence_transition == "smart_recovery_state_changed"
+    assert active.save_required is True
+
+    unchanged_transition = _recover(
+        active_transition.state,
+        RECOVERY,
+        now + timedelta(seconds=1),
+    )
+    unchanged = finalize_smart_socket_recovery(
+        unchanged_transition,
+        previous_state=active_transition.state,
+    )
+    assert unchanged.active is True
+    assert unchanged.state_changed is False
+    assert unchanged.persistence_transition == "none"
+    assert unchanged.save_required is False
+
+    idle_transition = _recover(
+        previous,
+        replace(RECOVERY, charging_state="disconnected"),
+        now,
+    )
+    idle = finalize_smart_socket_recovery(
+        idle_transition,
+        previous_state=previous,
+    )
+    assert idle.active is False
+    assert idle.save_required is False
 
 
 def test_smart_socket_recovery_waits_for_post_power_actuator_like_pilot():

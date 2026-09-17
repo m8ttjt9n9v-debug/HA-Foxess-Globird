@@ -138,6 +138,7 @@ from .planner.ev import (
     estimate_other_free_window_import_kwh,
     estimate_vehicle_energy_to_target_kwh,
     finalize_direct_evse_reconciliation,
+    finalize_smart_socket_recovery,
     house_load_excluding_ev_kw,
     plan_charge_limit_target,
     plan_direct_evse_commands,
@@ -938,30 +939,24 @@ class ActiveEvController:
                 DEFAULT_EV_SMART_RECOVERY_REARM_SECONDS,
             ),
         )
-        recovery_active = recovery.state.phase in {
-            "confirming_current",
-            "confirming_socket_off",
-            "power_off_dwell",
-            "confirming_socket_on",
-            "post_power_settle",
-            "awaiting_actuator",
-            "confirming_charging",
-        }
-        recovery_changed = recovery.state != self.smart_recovery
+        recovery_runtime = finalize_smart_socket_recovery(
+            recovery,
+            previous_state=self.smart_recovery,
+        )
         self.smart_recovery_candidate = build_ev_stage_candidate(
             "smart_recovery",
-            eligible=bool(recovery_active or recovery.plan.commands),
+            eligible=bool(recovery_runtime.active or recovery.plan.commands),
             reason=recovery.plan.reason,
             target_current_a=recovery.state.recovery_current_a,
             target_limit_percent=self.target_limit_percent,
             command_intent=tuple(
                 command.action for command in recovery.plan.commands
             ),
-            persistence_transition=(
-                "smart_recovery_state_changed" if recovery_changed else "none"
-            ),
+            persistence_transition=recovery_runtime.persistence_transition,
         )
-        if gate == "safety_locked" and (recovery_active or recovery.plan.commands):
+        if gate == "safety_locked" and (
+            recovery_runtime.active or recovery.plan.commands
+        ):
             self.last_actions = tuple(
                 f"would_{command.action}" for command in recovery.plan.commands
             )
@@ -974,12 +969,12 @@ class ActiveEvController:
             self.smart_recovery,
             recovery.plan.reason,
         )
-        if self.smart_recovery != previous_recovery:
+        if recovery_runtime.save_required:
             await self._async_save(now)
         if recovery.plan.commands:
             await self._async_execute_ev_plan(recovery.plan, now)
             return
-        if recovery_active:
+        if recovery_runtime.active:
             self.last_reason = recovery.plan.reason
             return
 
