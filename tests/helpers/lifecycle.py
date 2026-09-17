@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import EVENT_CALL_SERVICE
+from homeassistant.const import EVENT_CALL_SERVICE, STATE_UNAVAILABLE
 from homeassistant.core import Event, HomeAssistant
 
 
@@ -68,9 +68,34 @@ class LifecycleHarness:
         assert await self.hass.config_entries.async_setup(entry.entry_id)
         await self.hass.async_block_till_done()
 
+    async def unload(self, entry: ConfigEntry) -> None:
+        """Unload one config entry and drain scheduled work."""
+        assert await self.hass.config_entries.async_unload(entry.entry_id)
+        await self.hass.async_block_till_done()
+
     async def reload(self, entry: ConfigEntry) -> None:
         """Reload one config entry and drain scheduled work."""
         assert await self.hass.config_entries.async_reload(entry.entry_id)
+        await self.hass.async_block_till_done()
+
+    async def set_state(
+        self,
+        entity_id: str,
+        state: str | float | int,
+        attributes: dict[str, Any] | None = None,
+    ) -> None:
+        """Publish one input state and drain state-change listeners."""
+        self.hass.states.async_set(entity_id, str(state), attributes or {})
+        await self.hass.async_block_till_done()
+
+    async def set_unavailable(self, entity_id: str) -> None:
+        """Make one input explicitly unavailable."""
+        self.hass.states.async_set(entity_id, STATE_UNAVAILABLE)
+        await self.hass.async_block_till_done()
+
+    async def remove_state(self, entity_id: str) -> None:
+        """Remove one input state and drain state-change listeners."""
+        self.hass.states.async_remove(entity_id)
         await self.hass.async_block_till_done()
 
     def states(
