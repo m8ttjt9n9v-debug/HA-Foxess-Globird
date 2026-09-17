@@ -57,14 +57,15 @@ selectors, validation, migration behavior and the multi-page draft workflow.
   runtime meaning, while ten domain-invalid page scenarios prove the complete
   multi-page draft survives correction and final commit. The completion audit
   also identified dynamic-key raw configuration helpers that the v2 AST usage
-  inventory did not count. Contract schema v3 now exposes 12 raw runtime
-  mapping operations (eleven variable-key and one literal legacy fallback), in
+  inventory did not count. Contract schema v3 now exposes 13 raw runtime
+  mapping operations (eleven variable-key, one literal legacy fallback and one
+  constant-key membership test), in
   addition to 11 managed mutation calls. Phase 3 therefore remains open until
   those raw runtime reads are migrated and the central mutation implementation
   is explicitly classified as the boundary it provides. The first corrected
   seam moved power-source mappings, listener registration and effective grid,
   solar and service-current directions into the immutable snapshot, reducing
-  raw runtime mapping operations from 12 to eight without changing telemetry.
+  raw runtime mapping operations from 13 to nine without changing telemetry.
 
 ## Work packages
 

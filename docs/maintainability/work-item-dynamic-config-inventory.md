@@ -40,9 +40,9 @@ previous-release rehearsal must pass.
 ## Outcome
 
 - Contract schema v3 preserves the 436 previously visible accesses and exposes
-  12 additional raw runtime accesses: eleven variable-key operations plus the
-  literal legacy grid-direction fallback.
-- Runtime inventory now reports 23 accesses: 11 managed mutation calls and 12
+  13 additional raw runtime accesses: eleven variable-key operations, the
+  literal legacy grid-direction fallback and one constant-key membership test.
+- Runtime inventory initially reported 24 accesses: 11 managed mutation calls and 13
   direct mapping operations. The two direct writes are confined to the
   coordinator's central `update_config_value` implementation.
 - Focused usage/configuration tests: 73 passed.

@@ -44,7 +44,7 @@ contracts and the v0.12.26 previous-release rehearsal must pass.
 - Telemetry normalization and state-listener registration consume the snapshot;
   effective direction properties retain explicit, default and legacy boolean
   behavior.
-- Raw runtime configuration operations fell from 12 to 8; dynamic operations
+- Raw runtime configuration operations fell from 13 to nine; dynamic operations
   fell from 11 to 8. The additional reads are now at the parser boundary.
 - Focused configuration/telemetry/setup/usage tests: 132 passed.
 - Complete regression suite: 604 passed.

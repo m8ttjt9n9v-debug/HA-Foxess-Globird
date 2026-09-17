@@ -138,6 +138,15 @@ class _UsageVisitor(ast.NodeVisitor):
         self._record(node.slice, node.value, f"subscript_{context}")
         self.generic_visit(node)
 
+    def visit_Compare(self, node: ast.Compare) -> None:  # noqa: N802
+        left = node.left
+        for operator, comparator in zip(node.ops, node.comparators, strict=True):
+            if isinstance(operator, (ast.In, ast.NotIn)):
+                access = "not_in" if isinstance(operator, ast.NotIn) else "in"
+                self._record(left, comparator, access)
+            left = comparator
+        self.generic_visit(node)
+
 
 def build_config_usage_contract() -> dict[str, Any]:
     """Return a deterministic AST inventory of direct config-key access."""
