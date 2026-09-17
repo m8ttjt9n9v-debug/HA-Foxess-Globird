@@ -132,6 +132,7 @@ from .planner.ev import (
     SmartSocketObservation,
     SmartSocketRecoveryObservation,
     SmartSocketRecoveryState,
+    SmartSocketStageState,
     apply_daily_allowance_ceiling,
     estimate_other_free_window_import_kwh,
     estimate_vehicle_energy_to_target_kwh,
@@ -142,6 +143,7 @@ from .planner.ev import (
     plan_smart_socket_commands,
     reconcile_direct_evse,
     reconcile_smart_socket_recovery,
+    reconcile_smart_socket_stage,
 )
 from .planner.ev_candidates import (
     EvCycleRoute,
@@ -1142,42 +1144,26 @@ class ActiveEvController:
         observation: SmartSocketObservation,
         now: datetime,
     ) -> EvCommandPlan:
-        stage_only = (
-            not observation.socket_on
-            and len(plan.commands) == 1
-            and plan.commands[0].action == "set_charge_current"
+        transition = reconcile_smart_socket_stage(
+            SmartSocketStageState(
+                self.smart_stage_target_a,
+                self.smart_stage_started_at,
+            ),
+            plan,
+            observation,
+            now=now,
+            current_confirm_seconds=self._float(
+                CONF_EV_SMART_RECOVERY_CURRENT_CONFIRM_SECONDS,
+                DEFAULT_EV_SMART_RECOVERY_CURRENT_CONFIRM_SECONDS,
+            ),
+            retry_seconds=self._float(
+                CONF_EV_SMART_SOCKET_RETRY_SECONDS,
+                DEFAULT_EV_SMART_SOCKET_RETRY_SECONDS,
+            ),
         )
-        if not stage_only:
-            if any(command.action == "turn_on_smart_socket" for command in plan.commands):
-                self.smart_stage_target_a = None
-                self.smart_stage_started_at = None
-            return plan
-        target = plan.commands[0].value
-        if target != self.smart_stage_target_a or self.smart_stage_started_at is None:
-            self.smart_stage_target_a = target
-            self.smart_stage_started_at = now
-            return plan
-        elapsed = (now - self.smart_stage_started_at).total_seconds()
-        timeout = self._float(
-            CONF_EV_SMART_RECOVERY_CURRENT_CONFIRM_SECONDS,
-            DEFAULT_EV_SMART_RECOVERY_CURRENT_CONFIRM_SECONDS,
-        )
-        retry = self._float(
-            CONF_EV_SMART_SOCKET_RETRY_SECONDS,
-            DEFAULT_EV_SMART_SOCKET_RETRY_SECONDS,
-        )
-        if elapsed >= retry:
-            # The pilot retries its stopped one-minute wait from a five-minute
-            # reconciliation trigger. Preserve that cadence without issuing a
-            # current write every 30-second HACS controller tick.
-            self.smart_stage_started_at = now
-            return plan
-        reason = (
-            "smart_socket_awaiting_staged_current"
-            if elapsed < timeout
-            else "smart_socket_staged_current_not_confirmed"
-        )
-        return EvCommandPlan((), reason)
+        self.smart_stage_target_a = transition.state.target_current_a
+        self.smart_stage_started_at = transition.state.started_at
+        return transition.plan
 
     async def _async_execute_ev_plan(self, plan: EvCommandPlan, now: datetime) -> None:
         try:

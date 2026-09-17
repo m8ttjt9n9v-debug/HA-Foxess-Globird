@@ -65,6 +65,22 @@ class EvCommandPlan:
 
 
 @dataclass(frozen=True, slots=True)
+class SmartSocketStageState:
+    """Transient current-staging hold while a switched supply is off."""
+
+    target_current_a: float | None = None
+    started_at: datetime | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class SmartSocketStageTransition:
+    """Next staging hold and the command plan permitted for this cycle."""
+
+    state: SmartSocketStageState
+    plan: EvCommandPlan
+
+
+@dataclass(frozen=True, slots=True)
 class DirectEvseReconciliationState:
     """Restart-safe, bounded command/feedback state for one direct EVSE."""
 
@@ -561,6 +577,46 @@ def plan_smart_socket_commands(
     if observation.charge_switch_on is None:
         return EvCommandPlan((), "smart_socket_charge_switch_unavailable")
     return EvCommandPlan(tuple(commands), "smart_socket_ready")
+
+
+def reconcile_smart_socket_stage(
+    state: SmartSocketStageState,
+    plan: EvCommandPlan,
+    observation: SmartSocketObservation,
+    *,
+    now: datetime,
+    current_confirm_seconds: float,
+    retry_seconds: float,
+) -> SmartSocketStageTransition:
+    """Hold repeated staging writes while awaiting unpowered-current feedback."""
+    stage_only = (
+        not observation.socket_on
+        and len(plan.commands) == 1
+        and plan.commands[0].action == "set_charge_current"
+    )
+    if not stage_only:
+        next_state = (
+            SmartSocketStageState()
+            if any(command.action == "turn_on_smart_socket" for command in plan.commands)
+            else state
+        )
+        return SmartSocketStageTransition(next_state, plan)
+
+    target = plan.commands[0].value
+    if target != state.target_current_a or state.started_at is None:
+        return SmartSocketStageTransition(SmartSocketStageState(target, now), plan)
+
+    elapsed = (now - state.started_at).total_seconds()
+    if elapsed >= retry_seconds:
+        # Preserve the pilot's five-minute retry without repeating the current
+        # write on every 30-second controller tick.
+        return SmartSocketStageTransition(SmartSocketStageState(target, now), plan)
+    reason = (
+        "smart_socket_awaiting_staged_current"
+        if elapsed < current_confirm_seconds
+        else "smart_socket_staged_current_not_confirmed"
+    )
+    return SmartSocketStageTransition(state, EvCommandPlan((), reason))
 
 
 def plan_direct_evse_commands(

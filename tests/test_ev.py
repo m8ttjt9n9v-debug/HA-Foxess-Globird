@@ -11,10 +11,12 @@ from custom_components.home_energy_orchestrator.planner.ev import (
     DirectEvseObservation,
     DirectEvseReconciliationState,
     EvCommand,
+    EvCommandPlan,
     FreeWindowCurrentInputs,
     SmartSocketObservation,
     SmartSocketRecoveryObservation,
     SmartSocketRecoveryState,
+    SmartSocketStageState,
     apply_daily_allowance_ceiling,
     direct_evse_response_matches,
     estimate_other_free_window_import_kwh,
@@ -26,6 +28,7 @@ from custom_components.home_energy_orchestrator.planner.ev import (
     plan_smart_socket_commands,
     reconcile_direct_evse,
     reconcile_smart_socket_recovery,
+    reconcile_smart_socket_stage,
 )
 
 BASE = FreeWindowCurrentInputs(
@@ -611,6 +614,84 @@ def test_smart_socket_recovery_requires_sustained_coherent_home_evidence():
         now,
     )
     assert stale.plan.reason == "recovery_home_evidence_unavailable"
+
+
+def test_smart_socket_stage_transition_preserves_hold_retry_and_reset_semantics():
+    now = datetime(2026, 9, 7, 8, tzinfo=UTC)
+    observation = SmartSocketObservation(None, False, False, 0, 16, 1)
+    staged = EvCommandPlan((EvCommand("set_charge_current", 10),), "stage")
+
+    first = reconcile_smart_socket_stage(
+        SmartSocketStageState(),
+        staged,
+        observation,
+        now=now,
+        current_confirm_seconds=60,
+        retry_seconds=300,
+    )
+    assert first.state == SmartSocketStageState(10, now)
+    assert first.plan == staged
+
+    awaiting = reconcile_smart_socket_stage(
+        first.state,
+        staged,
+        observation,
+        now=now + timedelta(seconds=59),
+        current_confirm_seconds=60,
+        retry_seconds=300,
+    )
+    assert awaiting.state == first.state
+    assert awaiting.plan == EvCommandPlan((), "smart_socket_awaiting_staged_current")
+
+    unconfirmed = reconcile_smart_socket_stage(
+        first.state,
+        staged,
+        observation,
+        now=now + timedelta(seconds=60),
+        current_confirm_seconds=60,
+        retry_seconds=300,
+    )
+    assert unconfirmed.state == first.state
+    assert unconfirmed.plan == EvCommandPlan((), "smart_socket_staged_current_not_confirmed")
+
+    retry = reconcile_smart_socket_stage(
+        first.state,
+        staged,
+        observation,
+        now=now + timedelta(seconds=300),
+        current_confirm_seconds=60,
+        retry_seconds=300,
+    )
+    assert retry.state == SmartSocketStageState(10, now + timedelta(seconds=300))
+    assert retry.plan == staged
+
+    powered = EvCommandPlan((EvCommand("turn_on_smart_socket"),), "confirmed")
+    reset = reconcile_smart_socket_stage(
+        retry.state,
+        powered,
+        observation,
+        now=now + timedelta(seconds=301),
+        current_confirm_seconds=60,
+        retry_seconds=300,
+    )
+    assert reset.state == SmartSocketStageState()
+    assert reset.plan == powered
+
+
+def test_smart_socket_stage_transition_retains_hold_for_unrelated_plan():
+    now = datetime(2026, 9, 7, 8, tzinfo=UTC)
+    state = SmartSocketStageState(10, now)
+    unrelated = EvCommandPlan((), "smart_socket_no_charge_command")
+    transition = reconcile_smart_socket_stage(
+        state,
+        unrelated,
+        SmartSocketObservation(None, False, False, 0, 16, 1),
+        now=now + timedelta(seconds=1),
+        current_confirm_seconds=60,
+        retry_seconds=300,
+    )
+    assert transition.state == state
+    assert transition.plan == unrelated
 
 
 def test_direct_path_orders_limit_current_then_start():

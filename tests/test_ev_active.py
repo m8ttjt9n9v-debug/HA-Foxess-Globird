@@ -1549,6 +1549,53 @@ async def test_smart_socket_runtime_preserves_pilot_command_order(
     ]
 
 
+@pytest.mark.freeze_time("2026-09-07 12:01:00+00:00")
+async def test_smart_socket_runtime_preserves_staged_current_retry_trace(
+    hass: HomeAssistant,
+) -> None:
+    _set_ev_states(hass)
+    hass.states.async_set("switch.car_socket", "off")
+    hass.states.async_set(
+        "number.car_current",
+        "16",
+        {"min": 1, "max": 16, "step": 1, "unit_of_measurement": "A"},
+    )
+    writes = []
+
+    async def set_number(call):
+        # Deliberately leave requested-current feedback unchanged.
+        writes.append(call.data["value"])
+
+    hass.services.async_register("number", "set_value", set_number)
+    controller = ActiveEvController(
+        hass,
+        _coordinator(
+            _controller_config(
+                ev_charge_path="smart_socket",
+                ev_smart_socket_entity="switch.car_socket",
+                ev_smart_socket_current_limit_a=10,
+            )
+        ),
+    )
+    start = datetime(2026, 9, 7, 12, 1, tzinfo=UTC)
+
+    await controller.async_reconcile(start)
+    assert writes == [10]
+    assert controller.last_reason == "smart_socket_stage_current_before_power"
+
+    await controller.async_reconcile(start + timedelta(seconds=30))
+    assert writes == [10]
+    assert controller.last_reason == "smart_socket_awaiting_staged_current"
+
+    await controller.async_reconcile(start + timedelta(seconds=60))
+    assert writes == [10]
+    assert controller.last_reason == "smart_socket_staged_current_not_confirmed"
+
+    await controller.async_reconcile(start + timedelta(seconds=300))
+    assert writes == [10, 10]
+    assert controller.last_reason == "smart_socket_stage_current_before_power"
+
+
 @pytest.mark.freeze_time("2026-09-07 00:01:00+00:00")
 async def test_smart_socket_runtime_turns_off_disconnected_socket_outside_window(
     hass: HomeAssistant,
