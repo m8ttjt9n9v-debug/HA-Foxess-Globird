@@ -67,6 +67,25 @@ class HouseBudgetResult:
         return self.base_sample_count
 
 
+@dataclass(frozen=True, slots=True)
+class HouseLearningObservation:
+    """One immutable, adapter-normalized learning observation."""
+
+    observed_at: datetime
+    base_house_power_kw: float | None
+    heater_power_kw: float | None
+
+
+@dataclass(frozen=True, slots=True)
+class HouseLearningAdvanceResult:
+    """Outcome of advancing the retained house-learning state once."""
+
+    accepted: bool
+    base_cycle_completed: bool
+    heater_cycle_completed: bool
+    save_required: bool
+
+
 @dataclass(slots=True)
 class DemandHistory:
     """Persistable rolling history for completed protected-demand cycles."""
@@ -427,6 +446,44 @@ class DailyDemandCycleSampler:
         """Mirror the pilot integration sensor's configured left method."""
         assert self._last_power_kw is not None
         return self._last_power_kw * (finish - begin).total_seconds() / 3600
+
+
+def advance_house_learning(
+    *,
+    demand_sampler: DemandCycleSampler | None,
+    heater_sampler: DailyDemandCycleSampler | None,
+    demand_history: DemandHistory,
+    heater_history: DemandHistory,
+    observation: HouseLearningObservation,
+    last_saved_at: datetime | None,
+) -> HouseLearningAdvanceResult:
+    """Advance both learning streams without Home Assistant or Store access."""
+    if demand_sampler is None or observation.base_house_power_kw is None:
+        return HouseLearningAdvanceResult(False, False, False, False)
+    sample = demand_sampler.observe(
+        observation.observed_at, observation.base_house_power_kw
+    )
+    heater_sample = None
+    if heater_sampler is not None and observation.heater_power_kw is not None:
+        heater_sample = heater_sampler.observe(
+            observation.observed_at, observation.heater_power_kw
+        )
+    if sample is not None:
+        demand_history.add(sample.observed_at, sample.energy_kwh)
+    if heater_sample is not None:
+        heater_history.add(heater_sample.observed_at, heater_sample.energy_kwh)
+    save_interval = demand_sampler.max_gap / 2
+    return HouseLearningAdvanceResult(
+        accepted=True,
+        base_cycle_completed=sample is not None,
+        heater_cycle_completed=heater_sample is not None,
+        save_required=(
+            sample is not None
+            or heater_sample is not None
+            or last_saved_at is None
+            or observation.observed_at - last_saved_at >= save_interval
+        ),
+    )
 
 
 @dataclass(frozen=True, slots=True)

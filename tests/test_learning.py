@@ -12,7 +12,9 @@ from custom_components.home_energy_orchestrator.planner.learning import (
     DemandCycleSampler,
     DemandHistory,
     DemandPersistenceState,
+    HouseLearningObservation,
     OccupancyPerson,
+    advance_house_learning,
     classify_energy_occupancy,
     protected_base_house_power_kw,
     remaining_protected_cycle_budget_kwh,
@@ -20,6 +22,62 @@ from custom_components.home_energy_orchestrator.planner.learning import (
     select_house_cycle_budget,
     select_protected_cycle_budget,
 )
+
+
+def test_house_learning_cycle_advances_both_histories_from_one_observation() -> None:
+    first = datetime(2026, 9, 1, 12, tzinfo=UTC)
+    demand_sampler = DemandCycleSampler(
+        time(12), time(15), max_gap=timedelta(days=2)
+    )
+    heater_sampler = DailyDemandCycleSampler(
+        time(12), max_gap=timedelta(days=2)
+    )
+    demand_history = DemandHistory([])
+    heater_history = DemandHistory([])
+    advance_house_learning(
+        demand_sampler=demand_sampler,
+        heater_sampler=heater_sampler,
+        demand_history=demand_history,
+        heater_history=heater_history,
+        observation=HouseLearningObservation(first, 1.0, 2.0),
+        last_saved_at=None,
+    )
+
+    result = advance_house_learning(
+        demand_sampler=demand_sampler,
+        heater_sampler=heater_sampler,
+        demand_history=demand_history,
+        heater_history=heater_history,
+        observation=HouseLearningObservation(
+            first + timedelta(days=1), 1.0, 2.0
+        ),
+        last_saved_at=first,
+    )
+
+    assert result.accepted
+    assert result.base_cycle_completed
+    assert result.heater_cycle_completed
+    assert result.save_required
+    assert len(demand_history.samples) == 1
+    assert len(heater_history.samples) == 1
+
+
+def test_house_learning_cycle_rejects_unavailable_base_source_without_mutation() -> None:
+    sampler = DemandCycleSampler(time(12), time(15))
+    result = advance_house_learning(
+        demand_sampler=sampler,
+        heater_sampler=None,
+        demand_history=DemandHistory([]),
+        heater_history=DemandHistory([]),
+        observation=HouseLearningObservation(
+            datetime(2026, 9, 1, 12, tzinfo=UTC), None, None
+        ),
+        last_saved_at=None,
+    )
+
+    assert not result.accepted
+    assert not result.save_required
+    assert sampler.to_payload() is None
 
 
 def test_learning_uses_explicit_fallback_during_warmup() -> None:

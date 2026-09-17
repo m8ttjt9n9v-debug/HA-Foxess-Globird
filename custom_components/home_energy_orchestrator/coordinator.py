@@ -112,8 +112,10 @@ from .planner.learning import (
     DemandLearningResult,
     DemandPersistenceState,
     HouseBudgetResult,
+    HouseLearningObservation,
     OccupancyPerson,
     OccupancyResult,
+    advance_house_learning,
     classify_energy_occupancy,
     protected_base_house_power_kw,
     remaining_protected_cycle_budget_kwh,
@@ -1310,25 +1312,24 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
             return
         # Window boundaries are configured in Home Assistant's local site time.
         # Using UTC would silently learn a different interval at most sites.
-        sample = self.demand_sampler.observe(now, house_load_kw)
-        heater_sample = None
-        if self.heater_sampler is not None:
-            heater_power_kw = self._power(
-                self.runtime_config.house.heater_power_entity
-            )
-            if heater_power_kw is not None:
-                heater_sample = self.heater_sampler.observe(now, heater_power_kw)
-        if sample is not None:
-            self.demand_history.add(sample.observed_at, sample.energy_kwh)
-        if heater_sample is not None:
-            self.heater_history.add(heater_sample.observed_at, heater_sample.energy_kwh)
-        save_interval = self.demand_sampler.max_gap / 2
-        if (
-            sample is not None
-            or heater_sample is not None
-            or self._demand_sampler_last_saved_at is None
-            or now - self._demand_sampler_last_saved_at >= save_interval
-        ):
+        heater_power_kw = (
+            self._power(self.runtime_config.house.heater_power_entity)
+            if self.heater_sampler is not None
+            else None
+        )
+        result = advance_house_learning(
+            demand_sampler=self.demand_sampler,
+            heater_sampler=self.heater_sampler,
+            demand_history=self.demand_history,
+            heater_history=self.heater_history,
+            observation=HouseLearningObservation(
+                observed_at=now,
+                base_house_power_kw=house_load_kw,
+                heater_power_kw=heater_power_kw,
+            ),
+            last_saved_at=self._demand_sampler_last_saved_at,
+        )
+        if result.save_required:
             await self._async_save_demand_state()
             self._demand_sampler_last_saved_at = now
 
