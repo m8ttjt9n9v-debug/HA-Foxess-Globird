@@ -4,12 +4,19 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
+from math import isfinite
 from typing import Protocol
 
 from homeassistant.core import HomeAssistant, State
 
+from .normalise import energy_to_kwh, power_to_kw
 from .planner.forecast import RetailerScorecardObservation
-from .telemetry import SiteTelemetrySources, TelemetrySource
+from .planner.learning import OccupancyPerson
+from .telemetry import (
+    SiteTelemetrySources,
+    TelemetrySource,
+    normalize_power_sample,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -118,3 +125,71 @@ def capture_retailer_scorecard(
         cost_value=cost_state.state if cost_state is not None else None,
         status_value=status_state.state if status_state is not None else None,
     )
+
+
+def read_finite_number(hass: HomeAssistant, entity_id: str | None) -> float | None:
+    """Read one finite numeric state without applying a unit conversion."""
+    if not entity_id:
+        return None
+    state = hass.states.get(entity_id)
+    if state is None:
+        return None
+    try:
+        value = float(state.state)
+    except (TypeError, ValueError):
+        return None
+    return value if isfinite(value) else None
+
+
+def read_power_kw(hass: HomeAssistant, entity_id: str | None) -> float | None:
+    """Read and convert one finite power state to kW."""
+    value = read_finite_number(hass, entity_id)
+    if value is None or not entity_id:
+        return None
+    state = hass.states.get(entity_id)
+    try:
+        unit = state.attributes.get("unit_of_measurement") if state else None
+        return power_to_kw(value, unit)
+    except ValueError:
+        return None
+
+
+def read_energy_kwh(hass: HomeAssistant, entity_id: str | None) -> float | None:
+    """Read and convert one finite energy state to kWh."""
+    value = read_finite_number(hass, entity_id)
+    if value is None or not entity_id:
+        return None
+    state = hass.states.get(entity_id)
+    try:
+        unit = state.attributes.get("unit_of_measurement") if state else None
+        return energy_to_kwh(value, unit)
+    except ValueError:
+        return None
+
+
+def capture_occupancy_people(hass: HomeAssistant) -> tuple[OccupancyPerson, ...]:
+    """Capture the minimal person-state evidence used by occupancy policy."""
+    return tuple(
+        OccupancyPerson(state.state, state.last_changed)
+        for state in hass.states.async_all("person")
+    )
+
+
+def read_fresh_power_kw(
+    hass: HomeAssistant,
+    entity_id: object,
+    *,
+    now: datetime,
+    max_age_seconds: float,
+) -> float | None:
+    """Read one mapped power source only while its report is fresh."""
+    source = capture_telemetry_source(hass, entity_id)
+    if source is None:
+        return None
+    return normalize_power_sample(
+        source,
+        now=now,
+        max_age_seconds=max_age_seconds,
+        multiplier=1.0,
+        positive_direction="positive_consumption",
+    ).value

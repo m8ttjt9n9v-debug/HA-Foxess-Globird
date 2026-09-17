@@ -81,7 +81,7 @@ from .const import (
     REASON_INVALID_CONFIGURATION,
 )
 from .models import EnergyLedger, SiteSnapshot
-from .normalise import current_to_a, energy_to_kwh, percent, power_to_kw
+from .normalise import current_to_a, percent
 from .persistence import TypedStoreRepository, TypedValueStoreRepository
 from .planner.accounting import (
     AccountingMeterSnapshot,
@@ -111,7 +111,6 @@ from .planner.learning import (
     DemandPersistenceState,
     HouseBudgetResult,
     HouseLearningObservation,
-    OccupancyPerson,
     OccupancyResult,
     advance_house_learning,
     classify_energy_occupancy,
@@ -141,9 +140,14 @@ from .telemetry import (
 )
 from .telemetry_adapter import (
     TelemetryEntityIds,
+    capture_occupancy_people,
     capture_retailer_scorecard,
     capture_site_telemetry,
     capture_telemetry_source,
+    read_energy_kwh,
+    read_finite_number,
+    read_fresh_power_kw,
+    read_power_kw,
     state_reported_at,
 )
 
@@ -386,10 +390,7 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
     @property
     def occupancy_result(self) -> OccupancyResult:
         """Return the canonical conservative occupancy classification."""
-        people = [
-            OccupancyPerson(state.state, state.last_changed)
-            for state in self.hass.states.async_all("person")
-        ]
+        people = capture_occupancy_people(self.hass)
         house = self.runtime_config.house
         confirmation = house.away_confirmation_hours
         if confirmation is not None:
@@ -488,16 +489,7 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
             self._unsub_source_updates = None
 
     def _number(self, entity_id: str | None) -> float | None:
-        if not entity_id:
-            return None
-        state = self.hass.states.get(entity_id)
-        if state is None:
-            return None
-        try:
-            value = float(state.state)
-        except (TypeError, ValueError):
-            return None
-        return value if isfinite(value) else None
+        return read_finite_number(self.hass, entity_id)
 
     def _configured_float(self, key: str) -> float:
         """Retain required-number failure behavior during typed migration."""
@@ -924,15 +916,7 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
         self._forecast_last_saved_signature = signature
 
     def _power(self, entity_id: str | None) -> float | None:
-        value = self._number(entity_id)
-        if value is None or not entity_id:
-            return None
-        state = self.hass.states.get(entity_id)
-        try:
-            unit = state.attributes.get("unit_of_measurement") if state else None
-            return power_to_kw(value, unit)
-        except ValueError:
-            return None
+        return read_power_kw(self.hass, entity_id)
 
     def _max_telemetry_age(self) -> float:
         return self.runtime_config.telemetry.max_age_seconds
@@ -987,15 +971,7 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
         )
 
     def _energy(self, entity_id: str | None) -> float | None:
-        value = self._number(entity_id)
-        if value is None or not entity_id:
-            return None
-        state = self.hass.states.get(entity_id)
-        try:
-            unit = state.attributes.get("unit_of_measurement") if state else None
-            return energy_to_kwh(value, unit)
-        except ValueError:
-            return None
+        return read_energy_kwh(self.hass, entity_id)
 
     async def _async_update_data(self) -> EnergyLedger:
         battery_soc = self._number(self.runtime_config.battery.soc_entity)
@@ -1169,25 +1145,25 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
         """Port the pilot's charging-state-qualified EV power calculation."""
         ev_telemetry = self.runtime_config.ev_telemetry
         charging_entity = ev_telemetry.charging_state_entity
-        charging_state = self.hass.states.get(charging_entity) if charging_entity else None
-        if charging_state is None:
+        charging_state = capture_telemetry_source(self.hass, charging_entity)
+        if charging_state is None or charging_state.updated_at is None:
             return None
-        age_seconds = (now - self._state_reported_at(charging_state)).total_seconds()
+        age_seconds = (now - charging_state.updated_at).total_seconds()
         if age_seconds < 0 or age_seconds > self._max_telemetry_age():
             return None
-        if charging_state.state.lower() != "charging":
+        if str(charging_state.raw_value).lower() != "charging":
             return 0.0
         current_entity = ev_telemetry.actual_current_entity
-        current_state = self.hass.states.get(current_entity) if current_entity else None
-        if current_state is None:
+        current_state = capture_telemetry_source(self.hass, current_entity)
+        if current_state is None or current_state.updated_at is None:
             return None
-        current_age_seconds = (now - self._state_reported_at(current_state)).total_seconds()
+        current_age_seconds = (now - current_state.updated_at).total_seconds()
         if current_age_seconds < 0 or current_age_seconds > self._max_telemetry_age():
             return None
         try:
             current_a = current_to_a(
-                float(current_state.state),
-                current_state.attributes.get("unit_of_measurement"),
+                float(current_state.raw_value),
+                current_state.raw_unit,
             )
             voltage_v = self._configured_float(CONF_EV_VOLTAGE)
             phase_count = self._configured_phase_count()
@@ -1199,15 +1175,12 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
 
     def _fresh_power(self, entity_id: object, now: datetime) -> float | None:
         """Read a mapped power component only while its state is fresh."""
-        if not isinstance(entity_id, str) or not entity_id:
-            return None
-        state = self.hass.states.get(entity_id)
-        if state is None:
-            return None
-        age_seconds = (now - self._state_reported_at(state)).total_seconds()
-        if age_seconds < 0 or age_seconds > self._max_telemetry_age():
-            return None
-        return self._power(entity_id)
+        return read_fresh_power_kw(
+            self.hass,
+            entity_id,
+            now=now,
+            max_age_seconds=self._max_telemetry_age(),
+        )
 
     @staticmethod
     def _state_reported_at(state: State) -> datetime:
