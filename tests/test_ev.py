@@ -19,12 +19,16 @@ from custom_components.home_energy_orchestrator.planner.ev import (
     SmartSocketRecoveryState,
     SmartSocketStageState,
     apply_daily_allowance_ceiling,
+    charging_path_ceiling_a,
     direct_evse_response_matches,
     estimate_other_free_window_import_kwh,
     estimate_vehicle_energy_to_target_kwh,
     finalize_direct_evse_reconciliation,
     finalize_smart_socket_recovery,
     house_load_excluding_ev_kw,
+    outside_service_ceiling_a,
+    outside_service_feedback_required,
+    physical_charging_minimum_a,
     plan_charge_limit_target,
     plan_direct_evse_commands,
     plan_free_window_current,
@@ -325,6 +329,54 @@ DIRECT = DirectEvseObservation(
     limit_maximum_percent=100,
     limit_step_percent=1,
 )
+
+
+def test_physical_minimum_and_path_ceiling_retain_commissioned_bounds():
+    zero_minimum = replace(DIRECT, current_minimum_a=0, current_step_a=2)
+    assert physical_charging_minimum_a(zero_minimum) == 2
+    assert physical_charging_minimum_a(
+        replace(DIRECT, current_minimum_a=1, current_step_a=2)
+    ) == 1
+    assert physical_charging_minimum_a(
+        replace(DIRECT, current_minimum_a=0, current_step_a=0)
+    ) is None
+    assert charging_path_ceiling_a(
+        smart_path_selected=True,
+        smart_limit_a=10,
+        direct_limit_a=16,
+    ) == 10
+    assert charging_path_ceiling_a(
+        smart_path_selected=False,
+        smart_limit_a=10,
+        direct_limit_a=16,
+    ) == 16
+
+
+def test_outside_service_ceiling_retains_headroom_feedback_and_step_rules():
+    common = {
+        "physical_ceiling_a": 16.0,
+        "current_step_a": 2.0,
+        "service_limit_a": 20.0,
+        "reserved_headroom_a": 1.0,
+        "grid_current_a": 12.0,
+        "grid_current_valid": True,
+        "actual_ev_current_a": 4.0,
+        "actual_ev_current_valid": True,
+    }
+    assert outside_service_ceiling_a(**common) == 10.0
+    assert outside_service_ceiling_a(
+        **{**common, "grid_current_valid": False}
+    ) == 0.0
+    assert outside_service_ceiling_a(
+        **{
+            **common,
+            "service_limit_a": 0.0,
+            "grid_current_valid": False,
+            "actual_ev_current_valid": False,
+        }
+    ) == 16.0
+    assert outside_service_feedback_required(service_limit_a=20.0) is True
+    assert outside_service_feedback_required(service_limit_a=0.0) is False
 
 
 SMART = SmartSocketObservation(

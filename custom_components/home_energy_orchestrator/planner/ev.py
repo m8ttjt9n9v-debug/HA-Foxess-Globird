@@ -176,6 +176,57 @@ class DirectEvseObservation:
     limit_step_percent: float | None
 
 
+def physical_charging_minimum_a(
+    observation: DirectEvseObservation,
+) -> float | None:
+    """Retain the Tessie minimum-zero fallback to one actuator step."""
+    minimum = observation.current_minimum_a
+    step = observation.current_step_a
+    if minimum is None or step is None or step <= 0:
+        return None
+    return minimum if minimum > 0 else step
+
+
+def charging_path_ceiling_a(
+    *,
+    smart_path_selected: bool,
+    smart_limit_a: float,
+    direct_limit_a: float,
+) -> float:
+    """Return the commissioned current ceiling for the selected charge path."""
+    return smart_limit_a if smart_path_selected else direct_limit_a
+
+
+def outside_service_ceiling_a(
+    *,
+    physical_ceiling_a: float,
+    current_step_a: float,
+    service_limit_a: float,
+    reserved_headroom_a: float,
+    grid_current_a: float,
+    grid_current_valid: bool,
+    actual_ev_current_a: float,
+    actual_ev_current_valid: bool,
+) -> float:
+    """Bound outside charging by commissioned per-phase service headroom."""
+    if service_limit_a <= 0:
+        return physical_ceiling_a
+    if not grid_current_valid or not actual_ev_current_valid:
+        return 0.0
+    non_ev_current = max(grid_current_a - actual_ev_current_a, 0.0)
+    available = max(
+        service_limit_a - reserved_headroom_a - non_ev_current,
+        0.0,
+    )
+    stepped = int(available / current_step_a) * current_step_a
+    return round(min(physical_ceiling_a, stepped), 3)
+
+
+def outside_service_feedback_required(*, service_limit_a: float) -> bool:
+    """Return whether current feedback can affect the commissioned ceiling."""
+    return service_limit_a > 0
+
+
 @dataclass(frozen=True, slots=True)
 class SmartSocketObservation:
     """Live state needed by the explicitly selected switchable supply."""

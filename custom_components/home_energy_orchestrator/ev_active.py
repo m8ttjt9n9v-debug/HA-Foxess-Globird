@@ -141,11 +141,15 @@ from .planner.ev import (
     SmartSocketRecoveryState,
     SmartSocketStageState,
     apply_daily_allowance_ceiling,
+    charging_path_ceiling_a,
     estimate_other_free_window_import_kwh,
     estimate_vehicle_energy_to_target_kwh,
     finalize_direct_evse_reconciliation,
     finalize_smart_socket_recovery,
     house_load_excluding_ev_kw,
+    outside_service_ceiling_a,
+    outside_service_feedback_required,
+    physical_charging_minimum_a,
     plan_charge_limit_target,
     plan_direct_evse_commands,
     plan_free_window_current,
@@ -1831,24 +1835,26 @@ class ActiveEvController:
             CONF_SERVICE_IMPORT_LIMIT_A,
             DEFAULT_SERVICE_IMPORT_LIMIT_A,
         )
-        if service_limit <= 0:
-            return physical_ceiling_a
-        grid_current, grid_valid = self._grid_current_a()
-        actual_current, actual_valid = self._actual_ev_current_a()
-        if not grid_valid or not actual_valid:
-            return 0.0
-        non_ev_current = max(grid_current - actual_current, 0.0)
-        available = max(
-            service_limit
-            - self._float(
+        if outside_service_feedback_required(service_limit_a=service_limit):
+            grid_current, grid_valid = self._grid_current_a()
+            actual_current, actual_valid = self._actual_ev_current_a()
+        else:
+            # Preserve the commissioned-disabled fast path without sampling.
+            grid_current = actual_current = 0.0
+            grid_valid = actual_valid = False
+        return outside_service_ceiling_a(
+            physical_ceiling_a=physical_ceiling_a,
+            current_step_a=current_step,
+            service_limit_a=service_limit,
+            reserved_headroom_a=self._float(
                 CONF_SITE_GRID_HEADROOM_CURRENT,
                 DEFAULT_SITE_GRID_HEADROOM_CURRENT,
-            )
-            - non_ev_current,
-            0.0,
+            ),
+            grid_current_a=grid_current,
+            grid_current_valid=grid_valid,
+            actual_ev_current_a=actual_current,
+            actual_ev_current_valid=actual_valid,
         )
-        stepped = int(available / current_step) * current_step
-        return round(min(physical_ceiling_a, stepped), 3)
 
     def _daily_ready_cycle(self, now: datetime) -> tuple[datetime, datetime, datetime]:
         ready_time = self.coordinator._configured_time(  # noqa: SLF001
@@ -2239,11 +2245,7 @@ class ActiveEvController:
         observation: DirectEvseObservation,
     ) -> float | None:
         """Port the pilot's Tessie min=0 fallback to one actuator step."""
-        minimum = observation.current_minimum_a
-        step = observation.current_step_a
-        if minimum is None or step is None or step <= 0:
-            return None
-        return minimum if minimum > 0 else step
+        return physical_charging_minimum_a(observation)
 
     def _free_window(self, now: datetime) -> tuple[bool, float, float]:
         start = self.coordinator._configured_time(  # noqa: SLF001
@@ -2311,15 +2313,17 @@ class ActiveEvController:
         return self.coordinator.runtime_config.ev_numbers.value(key, default)
 
     def _path_ceiling_a(self) -> float:
-        if (
-            self.coordinator.runtime_config.ev_policy.charge_path
-            == EV_CHARGE_PATH_SMART_SOCKET
-        ):
-            return self._float(
+        return charging_path_ceiling_a(
+            smart_path_selected=(
+                self.coordinator.runtime_config.ev_policy.charge_path
+                == EV_CHARGE_PATH_SMART_SOCKET
+            ),
+            smart_limit_a=self._float(
                 CONF_EV_SMART_SOCKET_CURRENT_LIMIT,
                 DEFAULT_EV_SMART_SOCKET_CURRENT_LIMIT,
-            )
-        return self._float(CONF_EV_MAX_CURRENT, 0.0)
+            ),
+            direct_limit_a=self._float(CONF_EV_MAX_CURRENT, 0.0),
+        )
 
     async def _async_restore(self) -> None:
         persisted = await self._repository.async_load()
