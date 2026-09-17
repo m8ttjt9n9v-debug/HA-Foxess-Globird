@@ -7,14 +7,70 @@ from datetime import UTC, datetime, timedelta
 import pytest
 
 from custom_components.home_energy_orchestrator.telemetry import (
+    SiteTelemetrySources,
+    TelemetryNormalizationConfiguration,
     TelemetrySource,
     battery_power_from_magnitudes_or_signed,
     combine_battery_magnitudes,
     normalize_current_sample,
     normalize_power_sample,
+    normalize_site_telemetry,
 )
 
 NOW = datetime(2026, 9, 9, 12, 0, tzinfo=UTC)
+
+
+def test_site_telemetry_boundary_normalizes_signs_units_and_current_fallback() -> None:
+    telemetry = normalize_site_telemetry(
+        SiteTelemetrySources(
+            grid_power=TelemetrySource("sensor.grid", -2300, "W", NOW),
+            signed_battery_power=TelemetrySource("sensor.battery", -2, "kW", NOW),
+            battery_charge_power=None,
+            battery_discharge_power=None,
+            solar_power=TelemetrySource("sensor.solar", 1200, "W", NOW),
+            house_load=TelemetrySource("sensor.house", 0.8, "kW", NOW),
+            site_grid_current=None,
+        ),
+        TelemetryNormalizationConfiguration(
+            max_age_seconds=90,
+            grid_power_direction="positive_export",
+            battery_power_direction="positive_discharge",
+            solar_configured=True,
+            solar_generation_direction="generation_positive",
+            site_grid_current_direction="positive_import",
+            site_phase_count=1.0,
+            voltage_v=230.0,
+        ),
+        now=NOW,
+    )
+
+    assert telemetry.grid_power.value == pytest.approx(2.3)
+    assert telemetry.battery_power.value == pytest.approx(2.0)
+    assert telemetry.solar_power.value == pytest.approx(1.2)
+    assert telemetry.house_load.value == pytest.approx(0.8)
+    assert telemetry.site_grid_current.value == pytest.approx(10.0)
+    assert telemetry.site_grid_current.reason == "derived_from_grid_power"
+
+
+def test_site_telemetry_boundary_does_not_invent_solar_when_absent() -> None:
+    telemetry = normalize_site_telemetry(
+        SiteTelemetrySources(None, None, None, None, None, None, None),
+        TelemetryNormalizationConfiguration(
+            max_age_seconds=90,
+            grid_power_direction="positive_import",
+            battery_power_direction="positive_charge",
+            solar_configured=False,
+            solar_generation_direction="generation_positive",
+            site_grid_current_direction="positive_import",
+            site_phase_count=3.0,
+            voltage_v=None,
+        ),
+        now=NOW,
+    )
+
+    assert telemetry.solar_power.value == 0.0
+    assert telemetry.solar_power.reason == "configured_absent"
+    assert telemetry.grid_power.reason == "not_configured"
 
 
 def power(

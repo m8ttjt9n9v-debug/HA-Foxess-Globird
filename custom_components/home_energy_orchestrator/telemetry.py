@@ -11,6 +11,11 @@ from dataclasses import dataclass
 from datetime import datetime
 from math import isfinite
 
+from .const import (
+    BATTERY_POSITIVE_CHARGE,
+    GRID_POSITIVE_IMPORT,
+    SOLAR_GENERATION_POSITIVE,
+)
 from .normalise import current_to_a, power_to_kw
 
 
@@ -52,6 +57,33 @@ class NormalizedTelemetry:
     solar_power: NormalizedSample
     house_load: NormalizedSample
     site_grid_current: NormalizedSample
+
+
+@dataclass(frozen=True, slots=True)
+class SiteTelemetrySources:
+    """Raw Home Assistant observations captured together for one cycle."""
+
+    grid_power: TelemetrySource | None
+    signed_battery_power: TelemetrySource | None
+    battery_charge_power: TelemetrySource | None
+    battery_discharge_power: TelemetrySource | None
+    solar_power: TelemetrySource | None
+    house_load: TelemetrySource | None
+    site_grid_current: TelemetrySource | None
+
+
+@dataclass(frozen=True, slots=True)
+class TelemetryNormalizationConfiguration:
+    """Immutable sign, freshness and fallback configuration."""
+
+    max_age_seconds: float
+    grid_power_direction: str
+    battery_power_direction: str
+    solar_configured: bool
+    solar_generation_direction: str
+    site_grid_current_direction: str
+    site_phase_count: float | None
+    voltage_v: float | None
 
 
 def unavailable_sample(
@@ -250,3 +282,181 @@ def battery_power_from_magnitudes_or_signed(
             reason="signed_fallback_pair_stale",
         )
     return paired
+
+
+def _configured_power_sample(
+    source: TelemetrySource | None,
+    *,
+    now: datetime,
+    max_age_seconds: float,
+    direction: str,
+    positive_direction: str,
+) -> NormalizedSample:
+    if source is None:
+        return unavailable_sample(
+            unit="kW",
+            positive_direction=positive_direction,
+            reason="not_configured",
+        )
+    return normalize_power_sample(
+        source,
+        now=now,
+        max_age_seconds=max_age_seconds,
+        multiplier=1.0 if direction == positive_direction else -1.0,
+        positive_direction=positive_direction,
+    )
+
+
+def normalize_site_telemetry(
+    sources: SiteTelemetrySources,
+    configuration: TelemetryNormalizationConfiguration,
+    *,
+    now: datetime,
+) -> NormalizedTelemetry:
+    """Build the canonical signed telemetry surface from captured sources."""
+    grid = _configured_power_sample(
+        sources.grid_power,
+        now=now,
+        max_age_seconds=configuration.max_age_seconds,
+        direction=configuration.grid_power_direction,
+        positive_direction=GRID_POSITIVE_IMPORT,
+    )
+    signed_battery = _configured_power_sample(
+        sources.signed_battery_power,
+        now=now,
+        max_age_seconds=configuration.max_age_seconds,
+        direction=configuration.battery_power_direction,
+        positive_direction=BATTERY_POSITIVE_CHARGE,
+    )
+    if (
+        sources.battery_charge_power is not None
+        or sources.battery_discharge_power is not None
+    ):
+        charge = (
+            normalize_power_sample(
+                sources.battery_charge_power,
+                now=now,
+                max_age_seconds=configuration.max_age_seconds,
+                multiplier=1.0,
+                positive_direction="positive_magnitude",
+            )
+            if sources.battery_charge_power is not None
+            else unavailable_sample(
+                unit="kW",
+                positive_direction="positive_magnitude",
+                reason="not_configured",
+            )
+        )
+        discharge = (
+            normalize_power_sample(
+                sources.battery_discharge_power,
+                now=now,
+                max_age_seconds=configuration.max_age_seconds,
+                multiplier=1.0,
+                positive_direction="positive_magnitude",
+            )
+            if sources.battery_discharge_power is not None
+            else unavailable_sample(
+                unit="kW",
+                positive_direction="positive_magnitude",
+                reason="not_configured",
+            )
+        )
+        battery = battery_power_from_magnitudes_or_signed(
+            charge, discharge, signed_battery
+        )
+    else:
+        battery = signed_battery
+
+    solar = (
+        _configured_power_sample(
+            sources.solar_power,
+            now=now,
+            max_age_seconds=configuration.max_age_seconds,
+            direction=configuration.solar_generation_direction,
+            positive_direction=SOLAR_GENERATION_POSITIVE,
+        )
+        if configuration.solar_configured
+        else NormalizedSample(
+            value=0.0,
+            unit="kW",
+            sources=(),
+            positive_direction=SOLAR_GENERATION_POSITIVE,
+            valid=True,
+            fresh=True,
+            reason="configured_absent",
+        )
+    )
+    house = _configured_power_sample(
+        sources.house_load,
+        now=now,
+        max_age_seconds=configuration.max_age_seconds,
+        direction="positive_consumption",
+        positive_direction="positive_consumption",
+    )
+
+    current = None
+    if sources.site_grid_current is not None:
+        current = normalize_current_sample(
+            sources.site_grid_current,
+            now=now,
+            max_age_seconds=configuration.max_age_seconds,
+            multiplier=(
+                1.0
+                if configuration.site_grid_current_direction
+                == GRID_POSITIVE_IMPORT
+                else -1.0
+            ),
+            positive_direction=GRID_POSITIVE_IMPORT,
+        )
+    if (current is None or current.value is None) and grid.value is not None:
+        phase_count = configuration.site_phase_count
+        if (
+            phase_count is None
+            or not isfinite(phase_count)
+            or phase_count < 1
+            or not phase_count.is_integer()
+        ):
+            raise ValueError("site phase count must be a positive integer")
+    else:
+        phase_count = configuration.site_phase_count
+    if (
+        (current is None or current.value is None)
+        and phase_count == 1
+        and grid.value is not None
+    ):
+        voltage = configuration.voltage_v
+        if voltage is None or not isfinite(voltage):
+            raise ValueError("voltage must be finite")
+        current = (
+            NormalizedSample(
+                value=grid.value * 1000 / voltage,
+                unit="A",
+                sources=(
+                    *(current.sources if current is not None else ()),
+                    *grid.sources,
+                ),
+                positive_direction=GRID_POSITIVE_IMPORT,
+                valid=grid.valid,
+                fresh=grid.fresh,
+                reason=(
+                    "derived_from_grid_power"
+                    if sources.site_grid_current is None
+                    else "derived_from_grid_power_current_fallback"
+                ),
+            )
+            if voltage > 0
+            else unavailable_sample(
+                unit="A",
+                positive_direction=GRID_POSITIVE_IMPORT,
+                reason="invalid_voltage",
+                sources=grid.sources,
+            )
+        )
+    if current is None:
+        current = unavailable_sample(
+            unit="A",
+            positive_direction=GRID_POSITIVE_IMPORT,
+            reason="multiphase_mapping_required",
+        )
+    return NormalizedTelemetry(grid, battery, solar, house, current)

@@ -16,7 +16,6 @@ from homeassistant.util import dt as dt_util
 
 from .configuration import RuntimeConfiguration
 from .const import (
-    BATTERY_POSITIVE_CHARGE,
     CONF_BATTERY_CAPACITY,
     CONF_BATTERY_FLOOR,
     CONF_BONUS_WINDOW_END,
@@ -79,9 +78,7 @@ from .const import (
     DEFAULT_ZERO_IMPORT_THRESHOLD_KW,
     DEFAULT_ZEROHERO_DAILY_CREDIT,
     DOMAIN,
-    GRID_POSITIVE_IMPORT,
     REASON_INVALID_CONFIGURATION,
-    SOLAR_GENERATION_POSITIVE,
 )
 from .models import EnergyLedger, SiteSnapshot
 from .normalise import current_to_a, energy_to_kwh, percent, power_to_kw
@@ -136,13 +133,16 @@ from .planner.meter_cycle import (
     advance_accounting_meters,
 )
 from .telemetry import (
-    NormalizedSample,
     NormalizedTelemetry,
+    TelemetryNormalizationConfiguration,
     TelemetrySource,
-    battery_power_from_magnitudes_or_signed,
-    normalize_current_sample,
-    normalize_power_sample,
-    unavailable_sample,
+    normalize_site_telemetry,
+)
+from .telemetry_adapter import (
+    TelemetryEntityIds,
+    capture_site_telemetry,
+    capture_telemetry_source,
+    state_reported_at,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -990,190 +990,57 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
         except ValueError:
             return None
 
-    def _source(self, entity_id: object) -> TelemetrySource | None:
-        """Capture raw state and timestamp without interpreting sign or unit."""
-        if not isinstance(entity_id, str) or not entity_id:
-            return None
-        state = self.hass.states.get(entity_id)
-        if state is None:
-            return TelemetrySource(entity_id, None, None, None)
-        return TelemetrySource(
-            entity_id=entity_id,
-            raw_value=state.state,
-            raw_unit=state.attributes.get("unit_of_measurement"),
-            # Home Assistant keeps ``last_updated`` unchanged when an
-            # integration reports the same value again.  ``last_reported`` is
-            # the freshness timestamp: a steady zero/current/SoC is still
-            # healthy telemetry when its source continues to report it.
-            updated_at=self._state_reported_at(state),
-        )
-
     def _max_telemetry_age(self) -> float:
         return self.runtime_config.telemetry.max_age_seconds
 
-    def _power_sample(
-        self,
-        entity_id: str | None,
-        *,
-        now: datetime,
-        direction: str,
-        positive_direction: str,
-    ) -> NormalizedSample:
-        source = self._source(entity_id)
-        if source is None:
-            return unavailable_sample(
-                unit="kW",
-                positive_direction=positive_direction,
-                reason="not_configured",
-            )
-        return normalize_power_sample(
-            source,
-            now=now,
-            max_age_seconds=self._max_telemetry_age(),
-            multiplier=1.0 if direction == positive_direction else -1.0,
-            positive_direction=positive_direction,
+    def _source(self, entity_id: object) -> TelemetrySource | None:
+        """Retain the characterized source-capture compatibility seam."""
+        return capture_telemetry_source(
+            self.hass,
+            entity_id,
+            reported_at=self._state_reported_at,
         )
 
     def _normalized_telemetry(self, now: datetime) -> NormalizedTelemetry:
         """Build the single canonical signed telemetry surface."""
-        grid_direction = (
-            self.runtime_config.electrical.effective_grid_power_direction
+        power_sources = self.runtime_config.power_sources
+        battery = self.runtime_config.battery
+        site = self.runtime_config.site
+        electrical = self.runtime_config.electrical
+        sources = capture_site_telemetry(
+            self.hass,
+            TelemetryEntityIds(
+                grid_power=power_sources.grid_entity,
+                signed_battery_power=power_sources.battery_entity,
+                battery_charge_power=battery.charge_power_entity,
+                battery_discharge_power=battery.discharge_power_entity,
+                solar_power=(
+                    power_sources.solar_entity if site.solar_configured else None
+                ),
+                house_load=power_sources.house_load_entity,
+                site_grid_current=site.grid_current_entity,
+            ),
         )
-        grid = self._power_sample(
-            self.runtime_config.power_sources.grid_entity,
-            now=now,
-            direction=grid_direction,
-            positive_direction=GRID_POSITIVE_IMPORT,
-        )
-
-        battery_direction = (
-            self.runtime_config.electrical.battery_power_positive_direction
-        )
-        signed_battery = self._power_sample(
-            self.runtime_config.power_sources.battery_entity,
-            now=now,
-            direction=battery_direction,
-            positive_direction=BATTERY_POSITIVE_CHARGE,
-        )
-
-        charge_source = self._source(self.runtime_config.battery.charge_power_entity)
-        discharge_source = self._source(
-            self.runtime_config.battery.discharge_power_entity
-        )
-        if charge_source is not None or discharge_source is not None:
-            charge = (
-                normalize_power_sample(
-                    charge_source,
-                    now=now,
-                    max_age_seconds=self._max_telemetry_age(),
-                    multiplier=1.0,
-                    positive_direction="positive_magnitude",
-                )
-                if charge_source is not None
-                else unavailable_sample(
-                    unit="kW", positive_direction="positive_magnitude", reason="not_configured"
-                )
-            )
-            discharge = (
-                normalize_power_sample(
-                    discharge_source,
-                    now=now,
-                    max_age_seconds=self._max_telemetry_age(),
-                    multiplier=1.0,
-                    positive_direction="positive_magnitude",
-                )
-                if discharge_source is not None
-                else unavailable_sample(
-                    unit="kW", positive_direction="positive_magnitude", reason="not_configured"
-                )
-            )
-            battery = battery_power_from_magnitudes_or_signed(
-                charge, discharge, signed_battery
-            )
-        else:
-            battery = signed_battery
-
-        # Missing is a pre-capability entry and retains its historical sensor
-        # behavior. Only an explicit choice means deliberate absence.
-        solar_configured = self.runtime_config.site.solar_configured
-        if solar_configured:
-            solar_direction = (
-                self.runtime_config.electrical.effective_solar_generation_direction
-            )
-            solar = self._power_sample(
-                self.runtime_config.power_sources.solar_entity,
-                now=now,
-                direction=solar_direction,
-                positive_direction=SOLAR_GENERATION_POSITIVE,
-            )
-        else:
-            solar = NormalizedSample(
-                value=0.0,
-                unit="kW",
-                sources=(),
-                positive_direction=SOLAR_GENERATION_POSITIVE,
-                valid=True,
-                fresh=True,
-                reason="configured_absent",
-            )
-        house = self._power_sample(
-            self.runtime_config.power_sources.house_load_entity,
-            now=now,
-            direction="positive_consumption",
-            positive_direction="positive_consumption",
-        )
-
-        current_source = self._source(self.runtime_config.site.grid_current_entity)
-        current = None
-        if current_source is not None:
-            current_direction = (
-                self.runtime_config.electrical.effective_site_grid_current_direction
-            )
-            current = normalize_current_sample(
-                current_source,
-                now=now,
+        return normalize_site_telemetry(
+            sources,
+            TelemetryNormalizationConfiguration(
                 max_age_seconds=self._max_telemetry_age(),
-                multiplier=1.0 if current_direction == GRID_POSITIVE_IMPORT else -1.0,
-                positive_direction=GRID_POSITIVE_IMPORT,
-            )
-        if (
-            (current is None or current.value is None)
-            and self._configured_site_phase_count() == 1
-            and grid.value is not None
-        ):
-            voltage = self._configured_float(CONF_EV_VOLTAGE)
-            current = (
-                NormalizedSample(
-                    value=grid.value * 1000 / voltage,
-                    unit="A",
-                    sources=(
-                        *(current.sources if current is not None else ()),
-                        *grid.sources,
-                    ),
-                    positive_direction=GRID_POSITIVE_IMPORT,
-                    valid=grid.valid,
-                    fresh=grid.fresh,
-                    reason=(
-                        "derived_from_grid_power"
-                        if current_source is None
-                        else "derived_from_grid_power_current_fallback"
-                    ),
-                )
-                if voltage > 0
-                else unavailable_sample(
-                    unit="A",
-                    positive_direction=GRID_POSITIVE_IMPORT,
-                    reason="invalid_voltage",
-                    sources=grid.sources,
-                )
-            )
-        if current is None:
-            current = unavailable_sample(
-                unit="A",
-                positive_direction=GRID_POSITIVE_IMPORT,
-                reason="multiphase_mapping_required",
-            )
-        return NormalizedTelemetry(grid, battery, solar, house, current)
+                grid_power_direction=electrical.effective_grid_power_direction,
+                battery_power_direction=(
+                    electrical.battery_power_positive_direction
+                ),
+                solar_configured=site.solar_configured,
+                solar_generation_direction=(
+                    electrical.effective_solar_generation_direction
+                ),
+                site_grid_current_direction=(
+                    electrical.effective_site_grid_current_direction
+                ),
+                site_phase_count=site.phase_count,
+                voltage_v=self.runtime_config.ev_connection.configured_voltage_v,
+            ),
+            now=now,
+        )
 
     def _energy(self, entity_id: str | None) -> float | None:
         value = self._number(entity_id)
@@ -1401,7 +1268,7 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
     @staticmethod
     def _state_reported_at(state: State) -> datetime:
         """Use Home Assistant's report time so stable polled values stay fresh."""
-        return getattr(state, "last_reported", state.last_updated)
+        return state_reported_at(state)
 
     async def _async_save_demand_state(self) -> None:
         """Persist completed history and the current partial cycle together."""
