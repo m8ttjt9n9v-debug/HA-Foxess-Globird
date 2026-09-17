@@ -493,8 +493,28 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
 
     def _configured_nonnegative(self, key: str, default: float) -> float:
         """Read an optional physical limit; zero means not commissioned."""
-        value = float(self.config.get(key, default))
-        if not isfinite(value) or value < 0:
+        configured = self.runtime_config.nonnegative
+        values = {
+            CONF_ZERO_IMPORT_THRESHOLD_KW: configured.zero_import_threshold_kw,
+            CONF_DAILY_FREE_ALLOWANCE_KWH: configured.daily_free_allowance_kwh,
+            CONF_ZERO_IMPORT_CONFIRM_MINUTES: configured.zero_import_confirmation_minutes,
+            CONF_ZEROHERO_DAILY_CREDIT: configured.zerohero_daily_credit,
+            CONF_PEAK_RATE: configured.peak_rate_per_kwh,
+            CONF_OFFPEAK_RATE: configured.offpeak_rate_per_kwh,
+            CONF_OFFPEAK_BALANCE_RATE: configured.offpeak_balance_rate_per_kwh,
+            CONF_SHOULDER_RATE: configured.shoulder_rate_per_kwh,
+            CONF_DAILY_CHARGE: configured.daily_charge,
+            CONF_EXPORT_ALLOWANCE_KWH: configured.export_allowance_kwh,
+            CONF_EXPORT_RATE: configured.export_rate_per_kwh,
+            CONF_OFFPEAK_EXPORT_RATE: configured.offpeak_export_rate_per_kwh,
+            CONF_SUPER_EXPORT_RATE: configured.super_export_rate_per_kwh,
+            CONF_SERVICE_IMPORT_LIMIT_A: configured.service_import_limit_a,
+            CONF_EXPORT_LIMIT_KW: configured.export_limit_kw,
+            CONF_INVERTER_CHARGE_LIMIT_KW: configured.inverter_charge_limit_kw,
+            CONF_INVERTER_DISCHARGE_LIMIT_KW: configured.inverter_discharge_limit_kw,
+        }
+        value = values.get(key, default)
+        if value is None or not isfinite(value) or value < 0:
             raise ValueError(f"{key} must be finite and non-negative")
         return value
 

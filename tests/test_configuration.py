@@ -8,6 +8,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from custom_components.home_energy_orchestrator import const as heo_const
 from custom_components.home_energy_orchestrator.configuration import RuntimeConfiguration
 from custom_components.home_energy_orchestrator.const import (
     BATTERY_POSITIVE_CHARGE,
@@ -419,6 +420,71 @@ def test_coordinator_required_numeric_bridge_reads_only_the_snapshot() -> None:
     missing = SimpleNamespace(runtime_config=RuntimeConfiguration.from_mapping({}))
     with pytest.raises(ValueError, match="must be finite"):
         EnergyCoordinator._configured_float(missing, CONF_BATTERY_CAPACITY)
+
+
+_NONNEGATIVE_CASES = (
+    (heo_const.CONF_ZERO_IMPORT_THRESHOLD_KW, heo_const.DEFAULT_ZERO_IMPORT_THRESHOLD_KW),
+    (heo_const.CONF_DAILY_FREE_ALLOWANCE_KWH, heo_const.DEFAULT_DAILY_FREE_ALLOWANCE_KWH),
+    (
+        heo_const.CONF_ZERO_IMPORT_CONFIRM_MINUTES,
+        heo_const.DEFAULT_ZERO_IMPORT_CONFIRM_MINUTES,
+    ),
+    (heo_const.CONF_ZEROHERO_DAILY_CREDIT, heo_const.DEFAULT_ZEROHERO_DAILY_CREDIT),
+    (heo_const.CONF_PEAK_RATE, heo_const.DEFAULT_PEAK_RATE),
+    (heo_const.CONF_OFFPEAK_RATE, heo_const.DEFAULT_OFFPEAK_RATE),
+    (heo_const.CONF_OFFPEAK_BALANCE_RATE, heo_const.DEFAULT_OFFPEAK_BALANCE_RATE),
+    (heo_const.CONF_SHOULDER_RATE, heo_const.DEFAULT_SHOULDER_RATE),
+    (heo_const.CONF_DAILY_CHARGE, heo_const.DEFAULT_DAILY_CHARGE),
+    (heo_const.CONF_EXPORT_ALLOWANCE_KWH, heo_const.DEFAULT_EXPORT_ALLOWANCE_KWH),
+    (heo_const.CONF_EXPORT_RATE, heo_const.DEFAULT_EXPORT_RATE),
+    (heo_const.CONF_OFFPEAK_EXPORT_RATE, heo_const.DEFAULT_OFFPEAK_EXPORT_RATE),
+    (heo_const.CONF_SUPER_EXPORT_RATE, heo_const.DEFAULT_SUPER_EXPORT_RATE),
+    (heo_const.CONF_SERVICE_IMPORT_LIMIT_A, heo_const.DEFAULT_SERVICE_IMPORT_LIMIT_A),
+    (heo_const.CONF_EXPORT_LIMIT_KW, heo_const.DEFAULT_EXPORT_LIMIT_KW),
+    (
+        heo_const.CONF_INVERTER_CHARGE_LIMIT_KW,
+        heo_const.DEFAULT_INVERTER_CHARGE_LIMIT_KW,
+    ),
+    (
+        heo_const.CONF_INVERTER_DISCHARGE_LIMIT_KW,
+        heo_const.DEFAULT_INVERTER_DISCHARGE_LIMIT_KW,
+    ),
+)
+
+
+def test_nonnegative_bridge_preserves_all_missing_defaults() -> None:
+    coordinator = SimpleNamespace(
+        runtime_config=RuntimeConfiguration.from_mapping({})
+    )
+    for key, default in _NONNEGATIVE_CASES:
+        assert EnergyCoordinator._configured_nonnegative(
+            coordinator, key, default
+        ) == pytest.approx(default)
+    assert EnergyCoordinator._configured_nonnegative(
+        coordinator, "unknown", 7.5
+    ) == pytest.approx(7.5)
+
+
+@pytest.mark.parametrize("value", [-1, "invalid", float("nan"), float("inf")])
+def test_nonnegative_bridge_preserves_invalid_value_failures(value: object) -> None:
+    data = {key: value for key, _default in _NONNEGATIVE_CASES}
+    coordinator = SimpleNamespace(
+        runtime_config=RuntimeConfiguration.from_mapping(data)
+    )
+    for key, default in _NONNEGATIVE_CASES:
+        with pytest.raises(ValueError, match="finite and non-negative"):
+            EnergyCoordinator._configured_nonnegative(coordinator, key, default)
+
+
+def test_nonnegative_bridge_preserves_valid_configured_values() -> None:
+    data = {key: "1.25" for key, _default in _NONNEGATIVE_CASES}
+    coordinator = SimpleNamespace(
+        runtime_config=RuntimeConfiguration.from_mapping(data)
+    )
+    for key, default in _NONNEGATIVE_CASES:
+        assert EnergyCoordinator._configured_nonnegative(
+            coordinator, key, default
+        ) == pytest.approx(1.25)
 
 
 @pytest.mark.parametrize(

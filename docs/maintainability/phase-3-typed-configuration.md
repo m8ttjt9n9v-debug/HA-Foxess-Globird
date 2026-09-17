@@ -79,7 +79,9 @@ selectors, validation, migration behavior and the multi-page draft workflow.
   coordinator helpers and the EV-controller numeric helper. Required battery
   and EV numbers now come from immutable domain snapshots, leaving two raw
   runtime reads: the coordinator's optional non-negative helper and the
-  EV-controller numeric helper.
+  EV-controller numeric helper. The complete 17-key strict non-negative
+  contract now also comes from an immutable snapshot, leaving only the
+  EV-controller numeric helper as a raw runtime read.
 
 ## Work packages
 

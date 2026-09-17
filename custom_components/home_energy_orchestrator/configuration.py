@@ -29,6 +29,8 @@ from .const import (
     CONF_BONUS_WINDOW_START,
     CONF_CONFIGURE_EV,
     CONF_CONFIGURE_SOLAR,
+    CONF_DAILY_CHARGE,
+    CONF_DAILY_FREE_ALLOWANCE_KWH,
     CONF_DAILY_IMPORT_ENTITY,
     CONF_DISCHARGE_EFFICIENCY_PERCENT,
     CONF_EV_ACTUAL_CURRENT,
@@ -62,6 +64,8 @@ from .const import (
     CONF_EV_SOLAR_SPILL_ENABLED,
     CONF_EV_STORED_ENERGY,
     CONF_EV_VOLTAGE,
+    CONF_EXPORT_ALLOWANCE_KWH,
+    CONF_EXPORT_LIMIT_KW,
     CONF_EXPORT_RATE,
     CONF_EXPORT_RATE_WINDOW_END,
     CONF_EXPORT_RATE_WINDOW_START,
@@ -96,6 +100,7 @@ from .const import (
     CONF_PEAK_WINDOW_START,
     CONF_REHEARSAL_MODE,
     CONF_RESERVE,
+    CONF_SERVICE_IMPORT_LIMIT_A,
     CONF_SHOULDER_RATE,
     CONF_SIGN_CONVENTIONS_VERIFIED,
     CONF_SITE_GRID_CURRENT,
@@ -105,7 +110,9 @@ from .const import (
     CONF_SOLAR_POWER_DIRECTION,
     CONF_SUPER_EXPORT_RATE,
     CONF_TELEMETRY_MAX_AGE_SECONDS,
+    CONF_ZERO_IMPORT_CONFIRM_MINUTES,
     CONF_ZERO_IMPORT_THRESHOLD_KW,
+    CONF_ZEROHERO_DAILY_CREDIT,
     DEFAULT_AUTOMATIC_CHARGE_ENABLED,
     DEFAULT_AUTOMATIC_CONTROL_ENABLED,
     DEFAULT_AUTOMATIC_EXPORT_ENABLED,
@@ -114,6 +121,8 @@ from .const import (
     DEFAULT_BATTERY_FREE_WINDOW_TARGET,
     DEFAULT_BONUS_WINDOW_END,
     DEFAULT_BONUS_WINDOW_START,
+    DEFAULT_DAILY_CHARGE,
+    DEFAULT_DAILY_FREE_ALLOWANCE_KWH,
     DEFAULT_DISCHARGE_EFFICIENCY_PERCENT,
     DEFAULT_EV_ALLOWANCE_GUARD_ENABLED,
     DEFAULT_EV_AUTOMATIC_CONTROL_ENABLED,
@@ -132,6 +141,8 @@ from .const import (
     DEFAULT_EV_SMART_SOCKET_POWER_SWITCHING,
     DEFAULT_EV_SOLAR_SPILL_ENABLED,
     DEFAULT_EV_VOLTAGE,
+    DEFAULT_EXPORT_ALLOWANCE_KWH,
+    DEFAULT_EXPORT_LIMIT_KW,
     DEFAULT_EXPORT_RATE,
     DEFAULT_EXPORT_RATE_WINDOW_END,
     DEFAULT_EXPORT_RATE_WINDOW_START,
@@ -148,17 +159,24 @@ from .const import (
     DEFAULT_HOUSE_OCCUPANCY_MODE,
     DEFAULT_INVERTER_CHARGE_LIMIT_KW,
     DEFAULT_INVERTER_DISCHARGE_LIMIT_KW,
+    DEFAULT_OFFPEAK_BALANCE_RATE,
     DEFAULT_OFFPEAK_EXPORT_RATE,
+    DEFAULT_OFFPEAK_RATE,
+    DEFAULT_PEAK_RATE,
     DEFAULT_PEAK_WINDOW_END,
     DEFAULT_PEAK_WINDOW_START,
     DEFAULT_REHEARSAL_MODE,
+    DEFAULT_SERVICE_IMPORT_LIMIT_A,
+    DEFAULT_SHOULDER_RATE,
     DEFAULT_SIGN_CONVENTIONS_VERIFIED,
     DEFAULT_SITE_GRID_CURRENT_DIRECTION,
     DEFAULT_SITE_PHASE_COUNT,
     DEFAULT_SOLAR_POWER_DIRECTION,
     DEFAULT_SUPER_EXPORT_RATE,
     DEFAULT_TELEMETRY_MAX_AGE_SECONDS,
+    DEFAULT_ZERO_IMPORT_CONFIRM_MINUTES,
     DEFAULT_ZERO_IMPORT_THRESHOLD_KW,
+    DEFAULT_ZEROHERO_DAILY_CREDIT,
     GRID_POSITIVE_EXPORT,
     GRID_POSITIVE_IMPORT,
     HOUSE_OCCUPANCY_MODES,
@@ -190,6 +208,18 @@ def _required_number(data: Mapping[str, object], key: str) -> float | None:
     except (TypeError, ValueError):
         return None
     return value if isfinite(value) else None
+
+
+def _nonnegative_candidate(
+    data: Mapping[str, object], key: str, default: float
+) -> float | None:
+    """Preserve missing-default and invalid-value semantics for strict checks."""
+    if key not in data:
+        return default
+    try:
+        return float(data[key])
+    except (TypeError, ValueError):
+        return None
 
 
 def _optional_time(
@@ -412,6 +442,29 @@ class ExportSettings:
 
 
 @dataclass(frozen=True, slots=True)
+class NonnegativeSettings:
+    """Strict runtime candidates validated by the legacy compatibility bridge."""
+
+    zero_import_threshold_kw: float | None
+    daily_free_allowance_kwh: float | None
+    zero_import_confirmation_minutes: float | None
+    zerohero_daily_credit: float | None
+    peak_rate_per_kwh: float | None
+    offpeak_rate_per_kwh: float | None
+    offpeak_balance_rate_per_kwh: float | None
+    shoulder_rate_per_kwh: float | None
+    daily_charge: float | None
+    export_allowance_kwh: float | None
+    export_rate_per_kwh: float | None
+    offpeak_export_rate_per_kwh: float | None
+    super_export_rate_per_kwh: float | None
+    service_import_limit_a: float | None
+    export_limit_kw: float | None
+    inverter_charge_limit_kw: float | None
+    inverter_discharge_limit_kw: float | None
+
+
+@dataclass(frozen=True, slots=True)
 class TelemetrySettings:
     """Shared telemetry freshness policy after legacy-compatible parsing."""
 
@@ -565,6 +618,7 @@ class RuntimeConfiguration:
     site: SiteSettings
     battery: BatterySettings
     export: ExportSettings
+    nonnegative: NonnegativeSettings
     telemetry: TelemetrySettings
     power_sources: PowerSourceSettings
     electrical: ElectricalSettings
@@ -1005,6 +1059,67 @@ class RuntimeConfiguration:
                 ),
                 force_discharge_offset_configured=(
                     CONF_FORCE_DISCHARGE_OFFSET_MINUTES in data
+                ),
+            ),
+            nonnegative=NonnegativeSettings(
+                zero_import_threshold_kw=_nonnegative_candidate(
+                    data, CONF_ZERO_IMPORT_THRESHOLD_KW, DEFAULT_ZERO_IMPORT_THRESHOLD_KW
+                ),
+                daily_free_allowance_kwh=_nonnegative_candidate(
+                    data,
+                    CONF_DAILY_FREE_ALLOWANCE_KWH,
+                    DEFAULT_DAILY_FREE_ALLOWANCE_KWH,
+                ),
+                zero_import_confirmation_minutes=_nonnegative_candidate(
+                    data,
+                    CONF_ZERO_IMPORT_CONFIRM_MINUTES,
+                    DEFAULT_ZERO_IMPORT_CONFIRM_MINUTES,
+                ),
+                zerohero_daily_credit=_nonnegative_candidate(
+                    data, CONF_ZEROHERO_DAILY_CREDIT, DEFAULT_ZEROHERO_DAILY_CREDIT
+                ),
+                peak_rate_per_kwh=_nonnegative_candidate(
+                    data, CONF_PEAK_RATE, DEFAULT_PEAK_RATE
+                ),
+                offpeak_rate_per_kwh=_nonnegative_candidate(
+                    data, CONF_OFFPEAK_RATE, DEFAULT_OFFPEAK_RATE
+                ),
+                offpeak_balance_rate_per_kwh=_nonnegative_candidate(
+                    data, CONF_OFFPEAK_BALANCE_RATE, DEFAULT_OFFPEAK_BALANCE_RATE
+                ),
+                shoulder_rate_per_kwh=_nonnegative_candidate(
+                    data, CONF_SHOULDER_RATE, DEFAULT_SHOULDER_RATE
+                ),
+                daily_charge=_nonnegative_candidate(
+                    data, CONF_DAILY_CHARGE, DEFAULT_DAILY_CHARGE
+                ),
+                export_allowance_kwh=_nonnegative_candidate(
+                    data, CONF_EXPORT_ALLOWANCE_KWH, DEFAULT_EXPORT_ALLOWANCE_KWH
+                ),
+                export_rate_per_kwh=_nonnegative_candidate(
+                    data, CONF_EXPORT_RATE, DEFAULT_EXPORT_RATE
+                ),
+                offpeak_export_rate_per_kwh=_nonnegative_candidate(
+                    data, CONF_OFFPEAK_EXPORT_RATE, DEFAULT_OFFPEAK_EXPORT_RATE
+                ),
+                super_export_rate_per_kwh=_nonnegative_candidate(
+                    data, CONF_SUPER_EXPORT_RATE, DEFAULT_SUPER_EXPORT_RATE
+                ),
+                service_import_limit_a=_nonnegative_candidate(
+                    data, CONF_SERVICE_IMPORT_LIMIT_A, DEFAULT_SERVICE_IMPORT_LIMIT_A
+                ),
+                export_limit_kw=_nonnegative_candidate(
+                    data, CONF_EXPORT_LIMIT_KW, DEFAULT_EXPORT_LIMIT_KW
+                ),
+                inverter_charge_limit_kw=_nonnegative_candidate(
+                    data,
+                    CONF_INVERTER_CHARGE_LIMIT_KW,
+                    DEFAULT_INVERTER_CHARGE_LIMIT_KW,
+                ),
+                inverter_discharge_limit_kw=_nonnegative_candidate(
+                    data,
+                    CONF_INVERTER_DISCHARGE_LIMIT_KW,
+                    DEFAULT_INVERTER_DISCHARGE_LIMIT_KW,
                 ),
             ),
             telemetry=TelemetrySettings(
