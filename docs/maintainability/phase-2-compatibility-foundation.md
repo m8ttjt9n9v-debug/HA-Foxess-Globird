@@ -55,7 +55,9 @@ separate reviewable work items.
   reference is checked against the frozen v0.12.26 contracts.
 - The true previous-release rollback/downgrade rehearsal is still open.
 - Runtime `EntitySpec` coverage now includes all 107 entities without changing
-  their frozen descriptions; translations remain untouched.
+  their frozen descriptions. Every spec identifies its current value-projection
+  owner, availability rule and deprecation state; translations remain
+  untouched.
 - Nine display-label proposals await project-owner approval; no label is
   inferred as approved from engineering analysis.
 

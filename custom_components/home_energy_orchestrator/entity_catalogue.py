@@ -28,6 +28,7 @@ EntityPlatform = Literal[
     "sensor",
     "switch",
 ]
+AvailabilityRule = Literal["coordinator", "coordinator_and_projection"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -36,6 +37,9 @@ class EntitySpec:
 
     platform: EntityPlatform
     description: EntityDescription
+    value_projection: str
+    availability: AvailabilityRule
+    deprecated: bool = False
 
 
 SENSOR_DESCRIPTIONS = (
@@ -720,17 +724,46 @@ SIGN_CONVENTIONS_DESCRIPTION = BinarySensorEntityDescription(
     entity_category=EntityCategory.DIAGNOSTIC,
 )
 
+_NON_SENSOR_PROJECTIONS = {
+    "test_force_charge": "TestButton.async_press",
+    "test_force_discharge": "TestButton.async_press",
+    "test_stop": "TestButton.async_press",
+    "test_charge_power": "TestNumber.native_value",
+    "test_discharge_power": "TestNumber.native_value",
+    "test_duration": "TestNumber.native_value",
+    "ev_before_export_soc_target": "EvBeforeExportTargetNumber.native_value",
+    "house_occupancy_mode": "HouseOccupancyModeSelect.current_option",
+    "safety_lock": "SafetyLockSwitch.is_on",
+    "automatic_charge": "AutomaticChargeSwitch.is_on",
+    "automatic_export": "AutomaticExportSwitch.is_on",
+    "automatic_ev_control": "AutomaticEvControlSwitch.is_on",
+    "ev_before_export": "EvBeforeExportSwitch.is_on",
+    "ev_charge_to_full": "EvChargeToFullSwitch.is_on",
+    "sign_conventions_verified": "SignConventionsVerifiedBinarySensor.is_on",
+}
+
+
+def _entity_spec(platform: EntityPlatform, description: EntityDescription) -> EntitySpec:
+    if platform == "sensor":
+        projection = f"EnergySensor.native_value[{description.key!r}]"
+        availability: AvailabilityRule = "coordinator_and_projection"
+    else:
+        projection = _NON_SENSOR_PROJECTIONS[description.key]
+        availability = "coordinator"
+    return EntitySpec(platform, description, projection, availability)
+
+
 ENTITY_SPECS = (
-    *(EntitySpec("sensor", description) for description in SENSOR_DESCRIPTIONS),
-    *(EntitySpec("button", description) for description in BUTTON_DESCRIPTIONS),
-    *(EntitySpec("number", description) for description in NUMBER_DESCRIPTIONS),
-    EntitySpec("number", EV_BEFORE_EXPORT_TARGET_DESCRIPTION),
-    EntitySpec("select", HOUSE_OCCUPANCY_DESCRIPTION),
-    EntitySpec("switch", SAFETY_DESCRIPTION),
-    EntitySpec("switch", CHARGE_DESCRIPTION),
-    EntitySpec("switch", EXPORT_DESCRIPTION),
-    EntitySpec("switch", EV_DESCRIPTION),
-    EntitySpec("switch", EV_BEFORE_EXPORT_DESCRIPTION),
-    EntitySpec("switch", CHARGE_TO_FULL_DESCRIPTION),
-    EntitySpec("binary_sensor", SIGN_CONVENTIONS_DESCRIPTION),
+    *(_entity_spec("sensor", description) for description in SENSOR_DESCRIPTIONS),
+    *(_entity_spec("button", description) for description in BUTTON_DESCRIPTIONS),
+    *(_entity_spec("number", description) for description in NUMBER_DESCRIPTIONS),
+    _entity_spec("number", EV_BEFORE_EXPORT_TARGET_DESCRIPTION),
+    _entity_spec("select", HOUSE_OCCUPANCY_DESCRIPTION),
+    _entity_spec("switch", SAFETY_DESCRIPTION),
+    _entity_spec("switch", CHARGE_DESCRIPTION),
+    _entity_spec("switch", EXPORT_DESCRIPTION),
+    _entity_spec("switch", EV_DESCRIPTION),
+    _entity_spec("switch", EV_BEFORE_EXPORT_DESCRIPTION),
+    _entity_spec("switch", CHARGE_TO_FULL_DESCRIPTION),
+    _entity_spec("binary_sensor", SIGN_CONVENTIONS_DESCRIPTION),
 )
