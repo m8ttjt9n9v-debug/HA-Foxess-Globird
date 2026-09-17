@@ -13,8 +13,8 @@ from dataclasses import dataclass
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import EVENT_CALL_SERVICE, STATE_UNAVAILABLE
-from homeassistant.core import Event, HomeAssistant
+from homeassistant.const import STATE_UNAVAILABLE
+from homeassistant.core import HomeAssistant
 from homeassistant.helpers.storage import Store
 
 
@@ -42,16 +42,19 @@ class LifecycleHarness:
     def __init__(self, hass: HomeAssistant) -> None:
         self.hass = hass
         self._service_calls: list[ServiceCallTrace] = []
-        self._unsub_service_calls = hass.bus.async_listen(
-            EVENT_CALL_SERVICE, self._record_service_call
-        )
 
-    def _record_service_call(self, event: Event) -> None:
+    def record_service_call(
+        self,
+        domain: str,
+        service: str,
+        service_data: dict[str, Any],
+    ) -> None:
+        """Record one service invocation at its awaited call boundary."""
         self._service_calls.append(
             ServiceCallTrace(
-                domain=event.data["domain"],
-                service=event.data["service"],
-                service_data=deepcopy(event.data.get("service_data", {})),
+                domain=domain,
+                service=service,
+                service_data=deepcopy(service_data),
             )
         )
 
@@ -149,5 +152,4 @@ class LifecycleHarness:
         return tuple(result)
 
     def close(self) -> None:
-        """Remove the harness event listener."""
-        self._unsub_service_calls()
+        """Close the harness (reserved for future owned resources)."""

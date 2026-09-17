@@ -70,6 +70,11 @@ Create reusable test infrastructure for:
 **Complete when:** one ordinary uninterrupted day and the same day with restart
 at each session phase produce equivalent final state and command obligations.
 
+Ordered FoxESS traces are captured at the awaited Home Assistant service-call
+boundary. `EVENT_CALL_SERVICE` remains useful as evidence that calls occurred,
+but its asynchronously scheduled listeners are deliberately not used to infer
+command order.
+
 ### OM-005 — Incident fixture catalogue
 
 Retain sanitized fixtures for each confirmed class of failure, including:

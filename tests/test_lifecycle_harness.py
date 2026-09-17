@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from homeassistant.config_entries import SOURCE_RECONFIGURE
+from homeassistant.core import ServiceRegistry
 from homeassistant.data_entry_flow import FlowResultType
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
@@ -14,19 +15,50 @@ from tests.helpers.lifecycle import LifecycleHarness
 from tests.test_setup import ENTRY_DATA
 
 
-def _register_foxess_services(hass, monkeypatch) -> None:
+def _register_foxess_services(harness: LifecycleHarness, monkeypatch) -> None:
     async def noop(_call) -> None:
         return None
 
     async def no_wait(_seconds) -> None:
         return None
 
+    original_async_call = ServiceRegistry.async_call
+
+    async def record_call(
+        registry,
+        domain,
+        service,
+        service_data=None,
+        blocking=False,
+        context=None,
+        target=None,
+        return_response=False,
+    ):
+        if (domain, service) in {
+            ("number", "set_value"),
+            ("select", "select_option"),
+        }:
+            payload = dict(service_data or {})
+            payload.update(target or {})
+            harness.record_service_call(domain, service, payload)
+        return await original_async_call(
+            registry,
+            domain,
+            service,
+            service_data,
+            blocking,
+            context,
+            target,
+            return_response,
+        )
+
     monkeypatch.setattr(
         "custom_components.home_energy_orchestrator.foxess_adapter.asyncio.sleep",
         no_wait,
     )
-    hass.services.async_register("number", "set_value", noop)
-    hass.services.async_register("select", "select_option", noop)
+    monkeypatch.setattr(ServiceRegistry, "async_call", record_call)
+    harness.hass.services.async_register("number", "set_value", noop)
+    harness.hass.services.async_register("select", "select_option", noop)
 
 
 async def _seed_foxess_states(harness: LifecycleHarness, battery_soc: float) -> None:
@@ -198,7 +230,7 @@ async def test_active_free_charge_is_reasserted_then_adopted_after_reload(
 ) -> None:
     """A restart inside the free window resumes, then adopts confirmed feedback."""
     harness = LifecycleHarness(hass)
-    _register_foxess_services(hass, monkeypatch)
+    _register_foxess_services(harness, monkeypatch)
     await _seed_foxess_states(harness, 50)
     entry = MockConfigEntry(
         domain=DOMAIN,
@@ -285,7 +317,7 @@ async def test_active_export_is_reasserted_then_adopted_after_reload(
 ) -> None:
     """A retained export obligation survives setup and confirmed-feedback reload."""
     harness = LifecycleHarness(hass)
-    _register_foxess_services(hass, monkeypatch)
+    _register_foxess_services(harness, monkeypatch)
     await _seed_foxess_states(harness, 100)
     entry = MockConfigEntry(
         domain=DOMAIN,
@@ -374,7 +406,7 @@ async def test_completed_charge_does_not_adopt_external_forced_mode_across_reloa
 ) -> None:
     """A completed charge latch must not claim an unrelated forced mode."""
     harness = LifecycleHarness(hass)
-    _register_foxess_services(hass, monkeypatch)
+    _register_foxess_services(harness, monkeypatch)
     await _seed_foxess_states(harness, 50)
     await harness.set_state(
         "number.test_force_discharge",
@@ -445,7 +477,7 @@ async def test_free_charge_exact_end_restores_self_use_and_clears_on_reload(
 ) -> None:
     """The exact end boundary creates, persists and completes restoration."""
     harness = LifecycleHarness(hass)
-    _register_foxess_services(hass, monkeypatch)
+    _register_foxess_services(harness, monkeypatch)
     await _seed_foxess_states(harness, 80)
     await harness.set_state(
         "number.test_force_charge",
@@ -542,7 +574,7 @@ async def test_active_charge_ownership_survives_unavailable_feedback_and_reload(
 ) -> None:
     """Unavailable actuator feedback persists recovery instead of erasing ownership."""
     harness = LifecycleHarness(hass)
-    _register_foxess_services(hass, monkeypatch)
+    _register_foxess_services(harness, monkeypatch)
     await _seed_foxess_states(harness, 80)
     await harness.set_state(
         "number.test_force_charge",
@@ -633,7 +665,7 @@ async def test_active_charge_survives_applied_reconfiguration_without_duplicate_
 ) -> None:
     """Applying unrelated config reloads without dropping or replaying ownership."""
     harness = LifecycleHarness(hass)
-    _register_foxess_services(hass, monkeypatch)
+    _register_foxess_services(harness, monkeypatch)
     await _seed_foxess_states(harness, 80)
     await harness.set_state(
         "number.test_force_charge",
@@ -698,7 +730,7 @@ async def test_active_export_survives_safety_lock_reconfiguration(
 ) -> None:
     """Lock changes issue no commands and retain active export ownership."""
     harness = LifecycleHarness(hass)
-    _register_foxess_services(hass, monkeypatch)
+    _register_foxess_services(harness, monkeypatch)
     await _seed_foxess_states(harness, 100)
     await harness.set_state(
         "number.test_force_discharge",
@@ -901,13 +933,70 @@ async def test_export_anchor_stays_zero_when_import_continues_after_reload(
     harness.close()
 
 
+@pytest.mark.freeze_time("2026-09-17 17:00:00+00:00")
+async def test_gross_cost_stays_constant_during_continuous_export_across_reload(
+    hass, monkeypatch
+) -> None:
+    """Zero import cannot make gross cost creep while export accumulates."""
+    harness = LifecycleHarness(hass)
+    await harness.set_state(
+        "sensor.test_battery_soc", "80", {"unit_of_measurement": "%"}
+    )
+    await harness.set_state(
+        "sensor.test_house_load", "0.8", {"unit_of_measurement": "kW"}
+    )
+    await harness.set_state(
+        "sensor.test_grid_power", "-2", {"unit_of_measurement": "kW"}
+    )
+    now = [datetime(2026, 9, 17, 17, 0, tzinfo=UTC)]
+    monkeypatch.setattr(
+        "custom_components.home_energy_orchestrator.coordinator.dt_util.now",
+        lambda: now[0],
+    )
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Continuous export accounting",
+        version=6,
+        data={**ENTRY_DATA, "telemetry_max_age_seconds": 86_400.0},
+    )
+    entry.add_to_hass(hass)
+    await harness.setup(entry)
+
+    gross_entity = "sensor.home_energy_estimated_energy_cost"
+    initial_gross = hass.states.get(gross_entity)
+    assert initial_gross is not None
+    observed_gross = [initial_gross.state]
+
+    for index in range(1, 9):
+        now[0] += timedelta(minutes=30)
+        await harness.set_state(
+            "sensor.test_grid_power", "-2", {"unit_of_measurement": "kW"}
+        )
+        if index == 4:
+            await harness.reload(entry)
+        gross = hass.states.get(gross_entity)
+        assert gross is not None
+        observed_gross.append(gross.state)
+
+    daily_import = hass.states.get("sensor.home_energy_daily_import")
+    daily_export = hass.states.get("sensor.home_energy_daily_export")
+    assert daily_import is not None
+    assert daily_export is not None
+    assert daily_import.state == "0.0"
+    assert float(daily_export.state) > 0
+    assert observed_gross == [initial_gross.state] * 9
+    assert harness.service_calls == ()
+    await harness.unload(entry)
+    harness.close()
+
+
 @pytest.mark.freeze_time("2026-09-17 02:30:00+00:00")
 async def test_export_exact_end_restores_self_use_and_clears_on_reload(
     hass, monkeypatch
 ) -> None:
     """The exact export finish persists restoration until feedback confirms it."""
     harness = LifecycleHarness(hass)
-    _register_foxess_services(hass, monkeypatch)
+    _register_foxess_services(harness, monkeypatch)
     await _seed_foxess_states(harness, 100)
     await harness.set_state(
         "number.test_force_discharge",
@@ -1006,7 +1095,7 @@ async def test_active_export_ownership_survives_unavailable_feedback_and_reload(
 ) -> None:
     """Unavailable export feedback retains the persisted recovery obligation."""
     harness = LifecycleHarness(hass)
-    _register_foxess_services(hass, monkeypatch)
+    _register_foxess_services(harness, monkeypatch)
     await _seed_foxess_states(harness, 100)
     await harness.set_state(
         "number.test_force_discharge",
@@ -1099,7 +1188,7 @@ async def test_unfinished_manual_discharge_restores_and_clears_across_reload(
 ) -> None:
     """Setup restores an unfinished diagnostic and reload confirms completion."""
     harness = LifecycleHarness(hass)
-    _register_foxess_services(hass, monkeypatch)
+    _register_foxess_services(harness, monkeypatch)
     await _seed_foxess_states(harness, 80)
     await harness.set_state(
         "number.test_force_discharge",
@@ -1194,7 +1283,7 @@ async def test_safety_lock_blocks_persisted_manual_restore_on_setup_and_unload(
 ) -> None:
     """Safety Lock blocks every write while retaining diagnostic ownership."""
     harness = LifecycleHarness(hass)
-    _register_foxess_services(hass, monkeypatch)
+    _register_foxess_services(harness, monkeypatch)
     await _seed_foxess_states(harness, 80)
     await harness.set_state(
         "number.test_force_discharge",

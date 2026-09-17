@@ -630,10 +630,10 @@ async def test_local_modbus_free_charge_starts_at_noon_boundary(hass, monkeypatc
         1,
         datetime(2026, 9, 10, 12, 1, tzinfo=UTC),
     )
-    assert [(event.data["domain"], event.data["service"]) for event in calls] == [
-        ("number", "set_value"),
-        ("select", "select_option"),
-    ]
+    assert controller.last_actions == ("set_charge_power", "select_mode")
+    assert {
+        (event.data["domain"], event.data["service"]) for event in calls
+    } == {("number", "set_value"), ("select", "select_option")}
 
 
 async def test_local_modbus_charge_cannot_misread_noon_as_midnight(hass, monkeypatch):
@@ -967,10 +967,10 @@ async def test_active_free_charge_restarts_from_self_use_while_still_eligible(
     )
     assert controller.charge_power_target_kw == 10.0
     assert controller.last_reason == "charge_start_requested"
-    assert [(event.data["domain"], event.data["service"]) for event in calls] == [
-        ("number", "set_value"),
-        ("select", "select_option"),
-    ]
+    assert controller.last_actions == ("set_charge_power", "select_mode")
+    assert {
+        (event.data["domain"], event.data["service"]) for event in calls
+    } == {("number", "set_value"), ("select", "select_option")}
 
 
 async def test_free_charge_does_not_start_after_allowance_is_exhausted(
@@ -1062,10 +1062,10 @@ async def test_active_free_charge_restores_self_use_when_allowance_is_exhausted(
     await hass.async_block_till_done()
 
     assert controller.charge_session == ChargeSessionState("stopping", 8.0, 1, now)
-    assert [(event.data["domain"], event.data["service"]) for event in calls] == [
-        ("select", "select_option"),
-        ("number", "set_value"),
-    ]
+    assert controller.last_actions == ("select_mode", "set_charge_power")
+    assert {
+        (event.data["domain"], event.data["service"]) for event in calls
+    } == {("number", "set_value"), ("select", "select_option")}
 
 
 async def test_persisted_active_charge_restarts_after_ha_restart_feedback_settles(
@@ -1125,10 +1125,10 @@ async def test_persisted_active_charge_restarts_after_ha_restart_feedback_settle
     await hass.async_block_till_done()
 
     assert restored.charge_session == ChargeSessionState("starting", 8.0, 1, now)
-    assert [(event.data["domain"], event.data["service"]) for event in calls] == [
-        ("number", "set_value"),
-        ("select", "select_option"),
-    ]
+    assert restored.last_actions == ("set_charge_power", "select_mode")
+    assert {
+        (event.data["domain"], event.data["service"]) for event in calls
+    } == {("number", "set_value"), ("select", "select_option")}
 
 
 async def test_latched_charge_marks_recovering_when_feedback_is_unavailable(hass):

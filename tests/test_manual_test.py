@@ -238,12 +238,12 @@ async def test_controller_starts_and_stops_a_timed_test(hass) -> None:
     await hass.async_block_till_done()
 
     assert controller.status == "active_charge"
-    assert [(event.data["domain"], event.data["service"]) for event in calls] == [
-        ("number", "set_value"),
-        ("select", "select_option"),
-    ]
-    assert calls[0].data["service_data"]["value"] == 2.0
-    assert calls[1].data["service_data"]["option"] == "Force Charge"
+    start_calls = {
+        (event.data["domain"], event.data["service"]): event.data["service_data"]
+        for event in calls
+    }
+    assert start_calls[("number", "set_value")]["value"] == 2.0
+    assert start_calls[("select", "select_option")]["option"] == "Force Charge"
 
     # Simulate the inverter's feedback after accepting the request before
     # asking the controller to restore normal operation.
@@ -281,13 +281,14 @@ async def test_stop_clears_targets_when_feedback_disappears(hass) -> None:
     await hass.async_block_till_done()
 
     assert controller.status == "stopping_discharge"
-    assert [(event.data["domain"], event.data["service"]) for event in calls] == [
-        ("select", "select_option"),
-        ("number", "set_value"),
-        ("number", "set_value"),
+    select_calls = [
+        event for event in calls if event.data["service"] == "select_option"
     ]
-    assert calls[0].data["service_data"]["option"] == "Self Use"
-    assert all(call.data["service_data"]["value"] == 0.0 for call in calls[1:])
+    number_calls = [event for event in calls if event.data["service"] == "set_value"]
+    assert len(select_calls) == 1
+    assert len(number_calls) == 2
+    assert select_calls[0].data["service_data"]["option"] == "Self Use"
+    assert all(call.data["service_data"]["value"] == 0.0 for call in number_calls)
     await controller.async_unload()
 
 
@@ -326,10 +327,10 @@ async def test_restart_restores_a_persisted_unfinished_test(hass) -> None:
 
     assert restored.status == "stopping_discharge"
     assert restored.restore_attempts == 1
-    assert [event.data["service"] for event in calls] == [
+    assert {event.data["service"] for event in calls} == {
         "select_option",
         "set_value",
-    ]
+    }
 
     await restored._async_reconcile_restore("integration_restarted")
     assert restored.status == "idle"

@@ -62,15 +62,15 @@ async def test_adapter_executes_an_explicit_ordered_plan(hass: HomeAssistant) ->
 
     assert await adapter.async_execute(plan) == ("set_charge_power", "select_mode")
     await hass.async_block_till_done()
-    assert [(event.data["domain"], event.data["service"]) for event in calls] == [
-        ("number", "set_value"),
-        ("select", "select_option"),
-    ]
-    assert calls[0].data["service_data"] == {
+    service_data = {
+        (event.data["domain"], event.data["service"]): event.data["service_data"]
+        for event in calls
+    }
+    assert service_data[("number", "set_value")] == {
         "entity_id": "number.force_charge_power",
         "value": 10,
     }
-    assert calls[1].data["service_data"] == {
+    assert service_data[("select", "select_option")] == {
         "entity_id": "select.work_mode",
         "option": "Force Charge",
     }
