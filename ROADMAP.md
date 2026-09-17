@@ -48,6 +48,33 @@ Status here describes behavioral parity, not merely the presence of code.
   suite must no longer be presented as sufficient evidence for lifecycle
   safety.
 
+## Optimisation and maintainability programme
+
+- [ ] Execute the staged
+  [optimisation and maintainability roadmap](docs/optimisation-and-maintainability-roadmap.md).
+  This is a behaviour-preserving engineering programme, not a rewrite or a
+  line-count target. The lifecycle harness above is its structural safety
+  prerequisite. Its first user-visible deliverable is a reviewed contract and
+  consistent vocabulary for every entity and configuration field, followed by
+  typed configuration, one canonical presentation model, versioned persistence
+  repositories, controller decomposition and finally a serialized
+  reconciliation cycle.
+
+  Existing entity IDs, unique IDs, state values, configuration keys, stored
+  obligations and command ordering remain compatibility contracts. Correct
+  human-facing labels first; introduce replacement entities only when the old
+  semantic model is genuinely wrong and retain tested compatibility aliases.
+  Refactoring must proceed one seam per release with clean-instance, pilot-site,
+  remote-topology and rollback gates.
+
+  The active functionality freeze and execution controls are recorded in
+  [programme rules](docs/maintainability/programme-rules.md). Progress is
+  measured by the evidence-based [maintainability scorecard](docs/maintainability/scorecard.md),
+  and implementation begins with the detailed
+  [Phase 0 lifecycle baseline](docs/maintainability/phase-0-lifecycle-baseline.md).
+  Each bounded change uses the shared
+  [work-item template](docs/maintainability/work-item-template.md).
+
 ## Completed and retained
 
 - [x] Existing-entry GloBird scorecard migration. Upgrade entries that predate

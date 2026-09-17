@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased — maintainability foundation
+
+- Add the optimisation programme, evidence-based scorecard, work-item rules,
+  reproducible v0.12.26 baseline and first reusable lifecycle trace harness.
+- Freeze the complete 107-entity identity surface in a generated contract so
+  entity, unique-ID, unit and classification changes require explicit review.
+- Preserve user-renamed sensor and switch entity IDs, custom names, areas,
+  labels, visibility and enabled state instead of reclaiming HEO's preferred
+  object IDs during setup.
+
 ## 0.12.26 — restore GloBird scorecard mappings on upgrade
 
 - Migrate existing entries to the complete, unambiguous GloBird Latest Daily

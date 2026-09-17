@@ -199,6 +199,76 @@ async def test_setup_observes_normalised_values_and_never_calls_services(hass):
     assert service_calls == []
 
 
+async def test_setup_preserves_user_owned_entity_ids_and_names(hass):
+    """Reloading HEO must not reclaim entity IDs already owned by the user."""
+    hass.states.async_set("sensor.test_battery_soc", "60", {"unit_of_measurement": "%"})
+    hass.states.async_set("sensor.test_grid_power", "0", {"unit_of_measurement": "kW"})
+    hass.states.async_set("sensor.test_house_load", "0.8", {"unit_of_measurement": "kW"})
+    entry = MockConfigEntry(domain=DOMAIN, title="Registry contract", data=ENTRY_DATA)
+    entry.add_to_hass(hass)
+    registry = er.async_get(hass)
+
+    status = registry.async_get_or_create(
+        "sensor",
+        DOMAIN,
+        f"{entry.entry_id}_status",
+        suggested_object_id="home_energy_status",
+        config_entry=entry,
+    )
+    registry.async_update_entity(
+        status.entity_id,
+        new_entity_id="sensor.my_heo_control_mode",
+        name="My HEO control mode",
+        area_id="energy_area",
+        hidden_by=er.RegistryEntryHider.USER,
+        labels={"energy_label"},
+    )
+    safety = registry.async_get_or_create(
+        "switch",
+        DOMAIN,
+        f"{entry.entry_id}_safety_lock",
+        suggested_object_id="home_energy_safety_lock",
+        config_entry=entry,
+    )
+    registry.async_update_entity(
+        safety.entity_id,
+        new_entity_id="switch.my_heo_hardware_lock",
+        name="My hardware lock",
+    )
+    disabled_export = registry.async_get_or_create(
+        "switch",
+        DOMAIN,
+        f"{entry.entry_id}_automatic_export",
+        suggested_object_id="home_energy_automatic_export",
+        config_entry=entry,
+    )
+    registry.async_update_entity(
+        disabled_export.entity_id,
+        disabled_by=er.RegistryEntryDisabler.USER,
+    )
+
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    status_entry = registry.async_get("sensor.my_heo_control_mode")
+    safety_entry = registry.async_get("switch.my_heo_hardware_lock")
+    assert status_entry is not None
+    assert status_entry.name == "My HEO control mode"
+    assert status_entry.area_id == "energy_area"
+    assert status_entry.hidden_by is er.RegistryEntryHider.USER
+    assert status_entry.labels == {"energy_label"}
+    assert safety_entry is not None
+    assert safety_entry.name == "My hardware lock"
+    export_entry = registry.async_get("switch.home_energy_automatic_export")
+    assert export_entry is not None
+    assert export_entry.disabled_by is er.RegistryEntryDisabler.USER
+    assert registry.async_get("sensor.home_energy_status") is None
+    assert registry.async_get("switch.home_energy_safety_lock") is None
+    assert hass.states.get("sensor.my_heo_control_mode").state == "observe"
+    assert hass.states.get("switch.my_heo_hardware_lock").state == "on"
+    assert hass.states.get("switch.home_energy_automatic_export") is None
+
+
 async def test_reversed_foxess_signs_expose_one_canonical_surface(hass):
     hass.states.async_set("sensor.test_battery_soc", "60", {"unit_of_measurement": "%"})
     hass.states.async_set("sensor.test_grid_power", "4.495", {"unit_of_measurement": "kW"})

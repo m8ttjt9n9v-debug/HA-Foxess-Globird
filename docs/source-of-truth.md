@@ -4,6 +4,12 @@ The public product name is **FoxESS GloBird Tesla Energy Orchestrator**. The
 existing `home_energy_orchestrator` integration domain, entity IDs, and `HEO`
 short form remain stable for upgrade compatibility.
 
+Registered entity IDs become user-owned after first creation. Setup and reload
+must preserve a user's entity ID, custom name, area, labels, visibility and
+enabled state. HEO may improve default display translations, but must not
+silently reclaim a registered object ID or treat presentation changes as
+permission to change unique IDs, machine states or public attributes.
+
 This is the public, durable design record for the project. Git records what
 changed; this file records the authority order, supported behavior, and rules
 future work must preserve. Site addresses, credentials, incident chronology,

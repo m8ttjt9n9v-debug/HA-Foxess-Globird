@@ -7,7 +7,6 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
-from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
@@ -24,7 +23,6 @@ from .const import (
     DEFAULT_AUTOMATIC_CHARGE_ENABLED,
     DEFAULT_EV_BEFORE_EXPORT_ENABLED,
     DEFAULT_EV_CHARGE_TO_FULL_ENABLED,
-    DOMAIN,
 )
 from .coordinator import EnergyCoordinator
 
@@ -70,21 +68,6 @@ async def async_setup_entry(
     hass: HomeAssistant, entry: EnergyConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
     """Expose the config-backed safety lock as an unambiguous switch."""
-    registry = er.async_get(hass)
-    for description in (
-        SAFETY_DESCRIPTION,
-        CHARGE_DESCRIPTION,
-        EXPORT_DESCRIPTION,
-        EV_DESCRIPTION,
-        EV_BEFORE_EXPORT_DESCRIPTION,
-        CHARGE_TO_FULL_DESCRIPTION,
-    ):
-        unique_id = f"{entry.entry_id}_{description.key}"
-        current_entity_id = registry.async_get_entity_id("switch", DOMAIN, unique_id)
-        stable_entity_id = f"switch.home_energy_{description.key}"
-        if current_entity_id and current_entity_id != stable_entity_id:
-            if registry.async_get(stable_entity_id) is None:
-                registry.async_update_entity(current_entity_id, new_entity_id=stable_entity_id)
     async_add_entities(
         (
             SafetyLockSwitch(entry.runtime_data, entry, SAFETY_DESCRIPTION),

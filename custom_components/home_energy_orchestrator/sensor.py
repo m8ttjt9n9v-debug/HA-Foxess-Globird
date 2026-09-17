@@ -6,7 +6,6 @@ from homeassistant.components.sensor import SensorEntity, SensorEntityDescriptio
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import UnitOfElectricCurrent, UnitOfEnergy, UnitOfPower
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
@@ -616,14 +615,6 @@ async def async_setup_entry(
     hass: HomeAssistant, entry: EnergyConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
     """Add observer entities."""
-    registry = er.async_get(hass)
-    for description in DESCRIPTIONS:
-        unique_id = f"{entry.entry_id}_{description.key}"
-        current_entity_id = registry.async_get_entity_id("sensor", DOMAIN, unique_id)
-        stable_entity_id = f"sensor.home_energy_{description.key}"
-        if current_entity_id and current_entity_id != stable_entity_id:
-            if registry.async_get(stable_entity_id) is None:
-                registry.async_update_entity(current_entity_id, new_entity_id=stable_entity_id)
     async_add_entities(
         EnergySensor(entry.runtime_data, entry, description) for description in DESCRIPTIONS
     )
