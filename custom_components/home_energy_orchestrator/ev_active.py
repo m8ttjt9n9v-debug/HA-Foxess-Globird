@@ -237,7 +237,8 @@ class ActiveEvController:
     @property
     def gate_status(self) -> str:
         return ev_control_gate_status(
-            self.coordinator.config, adapter_connected=self._adapter is not None
+            self.coordinator.runtime_config,
+            adapter_connected=self._adapter is not None,
         )
 
     async def async_start(self) -> None:

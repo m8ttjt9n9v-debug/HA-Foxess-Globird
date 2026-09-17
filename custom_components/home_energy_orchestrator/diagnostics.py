@@ -38,7 +38,7 @@ async def async_get_config_entry_diagnostics(
     ev_gate = (
         ev_controller.gate_status
         if ev_controller is not None
-        else ev_control_gate_status(coordinator.config)
+        else ev_control_gate_status(coordinator.runtime_config)
     )
     telemetry = coordinator.telemetry
     forecast = coordinator.optimistic_forecast

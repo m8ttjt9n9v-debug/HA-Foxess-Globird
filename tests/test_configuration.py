@@ -35,6 +35,7 @@ from custom_components.home_energy_orchestrator.const import (
     CONF_EV_PRE_FREE_ENABLED,
     CONF_EV_PROTECTED_BASELINE_A,
     CONF_EV_SMART_SOCKET,
+    CONF_EV_SMART_SOCKET_CURRENT_LIMIT,
     CONF_EV_SMART_SOCKET_POWER_SWITCHING,
     CONF_EV_SOC,
     CONF_EV_SOLAR_SPILL_ENABLED,
@@ -53,6 +54,8 @@ from custom_components.home_energy_orchestrator.const import (
     CONF_INVERTER_DISCHARGE_LIMIT_KW,
     CONF_REHEARSAL_MODE,
     CONF_SIGN_CONVENTIONS_VERIFIED,
+    CONF_SITE_GRID_CURRENT,
+    CONF_SITE_PHASE_COUNT,
     CONF_ZERO_IMPORT_THRESHOLD_KW,
     DEFAULT_EV_ALLOWANCE_GUARD_ENABLED,
     DEFAULT_EV_BEFORE_EXPORT_SOC_TARGET,
@@ -62,6 +65,7 @@ from custom_components.home_energy_orchestrator.const import (
     DEFAULT_EV_PHASE_COUNT,
     DEFAULT_EV_PRE_FREE_ENABLED,
     DEFAULT_EV_PROTECTED_BASELINE_A,
+    DEFAULT_EV_SMART_SOCKET_CURRENT_LIMIT,
     DEFAULT_EV_SMART_SOCKET_POWER_SWITCHING,
     DEFAULT_EV_SOLAR_SPILL_ENABLED,
     DEFAULT_EV_VOLTAGE,
@@ -74,6 +78,7 @@ from custom_components.home_energy_orchestrator.const import (
     DEFAULT_INVERTER_DISCHARGE_LIMIT_KW,
     DEFAULT_REHEARSAL_MODE,
     DEFAULT_SIGN_CONVENTIONS_VERIFIED,
+    DEFAULT_SITE_PHASE_COUNT,
     DEFAULT_ZERO_IMPORT_THRESHOLD_KW,
 )
 from custom_components.home_energy_orchestrator.coordinator import EnergyCoordinator
@@ -139,6 +144,7 @@ def test_runtime_configuration_uses_established_defaults() -> None:
     assert parsed.ev_preferences.charge_to_full_enabled is False
     assert parsed.ev_preferences.legacy_charge_to_full_entity is None
     assert parsed.ev_connection.configured is False
+    assert parsed.ev_connection.explicitly_disabled is False
     assert parsed.ev_connection.control_commissioned is False
     assert parsed.ev_connection.location_mode == DEFAULT_EV_LOCATION_MODE
     assert parsed.ev_connection.at_home_entity is None
@@ -168,9 +174,16 @@ def test_runtime_configuration_uses_established_defaults() -> None:
         parsed.ev_policy.smart_socket_power_switching
         is DEFAULT_EV_SMART_SOCKET_POWER_SWITCHING
     )
+    assert (
+        parsed.ev_policy.smart_socket_current_limit_a
+        == DEFAULT_EV_SMART_SOCKET_CURRENT_LIMIT
+    )
     assert parsed.house.load_includes_ev is DEFAULT_HOUSE_LOAD_INCLUDES_EV
     assert parsed.site.solar_configured is True
+    assert parsed.site.phase_count == DEFAULT_SITE_PHASE_COUNT
+    assert parsed.site.grid_current_entity is None
     assert parsed.battery.soc_entity is None
+    assert parsed.ev_required_mapping_complete is False
     assert parsed.house.occupancy_mode == DEFAULT_HOUSE_OCCUPANCY_MODE
     assert parsed.electrical.verified is False
     assert (
@@ -532,6 +545,44 @@ def test_active_site_snapshot_preserves_upgrade_fallbacks(
         parsed.house.load_includes_ev,
         parsed.site.solar_configured,
         parsed.battery.soc_entity,
+    ) == expected
+
+
+@pytest.mark.parametrize(
+    ("data", "expected"),
+    [
+        ({}, (False, DEFAULT_EV_SMART_SOCKET_CURRENT_LIMIT, 1.0, None)),
+        (
+            {
+                CONF_CONFIGURE_EV: False,
+                CONF_EV_SMART_SOCKET_CURRENT_LIMIT: "16",
+                CONF_SITE_PHASE_COUNT: "3",
+                CONF_SITE_GRID_CURRENT: "sensor.grid_current",
+            },
+            (True, 16.0, 3.0, "sensor.grid_current"),
+        ),
+        (
+            {
+                CONF_CONFIGURE_EV: None,
+                CONF_EV_SMART_SOCKET_CURRENT_LIMIT: "invalid",
+                CONF_SITE_PHASE_COUNT: None,
+                CONF_SITE_GRID_CURRENT: 123,
+            },
+            (False, None, None, "123"),
+        ),
+    ],
+)
+def test_ev_gate_snapshot_preserves_explicit_and_numeric_semantics(
+    data: dict[str, object],
+    expected: tuple[bool, float | None, float | None, str | None],
+) -> None:
+    """Characterize explicit disable and gate-only numeric parsing."""
+    parsed = RuntimeConfiguration.from_mapping(data)
+    assert (
+        parsed.ev_connection.explicitly_disabled,
+        parsed.ev_policy.smart_socket_current_limit_a,
+        parsed.site.phase_count,
+        parsed.site.grid_current_entity,
     ) == expected
 
 

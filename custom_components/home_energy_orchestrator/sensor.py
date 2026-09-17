@@ -720,7 +720,7 @@ class EnergySensor(CoordinatorEntity[EnergyCoordinator], SensorEntity):
         ev_gate = (
             ev_controller.gate_status
             if ev_controller is not None
-            else ev_control_gate_status(self.coordinator.config)
+            else ev_control_gate_status(self.coordinator.runtime_config)
         )
         return {
             "mode": self._control_mode(),

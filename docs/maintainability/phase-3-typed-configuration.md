@@ -26,7 +26,8 @@ selectors, validation, migration behavior and the multi-page draft workflow.
   mappings, policy modes and the active controller's remaining site inputs are
   also consumed through immutable snapshots. The active EV controller now has
   no non-mutating direct configuration reads. Direct AST-visible runtime raw
-  access is now 45.
+  access is now 35, and the EV authorization adapter has no raw configuration
+  reads.
 
 ## Work packages
 

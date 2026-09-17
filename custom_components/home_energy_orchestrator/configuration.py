@@ -36,6 +36,7 @@ from .const import (
     CONF_EV_PRE_FREE_ENABLED,
     CONF_EV_PROTECTED_BASELINE_A,
     CONF_EV_SMART_SOCKET,
+    CONF_EV_SMART_SOCKET_CURRENT_LIMIT,
     CONF_EV_SMART_SOCKET_POWER_SWITCHING,
     CONF_EV_SOC,
     CONF_EV_SOLAR_SPILL_ENABLED,
@@ -55,7 +56,9 @@ from .const import (
     CONF_OFFPEAK_EXPORT_RATE,
     CONF_REHEARSAL_MODE,
     CONF_SIGN_CONVENTIONS_VERIFIED,
+    CONF_SITE_GRID_CURRENT,
     CONF_SITE_GRID_CURRENT_DIRECTION,
+    CONF_SITE_PHASE_COUNT,
     CONF_SOLAR_POWER_DIRECTION,
     CONF_SUPER_EXPORT_RATE,
     CONF_ZERO_IMPORT_THRESHOLD_KW,
@@ -75,6 +78,7 @@ from .const import (
     DEFAULT_EV_PHASE_COUNT,
     DEFAULT_EV_PRE_FREE_ENABLED,
     DEFAULT_EV_PROTECTED_BASELINE_A,
+    DEFAULT_EV_SMART_SOCKET_CURRENT_LIMIT,
     DEFAULT_EV_SMART_SOCKET_POWER_SWITCHING,
     DEFAULT_EV_SOLAR_SPILL_ENABLED,
     DEFAULT_EV_VOLTAGE,
@@ -89,6 +93,7 @@ from .const import (
     DEFAULT_REHEARSAL_MODE,
     DEFAULT_SIGN_CONVENTIONS_VERIFIED,
     DEFAULT_SITE_GRID_CURRENT_DIRECTION,
+    DEFAULT_SITE_PHASE_COUNT,
     DEFAULT_SOLAR_POWER_DIRECTION,
     DEFAULT_SUPER_EXPORT_RATE,
     DEFAULT_ZERO_IMPORT_THRESHOLD_KW,
@@ -101,6 +106,15 @@ def _number(data: Mapping[str, object], key: str, default: float) -> float:
         return float(data.get(key, default))
     except (TypeError, ValueError):
         return default
+
+
+def _optional_number(
+    data: Mapping[str, object], key: str, default: float
+) -> float | None:
+    try:
+        return float(data.get(key, default))
+    except (TypeError, ValueError):
+        return None
 
 
 @dataclass(frozen=True, slots=True)
@@ -132,6 +146,7 @@ class EvConnectionSettings:
     """EV commissioning and electrical inputs used by battery protection."""
 
     configured: bool
+    explicitly_disabled: bool
     control_commissioned: bool
     location_mode: str
     at_home_entity: str | None
@@ -187,6 +202,7 @@ class EvPolicySettings:
     solar_spill_enabled: bool
     pre_free_enabled: bool
     smart_socket_power_switching: bool
+    smart_socket_current_limit_a: float | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -202,6 +218,8 @@ class SiteSettings:
     """Site capability selections with upgrade-compatible defaults."""
 
     solar_configured: bool
+    phase_count: float | None
+    grid_current_entity: str | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -271,6 +289,25 @@ class RuntimeConfiguration:
     tariff: TariffSettings
     inverter: InverterSettings
 
+    @property
+    def ev_required_mapping_complete(self) -> bool:
+        """Return whether every legacy-required EV observation/control is mapped."""
+        return all(
+            (
+                self.ev_telemetry.soc_entity,
+                self.ev_connection.at_home_entity,
+                self.ev_connection.cable_connected_entity,
+                self.ev_telemetry.charging_state_entity,
+                self.ev_telemetry.actual_current_entity,
+                self.ev_telemetry.stored_energy_entity,
+                *(
+                    self.ev_actuators.direct_entities
+                    if self.ev_actuators.direct_entities is not None
+                    else (None,)
+                ),
+            )
+        )
+
     @classmethod
     def from_mapping(cls, data: Mapping[str, object]) -> RuntimeConfiguration:
         """Parse currently adopted fields with their established fallbacks."""
@@ -294,6 +331,7 @@ class RuntimeConfiguration:
         ev_stored_energy_entity = data.get(CONF_EV_STORED_ENERGY)
         ev_lifetime_energy_entity = data.get(CONF_EV_LIFETIME_ENERGY)
         battery_soc_entity = data.get(CONF_BATTERY_SOC)
+        site_grid_current_entity = data.get(CONF_SITE_GRID_CURRENT)
         legacy_charge_to_full_entity = data.get(CONF_EV_CHARGE_TO_FULL)
         ev_control_commissioned = bool(
             data.get(
@@ -378,6 +416,7 @@ class RuntimeConfiguration:
                         ),
                     )
                 ),
+                explicitly_disabled=data.get(CONF_CONFIGURE_EV) is False,
                 control_commissioned=ev_control_commissioned,
                 location_mode=str(
                     data.get(CONF_EV_LOCATION_MODE, DEFAULT_EV_LOCATION_MODE)
@@ -478,6 +517,11 @@ class RuntimeConfiguration:
                         DEFAULT_EV_SMART_SOCKET_POWER_SWITCHING,
                     )
                 ),
+                smart_socket_current_limit_a=_optional_number(
+                    data,
+                    CONF_EV_SMART_SOCKET_CURRENT_LIMIT,
+                    DEFAULT_EV_SMART_SOCKET_CURRENT_LIMIT,
+                ),
             ),
             house=HouseSettings(
                 occupancy_mode=occupancy,
@@ -490,6 +534,14 @@ class RuntimeConfiguration:
             ),
             site=SiteSettings(
                 solar_configured=data.get(CONF_CONFIGURE_SOLAR) is not False,
+                phase_count=_optional_number(
+                    data,
+                    CONF_SITE_PHASE_COUNT,
+                    DEFAULT_SITE_PHASE_COUNT,
+                ),
+                grid_current_entity=(
+                    str(site_grid_current_entity) if site_grid_current_entity else None
+                ),
             ),
             battery=BatterySettings(
                 soc_entity=str(battery_soc_entity) if battery_soc_entity else None,
