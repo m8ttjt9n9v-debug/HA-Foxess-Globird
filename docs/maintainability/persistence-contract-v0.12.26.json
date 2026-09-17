@@ -1,0 +1,98 @@
+{
+  "release_baseline": "0.12.26",
+  "schema_version": 1,
+  "store_count": 13,
+  "stores": [
+    {
+      "attribute": "self._charge_store",
+      "private": true,
+      "source": "custom_components/home_energy_orchestrator/active.py",
+      "storage_key_expression": "f\"home_energy_orchestrator.{getattr(coordinator, 'entry_id', 'runtime')}.charge_session\"",
+      "version": 1
+    },
+    {
+      "attribute": "self._export_store",
+      "private": true,
+      "source": "custom_components/home_energy_orchestrator/active.py",
+      "storage_key_expression": "f\"home_energy_orchestrator.{getattr(coordinator, 'entry_id', 'runtime')}.export_session\"",
+      "version": 1
+    },
+    {
+      "attribute": "self._daily_export_store",
+      "private": true,
+      "source": "custom_components/home_energy_orchestrator/coordinator.py",
+      "storage_key_expression": "f'{DOMAIN}.{entry_id}.daily_export'",
+      "version": 1
+    },
+    {
+      "attribute": "self._daily_import_store",
+      "private": true,
+      "source": "custom_components/home_energy_orchestrator/coordinator.py",
+      "storage_key_expression": "f'{DOMAIN}.{entry_id}.daily_import'",
+      "version": 1
+    },
+    {
+      "attribute": "self._demand_store",
+      "private": true,
+      "source": "custom_components/home_energy_orchestrator/coordinator.py",
+      "storage_key_expression": "f'{DOMAIN}.{entry_id}.demand_history'",
+      "version": 1
+    },
+    {
+      "attribute": "self._forecast_store",
+      "private": true,
+      "source": "custom_components/home_energy_orchestrator/coordinator.py",
+      "storage_key_expression": "f'{DOMAIN}.{entry_id}.forecast_feedback'",
+      "version": 1
+    },
+    {
+      "attribute": "self._free_import_store",
+      "private": true,
+      "source": "custom_components/home_energy_orchestrator/coordinator.py",
+      "storage_key_expression": "f'{DOMAIN}.{entry_id}.free_window_import'",
+      "version": 1
+    },
+    {
+      "attribute": "self._peak_import_store",
+      "private": true,
+      "source": "custom_components/home_energy_orchestrator/coordinator.py",
+      "storage_key_expression": "f'{DOMAIN}.{entry_id}.peak_import'",
+      "version": 1
+    },
+    {
+      "attribute": "self._standard_rate_export_store",
+      "private": true,
+      "source": "custom_components/home_energy_orchestrator/coordinator.py",
+      "storage_key_expression": "f'{DOMAIN}.{entry_id}.standard_rate_export'",
+      "version": 1
+    },
+    {
+      "attribute": "self._zerohero_export_store",
+      "private": true,
+      "source": "custom_components/home_energy_orchestrator/coordinator.py",
+      "storage_key_expression": "f'{DOMAIN}.{entry_id}.zerohero_export'",
+      "version": 1
+    },
+    {
+      "attribute": "self._zerohero_import_store",
+      "private": true,
+      "source": "custom_components/home_energy_orchestrator/coordinator.py",
+      "storage_key_expression": "f'{DOMAIN}.{entry_id}.zerohero_hourly_import'",
+      "version": 1
+    },
+    {
+      "attribute": "self._store",
+      "private": true,
+      "source": "custom_components/home_energy_orchestrator/ev_active.py",
+      "storage_key_expression": "f'home_energy_orchestrator.{coordinator.entry_id}.ev_control'",
+      "version": 1
+    },
+    {
+      "attribute": "self._store",
+      "private": true,
+      "source": "custom_components/home_energy_orchestrator/manual_test.py",
+      "storage_key_expression": "f'home_energy_orchestrator.{coordinator.entry_id}.manual_test'",
+      "version": 1
+    }
+  ]
+}

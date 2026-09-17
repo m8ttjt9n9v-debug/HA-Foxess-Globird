@@ -46,6 +46,11 @@ The corresponding ordered setup/reconfigure surface is frozen in the
 [v0.12.26 configuration contract](config-contract-v0.12.26.json). It records
 page membership and ordering separately from future semantic `FieldSpec` work.
 
+The retained Home Assistant storage keys, schema versions and privacy flags are
+frozen in the
+[v0.12.26 persistence contract](persistence-contract-v0.12.26.json). Any change
+to that contract requires an explicit migration and compatibility review.
+
 ### OM-004 — Lifecycle harness core
 
 Create reusable test infrastructure for:
