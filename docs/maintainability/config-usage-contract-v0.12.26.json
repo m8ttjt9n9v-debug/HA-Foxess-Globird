@@ -1,5 +1,5 @@
 {
-  "access_count": 458,
+  "access_count": 457,
   "accesses": [
     {
       "access": "subscript_store",
@@ -240,27 +240,6 @@
       "receiver": "data",
       "scope": "async_migrate_entry",
       "source": "custom_components/home_energy_orchestrator/__init__.py"
-    },
-    {
-      "access": "get",
-      "constant": null,
-      "key": null,
-      "key_expression": "key",
-      "kind": "raw_mapping",
-      "layer": "runtime",
-      "receiver": "self.coordinator.config",
-      "scope": "ActiveFoxessController._configured",
-      "source": "custom_components/home_energy_orchestrator/active.py"
-    },
-    {
-      "access": "not_in",
-      "constant": "CONF_FORCE_DISCHARGE_OFFSET_MINUTES",
-      "key": "force_discharge_offset_minutes",
-      "kind": "raw_mapping",
-      "layer": "runtime",
-      "receiver": "self.coordinator.config",
-      "scope": "ActiveFoxessController._force_discharge_finish_time",
-      "source": "custom_components/home_energy_orchestrator/active.py"
     },
     {
       "access": "get",
@@ -4193,6 +4172,16 @@
       "source": "custom_components/home_energy_orchestrator/configuration.py"
     },
     {
+      "access": "in",
+      "constant": "CONF_FORCE_DISCHARGE_OFFSET_MINUTES",
+      "key": "force_discharge_offset_minutes",
+      "kind": "raw_mapping",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "RuntimeConfiguration.from_mapping",
+      "source": "custom_components/home_energy_orchestrator/configuration.py"
+    },
+    {
       "access": "get",
       "constant": "CONF_FOXESS_CONTROL_OWNER",
       "key": "foxess_control_owner",
@@ -4592,17 +4581,16 @@
   ],
   "accesses_by_kind": {
     "managed_mutation": 11,
-    "raw_mapping": 447
+    "raw_mapping": 446
   },
   "accesses_by_layer": {
-    "boundary": 438,
-    "runtime": 20
+    "boundary": 439,
+    "runtime": 18
   },
   "accesses_by_source": {
     "custom_components/home_energy_orchestrator/__init__.py": 24,
-    "custom_components/home_energy_orchestrator/active.py": 2,
     "custom_components/home_energy_orchestrator/config_flow.py": 354,
-    "custom_components/home_energy_orchestrator/configuration.py": 60,
+    "custom_components/home_energy_orchestrator/configuration.py": 61,
     "custom_components/home_energy_orchestrator/coordinator.py": 5,
     "custom_components/home_energy_orchestrator/ev_active.py": 3,
     "custom_components/home_energy_orchestrator/manual_test.py": 1,
@@ -4610,11 +4598,11 @@
     "custom_components/home_energy_orchestrator/select.py": 1,
     "custom_components/home_energy_orchestrator/switch.py": 7
   },
-  "dynamic_access_count": 8,
+  "dynamic_access_count": 7,
   "key_count": 130,
   "raw_accesses_by_layer": {
-    "boundary": 438,
-    "runtime": 9
+    "boundary": 439,
+    "runtime": 7
   },
   "release_baseline": "0.12.26",
   "schema_version": 3

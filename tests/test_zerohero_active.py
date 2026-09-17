@@ -424,6 +424,19 @@ def test_zerohero_finish_offset_wraps_midnight(hass):
     assert finish == datetime(2026, 9, 6, 0, 4, tzinfo=UTC)
 
 
+def test_zerohero_finish_retains_legacy_value_when_offset_key_is_absent(hass):
+    coordinator = _coordinator(
+        **{
+            CONF_BONUS_WINDOW_END: "21:00:00",
+            CONF_FORCE_DISCHARGE_FINISH: "21:17:00",
+        }
+    )
+    coordinator.config.pop(CONF_FORCE_DISCHARGE_OFFSET_MINUTES, None)
+    coordinator.runtime_config = RuntimeConfiguration.from_mapping(coordinator.config)
+    controller = _loaded_controller(hass, coordinator)
+
+    assert controller._force_discharge_finish_time() == time(21, 17)  # noqa: SLF001
+
 async def test_automatic_export_cap_is_independent_of_boosted_tariff_cap(
     hass, monkeypatch
 ):

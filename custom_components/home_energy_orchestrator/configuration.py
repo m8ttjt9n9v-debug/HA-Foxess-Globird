@@ -14,10 +14,12 @@ from .const import (
     CONF_AUTOMATIC_CHARGE_ENABLED,
     CONF_AUTOMATIC_CONTROL_ENABLED,
     CONF_AUTOMATIC_EXPORT_ENABLED,
+    CONF_AUTOMATIC_EXPORT_LIMIT_KWH,
     CONF_BATTERY_CAPACITY_ENTITY,
     CONF_BATTERY_CHARGE_POSITIVE,
     CONF_BATTERY_CHARGE_POWER,
     CONF_BATTERY_DISCHARGE_POWER,
+    CONF_BATTERY_FREE_WINDOW_TARGET,
     CONF_BATTERY_POWER,
     CONF_BATTERY_POWER_DIRECTION,
     CONF_BATTERY_SOC,
@@ -26,6 +28,7 @@ from .const import (
     CONF_CONFIGURE_EV,
     CONF_CONFIGURE_SOLAR,
     CONF_DAILY_IMPORT_ENTITY,
+    CONF_DISCHARGE_EFFICIENCY_PERCENT,
     CONF_EV_ACTUAL_CURRENT,
     CONF_EV_ALLOWANCE_GUARD_ENABLED,
     CONF_EV_AT_HOME,
@@ -55,6 +58,8 @@ from .const import (
     CONF_EV_STORED_ENERGY,
     CONF_EV_VOLTAGE,
     CONF_EXPORT_RATE,
+    CONF_FORCE_DISCHARGE_FINISH,
+    CONF_FORCE_DISCHARGE_OFFSET_MINUTES,
     CONF_FOXESS_CONTROL_OWNER,
     CONF_FOXESS_FORCE_CHARGE_POWER,
     CONF_FOXESS_FORCE_DISCHARGE_POWER,
@@ -90,9 +95,12 @@ from .const import (
     DEFAULT_AUTOMATIC_CHARGE_ENABLED,
     DEFAULT_AUTOMATIC_CONTROL_ENABLED,
     DEFAULT_AUTOMATIC_EXPORT_ENABLED,
+    DEFAULT_AUTOMATIC_EXPORT_LIMIT_KWH,
     DEFAULT_BATTERY_CHARGE_POSITIVE,
+    DEFAULT_BATTERY_FREE_WINDOW_TARGET,
     DEFAULT_BONUS_WINDOW_END,
     DEFAULT_BONUS_WINDOW_START,
+    DEFAULT_DISCHARGE_EFFICIENCY_PERCENT,
     DEFAULT_EV_ALLOWANCE_GUARD_ENABLED,
     DEFAULT_EV_AUTOMATIC_CONTROL_ENABLED,
     DEFAULT_EV_BEFORE_EXPORT_ENABLED,
@@ -110,7 +118,11 @@ from .const import (
     DEFAULT_EV_SOLAR_SPILL_ENABLED,
     DEFAULT_EV_VOLTAGE,
     DEFAULT_EXPORT_RATE,
+    DEFAULT_FORCE_DISCHARGE_FINISH,
+    DEFAULT_FORCE_DISCHARGE_OFFSET_MINUTES,
     DEFAULT_FOXESS_CONTROL_OWNER,
+    DEFAULT_FREE_CHARGE_END,
+    DEFAULT_FREE_CHARGE_START,
     DEFAULT_GRID_POWER_DIRECTION,
     DEFAULT_HOUSE_AWAY_CONFIRMATION_HOURS,
     DEFAULT_HOUSE_AWAY_FALLBACK_KWH,
@@ -278,6 +290,29 @@ class WindowSettings:
     free_charge_end: time | None
     bonus_start: time | None
     bonus_end: time | None
+    legacy_force_discharge_finish: time | None
+
+    @property
+    def effective_free_charge_start(self) -> time:
+        return self.free_charge_start or time.fromisoformat(DEFAULT_FREE_CHARGE_START)
+
+    @property
+    def effective_free_charge_end(self) -> time:
+        return self.free_charge_end or time.fromisoformat(DEFAULT_FREE_CHARGE_END)
+
+    @property
+    def effective_bonus_start(self) -> time:
+        return self.bonus_start or time.fromisoformat(DEFAULT_BONUS_WINDOW_START)
+
+    @property
+    def effective_bonus_end(self) -> time:
+        return self.bonus_end or time.fromisoformat(DEFAULT_BONUS_WINDOW_END)
+
+    @property
+    def effective_legacy_force_discharge_finish(self) -> time:
+        return self.legacy_force_discharge_finish or time.fromisoformat(
+            DEFAULT_FORCE_DISCHARGE_FINISH
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -306,6 +341,17 @@ class BatterySettings:
     capacity_entity: str | None
     charge_power_entity: str | None
     discharge_power_entity: str | None
+    free_window_target_percent: float
+
+
+@dataclass(frozen=True, slots=True)
+class ExportSettings:
+    """Automatic export limits and legacy-compatible finish policy."""
+
+    automatic_limit_kwh: float
+    discharge_efficiency_percent: float
+    force_discharge_offset_minutes: float
+    force_discharge_offset_configured: bool
 
 
 @dataclass(frozen=True, slots=True)
@@ -407,6 +453,7 @@ class RuntimeConfiguration:
     accounting: AccountingSettings
     site: SiteSettings
     battery: BatterySettings
+    export: ExportSettings
     telemetry: TelemetrySettings
     power_sources: PowerSourceSettings
     electrical: ElectricalSettings
@@ -731,6 +778,11 @@ class RuntimeConfiguration:
                     CONF_BONUS_WINDOW_END,
                     DEFAULT_BONUS_WINDOW_END,
                 ),
+                legacy_force_discharge_finish=_optional_time(
+                    data,
+                    CONF_FORCE_DISCHARGE_FINISH,
+                    DEFAULT_FORCE_DISCHARGE_FINISH,
+                ),
             ),
             accounting=AccountingSettings(
                 daily_import_entity=(
@@ -774,6 +826,43 @@ class RuntimeConfiguration:
                     if isinstance(battery_discharge_power_entity, str)
                     and battery_discharge_power_entity
                     else None
+                ),
+                free_window_target_percent=max(
+                    _number(
+                        data,
+                        CONF_BATTERY_FREE_WINDOW_TARGET,
+                        DEFAULT_BATTERY_FREE_WINDOW_TARGET,
+                    ),
+                    0.0,
+                ),
+            ),
+            export=ExportSettings(
+                automatic_limit_kwh=max(
+                    _number(
+                        data,
+                        CONF_AUTOMATIC_EXPORT_LIMIT_KWH,
+                        DEFAULT_AUTOMATIC_EXPORT_LIMIT_KWH,
+                    ),
+                    0.0,
+                ),
+                discharge_efficiency_percent=max(
+                    _number(
+                        data,
+                        CONF_DISCHARGE_EFFICIENCY_PERCENT,
+                        DEFAULT_DISCHARGE_EFFICIENCY_PERCENT,
+                    ),
+                    0.0,
+                ),
+                force_discharge_offset_minutes=max(
+                    _number(
+                        data,
+                        CONF_FORCE_DISCHARGE_OFFSET_MINUTES,
+                        DEFAULT_FORCE_DISCHARGE_OFFSET_MINUTES,
+                    ),
+                    0.0,
+                ),
+                force_discharge_offset_configured=(
+                    CONF_FORCE_DISCHARGE_OFFSET_MINUTES in data
                 ),
             ),
             telemetry=TelemetrySettings(

@@ -17,24 +17,6 @@ from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
 from .const import (
-    CONF_AUTOMATIC_EXPORT_LIMIT_KWH,
-    CONF_BATTERY_FREE_WINDOW_TARGET,
-    CONF_BONUS_WINDOW_END,
-    CONF_BONUS_WINDOW_START,
-    CONF_DISCHARGE_EFFICIENCY_PERCENT,
-    CONF_FORCE_DISCHARGE_FINISH,
-    CONF_FORCE_DISCHARGE_OFFSET_MINUTES,
-    CONF_FREE_CHARGE_END,
-    CONF_FREE_CHARGE_START,
-    DEFAULT_AUTOMATIC_EXPORT_LIMIT_KWH,
-    DEFAULT_BATTERY_FREE_WINDOW_TARGET,
-    DEFAULT_BONUS_WINDOW_END,
-    DEFAULT_BONUS_WINDOW_START,
-    DEFAULT_DISCHARGE_EFFICIENCY_PERCENT,
-    DEFAULT_FORCE_DISCHARGE_FINISH,
-    DEFAULT_FORCE_DISCHARGE_OFFSET_MINUTES,
-    DEFAULT_FREE_CHARGE_END,
-    DEFAULT_FREE_CHARGE_START,
     FOXESS_CONTROL_OWNER_CLOUD,
     FOXESS_CONTROL_OWNER_MODBUS,
 )
@@ -237,10 +219,7 @@ class ActiveFoxessController:
             else (0.0 if source_available else None)
         )
         soc = getattr(self.coordinator.snapshot, "battery_soc", None)
-        target_soc = self._configured(
-            CONF_BATTERY_FREE_WINDOW_TARGET,
-            DEFAULT_BATTERY_FREE_WINDOW_TARGET,
-        )
+        target_soc = self.coordinator.runtime_config.battery.free_window_target_percent
         free_energy_remaining = getattr(
             self.coordinator.data, "free_energy_remaining_kwh", None
         )
@@ -358,10 +337,7 @@ class ActiveFoxessController:
             getattr(self.coordinator, "zerohero_export", None), "imported_kwh", None
         )
         try:
-            allowance = self._configured(
-                CONF_AUTOMATIC_EXPORT_LIMIT_KWH,
-                DEFAULT_AUTOMATIC_EXPORT_LIMIT_KWH,
-            )
+            allowance = runtime.export.automatic_limit_kwh
             self.automatic_export_remaining_kwh = (
                 max(allowance - float(exported), 0.0) if exported is not None else None
             )
@@ -383,10 +359,7 @@ class ActiveFoxessController:
                 and self.automatic_export_remaining_kwh is not None
                 and discharge_max > 0
             ):
-                efficiency = self._configured(
-                    CONF_DISCHARGE_EFFICIENCY_PERCENT,
-                    DEFAULT_DISCHARGE_EFFICIENCY_PERCENT,
-                ) / 100
+                efficiency = runtime.export.discharge_efficiency_percent / 100
                 window_hours = (finish_at - start_at).total_seconds() / 3600
                 self.export_plan = calculate_export_plan(
                     max(float(available), 0.0) * efficiency,
@@ -624,9 +597,7 @@ class ActiveFoxessController:
         }
 
     def _export_bounds(self, now: datetime) -> tuple[datetime, datetime]:
-        start = self.coordinator._configured_time(  # noqa: SLF001
-            CONF_BONUS_WINDOW_START, DEFAULT_BONUS_WINDOW_START
-        )
+        start = self.coordinator.runtime_config.windows.effective_bonus_start
         start_at = datetime.combine(now.date(), start, tzinfo=now.tzinfo)
         finish = self._force_discharge_finish_time()
         finish_at = datetime.combine(now.date(), finish, tzinfo=now.tzinfo)
@@ -639,29 +610,18 @@ class ActiveFoxessController:
 
     def _force_discharge_finish_time(self) -> time:
         """Derive finish from ZEROHERO end, retaining pre-v5 compatibility."""
-        if CONF_FORCE_DISCHARGE_OFFSET_MINUTES not in self.coordinator.config:
-            return self.coordinator._configured_time(  # noqa: SLF001
-                CONF_FORCE_DISCHARGE_FINISH, DEFAULT_FORCE_DISCHARGE_FINISH
-            )
-        bonus_end = self.coordinator._configured_time(  # noqa: SLF001
-            CONF_BONUS_WINDOW_END, DEFAULT_BONUS_WINDOW_END
-        )
+        runtime = self.coordinator.runtime_config
+        if not runtime.export.force_discharge_offset_configured:
+            return runtime.windows.effective_legacy_force_discharge_finish
+        bonus_end = runtime.windows.effective_bonus_end
         anchor = datetime.combine(datetime.min.date(), bonus_end)
         derived = anchor + timedelta(
-            minutes=max(
-                self._configured(
-                    CONF_FORCE_DISCHARGE_OFFSET_MINUTES,
-                    DEFAULT_FORCE_DISCHARGE_OFFSET_MINUTES,
-                ),
-                0.0,
-            )
+            minutes=runtime.export.force_discharge_offset_minutes
         )
         return derived.time()
 
     def _hours_until_next_free(self, now: datetime) -> float:
-        free_start = self.coordinator._configured_time(  # noqa: SLF001
-            CONF_FREE_CHARGE_START, DEFAULT_FREE_CHARGE_START
-        )
+        free_start = self.coordinator.runtime_config.windows.effective_free_charge_start
         target = datetime.combine(now.date(), free_start, tzinfo=now.tzinfo)
         if target <= now:
             target += timedelta(days=1)
@@ -674,15 +634,10 @@ class ActiveFoxessController:
             and automation.battery_export_enabled
         ):
             return False
-        charge_start = self.coordinator._configured_time(  # noqa: SLF001
-            CONF_FREE_CHARGE_START, DEFAULT_FREE_CHARGE_START
-        )
-        charge_end = self.coordinator._configured_time(  # noqa: SLF001
-            CONF_FREE_CHARGE_END, DEFAULT_FREE_CHARGE_END
-        )
-        export_start = self.coordinator._configured_time(  # noqa: SLF001
-            CONF_BONUS_WINDOW_START, DEFAULT_BONUS_WINDOW_START
-        )
+        windows = self.coordinator.runtime_config.windows
+        charge_start = windows.effective_free_charge_start
+        charge_end = windows.effective_free_charge_end
+        export_start = windows.effective_bonus_start
         export_end = self._force_discharge_finish_time()
 
         def segments(start, end):
@@ -786,10 +741,3 @@ class ActiveFoxessController:
             return power_to_kw(value, state.attributes.get("unit_of_measurement"))
         except (TypeError, ValueError):
             return None
-
-    def _configured(self, key: str, default: float) -> float:
-        try:
-            value = float(self.coordinator.config.get(key, default))
-        except (TypeError, ValueError):
-            return default
-        return max(value, 0.0)

@@ -15,10 +15,12 @@ from custom_components.home_energy_orchestrator.const import (
     CONF_AUTOMATIC_CHARGE_ENABLED,
     CONF_AUTOMATIC_CONTROL_ENABLED,
     CONF_AUTOMATIC_EXPORT_ENABLED,
+    CONF_AUTOMATIC_EXPORT_LIMIT_KWH,
     CONF_BATTERY_CAPACITY_ENTITY,
     CONF_BATTERY_CHARGE_POSITIVE,
     CONF_BATTERY_CHARGE_POWER,
     CONF_BATTERY_DISCHARGE_POWER,
+    CONF_BATTERY_FREE_WINDOW_TARGET,
     CONF_BATTERY_POWER,
     CONF_BATTERY_POWER_DIRECTION,
     CONF_BATTERY_SOC,
@@ -27,6 +29,7 @@ from custom_components.home_energy_orchestrator.const import (
     CONF_CONFIGURE_EV,
     CONF_CONFIGURE_SOLAR,
     CONF_DAILY_IMPORT_ENTITY,
+    CONF_DISCHARGE_EFFICIENCY_PERCENT,
     CONF_EV_ACTUAL_CURRENT,
     CONF_EV_ALLOWANCE_GUARD_ENABLED,
     CONF_EV_AT_HOME,
@@ -54,6 +57,8 @@ from custom_components.home_energy_orchestrator.const import (
     CONF_EV_STORED_ENERGY,
     CONF_EV_VOLTAGE,
     CONF_EXPORT_RATE,
+    CONF_FORCE_DISCHARGE_FINISH,
+    CONF_FORCE_DISCHARGE_OFFSET_MINUTES,
     CONF_FOXESS_CONTROL_OWNER,
     CONF_FOXESS_FORCE_CHARGE_POWER,
     CONF_FOXESS_FORCE_DISCHARGE_POWER,
@@ -84,8 +89,11 @@ from custom_components.home_energy_orchestrator.const import (
     CONF_SOLAR_POWER_DIRECTION,
     CONF_TELEMETRY_MAX_AGE_SECONDS,
     CONF_ZERO_IMPORT_THRESHOLD_KW,
+    DEFAULT_AUTOMATIC_EXPORT_LIMIT_KWH,
+    DEFAULT_BATTERY_FREE_WINDOW_TARGET,
     DEFAULT_BONUS_WINDOW_END,
     DEFAULT_BONUS_WINDOW_START,
+    DEFAULT_DISCHARGE_EFFICIENCY_PERCENT,
     DEFAULT_EV_ALLOWANCE_GUARD_ENABLED,
     DEFAULT_EV_BEFORE_EXPORT_SOC_TARGET,
     DEFAULT_EV_CHARGE_PATH,
@@ -99,7 +107,11 @@ from custom_components.home_energy_orchestrator.const import (
     DEFAULT_EV_SOLAR_SPILL_ENABLED,
     DEFAULT_EV_VOLTAGE,
     DEFAULT_EXPORT_RATE,
+    DEFAULT_FORCE_DISCHARGE_FINISH,
+    DEFAULT_FORCE_DISCHARGE_OFFSET_MINUTES,
     DEFAULT_FOXESS_CONTROL_OWNER,
+    DEFAULT_FREE_CHARGE_END,
+    DEFAULT_FREE_CHARGE_START,
     DEFAULT_GRID_POWER_DIRECTION,
     DEFAULT_HOUSE_AWAY_CONFIRMATION_HOURS,
     DEFAULT_HOUSE_AWAY_FALLBACK_KWH,
@@ -229,6 +241,15 @@ def test_runtime_configuration_uses_established_defaults() -> None:
     assert parsed.windows.free_charge_end is None
     assert parsed.windows.bonus_start == time.fromisoformat(DEFAULT_BONUS_WINDOW_START)
     assert parsed.windows.bonus_end == time.fromisoformat(DEFAULT_BONUS_WINDOW_END)
+    assert parsed.windows.legacy_force_discharge_finish == time.fromisoformat(
+        DEFAULT_FORCE_DISCHARGE_FINISH
+    )
+    assert parsed.windows.effective_free_charge_start == time.fromisoformat(
+        DEFAULT_FREE_CHARGE_START
+    )
+    assert parsed.windows.effective_free_charge_end == time.fromisoformat(
+        DEFAULT_FREE_CHARGE_END
+    )
     assert parsed.accounting.daily_import_entity is None
     assert parsed.accounting.retailer_daily_cost_entity is None
     assert parsed.accounting.retailer_zerohero_status_entity is None
@@ -239,6 +260,20 @@ def test_runtime_configuration_uses_established_defaults() -> None:
     assert parsed.battery.capacity_entity is None
     assert parsed.battery.charge_power_entity is None
     assert parsed.battery.discharge_power_entity is None
+    assert (
+        parsed.battery.free_window_target_percent
+        == DEFAULT_BATTERY_FREE_WINDOW_TARGET
+    )
+    assert parsed.export.automatic_limit_kwh == DEFAULT_AUTOMATIC_EXPORT_LIMIT_KWH
+    assert (
+        parsed.export.discharge_efficiency_percent
+        == DEFAULT_DISCHARGE_EFFICIENCY_PERCENT
+    )
+    assert (
+        parsed.export.force_discharge_offset_minutes
+        == DEFAULT_FORCE_DISCHARGE_OFFSET_MINUTES
+    )
+    assert parsed.export.force_discharge_offset_configured is False
     assert parsed.telemetry.max_age_seconds == DEFAULT_TELEMETRY_MAX_AGE_SECONDS
     assert parsed.ev_required_mapping_complete is False
     assert parsed.house.occupancy_mode == DEFAULT_HOUSE_OCCUPANCY_MODE
@@ -294,6 +329,59 @@ def test_runtime_configuration_preserves_existing_coercion_behavior() -> None:
     assert parsed.inverter.force_charge_power_entity == "number.foxess_charge"
     assert parsed.inverter.force_discharge_power_entity == "number.foxess_discharge"
     assert parsed.inverter.actuator_mapping_complete is True
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        ("12.5", 12.5),
+        (-2, 0.0),
+        ("invalid", DEFAULT_AUTOMATIC_EXPORT_LIMIT_KWH),
+    ],
+)
+def test_export_limit_snapshot_preserves_nonnegative_coercion(
+    value: object,
+    expected: float,
+) -> None:
+    runtime = RuntimeConfiguration.from_mapping(
+        {CONF_AUTOMATIC_EXPORT_LIMIT_KWH: value}
+    )
+    assert runtime.export.automatic_limit_kwh == expected
+
+
+def test_active_battery_export_snapshot_preserves_legacy_defaults_and_presence() -> None:
+    runtime = RuntimeConfiguration.from_mapping(
+        {
+            CONF_BATTERY_FREE_WINDOW_TARGET: "95",
+            CONF_DISCHARGE_EFFICIENCY_PERCENT: "90",
+            CONF_FORCE_DISCHARGE_OFFSET_MINUTES: -5,
+            CONF_FREE_CHARGE_START: "invalid",
+            CONF_FREE_CHARGE_END: "invalid",
+            CONF_BONUS_WINDOW_START: "invalid",
+            CONF_BONUS_WINDOW_END: "invalid",
+            CONF_FORCE_DISCHARGE_FINISH: "invalid",
+        }
+    )
+
+    assert runtime.battery.free_window_target_percent == 95.0
+    assert runtime.export.discharge_efficiency_percent == 90.0
+    assert runtime.export.force_discharge_offset_minutes == 0.0
+    assert runtime.export.force_discharge_offset_configured is True
+    assert runtime.windows.effective_free_charge_start == time.fromisoformat(
+        DEFAULT_FREE_CHARGE_START
+    )
+    assert runtime.windows.effective_free_charge_end == time.fromisoformat(
+        DEFAULT_FREE_CHARGE_END
+    )
+    assert runtime.windows.effective_bonus_start == time.fromisoformat(
+        DEFAULT_BONUS_WINDOW_START
+    )
+    assert runtime.windows.effective_bonus_end == time.fromisoformat(
+        DEFAULT_BONUS_WINDOW_END
+    )
+    assert runtime.windows.effective_legacy_force_discharge_finish == time.fromisoformat(
+        DEFAULT_FORCE_DISCHARGE_FINISH
+    )
 
 
 @pytest.mark.parametrize(

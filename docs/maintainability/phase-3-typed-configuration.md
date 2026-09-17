@@ -66,6 +66,11 @@ selectors, validation, migration behavior and the multi-page draft workflow.
   seam moved power-source mappings, listener registration and effective grid,
   solar and service-current directions into the immutable snapshot, reducing
   raw runtime mapping operations from 13 to nine without changing telemetry.
+  The next seam moved the active battery free-window target, automatic export
+  limit, discharge efficiency and legacy-compatible finish/offset selection
+  into the immutable snapshot. Raw runtime mapping operations are now seven;
+  the remaining reads are coordinator, EV-controller and manual-test helpers
+  plus the centralized mutation implementation.
 
 ## Work packages
 
