@@ -12,7 +12,7 @@ from .configuration import RuntimeConfiguration
 from .normalise import current_to_a, energy_to_kwh
 from .planner.ev import DirectEvseObservation
 
-UNKNOWN_STATES = frozenset({"unknown", "unavailable"})
+UNKNOWN_STATES = frozenset({"unknown", "unavailable", ""})
 
 
 @dataclass(frozen=True, slots=True)
@@ -71,6 +71,29 @@ class EvFeedbackSnapshot:
     smart_socket: EvEntityFeedback
     legacy_charge_to_full: EvEntityFeedback
     battery_soc: EvEntityFeedback
+
+    def for_entity(self, entity_id: str | None) -> EvEntityFeedback | None:
+        """Return captured feedback for an explicitly mapped entity ID."""
+        if entity_id is None:
+            return None
+        for feedback in (
+            self.at_home,
+            self.cable_connected,
+            self.charging_state,
+            self.actual_current,
+            self.soc,
+            self.stored_energy,
+            self.lifetime_energy,
+            self.current_limit,
+            self.charge_limit,
+            self.charge_switch,
+            self.smart_socket,
+            self.legacy_charge_to_full,
+            self.battery_soc,
+        ):
+            if feedback.entity_id == entity_id:
+                return feedback
+        return None
 
     @property
     def actual_current_result(self) -> tuple[float, bool]:

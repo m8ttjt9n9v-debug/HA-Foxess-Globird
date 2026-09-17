@@ -261,6 +261,56 @@ def test_composite_ev_snapshot_matches_retained_controller_helpers(hass) -> None
     )
 
 
+@pytest.mark.asyncio
+async def test_reconcile_reads_core_ev_feedback_once_per_cycle(hass, monkeypatch) -> None:
+    """Repeated policy helper access must use the cycle's immutable snapshot."""
+    _set_ev_states(hass)
+    controller = ActiveEvController(hass, _coordinator(_controller_config()))
+    state_machine_type = type(hass.states)
+    original_get = state_machine_type.get
+    calls: list[str] = []
+
+    def counted_get(state_machine, entity_id: str):
+        if entity_id == "sensor.car_soc":
+            calls.append(entity_id)
+        return original_get(state_machine, entity_id)
+
+    monkeypatch.setattr(state_machine_type, "get", counted_get)
+
+    await controller.async_reconcile(datetime(2026, 9, 7, 12, 1, tzinfo=UTC))
+
+    assert calls == ["sensor.car_soc"]
+
+
+@pytest.mark.asyncio
+async def test_reconcile_does_not_leak_snapshot_into_out_of_cycle_helpers(hass) -> None:
+    """Scheduled and diagnostic helper calls after a cycle remain live reads."""
+    _set_ev_states(hass)
+    controller = ActiveEvController(hass, _coordinator(_controller_config()))
+
+    await controller.async_reconcile(datetime(2026, 9, 7, 12, 1, tzinfo=UTC))
+    hass.states.async_set("sensor.car_soc", "42", {"unit_of_measurement": "%"})
+
+    assert controller._mapped_number("sensor.car_soc") == 42  # noqa: SLF001
+
+
+@pytest.mark.asyncio
+async def test_reconcile_resets_snapshot_when_cycle_raises(hass, monkeypatch) -> None:
+    """A failed cycle must not leave stale entity feedback in the task context."""
+    _set_ev_states(hass)
+    controller = ActiveEvController(hass, _coordinator(_controller_config()))
+
+    def fail_after_capture():
+        raise RuntimeError("planned test failure")
+
+    monkeypatch.setattr(controller, "_grid_current_a", fail_after_capture)
+    with pytest.raises(RuntimeError, match="planned test failure"):
+        await controller.async_reconcile(datetime(2026, 9, 7, 12, 1, tzinfo=UTC))
+
+    hass.states.async_set("sensor.car_soc", "43", {"unit_of_measurement": "%"})
+    assert controller._mapped_number("sensor.car_soc") == 43  # noqa: SLF001
+
+
 @pytest.mark.parametrize("entity_state", ["unknown", "unavailable"])
 def test_connected_at_home_fails_closed_on_unreadable_presence(
     hass: HomeAssistant,

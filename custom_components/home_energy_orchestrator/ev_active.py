@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from contextvars import ContextVar
 from datetime import datetime, timedelta
 from math import isfinite
 
@@ -110,6 +111,11 @@ from .const import (
 )
 from .coordinator import EnergyCoordinator
 from .ev_adapter import EvEntityMap, EvServiceAdapter, EvWriteBlocked, ev_control_gate_status
+from .ev_observation_adapter import (
+    EvFeedbackSnapshot,
+    capture_ev_feedback,
+    ev_observation_entity_map,
+)
 from .normalise import current_to_a, energy_to_kwh
 from .persistence import TypedValueStoreRepository
 from .planner.ev import (
@@ -168,6 +174,10 @@ from .planner.timed_average import TimedAverageWindow
 
 _LOGGER = logging.getLogger(__name__)
 _UNKNOWN_STATES = {"unknown", "unavailable", ""}
+_CYCLE_FEEDBACK: ContextVar[EvFeedbackSnapshot | None] = ContextVar(
+    "heo_ev_cycle_feedback",
+    default=None,
+)
 
 
 class ActiveEvController:
@@ -306,9 +316,23 @@ class ActiveEvController:
         await self._async_save(now)
 
     async def async_reconcile(self, now: datetime | None = None) -> None:
+        """Run one reconciliation with task-local feedback that cannot leak."""
+        token = _CYCLE_FEEDBACK.set(None)
+        try:
+            await self._async_reconcile_cycle(now)
+        finally:
+            _CYCLE_FEEDBACK.reset(token)
+
+    async def _async_reconcile_cycle(self, now: datetime | None = None) -> None:
         """Sample feedback, make a three-minute decision, then reconcile safely."""
         async with self._lock:
             now = now or dt_util.now()
+            _CYCLE_FEEDBACK.set(
+                capture_ev_feedback(
+                    self.hass,
+                    ev_observation_entity_map(self.coordinator.runtime_config),
+                )
+            )
             self.last_actions = ()
             grid_current, grid_valid = self._grid_current_a()
             ev_current, ev_valid = self._actual_ev_current_a()
@@ -2099,6 +2123,9 @@ class ActiveEvController:
         return telemetry.site_grid_current.value, True
 
     def _actual_ev_current_a(self) -> tuple[float, bool]:
+        feedback = _CYCLE_FEEDBACK.get()
+        if feedback is not None:
+            return feedback.actual_current_result
         ev_telemetry = self.coordinator.runtime_config.ev_telemetry
         charging = self._mapped_state(ev_telemetry.charging_state_entity)
         if charging is None:
@@ -2125,6 +2152,9 @@ class ActiveEvController:
         return value, True
 
     def _observation(self) -> DirectEvseObservation | None:
+        feedback = _CYCLE_FEEDBACK.get()
+        if feedback is not None:
+            return feedback.direct_observation
         actuators = self.coordinator.runtime_config.ev_actuators
         current_entity = actuators.current_limit_entity
         limit_entity = actuators.charge_limit_entity
@@ -2199,12 +2229,20 @@ class ActiveEvController:
 
     def _mapped_state(self, entity_id: str | None) -> str | None:
         """Return one mapped entity state, excluding unreadable values."""
+        feedback = _CYCLE_FEEDBACK.get()
+        captured = feedback.for_entity(entity_id) if feedback is not None else None
+        if captured is not None:
+            return captured.available_state
         state = self.hass.states.get(entity_id) if entity_id else None
         if state is None or state.state.lower() in _UNKNOWN_STATES:
             return None
         return state.state.lower()
 
     def _mapped_number(self, entity_id: str | None) -> float | None:
+        feedback = _CYCLE_FEEDBACK.get()
+        captured = feedback.for_entity(entity_id) if feedback is not None else None
+        if captured is not None:
+            return captured.number
         state = self.hass.states.get(entity_id) if entity_id else None
         try:
             value = float(state.state) if state is not None else None
@@ -2213,6 +2251,10 @@ class ActiveEvController:
         return value if value is not None and isfinite(value) else None
 
     def _mapped_energy(self, entity_id: str | None) -> float | None:
+        feedback = _CYCLE_FEEDBACK.get()
+        captured = feedback.for_entity(entity_id) if feedback is not None else None
+        if captured is not None:
+            return captured.energy_kwh
         state = self.hass.states.get(entity_id) if entity_id else None
         if state is None:
             return None
@@ -2228,6 +2270,10 @@ class ActiveEvController:
         if preference.charge_to_full_configured:
             return preference.charge_to_full_enabled
         legacy_entity = preference.legacy_charge_to_full_entity
+        feedback = _CYCLE_FEEDBACK.get()
+        captured = feedback.for_entity(legacy_entity) if feedback is not None else None
+        if captured is not None:
+            return captured.reported_state == "on"
         return bool(
             legacy_entity and self.hass.states.is_state(legacy_entity, "on")
         )

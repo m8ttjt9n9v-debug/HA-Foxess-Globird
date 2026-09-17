@@ -49,7 +49,7 @@ def test_capture_preserves_state_metadata_and_normalized_interpretations(hass) -
     assert result.last_updated == source.last_updated
 
 
-@pytest.mark.parametrize("reported", ["unknown", "unavailable", "UNKNOWN"])
+@pytest.mark.parametrize("reported", ["unknown", "unavailable", "UNKNOWN", ""])
 def test_unreadable_state_retains_presence_and_raw_value(hass, reported: str) -> None:
     hass.states.async_set("sensor.car", reported)
 
