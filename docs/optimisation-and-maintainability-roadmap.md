@@ -172,6 +172,9 @@ duplicate entities; the old dashboard and automations continue to work; a
 clean-install usability review can identify every primary entity without
 reading source code.
 
+Current work package and completion evidence:
+[Phase 2 compatibility foundation and naming-only release](maintainability/phase-2-compatibility-foundation.md).
+
 ### Phase 3 — typed configuration catalogue
 
 Estimated effort: 8–12 engineer-days.
