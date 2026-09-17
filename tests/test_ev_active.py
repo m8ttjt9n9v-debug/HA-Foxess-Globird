@@ -1094,6 +1094,28 @@ async def test_charge_to_full_starts_immediately_outside_free_and_bypasses_norma
     )
 
 
+async def test_charge_to_full_remains_explicit_exception_at_battery_floor(
+    hass: HomeAssistant,
+) -> None:
+    _set_ev_states(hass)
+    coordinator = _coordinator(
+        _controller_config(
+            ev_charge_to_full_enabled=True,
+            rehearsal_mode=True,
+            battery_floor_percent=10,
+        )
+    )
+    coordinator.snapshot = replace(coordinator.snapshot, battery_soc=5)
+    controller = ActiveEvController(hass, coordinator)
+
+    await controller.async_reconcile(datetime(2026, 9, 7, 18, 0, tzinfo=UTC))
+
+    assert controller.decision_phase == "charge_to_full_paid_grid_override"
+    assert controller.target_current_a == 16
+    assert controller.outside_stage_selection is not None
+    assert controller.outside_stage_selection.stage == "charge_to_full"
+
+
 async def test_charge_to_full_clears_and_stops_at_full_soc(
     hass: HomeAssistant,
 ) -> None:

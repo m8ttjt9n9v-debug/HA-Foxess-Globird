@@ -75,6 +75,43 @@ def test_pilot_site_free_window_branch_order(changes, expected, phase):
     assert decision.phase == phase
 
 
+@pytest.mark.parametrize(
+    ("changes", "expected", "phase"),
+    [
+        (
+            {"grid_average_a": 65, "charge_to_full": True, "ev_priority": True},
+            9,
+            "service_limit_correction",
+        ),
+        (
+            {"charge_to_full": True, "ev_priority": True, "elapsed_minutes": 0},
+            32,
+            "charge_to_full_priority",
+        ),
+        (
+            {"ev_priority": True, "elapsed_minutes": 0},
+            32,
+            "ev_priority_maximum",
+        ),
+        (
+            {"elapsed_minutes": 0, "grid_average_valid": False},
+            6,
+            "settling_foxess",
+        ),
+        (
+            {"grid_average_valid": False, "actual_ev_current_a": 0},
+            6,
+            "telemetry_fallback_minimum",
+        ),
+    ],
+)
+def test_free_window_priority_collisions(changes, expected, phase) -> None:
+    """Freeze the commissioned order when multiple branches are eligible."""
+    decision = plan_free_window_current(replace(BASE, **changes))
+    assert decision.current_a == expected
+    assert decision.phase == phase
+
+
 def test_service_overrun_can_reduce_to_protected_baseline():
     decision = plan_free_window_current(
         replace(BASE, grid_average_a=100, ev_average_a=6, requested_a=6)
