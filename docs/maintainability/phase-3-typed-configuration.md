@@ -71,9 +71,10 @@ selectors, validation, migration behavior and the multi-page draft workflow.
   into the immutable snapshot. Raw runtime mapping operations are now seven;
   a complete immutable window projection then replaced the coordinator's raw
   runtime time parser while preserving its compatibility interface. Raw runtime
-  mapping operations are now six; the remaining reads are numeric coordinator,
-  EV-controller and manual-test helpers plus the centralized mutation
-  implementation.
+  mapping operations fell to six. Manual diagnostic tariff selection now also
+  consumes immutable tariff settings, reducing raw runtime mapping operations
+  to five. The remaining reads are numeric coordinator and EV-controller
+  helpers plus the centralized mutation implementation.
 
 ## Work packages
 

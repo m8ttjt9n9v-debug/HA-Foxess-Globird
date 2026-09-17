@@ -22,8 +22,14 @@ from custom_components.home_energy_orchestrator.const import (
     CONF_FOXESS_WORK_MODE,
     CONF_INVERTER_CHARGE_LIMIT_KW,
     CONF_INVERTER_DISCHARGE_LIMIT_KW,
+    CONF_OFFPEAK_BALANCE_RATE,
     CONF_OFFPEAK_EXPORT_RATE,
+    CONF_OFFPEAK_RATE,
+    CONF_PEAK_RATE,
+    CONF_PEAK_WINDOW_END,
+    CONF_PEAK_WINDOW_START,
     CONF_REHEARSAL_MODE,
+    CONF_SHOULDER_RATE,
     CONF_SUPER_EXPORT_RATE,
     FOXESS_CONTROL_OWNER_CLOUD,
     FOXESS_CONTROL_OWNER_MODBUS,
@@ -112,6 +118,37 @@ def test_manual_discharge_preview_treats_tariff_windows_independently(
     )
 
     assert controller.current_export_rate() == pytest.approx(0.09)
+
+
+def test_manual_tariff_snapshot_preserves_missing_and_invalid_fallbacks(hass) -> None:
+    coordinator = _coordinator(
+        **{
+            "free_window_hours": 0.0,
+            CONF_PEAK_RATE: -1,
+            CONF_SHOULDER_RATE: "invalid",
+            CONF_PEAK_WINDOW_START: "16:00:00",
+            CONF_PEAK_WINDOW_END: "23:00:00",
+        }
+    )
+    controller = ManualTestController(hass, coordinator)
+
+    assert controller.current_import_rate(
+        datetime(2026, 9, 14, 17, 0, tzinfo=UTC)
+    ) == pytest.approx(0.0)
+    assert controller.current_import_rate(
+        datetime(2026, 9, 14, 12, 0, tzinfo=UTC)
+    ) == pytest.approx(0.0)
+
+    free_coordinator = _coordinator(
+        **{
+            CONF_OFFPEAK_RATE: -1,
+            CONF_OFFPEAK_BALANCE_RATE: "invalid",
+        }
+    )
+    free_controller = ManualTestController(hass, free_coordinator)
+    assert free_controller.current_import_rate() == pytest.approx(0.0)
+    free_coordinator.data.free_energy_remaining_kwh = 0.0
+    assert free_controller.current_import_rate() == pytest.approx(0.0)
 
 
 def _coordinator(**config):

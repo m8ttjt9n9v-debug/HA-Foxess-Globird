@@ -84,10 +84,14 @@ from .const import (
     CONF_HOUSE_OCCUPANCY_MODE,
     CONF_INVERTER_CHARGE_LIMIT_KW,
     CONF_INVERTER_DISCHARGE_LIMIT_KW,
+    CONF_OFFPEAK_BALANCE_RATE,
     CONF_OFFPEAK_EXPORT_RATE,
+    CONF_OFFPEAK_RATE,
+    CONF_PEAK_RATE,
     CONF_PEAK_WINDOW_END,
     CONF_PEAK_WINDOW_START,
     CONF_REHEARSAL_MODE,
+    CONF_SHOULDER_RATE,
     CONF_SIGN_CONVENTIONS_VERIFIED,
     CONF_SITE_GRID_CURRENT,
     CONF_SITE_GRID_CURRENT_DIRECTION,
@@ -444,7 +448,61 @@ class TariffSettings:
     peak_export_rate_per_kwh: float
     offpeak_export_rate_per_kwh: float
     additional_export_rate_per_kwh: float
+    peak_import_rate_per_kwh: float
+    offpeak_import_rate_per_kwh: float
+    offpeak_balance_rate_per_kwh: float
+    shoulder_import_rate_per_kwh: float
     zero_import_threshold_kwh_per_hour: float
+
+    @staticmethod
+    def _effective_rate(value: float, default: float) -> float:
+        return value if isfinite(value) and value >= 0 else default
+
+    @property
+    def effective_peak_export_rate_per_kwh(self) -> float:
+        return self._effective_rate(
+            self.peak_export_rate_per_kwh,
+            DEFAULT_EXPORT_RATE,
+        )
+
+    @property
+    def effective_offpeak_export_rate_per_kwh(self) -> float:
+        return self._effective_rate(
+            self.offpeak_export_rate_per_kwh,
+            DEFAULT_OFFPEAK_EXPORT_RATE,
+        )
+
+    @property
+    def effective_additional_export_rate_per_kwh(self) -> float:
+        return self._effective_rate(
+            self.additional_export_rate_per_kwh,
+            DEFAULT_SUPER_EXPORT_RATE,
+        )
+
+    @property
+    def effective_peak_import_rate_per_kwh(self) -> float:
+        return self._effective_rate(self.peak_import_rate_per_kwh, 0.0)
+
+    @property
+    def effective_offpeak_import_rate_per_kwh(self) -> float:
+        return self._effective_rate(
+            self.offpeak_import_rate_per_kwh,
+            0.0,
+        )
+
+    @property
+    def effective_offpeak_balance_rate_per_kwh(self) -> float:
+        return self._effective_rate(
+            self.offpeak_balance_rate_per_kwh,
+            0.0,
+        )
+
+    @property
+    def effective_shoulder_import_rate_per_kwh(self) -> float:
+        return self._effective_rate(
+            self.shoulder_import_rate_per_kwh,
+            0.0,
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -982,6 +1040,26 @@ class RuntimeConfiguration:
                     data,
                     CONF_SUPER_EXPORT_RATE,
                     DEFAULT_SUPER_EXPORT_RATE,
+                ),
+                peak_import_rate_per_kwh=_number(
+                    data,
+                    CONF_PEAK_RATE,
+                    0.0,
+                ),
+                offpeak_import_rate_per_kwh=_number(
+                    data,
+                    CONF_OFFPEAK_RATE,
+                    0.0,
+                ),
+                offpeak_balance_rate_per_kwh=_number(
+                    data,
+                    CONF_OFFPEAK_BALANCE_RATE,
+                    0.0,
+                ),
+                shoulder_import_rate_per_kwh=_number(
+                    data,
+                    CONF_SHOULDER_RATE,
+                    0.0,
                 ),
                 zero_import_threshold_kwh_per_hour=_number(
                     data,

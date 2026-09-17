@@ -19,26 +19,16 @@ from homeassistant.util import dt as dt_util
 from .const import (
     CONF_BONUS_WINDOW_END,
     CONF_BONUS_WINDOW_START,
-    CONF_EXPORT_RATE,
     CONF_EXPORT_RATE_WINDOW_END,
     CONF_EXPORT_RATE_WINDOW_START,
     CONF_INVERTER_CHARGE_LIMIT_KW,
     CONF_INVERTER_DISCHARGE_LIMIT_KW,
-    CONF_OFFPEAK_BALANCE_RATE,
-    CONF_OFFPEAK_EXPORT_RATE,
-    CONF_OFFPEAK_RATE,
-    CONF_PEAK_RATE,
     CONF_PEAK_WINDOW_END,
     CONF_PEAK_WINDOW_START,
-    CONF_SHOULDER_RATE,
-    CONF_SUPER_EXPORT_RATE,
     DEFAULT_BONUS_WINDOW_END,
     DEFAULT_BONUS_WINDOW_START,
-    DEFAULT_EXPORT_RATE,
     DEFAULT_EXPORT_RATE_WINDOW_END,
     DEFAULT_EXPORT_RATE_WINDOW_START,
-    DEFAULT_OFFPEAK_EXPORT_RATE,
-    DEFAULT_SUPER_EXPORT_RATE,
     FOXESS_CONTROL_OWNER_MODBUS,
 )
 from .coordinator import EnergyCoordinator
@@ -144,13 +134,16 @@ class ManualTestController:
         free_remaining = 0.0
         if self.coordinator.data is not None:
             free_remaining = max(self.coordinator.data.free_energy_remaining_kwh or 0.0, 0.0)
+        tariff = self.coordinator.runtime_config.tariff
         return estimate_charge(
             self.charge_power_kw,
             self.duration_minutes,
             free_window_active=self._free_window_active(now),
             free_energy_remaining_kwh=free_remaining,
-            offpeak_rate=self._rate(CONF_OFFPEAK_RATE, 0.0),
-            offpeak_balance_rate=self._rate(CONF_OFFPEAK_BALANCE_RATE, 0.0),
+            offpeak_rate=tariff.effective_offpeak_import_rate_per_kwh,
+            offpeak_balance_rate=(
+                tariff.effective_offpeak_balance_rate_per_kwh
+            ),
             current_rate=self.current_import_rate(now),
         )
 
@@ -165,15 +158,14 @@ class ManualTestController:
     def current_export_rate(self, now: datetime | None = None) -> float:
         """Return the configured export rate for the current local time."""
         now = now or dt_util.now()
+        tariff = self.coordinator.runtime_config.tariff
         standard_rate = (
-            self._rate(CONF_EXPORT_RATE, DEFAULT_EXPORT_RATE)
+            tariff.effective_peak_export_rate_per_kwh
             if self._standard_export_window_active(now)
-            else self._rate(CONF_OFFPEAK_EXPORT_RATE, DEFAULT_OFFPEAK_EXPORT_RATE)
+            else tariff.effective_offpeak_export_rate_per_kwh
         )
         if self._bonus_window_active(now):
-            return standard_rate + self._rate(
-                CONF_SUPER_EXPORT_RATE, DEFAULT_SUPER_EXPORT_RATE
-            )
+            return standard_rate + tariff.effective_additional_export_rate_per_kwh
         return standard_rate
 
     def current_import_rate(self, now: datetime | None = None) -> float:
@@ -185,15 +177,22 @@ class ManualTestController:
                 if self.coordinator.data is None
                 else max(self.coordinator.data.free_energy_remaining_kwh or 0.0, 0.0)
             )
-            return self._rate(
-                CONF_OFFPEAK_RATE if remaining > 0 else CONF_OFFPEAK_BALANCE_RATE,
-                0.0,
+            tariff = self.coordinator.runtime_config.tariff
+            return (
+                tariff.effective_offpeak_import_rate_per_kwh
+                if remaining > 0
+                else tariff.effective_offpeak_balance_rate_per_kwh
             )
         start = self.coordinator._configured_time(CONF_PEAK_WINDOW_START, "16:00:00")
         end = self.coordinator._configured_time(CONF_PEAK_WINDOW_END, "23:00:00")
         current = now.timetz().replace(tzinfo=None)
         in_peak = (start <= current < end) if start < end else (current >= start or current < end)
-        return self._rate(CONF_PEAK_RATE if in_peak else CONF_SHOULDER_RATE, 0.0)
+        tariff = self.coordinator.runtime_config.tariff
+        return (
+            tariff.effective_peak_import_rate_per_kwh
+            if in_peak
+            else tariff.effective_shoulder_import_rate_per_kwh
+        )
 
     async def async_start(self, kind: str, power_kw: float, duration_minutes: float) -> None:
         """Start a bounded test after all commissioning gates pass."""
@@ -553,13 +552,6 @@ class ManualTestController:
             else 0.0
         )
         return value if isfinite(value) and value >= 0 else 0.0
-
-    def _rate(self, key: str, default: float) -> float:
-        try:
-            value = float(self.coordinator.config.get(key, default))
-        except (TypeError, ValueError):
-            return default
-        return value if isfinite(value) and value >= 0 else default
 
     def _free_window_active(self, now: datetime) -> bool:
         return self.coordinator._free_window_hours_remaining(now) > 0
