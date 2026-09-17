@@ -92,35 +92,6 @@ class EnergySensor(CoordinatorEntity[EnergyCoordinator], SensorEntity):
             "daily_export": ledger.daily_export_kwh,
             "standard_export_window": ledger.standard_window_export_kwh,
             "offpeak_export": ledger.offpeak_rate_export_kwh,
-            # Cost has no Home Assistant unit (it is site-currency specific),
-            # so round the state itself rather than relying on display hints.
-            "estimated_energy_cost": (
-                None
-                if ledger.estimated_energy_cost is None
-                else round(ledger.estimated_energy_cost, 2)
-            ),
-            "estimated_import_energy_cost": (
-                None
-                if ledger.estimated_import_energy_cost is None
-                else round(ledger.estimated_import_energy_cost, 2)
-            ),
-            "daily_supply_charge": (
-                None
-                if ledger.daily_supply_charge is None
-                else round(ledger.daily_supply_charge, 2)
-            ),
-            "estimated_export_revenue": (
-                None
-                if ledger.estimated_export_revenue is None
-                else round(ledger.estimated_export_revenue, 2)
-            ),
-            "zerohero_credit": (
-                None if ledger.zerohero_credit is None else round(ledger.zerohero_credit, 2)
-            ),
-            "forecast_export_realisation": round(
-                self.coordinator.forecast_feedback.export_realisation_fraction * 100,
-                1,
-            ),
             "free_charge_allowed": ledger.free_charge_allowed_kwh,
             "free_charge_power_target": (
                 None

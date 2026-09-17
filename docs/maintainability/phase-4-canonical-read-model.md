@@ -41,12 +41,16 @@ The fourth seam adds a frozen EV state submodel for all EV entity states and
 Fleet EV summary values. It preserves missing-controller defaults and active
 session start precedence without moving EV control or command behavior.
 
+The fifth seam completes cost entity-state projection through the existing
+cost submodel, retaining all established state rounding.
+
 Work-item evidence:
 
 - [core SiteReadModel projection](work-item-core-read-model.md)
 - [accounting and scorecard read model](work-item-accounting-read-model.md)
 - [house learning and occupancy read model](work-item-learning-read-model.md)
 - [EV entity-state read model](work-item-ev-state-read-model.md)
+- [cost entity-state read model](work-item-cost-state-read-model.md)
 
 ## Work packages
 

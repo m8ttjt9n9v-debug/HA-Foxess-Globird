@@ -72,6 +72,8 @@ class CostReadModel:
     """Canonical measured and forecast cost presentation values."""
 
     measured_gross_cost: float | None
+    measured_import_cost: float | None
+    daily_supply_charge: float | None
     measured_export_revenue: float | None
     measured_zerohero_credit: float | None
     measured_net_cost: float | None
@@ -84,6 +86,30 @@ class CostReadModel:
     forecast_learned_cost_bias: float | None
     feedback_export_realisation_fraction: float
     feedback_learned_cost_bias: float
+
+    def sensor_values(self) -> dict[str, object]:
+        """Project the existing cost and forecast entity states."""
+        # Cost has no Home Assistant unit (it is site-currency specific), so
+        # preserve state rounding here rather than relying on display hints.
+        return {
+            "estimated_energy_cost": _rounded(self.measured_gross_cost, 2),
+            "estimated_import_energy_cost": _rounded(
+                self.measured_import_cost,
+                2,
+            ),
+            "daily_supply_charge": _rounded(self.daily_supply_charge, 2),
+            "estimated_export_revenue": _rounded(
+                self.measured_export_revenue,
+                2,
+            ),
+            "zerohero_credit": _rounded(self.measured_zerohero_credit, 2),
+            "estimated_net_cost": _rounded(self.calibrated_net_cost, 2),
+            "measured_net_cost": _rounded(self.measured_net_cost, 2),
+            "forecast_export_realisation": round(
+                self.feedback_export_realisation_fraction * 100,
+                1,
+            ),
+        }
 
     def sensor_attributes(self) -> dict[str, object]:
         """Project the Estimated Net Cost entity's existing attributes."""
@@ -325,8 +351,6 @@ class SiteReadModel:
             "grid_power": self.grid_power_kw,
             "solar_power": self.solar_power_kw,
             "house_load": self.house_load_kw,
-            "estimated_net_cost": _rounded(self.cost.calibrated_net_cost, 2),
-            "measured_net_cost": _rounded(self.cost.measured_net_cost, 2),
             "forecast_yesterday_cost": self.scorecard.forecast_cost,
             "globird_yesterday_actual_cost": self.scorecard.actual_cost,
             "forecast_error_yesterday": self.scorecard.forecast_error,
@@ -337,6 +361,7 @@ class SiteReadModel:
             "zerohero_planned_duration": self.planned_export_duration_minutes,
             "zerohero_planned_start": self.planned_export_start,
             "zerohero_export_status": self.export_status,
+            **self.cost.sensor_values(),
             **self.learning.sensor_values(),
             **self.ev.sensor_values(),
         }
@@ -538,6 +563,8 @@ def build_site_read_model(
     occupancy = coordinator.occupancy_result
     cost = CostReadModel(
         measured_gross_cost=ledger.estimated_energy_cost,
+        measured_import_cost=ledger.estimated_import_energy_cost,
+        daily_supply_charge=ledger.daily_supply_charge,
         measured_export_revenue=ledger.estimated_export_revenue,
         measured_zerohero_credit=ledger.zerohero_credit,
         measured_net_cost=ledger.estimated_net_cost,

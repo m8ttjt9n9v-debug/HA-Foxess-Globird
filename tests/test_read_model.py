@@ -102,6 +102,8 @@ def _coordinator() -> SimpleNamespace:
         ),
         data=SimpleNamespace(
             estimated_energy_cost=3.456,
+            estimated_import_energy_cost=4.567,
+            daily_supply_charge=1.234,
             estimated_export_revenue=1.112,
             zerohero_credit=1.0,
             estimated_net_cost=2.344,
@@ -232,6 +234,12 @@ def test_site_read_model_projects_existing_sensor_and_fleet_values() -> None:
         "ev_free_window_soc_gain": 35.0,
         "ev_learned_charge_limit": 82,
         "ev_driving_learning_status": "learned",
+        "estimated_energy_cost": 3.46,
+        "estimated_import_energy_cost": 4.57,
+        "daily_supply_charge": 1.23,
+        "estimated_export_revenue": 1.11,
+        "zerohero_credit": 1.0,
+        "forecast_export_realisation": 80.0,
     }
     assert model.fleet_attributes(updated_at) == {
         "summary_schema_version": 1,
