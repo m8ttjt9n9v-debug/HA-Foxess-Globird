@@ -139,6 +139,11 @@ accounting, smart-socket recovery and save decisions from Home Assistant calls.
 Run old and new reconciliation in shadow over fixed incident sequences until
 next-state, reason, action and persistence traces are byte-for-byte equivalent.
 
+Implementation and deterministic compatibility evidence are recorded in the
+[Phase 7.8 exit audit](phase-7-8-exit-audit.md). That audit closes only this
+bounded extraction step; it does not satisfy the Phase 7 exit gate or authorize
+deployment.
+
 ### 7.9 — facade and boundary audit
 
 Leave active controllers responsible only for timer/lifecycle entry points,
