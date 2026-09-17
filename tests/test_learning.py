@@ -11,6 +11,7 @@ from custom_components.home_energy_orchestrator.planner.learning import (
     DemandCycleSample,
     DemandCycleSampler,
     DemandHistory,
+    DemandPersistenceState,
     OccupancyPerson,
     classify_energy_occupancy,
     protected_base_house_power_kw,
@@ -155,6 +156,42 @@ def test_cycle_sampler_restores_an_in_progress_cycle_after_short_restart() -> No
     restored.restore(payload, start + timedelta(minutes=9))
 
     assert restored.to_payload() == payload
+
+
+def test_learning_persistence_state_preserves_composite_payload_shape() -> None:
+    now = datetime(2026, 9, 2, 12, tzinfo=UTC)
+    history = DemandHistory([])
+    heater_history = DemandHistory([])
+    history.add(now - timedelta(days=1), 4.0)
+    heater_history.add(now - timedelta(days=1), 2.0)
+    demand_sampler = DemandCycleSampler(time(12), time(15))
+    demand_sampler.observe(now - timedelta(minutes=5), 1.0)
+    heater_sampler = DailyDemandCycleSampler(time(12))
+    heater_sampler.observe(now - timedelta(minutes=5), 2.0)
+    captured = DemandPersistenceState.capture(
+        history,
+        heater_history,
+        demand_sampler,
+        heater_sampler,
+    )
+
+    payload = captured.to_payload()
+    restored = DemandPersistenceState.restore(payload, now)
+
+    assert restored.to_payload() == payload
+    assert len(restored.demand_history.samples) == 1
+    assert len(restored.heater_history.samples) == 1
+
+
+def test_learning_persistence_state_rejects_invalid_outer_payload() -> None:
+    restored = DemandPersistenceState.restore(["invalid"], datetime.now(UTC))
+
+    assert restored.demand_history.samples == []
+    assert restored.heater_history.samples == []
+    assert restored.to_payload() == {
+        "samples": [],
+        "heater_history": {"samples": []},
+    }
 
 
 def test_cycle_sampler_rejects_stale_in_progress_state() -> None:

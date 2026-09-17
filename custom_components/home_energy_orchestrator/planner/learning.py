@@ -429,6 +429,63 @@ class DailyDemandCycleSampler:
         return self._last_power_kw * (finish - begin).total_seconds() / 3600
 
 
+@dataclass(frozen=True, slots=True)
+class DemandPersistenceState:
+    """Typed representation of the existing composite learning payload."""
+
+    demand_history: DemandHistory
+    heater_history: DemandHistory
+    in_progress_cycle: object = None
+    heater_in_progress_cycle: object = None
+    include_in_progress_cycle: bool = False
+    include_heater_in_progress_cycle: bool = False
+
+    @classmethod
+    def restore(cls, payload: object, now: datetime) -> DemandPersistenceState:
+        """Decode histories while retaining sampler payloads for domain restore."""
+        mapping = payload if isinstance(payload, dict) else {}
+        return cls(
+            demand_history=DemandHistory.from_payload(mapping, now),
+            heater_history=DemandHistory.from_payload(mapping.get("heater_history"), now),
+            in_progress_cycle=mapping.get("in_progress_cycle"),
+            heater_in_progress_cycle=mapping.get("heater_in_progress_cycle"),
+            include_in_progress_cycle="in_progress_cycle" in mapping,
+            include_heater_in_progress_cycle="heater_in_progress_cycle" in mapping,
+        )
+
+    @classmethod
+    def capture(
+        cls,
+        demand_history: DemandHistory,
+        heater_history: DemandHistory,
+        demand_sampler: DemandCycleSampler | None,
+        heater_sampler: DailyDemandCycleSampler | None,
+    ) -> DemandPersistenceState:
+        """Capture the current runtime state without changing payload shape."""
+        return cls(
+            demand_history=demand_history,
+            heater_history=heater_history,
+            in_progress_cycle=(
+                None if demand_sampler is None else demand_sampler.to_payload()
+            ),
+            heater_in_progress_cycle=(
+                None if heater_sampler is None else heater_sampler.to_payload()
+            ),
+            include_in_progress_cycle=demand_sampler is not None,
+            include_heater_in_progress_cycle=heater_sampler is not None,
+        )
+
+    def to_payload(self) -> dict[str, object]:
+        """Return the unchanged composite Home Assistant Store payload."""
+        payload: dict[str, object] = self.demand_history.to_payload()
+        payload["heater_history"] = self.heater_history.to_payload()
+        if self.include_in_progress_cycle:
+            payload["in_progress_cycle"] = self.in_progress_cycle
+        if self.include_heater_in_progress_cycle:
+            payload["heater_in_progress_cycle"] = self.heater_in_progress_cycle
+        return payload
+
+
 def retain_demand_samples(
     samples: Iterable[DemandCycleSample],
     now: datetime,

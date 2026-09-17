@@ -102,6 +102,7 @@ from .planner.learning import (
     DemandCycleSampler,
     DemandHistory,
     DemandLearningResult,
+    DemandPersistenceState,
     HouseBudgetResult,
     OccupancyPerson,
     OccupancyResult,
@@ -216,6 +217,13 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
         self._demand_store: Store[dict[str, object]] = Store(
             hass, 1, f"{DOMAIN}.{entry_id}.demand_history", private=True
         )
+        self._demand_repository = TypedValueStoreRepository(
+            self._demand_store,
+            decode=lambda payload: DemandPersistenceState.restore(
+                payload, dt_util.utcnow()
+            ),
+            encode=DemandPersistenceState.to_payload,
+        )
         self._forecast_store: Store[dict[str, object]] = Store(
             hass, 1, f"{DOMAIN}.{entry_id}.forecast_feedback", private=True
         )
@@ -297,18 +305,13 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
 
     async def async_load_demand_history(self) -> None:
         """Load and validate the rolling learner history from HA storage."""
-        payload = await self._demand_store.async_load()
-        self.demand_history = DemandHistory.from_payload(payload, dt_util.utcnow())
-        if isinstance(payload, dict):
-            self.heater_history = DemandHistory.from_payload(
-                payload.get("heater_history"), dt_util.utcnow()
-            )
-            if self.demand_sampler is not None:
-                self.demand_sampler.restore(payload.get("in_progress_cycle"), dt_util.now())
-            if self.heater_sampler is not None:
-                self.heater_sampler.restore(
-                    payload.get("heater_in_progress_cycle"), dt_util.now()
-                )
+        state = await self._demand_repository.async_load()
+        self.demand_history = state.demand_history
+        self.heater_history = state.heater_history
+        if self.demand_sampler is not None:
+            self.demand_sampler.restore(state.in_progress_cycle, dt_util.now())
+        if self.heater_sampler is not None:
+            self.heater_sampler.restore(state.heater_in_progress_cycle, dt_util.now())
 
     async def async_load_daily_import(self) -> None:
         """Load the persisted same-day tariff accumulators."""
@@ -1457,10 +1460,10 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
 
     async def _async_save_demand_state(self) -> None:
         """Persist completed history and the current partial cycle together."""
-        payload: dict[str, object] = self.demand_history.to_payload()
-        payload["heater_history"] = self.heater_history.to_payload()
-        if self.demand_sampler is not None:
-            payload["in_progress_cycle"] = self.demand_sampler.to_payload()
-        if self.heater_sampler is not None:
-            payload["heater_in_progress_cycle"] = self.heater_sampler.to_payload()
-        await self._demand_store.async_save(payload)
+        state = DemandPersistenceState.capture(
+            self.demand_history,
+            self.heater_history,
+            self.demand_sampler,
+            self.heater_sampler,
+        )
+        await self._demand_repository.async_save(state)
