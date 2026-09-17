@@ -76,10 +76,6 @@ class EnergySensor(CoordinatorEntity[EnergyCoordinator], SensorEntity):
     @property
     def native_value(self):
         ledger = self.coordinator.data
-        learning = self.coordinator.learning_result
-        base_learning = self.coordinator.base_learning_result
-        heater_learning = self.coordinator.heater_learning_result
-        occupancy = self.coordinator.occupancy_result
         snapshot = self.coordinator.snapshot
         ev_controller = self.coordinator.ev_controller
         now = dt_util.now()
@@ -273,16 +269,6 @@ class EnergySensor(CoordinatorEntity[EnergyCoordinator], SensorEntity):
                 if self.coordinator.active_controller is None
                 else self.coordinator.active_controller.ev_before_export_decision.reason
             ),
-            "learned_house_energy": learning.cycle_budget_kwh,
-            "learned_base_house_energy": base_learning.cycle_budget_kwh,
-            "learned_heater_energy": (
-                None if heater_learning is None else heater_learning.cycle_budget_kwh
-            ),
-            "remaining_house_energy": self.coordinator.learning_remaining_kwh,
-            "learning_samples": learning.sample_count,
-            "learning_status": learning.model,
-            "heater_learning_samples": learning.heater_sample_count,
-            "house_occupancy_state": occupancy.state,
             "test_charge_estimated_cost": self.coordinator.manual_test.preview_charge().amount,
             "test_charge_import_rate": self.coordinator.manual_test.current_import_rate(),
             "test_discharge_estimated_earning": (
@@ -458,17 +444,10 @@ class EnergySensor(CoordinatorEntity[EnergyCoordinator], SensorEntity):
                 ),
             }
         if self.entity_description.key == "house_occupancy_state":
-            occupancy = self.coordinator.occupancy_result
-            return {
-                "selected_mode": occupancy.selected_mode,
-                "person_entities_found": occupancy.person_count,
-                "people_home": occupancy.people_home,
-                "all_people_away_for_hours": occupancy.all_people_away_for_hours,
-                "reason": occupancy.reason,
-            }
+            return build_site_read_model(self.coordinator).learning.occupancy_attributes()
         if self.entity_description.key != "status":
             return None
-        learning = self.coordinator.learning_result
+        read_model = build_site_read_model(self.coordinator)
         automation = self.coordinator.runtime_config.automation
         foxess_requested = automation.master_enabled
         charge_enabled = automation.battery_charge_enabled
@@ -602,11 +581,11 @@ class EnergySensor(CoordinatorEntity[EnergyCoordinator], SensorEntity):
             ),
             "rehearsal_mode": automation.safety_lock,
             "integration": DOMAIN,
-            "learning_model": learning.model,
-            "learning_samples": learning.sample_count,
-            "heater_learning_samples": learning.heater_sample_count,
-            "house_occupancy": learning.occupancy,
-            "house_occupancy_reason": self.coordinator.occupancy_result.reason,
+            "learning_model": read_model.learning.model,
+            "learning_samples": read_model.learning.sample_count,
+            "heater_learning_samples": read_model.learning.heater_sample_count,
+            "house_occupancy": read_model.learning.budget_occupancy,
+            "house_occupancy_reason": read_model.learning.occupancy_reason,
             "learning_max_age_days": self.coordinator.demand_history.max_age_days,
             "learning_sample_limit": self.coordinator.demand_history.sample_limit,
             "learning_sampler_enabled": self.coordinator.demand_sampler is not None,

@@ -147,6 +147,70 @@ class ScorecardReadModel:
 
 
 @dataclass(frozen=True, slots=True)
+class LearningReadModel:
+    """Canonical house-learning and occupancy presentation values."""
+
+    model: str
+    cycle_budget_kwh: float
+    base_cycle_budget_kwh: float
+    heater_cycle_budget_kwh: float | None
+    remaining_cycle_budget_kwh: float | None
+    sample_count: int
+    retained_sample_count: int
+    heater_sample_count: int
+    heater_retained_sample_count: int
+    heater_model: str
+    budget_occupancy: str
+    occupancy_state: str
+    occupancy_mode: str
+    occupancy_reason: str
+    person_count: int
+    people_home: int
+    all_people_away_for_hours: float
+
+    def sensor_values(self) -> dict[str, object]:
+        """Project the existing house-learning entity states."""
+        return {
+            "learned_house_energy": self.cycle_budget_kwh,
+            "learned_base_house_energy": self.base_cycle_budget_kwh,
+            "learned_heater_energy": self.heater_cycle_budget_kwh,
+            "remaining_house_energy": self.remaining_cycle_budget_kwh,
+            "learning_samples": self.sample_count,
+            "learning_status": self.model,
+            "heater_learning_samples": self.heater_sample_count,
+            "house_occupancy_state": self.occupancy_state,
+        }
+
+    def occupancy_attributes(self) -> dict[str, object]:
+        """Project the House Occupancy State entity's existing attributes."""
+        return {
+            "selected_mode": self.occupancy_mode,
+            "person_entities_found": self.person_count,
+            "people_home": self.people_home,
+            "all_people_away_for_hours": self.all_people_away_for_hours,
+            "reason": self.occupancy_reason,
+        }
+
+    def diagnostics(self) -> dict[str, object]:
+        """Project the existing redacted learning support payload."""
+        return {
+            "model": self.model,
+            "cycle_budget_kwh": self.cycle_budget_kwh,
+            "sample_count": self.sample_count,
+            "retained_sample_count": self.retained_sample_count,
+            "heater_sample_count": self.heater_sample_count,
+            "heater_retained_sample_count": self.heater_retained_sample_count,
+            "heater_model": self.heater_model,
+            "occupancy": self.occupancy_state,
+            "occupancy_mode": self.occupancy_mode,
+            "occupancy_reason": self.occupancy_reason,
+            "person_entities_found": self.person_count,
+            "people_home": self.people_home,
+            "all_people_away_for_hours": self.all_people_away_for_hours,
+        }
+
+
+@dataclass(frozen=True, slots=True)
 class SiteReadModel:
     """One immutable view of values shared by public presentation surfaces."""
 
@@ -166,9 +230,9 @@ class SiteReadModel:
     ev_control_status: str
     cost: CostReadModel
     scorecard: ScorecardReadModel
+    learning: LearningReadModel
     zerohero_status: str
     latest_zerohero_status: str | None
-    house_learning_samples: int
     ev_learning_samples: int
     ledger_status: str
     tariff_status: str
@@ -196,6 +260,7 @@ class SiteReadModel:
             "zerohero_planned_duration": self.planned_export_duration_minutes,
             "zerohero_planned_start": self.planned_export_start,
             "zerohero_export_status": self.export_status,
+            **self.learning.sensor_values(),
         }
 
     def fleet_attributes(self, updated_at: datetime) -> dict[str, object]:
@@ -221,7 +286,7 @@ class SiteReadModel:
             "zerohero_status": self.zerohero_status,
             "latest_zerohero_status": self.latest_zerohero_status,
             "forecast_scorecard_status": self.scorecard.status,
-            "house_learning_samples": self.house_learning_samples,
+            "house_learning_samples": self.learning.sample_count,
             "ev_learning_samples": self.ev_learning_samples,
             "ledger_status": self.ledger_status,
             "tariff_status": self.tariff_status,
@@ -270,6 +335,10 @@ def build_site_read_model(coordinator: EnergyCoordinator) -> SiteReadModel:
         else None
     )
     feedback = coordinator.forecast_feedback
+    learning = coordinator.learning_result
+    base_learning = coordinator.base_learning_result
+    heater_learning = coordinator.heater_learning_result
+    occupancy = coordinator.occupancy_result
     cost = CostReadModel(
         measured_gross_cost=ledger.estimated_energy_cost,
         measured_export_revenue=ledger.estimated_export_revenue,
@@ -330,6 +399,29 @@ def build_site_read_model(coordinator: EnergyCoordinator) -> SiteReadModel:
         learned_export_realisation_fraction=feedback.export_realisation_fraction,
         learned_cost_bias=feedback.learned_cost_bias,
     )
+    learning_model = LearningReadModel(
+        model=learning.model,
+        cycle_budget_kwh=learning.cycle_budget_kwh,
+        base_cycle_budget_kwh=base_learning.cycle_budget_kwh,
+        heater_cycle_budget_kwh=(
+            None if heater_learning is None else heater_learning.cycle_budget_kwh
+        ),
+        remaining_cycle_budget_kwh=coordinator.learning_remaining_kwh,
+        sample_count=learning.sample_count,
+        retained_sample_count=len(coordinator.demand_history.samples),
+        heater_sample_count=learning.heater_sample_count,
+        heater_retained_sample_count=len(coordinator.heater_history.samples),
+        heater_model=(
+            "not_mapped" if heater_learning is None else heater_learning.model
+        ),
+        budget_occupancy=learning.occupancy,
+        occupancy_state=occupancy.state,
+        occupancy_mode=occupancy.selected_mode,
+        occupancy_reason=occupancy.reason,
+        person_count=occupancy.person_count,
+        people_home=occupancy.people_home,
+        all_people_away_for_hours=occupancy.all_people_away_for_hours,
+    )
     return SiteReadModel(
         orchestrator_status=control_mode(coordinator),
         battery_soc=None if snapshot is None else snapshot.battery_soc,
@@ -363,11 +455,11 @@ def build_site_read_model(coordinator: EnergyCoordinator) -> SiteReadModel:
         ),
         cost=cost,
         scorecard=scorecard_model,
+        learning=learning_model,
         zerohero_status=ledger.zerohero_credit_status,
         latest_zerohero_status=(
             None if scorecard is None else scorecard.retailer_zerohero_status
         ),
-        house_learning_samples=coordinator.learning_result.sample_count,
         ev_learning_samples=(
             0 if ev_controller is None else len(ev_controller.driving_history.samples)
         ),

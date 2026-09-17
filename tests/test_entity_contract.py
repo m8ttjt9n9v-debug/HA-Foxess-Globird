@@ -102,7 +102,7 @@ def test_sensor_specs_match_native_value_projection_keys() -> None:
         for key in projection.keys
         if key is not None
     }
-    read_model_projection: ast.Dict | None = None
+    read_model_projections: list[ast.Dict] = []
     for node in ast.walk(read_model_tree):
         if not isinstance(node, ast.FunctionDef) or node.name != "sensor_values":
             continue
@@ -112,14 +112,14 @@ def test_sensor_specs_match_native_value_projection_keys() -> None:
             if isinstance(child, ast.Return) and isinstance(child.value, ast.Dict)
         ]
         assert len(returns) == 1
-        read_model_projection = returns[0].value
-        break
-    assert read_model_projection is not None
-    projected_keys.update(
-        ast.literal_eval(key)
-        for key in read_model_projection.keys
-        if key is not None
-    )
+        read_model_projections.append(returns[0].value)
+    assert len(read_model_projections) == 2
+    for read_model_projection in read_model_projections:
+        projected_keys.update(
+            ast.literal_eval(key)
+            for key in read_model_projection.keys
+            if key is not None
+        )
     catalogued_keys = {
         spec.description.key for spec in ENTITY_SPECS if spec.platform == "sensor"
     }

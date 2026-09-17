@@ -33,10 +33,15 @@ attributes, all four prior-day scorecard entities and redacted forecast
 diagnostics now share the same facts already used by Fleet Summary; accounting,
 forecast and feedback calculations remain with their existing producers.
 
+The third seam adds a frozen learning/occupancy submodel shared by learning
+entities, occupancy and Status attributes, Fleet sample counts and redacted
+diagnostics. Sampling, learning selection and occupancy policy remain unchanged.
+
 Work-item evidence:
 
 - [core SiteReadModel projection](work-item-core-read-model.md)
 - [accounting and scorecard read model](work-item-accounting-read-model.md)
+- [house learning and occupancy read model](work-item-learning-read-model.md)
 
 ## Work packages
 

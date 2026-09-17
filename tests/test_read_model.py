@@ -88,7 +88,29 @@ def _coordinator() -> SimpleNamespace:
             export_realisation_fraction=0.8,
             learned_cost_bias=-0.04,
         ),
-        learning_result=SimpleNamespace(sample_count=7),
+        learning_result=SimpleNamespace(
+            model="occupied_combined_p80",
+            cycle_budget_kwh=6.5,
+            sample_count=7,
+            heater_sample_count=5,
+            occupancy="home",
+        ),
+        base_learning_result=SimpleNamespace(cycle_budget_kwh=5.0),
+        heater_learning_result=SimpleNamespace(
+            cycle_budget_kwh=1.5,
+            model="p80",
+        ),
+        learning_remaining_kwh=2.25,
+        demand_history=SimpleNamespace(samples=(1, 2, 3, 4, 5, 6, 7)),
+        heater_history=SimpleNamespace(samples=(1, 2, 3, 4, 5)),
+        occupancy_result=SimpleNamespace(
+            state="home",
+            selected_mode="auto",
+            reason="people_home",
+            person_count=2,
+            people_home=1,
+            all_people_away_for_hours=0.0,
+        ),
     )
 
 
@@ -118,6 +140,14 @@ def test_site_read_model_projects_existing_sensor_and_fleet_values() -> None:
         "zerohero_planned_duration": 45.9,
         "zerohero_planned_start": datetime(2026, 9, 17, 18, 0, tzinfo=UTC),
         "zerohero_export_status": "exporting",
+        "learned_house_energy": 6.5,
+        "learned_base_house_energy": 5.0,
+        "learned_heater_energy": 1.5,
+        "remaining_house_energy": 2.25,
+        "learning_samples": 7,
+        "learning_status": "occupied_combined_p80",
+        "heater_learning_samples": 5,
+        "house_occupancy_state": "home",
     }
     assert model.fleet_attributes(updated_at) == {
         "summary_schema_version": 1,
@@ -185,6 +215,28 @@ def test_site_read_model_projects_existing_sensor_and_fleet_values() -> None:
         "scorecard_actual_cost": 1.456,
         "scorecard_error": 0.222,
         "scorecard_zerohero_status": "achieved",
+    }
+    assert model.learning.occupancy_attributes() == {
+        "selected_mode": "auto",
+        "person_entities_found": 2,
+        "people_home": 1,
+        "all_people_away_for_hours": 0.0,
+        "reason": "people_home",
+    }
+    assert model.learning.diagnostics() == {
+        "model": "occupied_combined_p80",
+        "cycle_budget_kwh": 6.5,
+        "sample_count": 7,
+        "retained_sample_count": 7,
+        "heater_sample_count": 5,
+        "heater_retained_sample_count": 5,
+        "heater_model": "p80",
+        "occupancy": "home",
+        "occupancy_mode": "auto",
+        "occupancy_reason": "people_home",
+        "person_entities_found": 2,
+        "people_home": 1,
+        "all_people_away_for_hours": 0.0,
     }
 
 
