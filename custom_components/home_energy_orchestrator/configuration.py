@@ -20,6 +20,8 @@ from .const import (
     CONF_FREE_CHARGE_SCHEDULE_CONFIRMED,
     CONF_GRID_POWER_DIRECTION,
     CONF_HOUSE_OCCUPANCY_MODE,
+    CONF_INVERTER_CHARGE_LIMIT_KW,
+    CONF_INVERTER_DISCHARGE_LIMIT_KW,
     CONF_OFFPEAK_EXPORT_RATE,
     CONF_REHEARSAL_MODE,
     CONF_SIGN_CONVENTIONS_VERIFIED,
@@ -39,6 +41,8 @@ from .const import (
     DEFAULT_FOXESS_CONTROL_OWNER,
     DEFAULT_GRID_POWER_DIRECTION,
     DEFAULT_HOUSE_OCCUPANCY_MODE,
+    DEFAULT_INVERTER_CHARGE_LIMIT_KW,
+    DEFAULT_INVERTER_DISCHARGE_LIMIT_KW,
     DEFAULT_OFFPEAK_EXPORT_RATE,
     DEFAULT_REHEARSAL_MODE,
     DEFAULT_SIGN_CONVENTIONS_VERIFIED,
@@ -108,6 +112,14 @@ class TariffSettings:
 
 
 @dataclass(frozen=True, slots=True)
+class InverterSettings:
+    """Inverter limits currently projected by commissioning entities."""
+
+    charge_limit_kw: float
+    discharge_limit_kw: float
+
+
+@dataclass(frozen=True, slots=True)
 class RuntimeConfiguration:
     """Typed runtime snapshot adopted one domain at a time."""
 
@@ -116,6 +128,7 @@ class RuntimeConfiguration:
     house: HouseSettings
     electrical: ElectricalSettings
     tariff: TariffSettings
+    inverter: InverterSettings
 
     @classmethod
     def from_mapping(cls, data: Mapping[str, object]) -> RuntimeConfiguration:
@@ -241,6 +254,18 @@ class RuntimeConfiguration:
                     data,
                     CONF_ZERO_IMPORT_THRESHOLD_KW,
                     DEFAULT_ZERO_IMPORT_THRESHOLD_KW,
+                ),
+            ),
+            inverter=InverterSettings(
+                charge_limit_kw=_number(
+                    data,
+                    CONF_INVERTER_CHARGE_LIMIT_KW,
+                    DEFAULT_INVERTER_CHARGE_LIMIT_KW,
+                ),
+                discharge_limit_kw=_number(
+                    data,
+                    CONF_INVERTER_DISCHARGE_LIMIT_KW,
+                    DEFAULT_INVERTER_DISCHARGE_LIMIT_KW,
                 ),
             ),
         )

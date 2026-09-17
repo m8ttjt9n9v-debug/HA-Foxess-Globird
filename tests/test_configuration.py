@@ -16,12 +16,14 @@ from custom_components.home_energy_orchestrator.const import (
     CONF_FREE_CHARGE_SCHEDULE_CONFIRMED,
     CONF_GRID_POWER_DIRECTION,
     CONF_HOUSE_OCCUPANCY_MODE,
+    CONF_INVERTER_CHARGE_LIMIT_KW,
     CONF_ZERO_IMPORT_THRESHOLD_KW,
     DEFAULT_EV_BEFORE_EXPORT_SOC_TARGET,
     DEFAULT_EXPORT_RATE,
     DEFAULT_FOXESS_CONTROL_OWNER,
     DEFAULT_GRID_POWER_DIRECTION,
     DEFAULT_HOUSE_OCCUPANCY_MODE,
+    DEFAULT_INVERTER_CHARGE_LIMIT_KW,
     DEFAULT_ZERO_IMPORT_THRESHOLD_KW,
 )
 from custom_components.home_energy_orchestrator.coordinator import EnergyCoordinator
@@ -51,6 +53,7 @@ def test_runtime_configuration_uses_established_defaults() -> None:
         parsed.tariff.zero_import_threshold_kwh_per_hour
         == DEFAULT_ZERO_IMPORT_THRESHOLD_KW
     )
+    assert parsed.inverter.charge_limit_kw == DEFAULT_INVERTER_CHARGE_LIMIT_KW
 
 
 def test_runtime_configuration_preserves_existing_coercion_behavior() -> None:
@@ -62,6 +65,7 @@ def test_runtime_configuration_preserves_existing_coercion_behavior() -> None:
             CONF_FOXESS_CONTROL_OWNER: None,
             CONF_FREE_CHARGE_SCHEDULE_CONFIRMED: "confirmed",
             CONF_HOUSE_OCCUPANCY_MODE: "invalid",
+            CONF_INVERTER_CHARGE_LIMIT_KW: "12.5",
             CONF_EXPORT_RATE: "0.075",
             CONF_ZERO_IMPORT_THRESHOLD_KW: "invalid",
         }
@@ -79,6 +83,7 @@ def test_runtime_configuration_preserves_existing_coercion_behavior() -> None:
         parsed.tariff.zero_import_threshold_kwh_per_hour
         == DEFAULT_ZERO_IMPORT_THRESHOLD_KW
     )
+    assert parsed.inverter.charge_limit_kw == 12.5
 
 
 def test_runtime_configuration_is_immutable() -> None:

@@ -17,7 +17,6 @@ from .const import (
     CONF_EV_BEFORE_EXPORT_ENABLED,
     CONF_EV_CHARGE_TO_FULL,
     CONF_EV_CHARGE_TO_FULL_ENABLED,
-    CONF_FREE_CHARGE_SCHEDULE_CONFIRMED,
     CONF_REHEARSAL_MODE,
 )
 from .coordinator import EnergyCoordinator
@@ -156,7 +155,7 @@ class AutomaticChargeSwitch(CoordinatorEntity[EnergyCoordinator], SwitchEntity):
         return self.coordinator.runtime_config.automation.battery_charge_enabled
 
     async def async_turn_on(self, **kwargs: object) -> None:
-        if not self.coordinator.config.get(CONF_FREE_CHARGE_SCHEDULE_CONFIRMED, False):
+        if not self.coordinator.runtime_config.automation.free_charge_schedule_confirmed:
             raise HomeAssistantError(
                 "Reconfigure HEO and confirm the exact 24-hour free-power schedule first"
             )

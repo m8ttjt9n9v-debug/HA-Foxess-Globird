@@ -11,10 +11,6 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from . import EnergyConfigEntry
 from .const import (
     CONF_EV_BEFORE_EXPORT_SOC_TARGET,
-    CONF_INVERTER_CHARGE_LIMIT_KW,
-    CONF_INVERTER_DISCHARGE_LIMIT_KW,
-    DEFAULT_INVERTER_CHARGE_LIMIT_KW,
-    DEFAULT_INVERTER_DISCHARGE_LIMIT_KW,
 )
 from .coordinator import EnergyCoordinator
 from .entity_catalogue import (
@@ -120,23 +116,7 @@ class TestNumber(CoordinatorEntity[EnergyCoordinator], NumberEntity):
 
     def _max_value(self) -> float:
         if self.entity_description.key == "test_charge_power":
-            return max(
-                float(
-                    self.coordinator.config.get(
-                        CONF_INVERTER_CHARGE_LIMIT_KW,
-                        DEFAULT_INVERTER_CHARGE_LIMIT_KW,
-                    )
-                ),
-                0.1,
-            )
+            return max(self.coordinator.runtime_config.inverter.charge_limit_kw, 0.1)
         if self.entity_description.key == "test_discharge_power":
-            return max(
-                float(
-                    self.coordinator.config.get(
-                        CONF_INVERTER_DISCHARGE_LIMIT_KW,
-                        DEFAULT_INVERTER_DISCHARGE_LIMIT_KW,
-                    )
-                ),
-                0.1,
-            )
+            return max(self.coordinator.runtime_config.inverter.discharge_limit_kw, 0.1)
         return float(self.entity_description.native_max_value)

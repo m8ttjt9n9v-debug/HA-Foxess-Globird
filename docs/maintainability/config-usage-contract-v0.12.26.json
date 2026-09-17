@@ -1,5 +1,5 @@
 {
-  "access_count": 514,
+  "access_count": 511,
   "accesses": [
     {
       "access": "subscript_store",
@@ -5012,26 +5012,6 @@
       "source": "custom_components/home_energy_orchestrator/number.py"
     },
     {
-      "access": "get",
-      "constant": "CONF_INVERTER_CHARGE_LIMIT_KW",
-      "key": "inverter_charge_limit_kw",
-      "kind": "raw_mapping",
-      "layer": "runtime",
-      "receiver": "self.coordinator.config",
-      "scope": "TestNumber._max_value",
-      "source": "custom_components/home_energy_orchestrator/number.py"
-    },
-    {
-      "access": "get",
-      "constant": "CONF_INVERTER_DISCHARGE_LIMIT_KW",
-      "key": "inverter_discharge_limit_kw",
-      "kind": "raw_mapping",
-      "layer": "runtime",
-      "receiver": "self.coordinator.config",
-      "scope": "TestNumber._max_value",
-      "source": "custom_components/home_energy_orchestrator/number.py"
-    },
-    {
       "access": "update_config_value",
       "constant": "CONF_HOUSE_OCCUPANCY_MODE",
       "key": "house_occupancy_mode",
@@ -5049,16 +5029,6 @@
       "layer": "runtime",
       "receiver": "self.coordinator",
       "scope": "AutomaticChargeSwitch._set_enabled",
-      "source": "custom_components/home_energy_orchestrator/switch.py"
-    },
-    {
-      "access": "get",
-      "constant": "CONF_FREE_CHARGE_SCHEDULE_CONFIRMED",
-      "key": "free_charge_schedule_confirmed",
-      "kind": "raw_mapping",
-      "layer": "runtime",
-      "receiver": "self.coordinator.config",
-      "scope": "AutomaticChargeSwitch.async_turn_on",
       "source": "custom_components/home_energy_orchestrator/switch.py"
     },
     {
@@ -5144,11 +5114,11 @@
   ],
   "accesses_by_kind": {
     "managed_mutation": 9,
-    "raw_mapping": 505
+    "raw_mapping": 502
   },
   "accesses_by_layer": {
     "boundary": 386,
-    "runtime": 128
+    "runtime": 125
   },
   "accesses_by_source": {
     "custom_components/home_energy_orchestrator/__init__.py": 24,
@@ -5159,14 +5129,14 @@
     "custom_components/home_energy_orchestrator/ev_active.py": 38,
     "custom_components/home_energy_orchestrator/ev_adapter.py": 10,
     "custom_components/home_energy_orchestrator/manual_test.py": 10,
-    "custom_components/home_energy_orchestrator/number.py": 3,
+    "custom_components/home_energy_orchestrator/number.py": 1,
     "custom_components/home_energy_orchestrator/select.py": 1,
-    "custom_components/home_energy_orchestrator/switch.py": 10
+    "custom_components/home_energy_orchestrator/switch.py": 9
   },
   "key_count": 129,
   "raw_accesses_by_layer": {
     "boundary": 386,
-    "runtime": 119
+    "runtime": 116
   },
   "release_baseline": "0.12.26",
   "schema_version": 2
