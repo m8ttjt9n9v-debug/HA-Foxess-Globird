@@ -104,6 +104,8 @@ def build_entity_attribute_contract() -> dict[str, Any]:
     read_model_groups = _dict_return_keys(
         _method(read_model_tree, "CostReadModel", "sensor_attributes")
     ) + _dict_return_keys(
+        _method(read_model_tree, "TelemetrySampleReadModel", "entity_attributes")
+    ) + _dict_return_keys(
         _method(read_model_tree, "CostReadModel", "export_revenue_attributes")
     ) + _dict_return_keys(
         _method(read_model_tree, "ScorecardReadModel", "sensor_attributes")
@@ -115,7 +117,7 @@ def build_entity_attribute_contract() -> dict[str, Any]:
         _method(read_model_tree, "SiteReadModel", "status_attributes")
     )
 
-    telemetry = _group_by_sentinel(groups, "positive_direction")
+    telemetry = _group_by_sentinel(read_model_groups, "positive_direction")
     zerohero_import = _group_by_sentinel(groups, "hourly_import_kwh")
     export_revenue = _group_by_sentinel(
         read_model_groups,

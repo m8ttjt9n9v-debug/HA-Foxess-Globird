@@ -38,7 +38,6 @@ async def async_get_config_entry_diagnostics(
         if ev_controller is not None
         else ev_control_gate_status(coordinator.runtime_config)
     )
-    telemetry = coordinator.telemetry
     read_model = build_site_read_model(coordinator)
     return {
         "entry": {"version": entry.version, "options": {"mode": "observe"}},
@@ -86,28 +85,7 @@ async def async_get_config_entry_diagnostics(
             "foxess_writes_enabled": foxess_gate == "ready",
             "writes_enabled": foxess_gate == "ready",
         },
-        "normalized_telemetry": {
-            name: {
-                "value": sample.value,
-                "unit": sample.unit,
-                "positive_direction": sample.positive_direction,
-                "valid": sample.valid,
-                "fresh": sample.fresh,
-                "reason": sample.reason,
-                "source_count": len(sample.sources),
-            }
-            for name, sample in (
-                (
-                    ("grid_power", telemetry.grid_power),
-                    ("battery_power", telemetry.battery_power),
-                    ("solar_power", telemetry.solar_power),
-                    ("house_load", telemetry.house_load),
-                    ("site_grid_current", telemetry.site_grid_current),
-                )
-                if telemetry is not None
-                else ()
-            )
-        },
+        "normalized_telemetry": read_model.telemetry.diagnostics(),
         "ledger": {
             "reason": ledger.reason,
             "battery_energy_kwh": ledger.battery_energy_kwh,

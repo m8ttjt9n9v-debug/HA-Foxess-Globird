@@ -15,6 +15,7 @@ from .planner.export import ExportPlan
 
 if TYPE_CHECKING:
     from .coordinator import EnergyCoordinator
+    from .telemetry import NormalizedSample
 
 
 def control_mode(coordinator: EnergyCoordinator) -> str:
@@ -67,6 +68,95 @@ def export_status(coordinator: EnergyCoordinator) -> str:
 
 def _rounded(value: float | None, digits: int = 3) -> float | None:
     return None if value is None else round(float(value), digits)
+
+
+@dataclass(frozen=True, slots=True)
+class TelemetrySourceReadModel:
+    """Immutable raw-source evidence used only for entity attributes."""
+
+    entity_id: str
+    raw_value: object
+    raw_unit: str | None
+    updated_at: datetime | None
+
+    def entity_attributes(self) -> dict[str, object]:
+        """Project the existing source-evidence shape."""
+        return {
+            "entity_id": self.entity_id,
+            "raw_value": self.raw_value,
+            "raw_unit": self.raw_unit,
+            "updated_at": (
+                None if self.updated_at is None else self.updated_at.isoformat()
+            ),
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class TelemetrySampleReadModel:
+    """Canonical presentation facts for one normalized telemetry sample."""
+
+    value: float | None
+    unit: str
+    positive_direction: str
+    valid: bool
+    fresh: bool
+    reason: str
+    sources: tuple[TelemetrySourceReadModel, ...]
+
+    def entity_attributes(self) -> dict[str, object]:
+        """Project the existing telemetry entity attributes."""
+        return {
+            "positive_direction": self.positive_direction,
+            "valid": self.valid,
+            "fresh": self.fresh,
+            "reason": self.reason,
+            "sources": [source.entity_attributes() for source in self.sources],
+        }
+
+    def diagnostics(self) -> dict[str, object]:
+        """Project the existing redacted telemetry diagnostics."""
+        return {
+            "value": self.value,
+            "unit": self.unit,
+            "positive_direction": self.positive_direction,
+            "valid": self.valid,
+            "fresh": self.fresh,
+            "reason": self.reason,
+            "source_count": len(self.sources),
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class TelemetryReadModel:
+    """Canonical presentation snapshot of all normalized telemetry."""
+
+    grid_power: TelemetrySampleReadModel | None
+    battery_power: TelemetrySampleReadModel | None
+    solar_power: TelemetrySampleReadModel | None
+    house_load: TelemetrySampleReadModel | None
+    site_grid_current: TelemetrySampleReadModel | None
+
+    def _samples(self) -> dict[str, TelemetrySampleReadModel | None]:
+        return {
+            "grid_power": self.grid_power,
+            "battery_power": self.battery_power,
+            "solar_power": self.solar_power,
+            "house_load": self.house_load,
+            "site_grid_current": self.site_grid_current,
+        }
+
+    def entity_attributes(self, key: str) -> dict[str, object] | None:
+        """Project attributes for one telemetry entity when available."""
+        sample = self._samples().get(key)
+        return None if sample is None else sample.entity_attributes()
+
+    def diagnostics(self) -> dict[str, object]:
+        """Project the existing redacted normalized telemetry payload."""
+        return {
+            key: sample.diagnostics()
+            for key, sample in self._samples().items()
+            if sample is not None
+        }
 
 
 @dataclass(frozen=True, slots=True)
@@ -576,6 +666,7 @@ class SiteReadModel:
     planned_export_duration_minutes: float | None
     planned_export_start: datetime | None
     export_status: str
+    telemetry: TelemetryReadModel
     operational: OperationalReadModel
     manual_test: ManualTestReadModel
     control: ControlReadModel
@@ -751,6 +842,42 @@ class SiteReadModel:
             "learning_sample_limit": control.learning_sample_limit,
             "learning_sampler_enabled": control.learning_sampler_enabled,
         }
+
+
+def _build_telemetry_read_model(
+    coordinator: EnergyCoordinator,
+) -> TelemetryReadModel:
+    """Capture normalized telemetry once for every presentation consumer."""
+    telemetry = coordinator.telemetry
+
+    def sample_model(sample: NormalizedSample) -> TelemetrySampleReadModel:
+        return TelemetrySampleReadModel(
+            value=sample.value,
+            unit=sample.unit,
+            positive_direction=sample.positive_direction,
+            valid=sample.valid,
+            fresh=sample.fresh,
+            reason=sample.reason,
+            sources=tuple(
+                TelemetrySourceReadModel(
+                    entity_id=source.entity_id,
+                    raw_value=source.raw_value,
+                    raw_unit=source.raw_unit,
+                    updated_at=source.updated_at,
+                )
+                for source in sample.sources
+            ),
+        )
+
+    if telemetry is None:
+        return TelemetryReadModel(None, None, None, None, None)
+    return TelemetryReadModel(
+        grid_power=sample_model(telemetry.grid_power),
+        battery_power=sample_model(telemetry.battery_power),
+        solar_power=sample_model(telemetry.solar_power),
+        house_load=sample_model(telemetry.house_load),
+        site_grid_current=sample_model(telemetry.site_grid_current),
+    )
 
 
 def _build_ev_read_model(
@@ -944,6 +1071,7 @@ def build_site_read_model(
     base_learning = coordinator.base_learning_result
     heater_learning = coordinator.heater_learning_result
     occupancy = coordinator.occupancy_result
+    telemetry_model = _build_telemetry_read_model(coordinator)
     cost = CostReadModel(
         measured_gross_cost=ledger.estimated_energy_cost,
         measured_import_cost=ledger.estimated_import_energy_cost,
@@ -1160,6 +1288,7 @@ def build_site_read_model(
             None if plan is None or controller is None else controller.export_planned_start
         ),
         export_status=export_status(coordinator),
+        telemetry=telemetry_model,
         operational=operational_model,
         manual_test=manual_test_model,
         control=control_model,

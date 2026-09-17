@@ -80,35 +80,11 @@ class EnergySensor(CoordinatorEntity[EnergyCoordinator], SensorEntity):
     def extra_state_attributes(self):
         if self.entity_description.key == "fleet_summary":
             return self._fleet_summary_attributes()
-        telemetry_samples = (
-            {
-                "grid_power": self.coordinator.telemetry.grid_power,
-                "battery_power": self.coordinator.telemetry.battery_power,
-                "solar_power": self.coordinator.telemetry.solar_power,
-                "house_load": self.coordinator.telemetry.house_load,
-                "site_grid_current": self.coordinator.telemetry.site_grid_current,
-            }
-            if self.coordinator.telemetry is not None
-            else {}
-        )
-        if sample := telemetry_samples.get(self.entity_description.key):
-            return {
-                "positive_direction": sample.positive_direction,
-                "valid": sample.valid,
-                "fresh": sample.fresh,
-                "reason": sample.reason,
-                "sources": [
-                    {
-                        "entity_id": source.entity_id,
-                        "raw_value": source.raw_value,
-                        "raw_unit": source.raw_unit,
-                        "updated_at": (
-                            source.updated_at.isoformat() if source.updated_at is not None else None
-                        ),
-                    }
-                    for source in sample.sources
-                ],
-            }
+        read_model = build_site_read_model(self.coordinator)
+        if attributes := read_model.telemetry.entity_attributes(
+            self.entity_description.key
+        ):
+            return attributes
         if self.entity_description.key == "zerohero_import_window":
             accumulator = self.coordinator.zerohero_import
             return {
@@ -127,22 +103,20 @@ class EnergySensor(CoordinatorEntity[EnergyCoordinator], SensorEntity):
                 ),
             }
         if self.entity_description.key == "estimated_export_revenue":
-            return build_site_read_model(
-                self.coordinator
-            ).cost.export_revenue_attributes()
+            return read_model.cost.export_revenue_attributes()
         if self.entity_description.key == "estimated_net_cost":
-            return build_site_read_model(self.coordinator).cost.sensor_attributes()
+            return read_model.cost.sensor_attributes()
         if self.entity_description.key in {
             "forecast_yesterday_cost",
             "globird_yesterday_actual_cost",
             "forecast_error_yesterday",
             "forecast_scorecard_status",
         }:
-            return build_site_read_model(self.coordinator).scorecard.sensor_attributes()
+            return read_model.scorecard.sensor_attributes()
         if self.entity_description.key == "ev_control_status":
-            return build_site_read_model(self.coordinator).ev.control_attributes()
+            return read_model.ev.control_attributes()
         if self.entity_description.key == "house_occupancy_state":
-            return build_site_read_model(self.coordinator).learning.occupancy_attributes()
+            return read_model.learning.occupancy_attributes()
         if self.entity_description.key != "status":
             return None
-        return build_site_read_model(self.coordinator).status_attributes()
+        return read_model.status_attributes()

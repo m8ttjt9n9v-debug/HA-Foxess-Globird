@@ -50,6 +50,26 @@ def _coordinator() -> SimpleNamespace:
             reason="target_met",
         ),
     )
+    source = SimpleNamespace(
+        entity_id="sensor.source",
+        raw_value="1.23",
+        raw_unit="kW",
+        updated_at=datetime(2026, 9, 17, 9, 59, tzinfo=UTC),
+    )
+
+    def telemetry_sample(
+        value: float, unit: str, positive_direction: str
+    ) -> SimpleNamespace:
+        return SimpleNamespace(
+            value=value,
+            unit=unit,
+            positive_direction=positive_direction,
+            valid=True,
+            fresh=True,
+            reason="ok",
+            sources=(source,),
+        )
+
     return SimpleNamespace(
         runtime_config=RuntimeConfiguration.from_mapping(
             {
@@ -176,10 +196,11 @@ def _coordinator() -> SimpleNamespace:
             ev_soc=74.0,
         ),
         telemetry=SimpleNamespace(
-            battery_power=SimpleNamespace(value=-3.45678),
-            grid_power=SimpleNamespace(value=-1.23456),
-            solar_power=SimpleNamespace(value=4.56789),
-            site_grid_current=SimpleNamespace(value=3.2),
+            battery_power=telemetry_sample(-3.45678, "kW", "positive_charge"),
+            grid_power=telemetry_sample(-1.23456, "kW", "positive_import"),
+            solar_power=telemetry_sample(4.56789, "kW", "positive_generation"),
+            house_load=telemetry_sample(1.23456, "kW", "positive_consumption"),
+            site_grid_current=telemetry_sample(3.2, "A", "positive_import"),
         ),
         zerohero_import=SimpleNamespace(
             last_at=datetime(2026, 9, 17, 10, 0, tzinfo=UTC),
@@ -450,6 +471,51 @@ def test_candidate_export_remains_visible_while_effective_plan_is_withheld() -> 
     assert model.planned_export_duration_minutes is None
     assert model.planned_export_start is None
     assert model.export_status == "withheld_ev_below_target"
+
+
+def test_telemetry_read_model_preserves_entity_and_diagnostic_shapes() -> None:
+    telemetry = build_site_read_model(_coordinator()).telemetry
+
+    assert telemetry.entity_attributes("grid_power") == {
+        "positive_direction": "positive_import",
+        "valid": True,
+        "fresh": True,
+        "reason": "ok",
+        "sources": [
+            {
+                "entity_id": "sensor.source",
+                "raw_value": "1.23",
+                "raw_unit": "kW",
+                "updated_at": "2026-09-17T09:59:00+00:00",
+            }
+        ],
+    }
+    assert telemetry.diagnostics()["grid_power"] == {
+        "value": -1.23456,
+        "unit": "kW",
+        "positive_direction": "positive_import",
+        "valid": True,
+        "fresh": True,
+        "reason": "ok",
+        "source_count": 1,
+    }
+    assert set(telemetry.diagnostics()) == {
+        "grid_power",
+        "battery_power",
+        "solar_power",
+        "house_load",
+        "site_grid_current",
+    }
+
+
+def test_missing_telemetry_preserves_empty_attribute_and_diagnostic_payloads() -> None:
+    coordinator = _coordinator()
+    coordinator.telemetry = None
+
+    telemetry = build_site_read_model(coordinator).telemetry
+
+    assert telemetry.entity_attributes("grid_power") is None
+    assert telemetry.diagnostics() == {}
 
 
 def test_ev_control_attributes_preserve_existing_public_values() -> None:

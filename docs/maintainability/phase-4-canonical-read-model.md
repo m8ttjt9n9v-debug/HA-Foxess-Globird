@@ -64,6 +64,10 @@ The tenth seam removes export-revenue arithmetic from entity attributes. The
 tariff engine now returns component revenues, the ledger carries them, and
 the cost read model performs formatting only.
 
+The eleventh seam introduces typed telemetry source/sample models shared by
+telemetry entity attributes and redacted support diagnostics, retaining the
+empty diagnostic payload when normalized telemetry is absent.
+
 Work-item evidence:
 
 - [core SiteReadModel projection](work-item-core-read-model.md)
@@ -76,6 +80,7 @@ Work-item evidence:
 - [Status control read model](work-item-status-control-read-model.md)
 - [complete native-state read model](work-item-native-state-read-model.md)
 - [authoritative export-revenue components](work-item-export-revenue-read-model.md)
+- [canonical telemetry presentation](work-item-telemetry-read-model.md)
 
 ## Work packages
 
