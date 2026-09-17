@@ -6,7 +6,12 @@ from math import isnan
 import pytest
 
 from custom_components.home_energy_orchestrator.ev_observation_adapter import (
+    EvObservationEntityMap,
     capture_ev_entity_feedback,
+    capture_ev_feedback,
+)
+from custom_components.home_energy_orchestrator.planner.ev import (
+    DirectEvseObservation,
 )
 
 
@@ -30,6 +35,7 @@ def test_capture_preserves_state_metadata_and_normalized_interpretations(hass) -
     assert result.present is True
     assert result.reported_state == "6000"
     assert result.available_state == "6000"
+    assert result.raw_number == 6000.0
     assert result.number == 6000.0
     assert result.current_a == 6.0
     assert result.energy_kwh is None
@@ -110,3 +116,92 @@ def test_snapshot_is_immutable(hass) -> None:
 
     with pytest.raises(FrozenInstanceError):
         result.reported_state = "away"  # type: ignore[misc]
+
+
+def test_composite_snapshot_preserves_actual_current_and_direct_actuator_views(
+    hass,
+) -> None:
+    hass.states.async_set("sensor.car_charging", "charging")
+    hass.states.async_set(
+        "sensor.car_actual_current",
+        "6500",
+        {"unit_of_measurement": "mA"},
+    )
+    hass.states.async_set(
+        "number.car_current",
+        "6",
+        {"min": 0, "max": 16, "step": 1, "unit_of_measurement": "A"},
+    )
+    hass.states.async_set(
+        "number.car_limit",
+        "80",
+        {"min": 50, "max": 100, "step": 1},
+    )
+    hass.states.async_set("switch.car_charge", "off")
+
+    result = capture_ev_feedback(
+        hass,
+        EvObservationEntityMap(
+            charging_state_entity="sensor.car_charging",
+            actual_current_entity="sensor.car_actual_current",
+            current_limit_entity="number.car_current",
+            charge_limit_entity="number.car_limit",
+            charge_switch_entity="switch.car_charge",
+        ),
+    )
+
+    assert result.actual_current_result == (6.5, True)
+    assert result.direct_observation == DirectEvseObservation(
+        requested_current_a=6.0,
+        charge_limit_percent=80.0,
+        charge_switch_on=False,
+        current_minimum_a=0.0,
+        current_maximum_a=16.0,
+        current_step_a=1.0,
+        limit_minimum_percent=50.0,
+        limit_maximum_percent=100.0,
+        limit_step_percent=1.0,
+    )
+
+
+def test_actual_current_is_state_qualified_before_numeric_feedback(hass) -> None:
+    hass.states.async_set("sensor.car_actual_current", "invalid")
+    entities = EvObservationEntityMap(
+        charging_state_entity="sensor.car_charging",
+        actual_current_entity="sensor.car_actual_current",
+    )
+
+    missing = capture_ev_feedback(hass, entities)
+    assert missing.actual_current_result == (0.0, False)
+
+    hass.states.async_set("sensor.car_charging", "stopped")
+    stopped = capture_ev_feedback(hass, entities)
+    assert stopped.actual_current_result == (0.0, True)
+
+    hass.states.async_set("sensor.car_charging", "charging")
+    charging = capture_ev_feedback(hass, entities)
+    assert charging.actual_current_result == (0.0, False)
+
+
+def test_composite_capture_reads_duplicate_entity_only_once(hass, monkeypatch) -> None:
+    hass.states.async_set("sensor.shared", "on")
+    state_machine_type = type(hass.states)
+    original_get = state_machine_type.get
+    calls: list[str] = []
+
+    def counted_get(state_machine, entity_id: str):
+        calls.append(entity_id)
+        return original_get(state_machine, entity_id)
+
+    monkeypatch.setattr(state_machine_type, "get", counted_get)
+    result = capture_ev_feedback(
+        hass,
+        EvObservationEntityMap(
+            at_home_entity="sensor.shared",
+            cable_connected_entity="sensor.shared",
+            charging_state_entity="sensor.shared",
+        ),
+    )
+
+    assert result.at_home is result.cable_connected is result.charging_state
+    assert calls == ["sensor.shared"]
