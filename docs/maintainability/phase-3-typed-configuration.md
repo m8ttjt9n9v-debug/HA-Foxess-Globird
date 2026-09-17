@@ -23,8 +23,10 @@ selectors, validation, migration behavior and the multi-page draft workflow.
   Lock, actuator mapping, independent request values and automatic-export EV
   protection inputs and legacy-compatible charge-to-full intent. Direct
   EV Home/Auto/Away mode, home/cable mappings, actuator mappings, telemetry
-  mappings and policy modes are also consumed through immutable snapshots.
-  Direct AST-visible runtime raw access is now 49.
+  mappings, policy modes and the active controller's remaining site inputs are
+  also consumed through immutable snapshots. The active EV controller now has
+  no non-mutating direct configuration reads. Direct AST-visible runtime raw
+  access is now 45.
 
 ## Work packages
 

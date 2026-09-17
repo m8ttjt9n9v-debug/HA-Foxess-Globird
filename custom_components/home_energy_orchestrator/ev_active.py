@@ -17,10 +17,8 @@ from .const import (
     CONF_BATTERY_CHARGE_EFFICIENCY,
     CONF_BATTERY_FLOOR,
     CONF_BATTERY_FREE_WINDOW_TARGET,
-    CONF_BATTERY_SOC,
     CONF_BONUS_WINDOW_END,
     CONF_BONUS_WINDOW_START,
-    CONF_CONFIGURE_SOLAR,
     CONF_DAILY_FREE_ALLOWANCE_KWH,
     CONF_DISCHARGE_EFFICIENCY_PERCENT,
     CONF_EV_ALLOWANCE_SAFETY_MARGIN,
@@ -59,7 +57,6 @@ from .const import (
     CONF_FORCE_DISCHARGE_FINISH,
     CONF_FREE_CHARGE_END,
     CONF_FREE_CHARGE_START,
-    CONF_HOUSE_LOAD_INCLUDES_EV,
     CONF_INVERTER_DISCHARGE_LIMIT_KW,
     CONF_SERVICE_IMPORT_LIMIT_A,
     CONF_SITE_GRID_HEADROOM_CURRENT,
@@ -104,7 +101,6 @@ from .const import (
     DEFAULT_FORCE_DISCHARGE_FINISH,
     DEFAULT_FREE_CHARGE_END,
     DEFAULT_FREE_CHARGE_START,
-    DEFAULT_HOUSE_LOAD_INCLUDES_EV,
     DEFAULT_INVERTER_DISCHARGE_LIMIT_KW,
     DEFAULT_SERVICE_IMPORT_LIMIT_A,
     DEFAULT_SITE_GRID_HEADROOM_CURRENT,
@@ -496,10 +492,7 @@ class ActiveEvController:
                     policy.allowance_guard_enabled
                 )
                 and bool(
-                    self.coordinator.config.get(
-                        CONF_HOUSE_LOAD_INCLUDES_EV,
-                        DEFAULT_HOUSE_LOAD_INCLUDES_EV,
-                    )
+                    self.coordinator.runtime_config.house.load_includes_ev
                 )
                 and ev_valid
                 and observation.current_step_a is not None
@@ -1246,9 +1239,7 @@ class ActiveEvController:
             return None
         try:
             allowance_house_load_kw = snapshot.house_load_kw
-            if self.coordinator.config.get(
-                CONF_HOUSE_LOAD_INCLUDES_EV, DEFAULT_HOUSE_LOAD_INCLUDES_EV
-            ):
+            if self.coordinator.runtime_config.house.load_includes_ev:
                 actual_current, actual_current_valid = self._actual_ev_current_a()
                 if not actual_current_valid:
                     return None
@@ -1454,7 +1445,7 @@ class ActiveEvController:
                     daily_current_a = plan.current_ceiling_a
 
         self.solar_spill = SolarSpillDecision(0.0, 0.0, "disabled")
-        solar_configured = self.coordinator.config.get(CONF_CONFIGURE_SOLAR) is not False
+        solar_configured = self.coordinator.runtime_config.site.solar_configured
         if solar_configured and self.coordinator.runtime_config.ev_policy.solar_spill_enabled:
             if snapshot is None or snapshot.battery_soc is None:
                 self.solar_spill = SolarSpillDecision(0.0, 0.0, "site_snapshot_unavailable")
@@ -1953,7 +1944,10 @@ class ActiveEvController:
             if actual_current_entity
             else None
         )
-        soc_state = self.hass.states.get(str(self.coordinator.config.get(CONF_BATTERY_SOC, "")))
+        battery_soc_entity = self.coordinator.runtime_config.battery.soc_entity
+        soc_state = (
+            self.hass.states.get(battery_soc_entity) if battery_soc_entity else None
+        )
         ev_current, ev_valid = self._actual_ev_current_a()
         timestamps = [
             source.updated_at

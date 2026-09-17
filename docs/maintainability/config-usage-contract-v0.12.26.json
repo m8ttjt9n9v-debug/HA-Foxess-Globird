@@ -1,5 +1,5 @@
 {
-  "access_count": 469,
+  "access_count": 468,
   "accesses": [
     {
       "access": "subscript_store",
@@ -3753,8 +3753,28 @@
     },
     {
       "access": "get",
+      "constant": "CONF_BATTERY_SOC",
+      "key": "battery_soc_entity",
+      "kind": "raw_mapping",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "RuntimeConfiguration.from_mapping",
+      "source": "custom_components/home_energy_orchestrator/configuration.py"
+    },
+    {
+      "access": "get",
       "constant": "CONF_CONFIGURE_EV",
       "key": "configure_ev",
+      "kind": "raw_mapping",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "RuntimeConfiguration.from_mapping",
+      "source": "custom_components/home_energy_orchestrator/configuration.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_CONFIGURE_SOLAR",
+      "key": "configure_solar",
       "kind": "raw_mapping",
       "layer": "boundary",
       "receiver": "data",
@@ -4055,6 +4075,16 @@
       "access": "get",
       "constant": "CONF_GRID_POWER_DIRECTION",
       "key": "grid_power_positive_direction",
+      "kind": "raw_mapping",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "RuntimeConfiguration.from_mapping",
+      "source": "custom_components/home_energy_orchestrator/configuration.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_HOUSE_LOAD_INCLUDES_EV",
+      "key": "house_load_includes_ev",
       "kind": "raw_mapping",
       "layer": "boundary",
       "receiver": "data",
@@ -4422,16 +4452,6 @@
       "source": "custom_components/home_energy_orchestrator/coordinator.py"
     },
     {
-      "access": "get",
-      "constant": "CONF_HOUSE_LOAD_INCLUDES_EV",
-      "key": "house_load_includes_ev",
-      "kind": "raw_mapping",
-      "layer": "runtime",
-      "receiver": "self.coordinator.config",
-      "scope": "ActiveEvController._allowance_target",
-      "source": "custom_components/home_energy_orchestrator/ev_active.py"
-    },
-    {
       "access": "pop",
       "constant": "CONF_EV_CHARGE_TO_FULL",
       "key": "ev_charge_to_full_entity",
@@ -4459,36 +4479,6 @@
       "layer": "runtime",
       "receiver": "self.coordinator",
       "scope": "ActiveEvController._async_clear_charge_to_full",
-      "source": "custom_components/home_energy_orchestrator/ev_active.py"
-    },
-    {
-      "access": "get",
-      "constant": "CONF_CONFIGURE_SOLAR",
-      "key": "configure_solar",
-      "kind": "raw_mapping",
-      "layer": "runtime",
-      "receiver": "self.coordinator.config",
-      "scope": "ActiveEvController._calculate_outside_target",
-      "source": "custom_components/home_energy_orchestrator/ev_active.py"
-    },
-    {
-      "access": "get",
-      "constant": "CONF_BATTERY_SOC",
-      "key": "battery_soc_entity",
-      "kind": "raw_mapping",
-      "layer": "runtime",
-      "receiver": "self.coordinator.config",
-      "scope": "ActiveEvController._solar_spill_decision",
-      "source": "custom_components/home_energy_orchestrator/ev_active.py"
-    },
-    {
-      "access": "get",
-      "constant": "CONF_HOUSE_LOAD_INCLUDES_EV",
-      "key": "house_load_includes_ev",
-      "kind": "raw_mapping",
-      "layer": "runtime",
-      "receiver": "self.coordinator.config",
-      "scope": "ActiveEvController.async_reconcile",
       "source": "custom_components/home_energy_orchestrator/ev_active.py"
     },
     {
@@ -4694,18 +4684,18 @@
   ],
   "accesses_by_kind": {
     "managed_mutation": 9,
-    "raw_mapping": 460
+    "raw_mapping": 459
   },
   "accesses_by_layer": {
-    "boundary": 411,
-    "runtime": 58
+    "boundary": 414,
+    "runtime": 54
   },
   "accesses_by_source": {
     "custom_components/home_energy_orchestrator/__init__.py": 24,
     "custom_components/home_energy_orchestrator/config_flow.py": 347,
-    "custom_components/home_energy_orchestrator/configuration.py": 40,
+    "custom_components/home_energy_orchestrator/configuration.py": 43,
     "custom_components/home_energy_orchestrator/coordinator.py": 31,
-    "custom_components/home_energy_orchestrator/ev_active.py": 7,
+    "custom_components/home_energy_orchestrator/ev_active.py": 3,
     "custom_components/home_energy_orchestrator/ev_adapter.py": 10,
     "custom_components/home_energy_orchestrator/number.py": 1,
     "custom_components/home_energy_orchestrator/select.py": 1,
@@ -4713,8 +4703,8 @@
   },
   "key_count": 129,
   "raw_accesses_by_layer": {
-    "boundary": 411,
-    "runtime": 49
+    "boundary": 414,
+    "runtime": 45
   },
   "release_baseline": "0.12.26",
   "schema_version": 2

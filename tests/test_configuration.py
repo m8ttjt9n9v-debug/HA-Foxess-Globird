@@ -12,7 +12,9 @@ from custom_components.home_energy_orchestrator.const import (
     CONF_AUTOMATIC_CHARGE_ENABLED,
     CONF_AUTOMATIC_CONTROL_ENABLED,
     CONF_AUTOMATIC_EXPORT_ENABLED,
+    CONF_BATTERY_SOC,
     CONF_CONFIGURE_EV,
+    CONF_CONFIGURE_SOLAR,
     CONF_EV_ACTUAL_CURRENT,
     CONF_EV_ALLOWANCE_GUARD_ENABLED,
     CONF_EV_AT_HOME,
@@ -45,6 +47,7 @@ from custom_components.home_energy_orchestrator.const import (
     CONF_FOXESS_WORK_MODE,
     CONF_FREE_CHARGE_SCHEDULE_CONFIRMED,
     CONF_GRID_POWER_DIRECTION,
+    CONF_HOUSE_LOAD_INCLUDES_EV,
     CONF_HOUSE_OCCUPANCY_MODE,
     CONF_INVERTER_CHARGE_LIMIT_KW,
     CONF_INVERTER_DISCHARGE_LIMIT_KW,
@@ -65,6 +68,7 @@ from custom_components.home_energy_orchestrator.const import (
     DEFAULT_EXPORT_RATE,
     DEFAULT_FOXESS_CONTROL_OWNER,
     DEFAULT_GRID_POWER_DIRECTION,
+    DEFAULT_HOUSE_LOAD_INCLUDES_EV,
     DEFAULT_HOUSE_OCCUPANCY_MODE,
     DEFAULT_INVERTER_CHARGE_LIMIT_KW,
     DEFAULT_INVERTER_DISCHARGE_LIMIT_KW,
@@ -164,6 +168,9 @@ def test_runtime_configuration_uses_established_defaults() -> None:
         parsed.ev_policy.smart_socket_power_switching
         is DEFAULT_EV_SMART_SOCKET_POWER_SWITCHING
     )
+    assert parsed.house.load_includes_ev is DEFAULT_HOUSE_LOAD_INCLUDES_EV
+    assert parsed.site.solar_configured is True
+    assert parsed.battery.soc_entity is None
     assert parsed.house.occupancy_mode == DEFAULT_HOUSE_OCCUPANCY_MODE
     assert parsed.electrical.verified is False
     assert (
@@ -482,6 +489,49 @@ def test_ev_policy_snapshot_preserves_enum_and_truthiness_semantics(
         policy.solar_spill_enabled,
         policy.pre_free_enabled,
         policy.smart_socket_power_switching,
+    ) == expected
+
+
+@pytest.mark.parametrize(
+    ("data", "expected"),
+    [
+        ({}, (False, True, None)),
+        (
+            {
+                CONF_HOUSE_LOAD_INCLUDES_EV: True,
+                CONF_CONFIGURE_SOLAR: False,
+                CONF_BATTERY_SOC: "sensor.battery_soc",
+            },
+            (True, False, "sensor.battery_soc"),
+        ),
+        (
+            {
+                CONF_HOUSE_LOAD_INCLUDES_EV: "false",
+                CONF_CONFIGURE_SOLAR: None,
+                CONF_BATTERY_SOC: 123,
+            },
+            (True, True, "123"),
+        ),
+        (
+            {
+                CONF_HOUSE_LOAD_INCLUDES_EV: 0,
+                CONF_CONFIGURE_SOLAR: 0,
+                CONF_BATTERY_SOC: "",
+            },
+            (False, True, None),
+        ),
+    ],
+)
+def test_active_site_snapshot_preserves_upgrade_fallbacks(
+    data: dict[str, object],
+    expected: tuple[bool, bool, str | None],
+) -> None:
+    """Characterize truthiness, exact-false solar and mapping coercion."""
+    parsed = RuntimeConfiguration.from_mapping(data)
+    assert (
+        parsed.house.load_includes_ev,
+        parsed.site.solar_configured,
+        parsed.battery.soc_entity,
     ) == expected
 
 

@@ -11,7 +11,9 @@ from .const import (
     CONF_AUTOMATIC_CONTROL_ENABLED,
     CONF_AUTOMATIC_EXPORT_ENABLED,
     CONF_BATTERY_POWER_DIRECTION,
+    CONF_BATTERY_SOC,
     CONF_CONFIGURE_EV,
+    CONF_CONFIGURE_SOLAR,
     CONF_EV_ACTUAL_CURRENT,
     CONF_EV_ALLOWANCE_GUARD_ENABLED,
     CONF_EV_AT_HOME,
@@ -46,6 +48,7 @@ from .const import (
     CONF_FOXESS_WORK_MODE,
     CONF_FREE_CHARGE_SCHEDULE_CONFIRMED,
     CONF_GRID_POWER_DIRECTION,
+    CONF_HOUSE_LOAD_INCLUDES_EV,
     CONF_HOUSE_OCCUPANCY_MODE,
     CONF_INVERTER_CHARGE_LIMIT_KW,
     CONF_INVERTER_DISCHARGE_LIMIT_KW,
@@ -78,6 +81,7 @@ from .const import (
     DEFAULT_EXPORT_RATE,
     DEFAULT_FOXESS_CONTROL_OWNER,
     DEFAULT_GRID_POWER_DIRECTION,
+    DEFAULT_HOUSE_LOAD_INCLUDES_EV,
     DEFAULT_HOUSE_OCCUPANCY_MODE,
     DEFAULT_INVERTER_CHARGE_LIMIT_KW,
     DEFAULT_INVERTER_DISCHARGE_LIMIT_KW,
@@ -190,6 +194,21 @@ class HouseSettings:
     """Operator-owned house-energy occupancy selection."""
 
     occupancy_mode: str
+    load_includes_ev: bool
+
+
+@dataclass(frozen=True, slots=True)
+class SiteSettings:
+    """Site capability selections with upgrade-compatible defaults."""
+
+    solar_configured: bool
+
+
+@dataclass(frozen=True, slots=True)
+class BatterySettings:
+    """Explicit Home Assistant entities used to observe the battery."""
+
+    soc_entity: str | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -246,6 +265,8 @@ class RuntimeConfiguration:
     ev_telemetry: EvTelemetrySettings
     ev_policy: EvPolicySettings
     house: HouseSettings
+    site: SiteSettings
+    battery: BatterySettings
     electrical: ElectricalSettings
     tariff: TariffSettings
     inverter: InverterSettings
@@ -272,6 +293,7 @@ class RuntimeConfiguration:
         ev_actual_current_entity = data.get(CONF_EV_ACTUAL_CURRENT)
         ev_stored_energy_entity = data.get(CONF_EV_STORED_ENERGY)
         ev_lifetime_energy_entity = data.get(CONF_EV_LIFETIME_ENERGY)
+        battery_soc_entity = data.get(CONF_BATTERY_SOC)
         legacy_charge_to_full_entity = data.get(CONF_EV_CHARGE_TO_FULL)
         ev_control_commissioned = bool(
             data.get(
@@ -457,7 +479,21 @@ class RuntimeConfiguration:
                     )
                 ),
             ),
-            house=HouseSettings(occupancy_mode=occupancy),
+            house=HouseSettings(
+                occupancy_mode=occupancy,
+                load_includes_ev=bool(
+                    data.get(
+                        CONF_HOUSE_LOAD_INCLUDES_EV,
+                        DEFAULT_HOUSE_LOAD_INCLUDES_EV,
+                    )
+                ),
+            ),
+            site=SiteSettings(
+                solar_configured=data.get(CONF_CONFIGURE_SOLAR) is not False,
+            ),
+            battery=BatterySettings(
+                soc_entity=str(battery_soc_entity) if battery_soc_entity else None,
+            ),
             electrical=ElectricalSettings(
                 verified=bool(
                     data.get(
