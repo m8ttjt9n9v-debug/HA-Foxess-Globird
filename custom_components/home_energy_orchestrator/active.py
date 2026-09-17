@@ -28,6 +28,12 @@ from .foxess_observation_adapter import (
 )
 from .persistence import create_typed_value_repository
 from .planner.charge_session import ChargeSessionState, advance_charge_session
+from .planner.control_windows import (
+    control_window_bounds,
+    daily_windows_overlap,
+    derive_force_discharge_finish,
+    hours_until_next_window,
+)
 from .planner.ev_before_export import (
     EvBeforeExportDecision,
     decide_ev_before_export,
@@ -529,34 +535,22 @@ class ActiveFoxessController:
 
     def _export_bounds(self, now: datetime) -> tuple[datetime, datetime]:
         start = self.coordinator.runtime_config.windows.effective_bonus_start
-        start_at = datetime.combine(now.date(), start, tzinfo=now.tzinfo)
         finish = self._force_discharge_finish_time()
-        finish_at = datetime.combine(now.date(), finish, tzinfo=now.tzinfo)
-        if finish <= start:
-            finish_at += timedelta(days=1)
-            if now < datetime.combine(now.date(), finish, tzinfo=now.tzinfo):
-                start_at -= timedelta(days=1)
-                finish_at -= timedelta(days=1)
-        return start_at, finish_at
+        return control_window_bounds(now, start=start, finish=finish)
 
     def _force_discharge_finish_time(self) -> time:
         """Derive finish from ZEROHERO end, retaining pre-v5 compatibility."""
         runtime = self.coordinator.runtime_config
-        if not runtime.export.force_discharge_offset_configured:
-            return runtime.windows.effective_legacy_force_discharge_finish
-        bonus_end = runtime.windows.effective_bonus_end
-        anchor = datetime.combine(datetime.min.date(), bonus_end)
-        derived = anchor + timedelta(
-            minutes=runtime.export.force_discharge_offset_minutes
+        return derive_force_discharge_finish(
+            bonus_end=runtime.windows.effective_bonus_end,
+            offset_configured=runtime.export.force_discharge_offset_configured,
+            offset_minutes=runtime.export.force_discharge_offset_minutes,
+            legacy_finish=runtime.windows.effective_legacy_force_discharge_finish,
         )
-        return derived.time()
 
     def _hours_until_next_free(self, now: datetime) -> float:
         free_start = self.coordinator.runtime_config.windows.effective_free_charge_start
-        target = datetime.combine(now.date(), free_start, tzinfo=now.tzinfo)
-        if target <= now:
-            target += timedelta(days=1)
-        return max((target - now).total_seconds() / 3600, 0.0)
+        return hours_until_next_window(now, start=free_start)
 
     def _enabled_control_windows_overlap(self) -> bool:
         automation = self.coordinator.runtime_config.automation
@@ -571,17 +565,11 @@ class ActiveFoxessController:
         export_start = windows.effective_bonus_start
         export_end = self._force_discharge_finish_time()
 
-        def segments(start, end):
-            start_s = start.hour * 3600 + start.minute * 60 + start.second
-            end_s = end.hour * 3600 + end.minute * 60 + end.second
-            if start_s < end_s:
-                return ((start_s, end_s),)
-            return ((start_s, 86400), (0, end_s))
-
-        return any(
-            max(charge_left, export_left) < min(charge_right, export_right)
-            for charge_left, charge_right in segments(charge_start, charge_end)
-            for export_left, export_right in segments(export_start, export_end)
+        return daily_windows_overlap(
+            charge_start,
+            charge_end,
+            export_start,
+            export_end,
         )
 
     def _protected_keepalive_energy_kwh(self, hours_until_free: float) -> float | None:
