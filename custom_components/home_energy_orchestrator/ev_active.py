@@ -143,7 +143,13 @@ from .planner.ev import (
     reconcile_direct_evse,
     reconcile_smart_socket_recovery,
 )
-from .planner.ev_candidates import EvStageCandidate
+from .planner.ev_candidates import (
+    EvStageCandidate,
+    OutsideStageCandidateInputs,
+    build_ev_stage_candidate,
+    build_outside_stage_candidates,
+    reject_ev_stage_candidate,
+)
 from .planner.ev_daily_backfill import (
     DailyBackfillInputs,
     DailyBackfillPlan,
@@ -745,8 +751,8 @@ class ActiveEvController:
         if abs(target - observation.charge_limit_percent) < step:
             self._general_limit_write_fingerprint = None
             self.last_reason = "outside_window_general_limit_confirmed"
-            self.general_limit_candidate = EvStageCandidate(
-                stage="general_limit",
+            self.general_limit_candidate = build_ev_stage_candidate(
+                "general_limit",
                 eligible=True,
                 reason=self.last_reason,
                 target_limit_percent=target,
@@ -755,16 +761,16 @@ class ActiveEvController:
         fingerprint = (target, observation.charge_limit_percent)
         if fingerprint == self._general_limit_write_fingerprint:
             self.last_reason = "outside_window_general_limit_awaiting_feedback"
-            self.general_limit_candidate = EvStageCandidate(
-                stage="general_limit",
+            self.general_limit_candidate = build_ev_stage_candidate(
+                "general_limit",
                 eligible=True,
                 reason=self.last_reason,
                 target_limit_percent=target,
             )
             return
         plan = EvCommandPlan((EvCommand("set_charge_limit", target),), "general_limit")
-        self.general_limit_candidate = EvStageCandidate(
-            stage="general_limit",
+        self.general_limit_candidate = build_ev_stage_candidate(
+            "general_limit",
             eligible=True,
             reason=plan.reason,
             target_limit_percent=target,
@@ -780,10 +786,8 @@ class ActiveEvController:
     def _reject_general_limit_candidate(self, reason: str) -> None:
         """Record a shadow general-limit rejection without changing control."""
         self.last_reason = reason
-        self.general_limit_candidate = EvStageCandidate(
-            stage="general_limit",
-            eligible=False,
-            reason=reason,
+        self.general_limit_candidate = reject_ev_stage_candidate(
+            "general_limit", reason
         )
 
     async def _async_reconcile_disconnected_smart_socket(
@@ -799,10 +803,9 @@ class ActiveEvController:
         physical_minimum = self._physical_charging_minimum_a(observation)
         if smart is None or physical_minimum is None:
             self.last_reason = "smart_socket_feedback_unavailable"
-            self.smart_socket_candidate = EvStageCandidate(
-                stage="smart_socket",
-                eligible=False,
-                reason=self.last_reason,
+            self.smart_socket_candidate = reject_ev_stage_candidate(
+                "smart_socket",
+                self.last_reason,
             )
             return
         plan = plan_smart_socket_commands(
@@ -821,8 +824,8 @@ class ActiveEvController:
                 self.coordinator.runtime_config.ev_policy.smart_socket_power_switching
             ),
         )
-        self.smart_socket_candidate = EvStageCandidate(
-            stage="smart_socket",
+        self.smart_socket_candidate = build_ev_stage_candidate(
+            "smart_socket",
             eligible=True,
             reason=plan.reason,
             target_current_a=0.0,
@@ -851,20 +854,18 @@ class ActiveEvController:
         smart = self._smart_socket_observation(now, observation)
         if smart is None:
             self.last_reason = "smart_socket_feedback_unavailable"
-            self.smart_socket_candidate = EvStageCandidate(
-                stage="smart_socket",
-                eligible=False,
-                reason=self.last_reason,
+            self.smart_socket_candidate = reject_ev_stage_candidate(
+                "smart_socket",
+                self.last_reason,
             )
             return
         physical_minimum = self._physical_charging_minimum_a(observation)
         physical_ceiling = self._path_ceiling_a()
         if physical_minimum is None or physical_ceiling < physical_minimum:
             self.last_reason = "smart_socket_physical_limits_invalid"
-            self.smart_socket_candidate = EvStageCandidate(
-                stage="smart_socket",
-                eligible=False,
-                reason=self.last_reason,
+            self.smart_socket_candidate = reject_ev_stage_candidate(
+                "smart_socket",
+                self.last_reason,
             )
             return
 
@@ -925,8 +926,8 @@ class ActiveEvController:
             "confirming_charging",
         }
         recovery_changed = recovery.state != self.smart_recovery
-        self.smart_recovery_candidate = EvStageCandidate(
-            stage="smart_recovery",
+        self.smart_recovery_candidate = build_ev_stage_candidate(
+            "smart_recovery",
             eligible=bool(recovery_active or recovery.plan.commands),
             reason=recovery.plan.reason,
             target_current_a=recovery.state.recovery_current_a,
@@ -979,8 +980,8 @@ class ActiveEvController:
             ),
         )
         if gate == "safety_locked":
-            self.smart_socket_candidate = EvStageCandidate(
-                stage="smart_socket",
+            self.smart_socket_candidate = build_ev_stage_candidate(
+                "smart_socket",
                 eligible=True,
                 reason=plan.reason,
                 target_current_a=self.target_current_a,
@@ -991,8 +992,8 @@ class ActiveEvController:
             self.last_reason = f"rehearsal_{plan.reason}"
             return
         plan = self._suppress_unconfirmed_smart_stage(plan, smart, now)
-        self.smart_socket_candidate = EvStageCandidate(
-            stage="smart_socket",
+        self.smart_socket_candidate = build_ev_stage_candidate(
+            "smart_socket",
             eligible=True,
             reason=plan.reason,
             target_current_a=self.target_current_a,
@@ -1318,8 +1319,8 @@ class ActiveEvController:
                 step_percent=limit_step,
             )
         )
-        self.free_window_candidate = EvStageCandidate(
-            stage="free_window",
+        self.free_window_candidate = build_ev_stage_candidate(
+            "free_window",
             eligible=True,
             reason=self.decision_phase,
             target_current_a=self.target_current_a,
@@ -1331,10 +1332,8 @@ class ActiveEvController:
     def _reject_free_window_candidate(self, reason: str) -> bool:
         """Record a shadow candidate rejection without changing legacy flow."""
         self.last_reason = reason
-        self.free_window_candidate = EvStageCandidate(
-            stage="free_window",
-            eligible=False,
-            reason=reason,
+        self.free_window_candidate = reject_ev_stage_candidate(
+            "free_window", reason
         )
         return False
 
@@ -1499,8 +1498,8 @@ class ActiveEvController:
             self.outside_stop_requested = observation.charge_switch_on
             self.outside_control_active = observation.charge_switch_on
             self.outside_stage_candidates = (
-                EvStageCandidate(
-                    stage="battery_floor",
+                build_ev_stage_candidate(
+                    "battery_floor",
                     eligible=observation.charge_switch_on,
                     reason="battery_floor_reached",
                     target_current_a=0.0,
@@ -1686,12 +1685,27 @@ class ActiveEvController:
             self.pre_free_session = PreFreeSessionState()
             self.pre_free_phase = "disabled"
 
-        self.outside_stage_candidates = self._outside_candidates(
-            charge_to_full=charge_to_full,
-            service_ceiling=service_ceiling,
-            daily_current_a=daily_current_a,
-            baseline=baseline,
-            current_minimum=current_minimum,
+        self.outside_stage_candidates = build_outside_stage_candidates(
+            OutsideStageCandidateInputs(
+                charge_to_full=charge_to_full,
+                service_ceiling_a=service_ceiling,
+                daily_enabled=self._daily_backfill_enabled(),
+                daily_active=self.daily_backfill_active,
+                daily_reason=(
+                    self.daily_backfill_plan.phase
+                    if self.daily_backfill_plan is not None
+                    else "inputs_unavailable"
+                ),
+                daily_current_a=daily_current_a,
+                daily_stop_pending=self.daily_backfill_stop_pending,
+                solar_current_a=self.solar_spill.current_a,
+                solar_reason=self.solar_spill.phase,
+                pre_free_active=self.pre_free_session.active,
+                pre_free_reason=self.pre_free_phase,
+                pre_free_current_a=self.pre_free_current_a or 0.0,
+                protected_baseline_a=baseline,
+                physical_minimum_a=current_minimum,
+            )
         )
 
         if charge_to_full:
@@ -1792,89 +1806,9 @@ class ActiveEvController:
         """Record an outside-window input rejection without changing control."""
         self.last_reason = reason
         self.outside_stage_candidates = (
-            EvStageCandidate(
-                stage="outside_window",
-                eligible=False,
-                reason=reason,
-            ),
+            reject_ev_stage_candidate("outside_window", reason),
         )
         return False
-
-    def _outside_candidates(
-        self,
-        *,
-        charge_to_full: bool,
-        service_ceiling: float,
-        daily_current_a: float,
-        baseline: float,
-        current_minimum: float,
-    ) -> tuple[EvStageCandidate, ...]:
-        """Describe retained outside stages without selecting among them."""
-        daily_enabled = self._daily_backfill_enabled()
-        daily_reason = (
-            self.daily_backfill_plan.phase
-            if self.daily_backfill_plan is not None
-            else "inputs_unavailable"
-            if daily_enabled
-            else "disabled"
-        )
-        command_intent = ("reconcile_current", "reconcile_charge_limit")
-        solar_eligible = self.solar_spill.current_a >= current_minimum
-        return (
-            EvStageCandidate(
-                stage="charge_to_full",
-                eligible=charge_to_full,
-                reason=(
-                    "charge_to_full_paid_grid_override"
-                    if charge_to_full
-                    else "disabled"
-                ),
-                target_current_a=service_ceiling if charge_to_full else None,
-                command_intent=command_intent if charge_to_full else (),
-            ),
-            EvStageCandidate(
-                stage="daily_ready",
-                eligible=self.daily_backfill_active,
-                reason=daily_reason,
-                target_current_a=(daily_current_a if self.daily_backfill_active else None),
-                command_intent=(command_intent if self.daily_backfill_active else ()),
-                persistence_transition=(
-                    "daily_backfill_active"
-                    if self.daily_backfill_active
-                    else "daily_backfill_stop_pending"
-                    if self.daily_backfill_stop_pending
-                    else "none"
-                ),
-            ),
-            EvStageCandidate(
-                stage="solar_spill",
-                eligible=solar_eligible,
-                reason=self.solar_spill.phase,
-                target_current_a=(self.solar_spill.current_a if solar_eligible else None),
-                command_intent=command_intent if solar_eligible else (),
-            ),
-            EvStageCandidate(
-                stage="pre_free",
-                eligible=self.pre_free_session.active,
-                reason=self.pre_free_phase,
-                target_current_a=(
-                    self.pre_free_current_a if self.pre_free_session.active else None
-                ),
-                command_intent=(command_intent if self.pre_free_session.active else ()),
-                persistence_transition=(
-                    "pre_free_session_active"
-                    if self.pre_free_session.active
-                    else "none"
-                ),
-            ),
-            EvStageCandidate(
-                stage="protected_baseline",
-                eligible=baseline > 0,
-                reason="protected_baseline" if baseline > 0 else "disabled",
-                target_current_a=baseline if baseline > 0 else None,
-                command_intent=command_intent if baseline > 0 else (),
-            ),
-        )
 
     def _calculate_daily_backfill_plan(
         self,
