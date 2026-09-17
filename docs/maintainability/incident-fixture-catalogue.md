@@ -1,0 +1,53 @@
+# Incident fixture catalogue
+
+This catalogue connects confirmed operational failure classes to permanent,
+sanitized regression evidence. A focused unit or controller regression is
+valuable, but does not by itself satisfy the Phase 0 system-lifecycle gate.
+
+Status meanings:
+
+- **System:** covered through Home Assistant setup/lifecycle infrastructure.
+- **Focused:** covered at planner, controller or component level; system replay
+  remains desirable.
+- **Gap:** the exact lifecycle sequence is not yet retained.
+- **Open bug:** behaviour remains incorrect and must be fixed separately after
+  a failing regression is agreed.
+
+| Incident class | Existing evidence | Status | Required Phase 0 work |
+|---|---|---|---|
+| Safety Lock with requested automation | `test_rehearsal_mode_is_an_absolute_no_write_gate`; `test_safety_lock_blocks_all_commands_across_reload` | System | Extend to generated transition sequences |
+| Free-window Force Charge recovery after restart | `test_persisted_active_charge_restarts_after_ha_restart_feedback_settles`; `test_active_free_charge_restarts_from_self_use_while_still_eligible` | Focused | Replay setup → active → unload/reload at every phase |
+| Completed charge incorrectly reasserted | `test_completed_charge_session_round_trips_through_ha_storage`; live eligibility/restart regressions in `test_zerohero_active.py` | Focused | Add explicit completed-hold system trace |
+| Free-window end restores Self Use | `test_latched_free_charge_restores_self_use_after_window` | Focused | Advance deterministic clock through exact boundary and reload |
+| Manual diagnostic loses restoration obligation | `test_restart_restores_a_persisted_unfinished_test`; `test_failed_restore_remains_persisted_for_next_startup`; `test_restore_attempts_are_bounded_and_fault_remains_active` | Focused | Add config-entry reload and malformed-store system traces |
+| Diagnostic/test restoration returns wrong work mode | manual-test restoration tests | Focused | Retain exact start → timeout → clear targets → Self Use trace |
+| Reload/reconfigure immediately after a forced session | no complete fixture | Gap | Replay each session phase with reconfigure and transient feedback |
+| External/unowned forced mode must not be adopted | `test_free_charge_does_not_adopt_an_unlatched_forced_mode` | Focused | Add external mode transition during active lifecycle replay |
+| Import/export meter stale anchor after reload | `test_accumulator_requests_checkpoint_when_import_ends`; `test_import_to_export_transition_is_checkpointed`; `test_export_to_import_transition_is_checkpointed` | Focused | Add persisted positive-flow → zero → reload trace |
+| Estimated cost rises while continuously exporting | tariff and accounting tests in `test_setup.py` and `test_tariff.py` | Focused | Add one recorded-day accounting trace with zero import |
+| Sellable energy unavailable after allowance reconfigure | independent cap/accounting tests | Gap | Reconfigure 15 → 20 kWh before/during relevant window and snapshot plan |
+| Canonical battery telemetry disappears while other sources remain healthy | `test_restart_recovers_from_stale_zero_with_fresh_signed_battery`; telemetry normalization tests | Focused | Inject unavailable, delayed and recovered effective sources in system replay |
+| EV current cycles between minimum and maximum | `test_allowance_does_not_cycle_when_whole_house_meter_includes_ev`; transition-hold tests; `test_runtime_does_not_flap_forever_when_feedback_never_changes` | Focused | Replay target, setting and actual-current convergence over timed updates |
+| EV policy drains protected house battery | `test_battery_floor_stops_automatic_outside_charge`; sellable-energy shrink/stop tests | Focused | Add full battery/EV/grid timeline with forbidden paid import |
+| Vehicle update races current convergence | `test_soc_update_does_not_recalculate_whole_house_allowance_during_current_ramp`; safety-boundary tests | Focused | Move into deterministic state-event replay |
+| Sign-verification or owner change during reconfiguration | migration and gate tests | Gap | Reconfigure each gate during idle and active sessions; assert atomic apply |
+| Battery-only site retains stale EV reservation | `test_battery_only_site_ignores_retained_ev_baseline` | Focused | Add clean setup and upgraded-entry system snapshots |
+| Learning becomes unavailable while valid EV samples remain | confirmed roadmap bug; existing learning arithmetic and restart tests | Open bug | First add disconnected setup/unplug/restart failing regressions; connection gates actuation only |
+| House learning loses or duplicates EV/heater subtraction | source-composition tests in `test_setup.py` | Focused | Add multi-cycle persisted sampler replay |
+| GloBird scorecard mappings disappear on upgrade | v5 migration and scorecard status tests | Focused | Add full config-entry upgrade/setup/Fleet snapshot |
+| User entity IDs are reclaimed on setup | `test_setup_preserves_user_owned_entity_ids_and_names` | System | Expand to upgrade, downgrade and collision fixtures |
+
+## Fixture completion rule
+
+An incident becomes **System** only when the fixture records:
+
+1. exact initial Home Assistant states and timestamps;
+2. config-entry data and relevant persisted payloads;
+3. ordered input events and lifecycle operations;
+4. public state and attribute trace;
+5. ordered hardware service-call trace;
+6. permitted and forbidden actions; and
+7. final owner, mode and outstanding restoration obligation.
+
+Private hostnames, addresses, credentials and identifiable site chronology are
+never included.

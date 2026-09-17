@@ -83,6 +83,9 @@ expected plans, permitted calls, forbidden calls and final ownership.
 **Complete when:** every confirmed incident is named, reproducible and runs in
 the deterministic suite without private hostnames, addresses or credentials.
 
+Current coverage and evidence gaps are tracked in the
+[incident fixture catalogue](incident-fixture-catalogue.md).
+
 ### OM-006 — Continuous enforcement
 
 - Run deterministic lifecycle fixtures on every pull request and release tag.
