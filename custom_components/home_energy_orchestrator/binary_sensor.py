@@ -10,19 +10,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from . import EnergyConfigEntry
-from .const import (
-    CONF_BATTERY_POWER_DIRECTION,
-    CONF_GRID_POWER_DIRECTION,
-    CONF_SIGN_CONVENTIONS_VERIFIED,
-    CONF_SITE_GRID_CURRENT_DIRECTION,
-    CONF_SOLAR_POWER_DIRECTION,
-    DEFAULT_BATTERY_POWER_DIRECTION,
-    DEFAULT_GRID_POWER_DIRECTION,
-    DEFAULT_SIGN_CONVENTIONS_VERIFIED,
-    DEFAULT_SITE_GRID_CURRENT_DIRECTION,
-    DEFAULT_SOLAR_POWER_DIRECTION,
-    DOMAIN,
-)
+from .const import DOMAIN
 from .coordinator import EnergyCoordinator
 from .entity_catalogue import SIGN_CONVENTIONS_DESCRIPTION as DESCRIPTION
 
@@ -58,28 +46,16 @@ class SignConventionsVerifiedBinarySensor(
 
     @property
     def is_on(self) -> bool:
-        return bool(
-            self.coordinator.config.get(
-                CONF_SIGN_CONVENTIONS_VERIFIED,
-                DEFAULT_SIGN_CONVENTIONS_VERIFIED,
-            )
-        )
+        return self.coordinator.runtime_config.electrical.verified
 
     @property
     def extra_state_attributes(self) -> dict[str, object]:
-        config = self.coordinator.config
+        electrical = self.coordinator.runtime_config.electrical
         return {
-            "grid_power_positive_direction": config.get(
-                CONF_GRID_POWER_DIRECTION, DEFAULT_GRID_POWER_DIRECTION
-            ),
-            "battery_power_positive_direction": config.get(
-                CONF_BATTERY_POWER_DIRECTION, DEFAULT_BATTERY_POWER_DIRECTION
-            ),
-            "solar_generation_direction": config.get(
-                CONF_SOLAR_POWER_DIRECTION, DEFAULT_SOLAR_POWER_DIRECTION
-            ),
-            "site_grid_current_positive_direction": config.get(
-                CONF_SITE_GRID_CURRENT_DIRECTION,
-                DEFAULT_SITE_GRID_CURRENT_DIRECTION,
+            "grid_power_positive_direction": electrical.grid_power_positive_direction,
+            "battery_power_positive_direction": electrical.battery_power_positive_direction,
+            "solar_generation_direction": electrical.solar_generation_direction,
+            "site_grid_current_positive_direction": (
+                electrical.site_grid_current_positive_direction
             ),
         }

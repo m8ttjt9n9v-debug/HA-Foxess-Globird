@@ -4,26 +4,37 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
+from typing import cast
 
 from .const import (
     CONF_AUTOMATIC_CHARGE_ENABLED,
     CONF_AUTOMATIC_CONTROL_ENABLED,
     CONF_AUTOMATIC_EXPORT_ENABLED,
+    CONF_BATTERY_POWER_DIRECTION,
     CONF_EV_AUTOMATIC_CONTROL_ENABLED,
     CONF_EV_BEFORE_EXPORT_ENABLED,
     CONF_EV_BEFORE_EXPORT_SOC_TARGET,
     CONF_EV_CHARGE_TO_FULL_ENABLED,
+    CONF_GRID_POWER_DIRECTION,
     CONF_HOUSE_OCCUPANCY_MODE,
     CONF_REHEARSAL_MODE,
+    CONF_SIGN_CONVENTIONS_VERIFIED,
+    CONF_SITE_GRID_CURRENT_DIRECTION,
+    CONF_SOLAR_POWER_DIRECTION,
     DEFAULT_AUTOMATIC_CHARGE_ENABLED,
     DEFAULT_AUTOMATIC_CONTROL_ENABLED,
     DEFAULT_AUTOMATIC_EXPORT_ENABLED,
+    DEFAULT_BATTERY_POWER_DIRECTION,
     DEFAULT_EV_AUTOMATIC_CONTROL_ENABLED,
     DEFAULT_EV_BEFORE_EXPORT_ENABLED,
     DEFAULT_EV_BEFORE_EXPORT_SOC_TARGET,
     DEFAULT_EV_CHARGE_TO_FULL_ENABLED,
+    DEFAULT_GRID_POWER_DIRECTION,
     DEFAULT_HOUSE_OCCUPANCY_MODE,
     DEFAULT_REHEARSAL_MODE,
+    DEFAULT_SIGN_CONVENTIONS_VERIFIED,
+    DEFAULT_SITE_GRID_CURRENT_DIRECTION,
+    DEFAULT_SOLAR_POWER_DIRECTION,
     HOUSE_OCCUPANCY_MODES,
 )
 
@@ -63,12 +74,24 @@ class HouseSettings:
 
 
 @dataclass(frozen=True, slots=True)
+class ElectricalSettings:
+    """Commissioned canonical sign directions and explicit verification."""
+
+    verified: bool
+    grid_power_positive_direction: str
+    battery_power_positive_direction: str
+    solar_generation_direction: str
+    site_grid_current_positive_direction: str
+
+
+@dataclass(frozen=True, slots=True)
 class RuntimeConfiguration:
     """Typed runtime snapshot adopted one domain at a time."""
 
     automation: AutomationSettings
     ev_preferences: EvPreferenceSettings
     house: HouseSettings
+    electrical: ElectricalSettings
 
     @classmethod
     def from_mapping(cls, data: Mapping[str, object]) -> RuntimeConfiguration:
@@ -128,4 +151,40 @@ class RuntimeConfiguration:
                 ),
             ),
             house=HouseSettings(occupancy_mode=occupancy),
+            electrical=ElectricalSettings(
+                verified=bool(
+                    data.get(
+                        CONF_SIGN_CONVENTIONS_VERIFIED,
+                        DEFAULT_SIGN_CONVENTIONS_VERIFIED,
+                    )
+                ),
+                grid_power_positive_direction=cast(
+                    str,
+                    data.get(
+                        CONF_GRID_POWER_DIRECTION,
+                        DEFAULT_GRID_POWER_DIRECTION,
+                    ),
+                ),
+                battery_power_positive_direction=cast(
+                    str,
+                    data.get(
+                        CONF_BATTERY_POWER_DIRECTION,
+                        DEFAULT_BATTERY_POWER_DIRECTION,
+                    ),
+                ),
+                solar_generation_direction=cast(
+                    str,
+                    data.get(
+                        CONF_SOLAR_POWER_DIRECTION,
+                        DEFAULT_SOLAR_POWER_DIRECTION,
+                    ),
+                ),
+                site_grid_current_positive_direction=cast(
+                    str,
+                    data.get(
+                        CONF_SITE_GRID_CURRENT_DIRECTION,
+                        DEFAULT_SITE_GRID_CURRENT_DIRECTION,
+                    ),
+                ),
+            ),
         )

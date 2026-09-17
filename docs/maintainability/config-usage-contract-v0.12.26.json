@@ -444,51 +444,6 @@
     },
     {
       "access": "get",
-      "constant": "CONF_BATTERY_POWER_DIRECTION",
-      "key": "battery_power_positive_direction",
-      "layer": "runtime",
-      "receiver": "config",
-      "scope": "SignConventionsVerifiedBinarySensor.extra_state_attributes",
-      "source": "custom_components/home_energy_orchestrator/binary_sensor.py"
-    },
-    {
-      "access": "get",
-      "constant": "CONF_GRID_POWER_DIRECTION",
-      "key": "grid_power_positive_direction",
-      "layer": "runtime",
-      "receiver": "config",
-      "scope": "SignConventionsVerifiedBinarySensor.extra_state_attributes",
-      "source": "custom_components/home_energy_orchestrator/binary_sensor.py"
-    },
-    {
-      "access": "get",
-      "constant": "CONF_SITE_GRID_CURRENT_DIRECTION",
-      "key": "site_grid_current_positive_direction",
-      "layer": "runtime",
-      "receiver": "config",
-      "scope": "SignConventionsVerifiedBinarySensor.extra_state_attributes",
-      "source": "custom_components/home_energy_orchestrator/binary_sensor.py"
-    },
-    {
-      "access": "get",
-      "constant": "CONF_SOLAR_POWER_DIRECTION",
-      "key": "solar_power_generation_direction",
-      "layer": "runtime",
-      "receiver": "config",
-      "scope": "SignConventionsVerifiedBinarySensor.extra_state_attributes",
-      "source": "custom_components/home_energy_orchestrator/binary_sensor.py"
-    },
-    {
-      "access": "get",
-      "constant": "CONF_SIGN_CONVENTIONS_VERIFIED",
-      "key": "sign_conventions_verified",
-      "layer": "runtime",
-      "receiver": "self.coordinator.config",
-      "scope": "SignConventionsVerifiedBinarySensor.is_on",
-      "source": "custom_components/home_energy_orchestrator/binary_sensor.py"
-    },
-    {
-      "access": "get",
       "constant": "CONF_AUTOMATIC_CHARGE_ENABLED",
       "key": "automatic_charge_enabled",
       "layer": "boundary",
@@ -3639,6 +3594,15 @@
     },
     {
       "access": "get",
+      "constant": "CONF_BATTERY_POWER_DIRECTION",
+      "key": "battery_power_positive_direction",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "RuntimeConfiguration.from_mapping",
+      "source": "custom_components/home_energy_orchestrator/configuration.py"
+    },
+    {
+      "access": "get",
       "constant": "CONF_EV_AUTOMATIC_CONTROL_ENABLED",
       "key": "ev_automatic_control_enabled",
       "layer": "boundary",
@@ -3666,6 +3630,15 @@
     },
     {
       "access": "get",
+      "constant": "CONF_GRID_POWER_DIRECTION",
+      "key": "grid_power_positive_direction",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "RuntimeConfiguration.from_mapping",
+      "source": "custom_components/home_energy_orchestrator/configuration.py"
+    },
+    {
+      "access": "get",
       "constant": "CONF_HOUSE_OCCUPANCY_MODE",
       "key": "house_occupancy_mode",
       "layer": "boundary",
@@ -3677,6 +3650,33 @@
       "access": "get",
       "constant": "CONF_REHEARSAL_MODE",
       "key": "rehearsal_mode",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "RuntimeConfiguration.from_mapping",
+      "source": "custom_components/home_energy_orchestrator/configuration.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_SIGN_CONVENTIONS_VERIFIED",
+      "key": "sign_conventions_verified",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "RuntimeConfiguration.from_mapping",
+      "source": "custom_components/home_energy_orchestrator/configuration.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_SITE_GRID_CURRENT_DIRECTION",
+      "key": "site_grid_current_positive_direction",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "RuntimeConfiguration.from_mapping",
+      "source": "custom_components/home_energy_orchestrator/configuration.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_SOLAR_POWER_DIRECTION",
+      "key": "solar_power_generation_direction",
       "layer": "boundary",
       "receiver": "data",
       "scope": "RuntimeConfiguration.from_mapping",
@@ -4845,15 +4845,14 @@
     }
   ],
   "accesses_by_layer": {
-    "boundary": 379,
-    "runtime": 159
+    "boundary": 384,
+    "runtime": 154
   },
   "accesses_by_source": {
     "custom_components/home_energy_orchestrator/__init__.py": 24,
     "custom_components/home_energy_orchestrator/active.py": 25,
-    "custom_components/home_energy_orchestrator/binary_sensor.py": 5,
     "custom_components/home_energy_orchestrator/config_flow.py": 347,
-    "custom_components/home_energy_orchestrator/configuration.py": 8,
+    "custom_components/home_energy_orchestrator/configuration.py": 13,
     "custom_components/home_energy_orchestrator/coordinator.py": 31,
     "custom_components/home_energy_orchestrator/diagnostics.py": 10,
     "custom_components/home_energy_orchestrator/ev_active.py": 38,
