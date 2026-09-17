@@ -44,6 +44,7 @@ from .const import (
     CONF_EV_CHARGING_STATE,
     CONF_EV_CONTROL_COMMISSIONED,
     CONF_EV_CURRENT_LIMIT,
+    CONF_EV_DAILY_READY_TIME,
     CONF_EV_FREE_WINDOW_PRIORITY,
     CONF_EV_LIFETIME_ENERGY,
     CONF_EV_LOCATION_MODE,
@@ -58,6 +59,8 @@ from .const import (
     CONF_EV_STORED_ENERGY,
     CONF_EV_VOLTAGE,
     CONF_EXPORT_RATE,
+    CONF_EXPORT_RATE_WINDOW_END,
+    CONF_EXPORT_RATE_WINDOW_START,
     CONF_FORCE_DISCHARGE_FINISH,
     CONF_FORCE_DISCHARGE_OFFSET_MINUTES,
     CONF_FOXESS_CONTROL_OWNER,
@@ -82,6 +85,8 @@ from .const import (
     CONF_INVERTER_CHARGE_LIMIT_KW,
     CONF_INVERTER_DISCHARGE_LIMIT_KW,
     CONF_OFFPEAK_EXPORT_RATE,
+    CONF_PEAK_WINDOW_END,
+    CONF_PEAK_WINDOW_START,
     CONF_REHEARSAL_MODE,
     CONF_SIGN_CONVENTIONS_VERIFIED,
     CONF_SITE_GRID_CURRENT,
@@ -108,6 +113,7 @@ from .const import (
     DEFAULT_EV_CHARGE_PATH,
     DEFAULT_EV_CHARGE_TO_FULL_ENABLED,
     DEFAULT_EV_CONTROL_COMMISSIONED,
+    DEFAULT_EV_DAILY_READY_TIME,
     DEFAULT_EV_FREE_WINDOW_PRIORITY,
     DEFAULT_EV_LOCATION_MODE,
     DEFAULT_EV_PHASE_COUNT,
@@ -118,6 +124,8 @@ from .const import (
     DEFAULT_EV_SOLAR_SPILL_ENABLED,
     DEFAULT_EV_VOLTAGE,
     DEFAULT_EXPORT_RATE,
+    DEFAULT_EXPORT_RATE_WINDOW_END,
+    DEFAULT_EXPORT_RATE_WINDOW_START,
     DEFAULT_FORCE_DISCHARGE_FINISH,
     DEFAULT_FORCE_DISCHARGE_OFFSET_MINUTES,
     DEFAULT_FOXESS_CONTROL_OWNER,
@@ -132,6 +140,8 @@ from .const import (
     DEFAULT_INVERTER_CHARGE_LIMIT_KW,
     DEFAULT_INVERTER_DISCHARGE_LIMIT_KW,
     DEFAULT_OFFPEAK_EXPORT_RATE,
+    DEFAULT_PEAK_WINDOW_END,
+    DEFAULT_PEAK_WINDOW_START,
     DEFAULT_REHEARSAL_MODE,
     DEFAULT_SIGN_CONVENTIONS_VERIFIED,
     DEFAULT_SITE_GRID_CURRENT_DIRECTION,
@@ -290,7 +300,28 @@ class WindowSettings:
     free_charge_end: time | None
     bonus_start: time | None
     bonus_end: time | None
+    peak_start: time | None
+    peak_end: time | None
+    export_rate_start: time | None
+    export_rate_end: time | None
+    ev_daily_ready: time | None
     legacy_force_discharge_finish: time | None
+
+    def time_for_legacy_key(self, key: str, default: str) -> time:
+        """Bridge existing callers to the immutable window snapshot."""
+        configured = {
+            CONF_FREE_CHARGE_START: self.free_charge_start,
+            CONF_FREE_CHARGE_END: self.free_charge_end,
+            CONF_BONUS_WINDOW_START: self.bonus_start,
+            CONF_BONUS_WINDOW_END: self.bonus_end,
+            CONF_PEAK_WINDOW_START: self.peak_start,
+            CONF_PEAK_WINDOW_END: self.peak_end,
+            CONF_EXPORT_RATE_WINDOW_START: self.export_rate_start,
+            CONF_EXPORT_RATE_WINDOW_END: self.export_rate_end,
+            CONF_EV_DAILY_READY_TIME: self.ev_daily_ready,
+            CONF_FORCE_DISCHARGE_FINISH: self.legacy_force_discharge_finish,
+        }.get(key)
+        return configured or time.fromisoformat(default)
 
     @property
     def effective_free_charge_start(self) -> time:
@@ -777,6 +808,31 @@ class RuntimeConfiguration:
                     data,
                     CONF_BONUS_WINDOW_END,
                     DEFAULT_BONUS_WINDOW_END,
+                ),
+                peak_start=_optional_time(
+                    data,
+                    CONF_PEAK_WINDOW_START,
+                    DEFAULT_PEAK_WINDOW_START,
+                ),
+                peak_end=_optional_time(
+                    data,
+                    CONF_PEAK_WINDOW_END,
+                    DEFAULT_PEAK_WINDOW_END,
+                ),
+                export_rate_start=_optional_time(
+                    data,
+                    CONF_EXPORT_RATE_WINDOW_START,
+                    DEFAULT_EXPORT_RATE_WINDOW_START,
+                ),
+                export_rate_end=_optional_time(
+                    data,
+                    CONF_EXPORT_RATE_WINDOW_END,
+                    DEFAULT_EXPORT_RATE_WINDOW_END,
+                ),
+                ev_daily_ready=_optional_time(
+                    data,
+                    CONF_EV_DAILY_READY_TIME,
+                    DEFAULT_EV_DAILY_READY_TIME,
                 ),
                 legacy_force_discharge_finish=_optional_time(
                     data,

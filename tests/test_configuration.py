@@ -43,6 +43,7 @@ from custom_components.home_energy_orchestrator.const import (
     CONF_EV_CHARGING_STATE,
     CONF_EV_CONTROL_COMMISSIONED,
     CONF_EV_CURRENT_LIMIT,
+    CONF_EV_DAILY_READY_TIME,
     CONF_EV_FREE_WINDOW_PRIORITY,
     CONF_EV_LIFETIME_ENERGY,
     CONF_EV_LOCATION_MODE,
@@ -57,6 +58,8 @@ from custom_components.home_energy_orchestrator.const import (
     CONF_EV_STORED_ENERGY,
     CONF_EV_VOLTAGE,
     CONF_EXPORT_RATE,
+    CONF_EXPORT_RATE_WINDOW_END,
+    CONF_EXPORT_RATE_WINDOW_START,
     CONF_FORCE_DISCHARGE_FINISH,
     CONF_FORCE_DISCHARGE_OFFSET_MINUTES,
     CONF_FOXESS_CONTROL_OWNER,
@@ -80,6 +83,8 @@ from custom_components.home_energy_orchestrator.const import (
     CONF_HOUSE_OCCUPANCY_MODE,
     CONF_INVERTER_CHARGE_LIMIT_KW,
     CONF_INVERTER_DISCHARGE_LIMIT_KW,
+    CONF_PEAK_WINDOW_END,
+    CONF_PEAK_WINDOW_START,
     CONF_REHEARSAL_MODE,
     CONF_SIGN_CONVENTIONS_VERIFIED,
     CONF_SITE_GRID_CURRENT,
@@ -97,6 +102,7 @@ from custom_components.home_energy_orchestrator.const import (
     DEFAULT_EV_ALLOWANCE_GUARD_ENABLED,
     DEFAULT_EV_BEFORE_EXPORT_SOC_TARGET,
     DEFAULT_EV_CHARGE_PATH,
+    DEFAULT_EV_DAILY_READY_TIME,
     DEFAULT_EV_FREE_WINDOW_PRIORITY,
     DEFAULT_EV_LOCATION_MODE,
     DEFAULT_EV_PHASE_COUNT,
@@ -107,6 +113,8 @@ from custom_components.home_energy_orchestrator.const import (
     DEFAULT_EV_SOLAR_SPILL_ENABLED,
     DEFAULT_EV_VOLTAGE,
     DEFAULT_EXPORT_RATE,
+    DEFAULT_EXPORT_RATE_WINDOW_END,
+    DEFAULT_EXPORT_RATE_WINDOW_START,
     DEFAULT_FORCE_DISCHARGE_FINISH,
     DEFAULT_FORCE_DISCHARGE_OFFSET_MINUTES,
     DEFAULT_FOXESS_CONTROL_OWNER,
@@ -120,6 +128,8 @@ from custom_components.home_energy_orchestrator.const import (
     DEFAULT_HOUSE_OCCUPANCY_MODE,
     DEFAULT_INVERTER_CHARGE_LIMIT_KW,
     DEFAULT_INVERTER_DISCHARGE_LIMIT_KW,
+    DEFAULT_PEAK_WINDOW_END,
+    DEFAULT_PEAK_WINDOW_START,
     DEFAULT_REHEARSAL_MODE,
     DEFAULT_SIGN_CONVENTIONS_VERIFIED,
     DEFAULT_SITE_GRID_CURRENT_DIRECTION,
@@ -241,6 +251,17 @@ def test_runtime_configuration_uses_established_defaults() -> None:
     assert parsed.windows.free_charge_end is None
     assert parsed.windows.bonus_start == time.fromisoformat(DEFAULT_BONUS_WINDOW_START)
     assert parsed.windows.bonus_end == time.fromisoformat(DEFAULT_BONUS_WINDOW_END)
+    assert parsed.windows.peak_start == time.fromisoformat(DEFAULT_PEAK_WINDOW_START)
+    assert parsed.windows.peak_end == time.fromisoformat(DEFAULT_PEAK_WINDOW_END)
+    assert parsed.windows.export_rate_start == time.fromisoformat(
+        DEFAULT_EXPORT_RATE_WINDOW_START
+    )
+    assert parsed.windows.export_rate_end == time.fromisoformat(
+        DEFAULT_EXPORT_RATE_WINDOW_END
+    )
+    assert parsed.windows.ev_daily_ready == time.fromisoformat(
+        DEFAULT_EV_DAILY_READY_TIME
+    )
     assert parsed.windows.legacy_force_discharge_finish == time.fromisoformat(
         DEFAULT_FORCE_DISCHARGE_FINISH
     )
@@ -382,6 +403,35 @@ def test_active_battery_export_snapshot_preserves_legacy_defaults_and_presence()
     assert runtime.windows.effective_legacy_force_discharge_finish == time.fromisoformat(
         DEFAULT_FORCE_DISCHARGE_FINISH
     )
+
+
+def test_window_snapshot_legacy_lookup_preserves_valid_invalid_and_unknown_keys() -> None:
+    windows = RuntimeConfiguration.from_mapping(
+        {
+            CONF_PEAK_WINDOW_START: "17:30:00",
+            CONF_PEAK_WINDOW_END: "invalid",
+            CONF_EXPORT_RATE_WINDOW_START: "18:00:00",
+            CONF_EXPORT_RATE_WINDOW_END: "22:30:00",
+            CONF_EV_DAILY_READY_TIME: "07:15:00",
+        }
+    ).windows
+
+    assert windows.time_for_legacy_key(
+        CONF_PEAK_WINDOW_START, DEFAULT_PEAK_WINDOW_START
+    ) == time(17, 30)
+    assert windows.time_for_legacy_key(
+        CONF_PEAK_WINDOW_END, DEFAULT_PEAK_WINDOW_END
+    ) == time.fromisoformat(DEFAULT_PEAK_WINDOW_END)
+    assert windows.time_for_legacy_key(
+        CONF_EXPORT_RATE_WINDOW_START, DEFAULT_EXPORT_RATE_WINDOW_START
+    ) == time(18, 0)
+    assert windows.time_for_legacy_key(
+        CONF_EXPORT_RATE_WINDOW_END, DEFAULT_EXPORT_RATE_WINDOW_END
+    ) == time(22, 30)
+    assert windows.time_for_legacy_key(
+        CONF_EV_DAILY_READY_TIME, DEFAULT_EV_DAILY_READY_TIME
+    ) == time(7, 15)
+    assert windows.time_for_legacy_key("unknown", "09:45:00") == time(9, 45)
 
 
 @pytest.mark.parametrize(

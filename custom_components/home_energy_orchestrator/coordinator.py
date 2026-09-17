@@ -339,10 +339,7 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
 
     def _configured_time(self, key: str, default: str) -> time:
         """Parse a local-time setting, falling back only for legacy entries."""
-        try:
-            return time.fromisoformat(str(self.config.get(key, default)))
-        except (TypeError, ValueError):
-            return time.fromisoformat(default)
+        return self.runtime_config.windows.time_for_legacy_key(key, default)
 
     @property
     def occupancy_result(self) -> OccupancyResult:
