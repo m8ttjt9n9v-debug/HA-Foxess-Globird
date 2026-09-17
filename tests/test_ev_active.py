@@ -915,11 +915,37 @@ async def test_disconnected_vehicle_exposes_solar_spill_ineligibility(
             )
         ),
     )
+    controller.charge_to_full_started_at = datetime(2026, 9, 7, 5, tzinfo=UTC)
+    controller.daily_backfill_active = True
+    controller.daily_backfill_session_target_kwh = 2
+    controller.daily_backfill_session_start_delivered_kwh = 0.5
+    controller.daily_backfill_frozen_start = datetime(2026, 9, 7, 5, tzinfo=UTC)
+    controller.daily_backfill_stop_pending = True
+    controller.daily_backfill_stop_attempts = 2
+    controller.daily_backfill_last_stop_at = datetime(2026, 9, 7, 5, 30, tzinfo=UTC)
+    controller.pre_free_session = PreFreeSessionState(
+        True,
+        datetime(2026, 9, 7, 5, 30, tzinfo=UTC),
+    )
+    controller.outside_control_active = True
+    controller.outside_target_active = True
 
     await controller.async_reconcile()
 
     assert controller.last_reason == "ev_cable_not_connected"
     assert controller.solar_spill.phase == "vehicle_not_eligible"
+    assert controller.charge_to_full_started_at is None
+    assert controller.daily_backfill_active is False
+    assert controller.daily_backfill_session_target_kwh == 0
+    assert controller.daily_backfill_session_start_delivered_kwh == 0
+    assert controller.daily_backfill_frozen_start is None
+    assert controller.daily_backfill_stop_pending is False
+    assert controller.daily_backfill_stop_attempts == 0
+    assert controller.daily_backfill_last_stop_at is None
+    assert controller.pre_free_session == PreFreeSessionState()
+    assert controller.pre_free_phase == "not_eligible"
+    assert controller.outside_control_active is False
+    assert controller.outside_target_active is False
 
 
 @pytest.mark.freeze_time("2026-09-07 00:01:00+00:00")
