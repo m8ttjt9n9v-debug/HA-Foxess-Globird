@@ -12,6 +12,7 @@ from homeassistant.core import callback, valid_entity_id
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import selector
 
+from .config_page_schema import build_page_schema
 from .const import (
     BATTERY_POSITIVE_DISCHARGE,
     BATTERY_POWER_DIRECTIONS,
@@ -1602,32 +1603,8 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     @callback
     def _page_schema(self, page: str, defaults: dict[str, object]) -> vol.Schema:
-        """Select one logical page from the single canonical field definition."""
-        if page == "site":
-            return vol.Schema(
-                {
-                    vol.Required(CONF_NAME, default=defaults.get(CONF_NAME, "Home Energy")):
-                        selector.TextSelector(),
-                    vol.Required(
-                        self._CONF_CONFIGURE_SOLAR,
-                        default=bool(defaults.get(self._CONF_CONFIGURE_SOLAR, False)),
-                    ): selector.BooleanSelector(),
-                    vol.Required(
-                        self._CONF_CONFIGURE_EV,
-                        default=bool(defaults.get(self._CONF_CONFIGURE_EV, False)),
-                    ): selector.BooleanSelector(),
-                }
-            )
-        canonical = {
-            marker.schema: (marker, validator)
-            for marker, validator in self._schema(defaults).schema.items()
-        }
-        return vol.Schema(
-            {
-                canonical[key][0]: canonical[key][1]
-                for key in self._PAGE_FIELDS[page]
-            }
-        )
+        """Build one logical page from the immutable field catalogue."""
+        return build_page_schema(page, defaults)
 
     @staticmethod
     def _apply_defaults(data: dict[str, object]) -> dict[str, object]:

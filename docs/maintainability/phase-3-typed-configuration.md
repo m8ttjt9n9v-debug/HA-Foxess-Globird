@@ -48,8 +48,11 @@ selectors, validation, migration behavior and the multi-page draft workflow.
   parity with the 124-field UI contract is enforced. Configuration page
   composition now comes from the catalogue's immutable page projection, so the
   former duplicate 124-key page map has been removed without changing page or
-  field order. Existing validators and defaults remain authoritative pending a
-  separately bounded catalogue-driven schema seam.
+  field order. Human setup and reconfigure page markers, displayed defaults and
+  selectors are now constructed directly from those same immutable field
+  definitions, with exact frozen-contract and numeric-coercion coverage. The
+  separate legacy full-payload compatibility schema remains unchanged, and
+  named cross-field validators remain outside catalogue metadata.
 
 ## Work packages
 
