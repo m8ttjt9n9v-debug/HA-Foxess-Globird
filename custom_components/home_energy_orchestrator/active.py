@@ -48,6 +48,10 @@ from .planner.foxess_export_policy import (
     evaluate_foxess_export_policy,
 )
 from .planner.foxess_gate import FoxessGateContext, evaluate_foxess_gate
+from .planner.foxess_ownership import (
+    FoxessOwnershipContext,
+    evaluate_foxess_ownership,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -497,78 +501,41 @@ class ActiveFoxessController:
         """Refuse hardware writes until forced-mode ownership is trustworthy."""
         manual = getattr(self.coordinator, "manual_test", None)
         manual_status = getattr(manual, "storage_status", "missing")
-        degraded = any(
-            status in {"missing", "malformed", "not_loaded"}
-            for status in (
-                self._charge_storage_status,
-                self._export_storage_status,
-                manual_status,
+        result = evaluate_foxess_ownership(
+            FoxessOwnershipContext(
+                mode=observation.mode,
+                charge_phase=self.charge_session.phase,
+                export_phase=self.export_session.phase,
+                charge_storage_status=self._charge_storage_status,
+                export_storage_status=self._export_storage_status,
+                manual_present=manual is not None,
+                manual_active=bool(
+                    manual is not None and getattr(manual, "is_active", False)
+                ),
+                manual_kind=(
+                    getattr(manual, "active_kind", None)
+                    if manual is not None
+                    else None
+                ),
+                manual_storage_status=manual_status,
             )
         )
-        charge_owned = self.charge_session.phase in {
-            "starting",
-            "active",
-            "stopping",
-            "recovering",
-        }
-        export_owned = self.export_session.phase in {
-            "starting",
-            "active",
-            "stopping",
-            "recovering",
-        }
-        manual_kind_for_mode = {
-            "Force Charge": "charge",
-            "Force Discharge": "discharge",
-        }.get(observation.mode)
-        manual_owned = bool(
-            manual is not None
-            and manual.is_active
-            and manual.active_kind == manual_kind_for_mode
-        )
-        matching_owner = (
-            observation.mode == "Force Charge" and charge_owned
-            or observation.mode == "Force Discharge" and export_owned
-            or manual_owned
-        )
-        if matching_owner:
-            self.ownership_status = "verified_session"
-            return False
-        if observation.mode == "Self Use" and (
-            charge_owned or export_owned or manual_owned
-        ):
-            # A valid retained obligation may observe Self Use while it resumes
-            # or confirms restoration. Missing evidence from an unrelated
-            # family must not erase that trustworthy obligation.
-            self.ownership_status = "verified_session"
-            return False
-        if observation.mode == "Self Use":
-            if degraded:
-                self.charge_session = ChargeSessionState()
-                self.export_session = ExportSessionState()
-                await self._charge_repository.async_save(self.charge_session)
-                await self._export_repository.async_save(self.export_session)
-                self._charge_storage_status = "valid"
-                self._export_storage_status = "valid"
-                if manual is not None:
-                    await manual.async_checkpoint_safe_idle()
-                self.ownership_status = "verified_safe_mode"
-                self.last_reason = "ownership_reestablished_self_use"
-                self.last_actions = ()
-                # The observed Self Use state itself establishes the safe
-                # boundary. Continue normal evaluation from that verified
-                # baseline; no extra reconciliation interval is required.
-                return False
-            self.ownership_status = "verified"
-            return False
-        self.last_actions = ()
-        if degraded:
-            self.ownership_status = "ownership_unknown"
-            self.last_reason = "ownership_unknown"
-        else:
-            self.ownership_status = "verified_external_owner"
-            self.last_reason = "external_forced_mode"
-        return True
+        if result.reset_sessions:
+            self.charge_session = ChargeSessionState()
+            self.export_session = ExportSessionState()
+            await self._charge_repository.async_save(self.charge_session)
+            await self._export_repository.async_save(self.export_session)
+            self._charge_storage_status = "valid"
+            self._export_storage_status = "valid"
+        if result.checkpoint_manual_idle:
+            assert manual is not None
+            await manual.async_checkpoint_safe_idle()
+        self.ownership_status = result.status
+        if result.reason is not None:
+            self.last_reason = result.reason
+        if result.clear_actions:
+            self.last_actions = ()
+        return result.hold
 
     def _export_state_payload(self) -> dict[str, object]:
         return self.export_session.to_payload()
