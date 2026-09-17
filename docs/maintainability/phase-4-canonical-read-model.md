@@ -73,6 +73,10 @@ read model. All public sensor state and attribute mappings are now owned by
 the canonical model; the attribute-contract generator no longer parses
 `sensor.py`.
 
+The thirteenth seam moves the remaining battery/EV actuator and ledger support
+payloads onto the control and operational models. Support diagnostics now
+contain only entry metadata plus canonical read-model projections.
+
 Work-item evidence:
 
 - [core SiteReadModel projection](work-item-core-read-model.md)
@@ -87,6 +91,7 @@ Work-item evidence:
 - [authoritative export-revenue components](work-item-export-revenue-read-model.md)
 - [canonical telemetry presentation](work-item-telemetry-read-model.md)
 - [ZEROHERO accumulator presentation](work-item-zerohero-accumulator-read-model.md)
+- [complete support diagnostics model](work-item-support-diagnostics-read-model.md)
 
 ## Work packages
 

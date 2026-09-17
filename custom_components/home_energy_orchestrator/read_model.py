@@ -228,6 +228,16 @@ class OperationalReadModel:
             "threshold_kwh_per_hour": self.zerohero_threshold_kwh_per_hour,
         }
 
+    def diagnostics(self) -> dict[str, object]:
+        """Project the existing redacted ledger support payload."""
+        return {
+            "reason": self.ledger_status,
+            "battery_energy_kwh": self.battery_energy_kwh,
+            "available_after_reserve_kwh": self.available_energy_kwh,
+            "grid_import_kw": self.grid_import_kw,
+            "grid_export_kw": self.grid_export_kw,
+        }
+
 
 @dataclass(frozen=True, slots=True)
 class ManualTestReadModel:
@@ -661,6 +671,8 @@ class ControlReadModel:
     foxess_control_owner: str
     automatic_export_enabled: bool
     automatic_export_effective: bool
+    ev_before_export_enabled: bool
+    ev_before_export_soc_target_percent: float
     ev_before_export_status: str
     ev_automatic_control_enabled: bool
     ev_gate: str
@@ -865,6 +877,37 @@ class SiteReadModel:
             "learning_max_age_days": control.learning_max_age_days,
             "learning_sample_limit": control.learning_sample_limit,
             "learning_sampler_enabled": control.learning_sampler_enabled,
+        }
+
+    def actuator_diagnostics(self) -> dict[str, object]:
+        """Project the existing redacted actuator support payload."""
+        control = self.control
+        return {
+            "safety_lock_engaged": control.rehearsal_mode,
+            "sign_conventions_verified": control.sign_conventions_verified,
+            "foxess_automatic_control_enabled": (
+                control.automatic_control_enabled
+            ),
+            "automatic_charge_enabled": control.automatic_charge_enabled,
+            "free_charge_schedule_confirmed": (
+                control.free_charge_schedule_confirmed
+            ),
+            "charge_session_phase": control.charge_session_phase,
+            "charge_power_target_kw": control.charge_power_target_kw,
+            "automatic_export_enabled": control.automatic_export_enabled,
+            "automatic_export_effective": control.automatic_export_effective,
+            "ev_before_export_enabled": control.ev_before_export_enabled,
+            "ev_before_export_soc_target_percent": (
+                control.ev_before_export_soc_target_percent
+            ),
+            "ev_before_export_status": control.ev_before_export_status,
+            "ev_automatic_control_enabled": control.ev_automatic_control_enabled,
+            **self.ev.actuator_diagnostics(control.ev_gate),
+            "export_session_phase": control.export_session_phase,
+            "foxess_control_owner": control.foxess_control_owner,
+            "foxess_control_gate": control.foxess_gate,
+            "foxess_writes_enabled": control.foxess_gate == "ready",
+            "writes_enabled": control.foxess_gate == "ready",
         }
 
 
@@ -1221,6 +1264,12 @@ def build_site_read_model(
         automatic_export_enabled=automation.battery_export_enabled,
         automatic_export_effective=(
             False if controller is None else controller.export_effective_enabled
+        ),
+        ev_before_export_enabled=(
+            coordinator.runtime_config.ev_preferences.before_export_enabled
+        ),
+        ev_before_export_soc_target_percent=(
+            coordinator.runtime_config.ev_preferences.before_export_soc_target
         ),
         ev_before_export_status=(
             "unavailable"

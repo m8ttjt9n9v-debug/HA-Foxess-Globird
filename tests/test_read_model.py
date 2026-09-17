@@ -699,6 +699,39 @@ def test_status_attributes_preserve_existing_public_values() -> None:
     }
 
 
+def test_site_actuator_and_ledger_diagnostics_use_canonical_facts() -> None:
+    model = build_site_read_model(_coordinator())
+
+    assert model.actuator_diagnostics() == {
+        "safety_lock_engaged": True,
+        "sign_conventions_verified": False,
+        "foxess_automatic_control_enabled": False,
+        "automatic_charge_enabled": True,
+        "free_charge_schedule_confirmed": False,
+        "charge_session_phase": "charging",
+        "charge_power_target_kw": 7.5,
+        "automatic_export_enabled": True,
+        "automatic_export_effective": True,
+        "ev_before_export_enabled": False,
+        "ev_before_export_soc_target_percent": 40.0,
+        "ev_before_export_status": "target_met",
+        "ev_automatic_control_enabled": False,
+        **model.ev.actuator_diagnostics("ready"),
+        "export_session_phase": "exporting",
+        "foxess_control_owner": "local_modbus",
+        "foxess_control_gate": "ready",
+        "foxess_writes_enabled": True,
+        "writes_enabled": True,
+    }
+    assert model.operational.diagnostics() == {
+        "reason": "ready",
+        "battery_energy_kwh": 20.0,
+        "available_after_reserve_kwh": 15.0,
+        "grid_import_kw": 0.5,
+        "grid_export_kw": 0.1,
+    }
+
+
 def test_missing_ev_controller_preserves_unavailable_state_defaults() -> None:
     coordinator = _coordinator()
     coordinator.ev_controller = None
