@@ -53,7 +53,12 @@ separate reviewable work items.
 - Registry setup/reload, migration and collision fixtures pass.
 - The portable dashboard is strictly parsed and every HEO entity and attribute
   reference is checked against the frozen v0.12.26 contracts.
-- The true previous-release rollback/downgrade rehearsal is still open.
+- An extracted v0.12.26 release now executes setup and unload against the
+  unchanged version-6 configuration surface on every test run. A deliberately
+  attempted user-renamed registry rollback exposed that v0.12.26 reclaims the
+  default ID, so full registry-safe downgrade remains an open hard gate rather
+  than a claimed success. Establish a compatibility-baseline release before
+  any approved naming release, then rehearse rollback to that baseline.
 - Runtime `EntitySpec` coverage now includes all 107 entities without changing
   their frozen descriptions. Every spec identifies its current value-projection
   owner, availability rule and deprecation state; translations remain

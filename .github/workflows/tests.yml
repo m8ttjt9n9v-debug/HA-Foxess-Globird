@@ -9,9 +9,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: "3.14"
       - run: pip install ".[test]" ruff
       - run: ruff check custom_components tests
       - run: pytest
+      - run: python -m scripts.previous_release_rehearsal --tag v0.12.26
