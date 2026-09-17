@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
@@ -406,6 +408,103 @@ async def test_completed_charge_does_not_adopt_external_forced_mode_across_reloa
     persisted = await harness.load_store(store_key)
     assert persisted is not None
     assert persisted["phase"] == "completed"
+    await harness.unload(entry)
+    hass.services.async_remove("number", "set_value")
+    hass.services.async_remove("select", "select_option")
+    harness.close()
+
+
+@pytest.mark.freeze_time("2026-09-17 02:30:00+00:00")
+async def test_free_charge_exact_end_restores_self_use_and_clears_on_reload(
+    hass, monkeypatch
+) -> None:
+    """The exact end boundary creates, persists and completes restoration."""
+    harness = LifecycleHarness(hass)
+    _register_foxess_services(hass, monkeypatch)
+    await _seed_foxess_states(harness, 80)
+    await harness.set_state(
+        "number.test_force_charge",
+        "10",
+        {"unit_of_measurement": "kW", "max": 10},
+    )
+    await harness.set_state(
+        "select.test_work_mode",
+        "Force Charge",
+        {"options": ["Self Use", "Force Discharge", "Force Charge"]},
+    )
+    now = [datetime(2026, 9, 17, 2, 30, tzinfo=UTC)]
+    monkeypatch.setattr(
+        "custom_components.home_energy_orchestrator.active.dt_util.now",
+        lambda: now[0],
+    )
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Free charge end boundary",
+        version=6,
+        data=_active_entry_data(
+            automatic_charge_enabled=True,
+            free_charge_schedule_confirmed=True,
+            free_charge_window_start="00:00:00",
+            free_charge_window_end="23:59:00",
+            inverter_charge_limit_kw=10.0,
+        ),
+    )
+    entry.add_to_hass(hass)
+    store_key = f"home_energy_orchestrator.{entry.entry_id}.charge_session"
+    await harness.save_store(
+        store_key,
+        {
+            "phase": "active",
+            "requested_power_kw": 10.0,
+            "attempts": 0,
+            "last_command_at": "2026-09-17T02:00:00+00:00",
+        },
+    )
+
+    await harness.setup(entry)
+    assert harness.service_calls == ()
+
+    now[0] = datetime(2026, 9, 17, 23, 59, tzinfo=UTC)
+    await entry.runtime_data.active_controller.async_reconcile()
+    await hass.async_block_till_done()
+
+    observed_calls = [
+        (call.domain, call.service, call.service_data)
+        for call in harness.service_calls
+    ]
+    assert observed_calls == [
+        (
+            "select",
+            "select_option",
+            {"option": "Self Use", "entity_id": "select.test_work_mode"},
+        ),
+        (
+            "number",
+            "set_value",
+            {"value": 0.0, "entity_id": "number.test_force_charge"},
+        ),
+    ]
+    persisted = await harness.load_store(store_key)
+    assert persisted is not None
+    assert persisted["phase"] == "stopping"
+    await harness.set_state(
+        "number.test_force_charge",
+        "0",
+        {"unit_of_measurement": "kW", "max": 10},
+    )
+    await harness.set_state(
+        "select.test_work_mode",
+        "Self Use",
+        {"options": ["Self Use", "Force Discharge", "Force Charge"]},
+    )
+
+    harness.clear_service_calls()
+    await harness.reload(entry)
+
+    assert harness.service_calls == ()
+    persisted = await harness.load_store(store_key)
+    assert persisted is not None
+    assert persisted["phase"] == "idle"
     await harness.unload(entry)
     hass.services.async_remove("number", "set_value")
     hass.services.async_remove("select", "select_option")
