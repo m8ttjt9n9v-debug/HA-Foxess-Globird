@@ -1,5 +1,5 @@
 {
-  "access_count": 455,
+  "access_count": 454,
   "accesses": [
     {
       "access": "subscript_store",
@@ -4392,17 +4392,6 @@
       "source": "custom_components/home_energy_orchestrator/configuration.py"
     },
     {
-      "access": "subscript_load",
-      "constant": null,
-      "key": null,
-      "key_expression": "key",
-      "kind": "raw_mapping",
-      "layer": "runtime",
-      "receiver": "self.config",
-      "scope": "EnergyCoordinator._configured_float",
-      "source": "custom_components/home_energy_orchestrator/coordinator.py"
-    },
-    {
       "access": "get",
       "constant": null,
       "key": null,
@@ -4560,27 +4549,27 @@
   "accesses_by_kind": {
     "managed_mutation": 11,
     "mutation_boundary": 2,
-    "raw_mapping": 442
+    "raw_mapping": 441
   },
   "accesses_by_layer": {
     "boundary": 441,
-    "runtime": 14
+    "runtime": 13
   },
   "accesses_by_source": {
     "custom_components/home_energy_orchestrator/__init__.py": 24,
     "custom_components/home_energy_orchestrator/config_flow.py": 354,
     "custom_components/home_energy_orchestrator/configuration.py": 61,
-    "custom_components/home_energy_orchestrator/coordinator.py": 4,
+    "custom_components/home_energy_orchestrator/coordinator.py": 3,
     "custom_components/home_energy_orchestrator/ev_active.py": 3,
     "custom_components/home_energy_orchestrator/number.py": 1,
     "custom_components/home_energy_orchestrator/select.py": 1,
     "custom_components/home_energy_orchestrator/switch.py": 7
   },
-  "dynamic_access_count": 5,
+  "dynamic_access_count": 4,
   "key_count": 130,
   "raw_accesses_by_layer": {
     "boundary": 439,
-    "runtime": 3
+    "runtime": 2
   },
   "release_baseline": "0.12.26",
   "schema_version": 4

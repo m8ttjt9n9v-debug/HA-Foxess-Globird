@@ -16,10 +16,12 @@ from custom_components.home_energy_orchestrator.const import (
     CONF_AUTOMATIC_CONTROL_ENABLED,
     CONF_AUTOMATIC_EXPORT_ENABLED,
     CONF_AUTOMATIC_EXPORT_LIMIT_KWH,
+    CONF_BATTERY_CAPACITY,
     CONF_BATTERY_CAPACITY_ENTITY,
     CONF_BATTERY_CHARGE_POSITIVE,
     CONF_BATTERY_CHARGE_POWER,
     CONF_BATTERY_DISCHARGE_POWER,
+    CONF_BATTERY_FLOOR,
     CONF_BATTERY_FREE_WINDOW_TARGET,
     CONF_BATTERY_POWER,
     CONF_BATTERY_POWER_DIRECTION,
@@ -47,6 +49,8 @@ from custom_components.home_energy_orchestrator.const import (
     CONF_EV_FREE_WINDOW_PRIORITY,
     CONF_EV_LIFETIME_ENERGY,
     CONF_EV_LOCATION_MODE,
+    CONF_EV_MAX_CURRENT,
+    CONF_EV_MIN_CURRENT,
     CONF_EV_PHASE_COUNT,
     CONF_EV_PRE_FREE_ENABLED,
     CONF_EV_PROTECTED_BASELINE_A,
@@ -86,6 +90,7 @@ from custom_components.home_energy_orchestrator.const import (
     CONF_PEAK_WINDOW_END,
     CONF_PEAK_WINDOW_START,
     CONF_REHEARSAL_MODE,
+    CONF_RESERVE,
     CONF_SIGN_CONVENTIONS_VERIFIED,
     CONF_SITE_GRID_CURRENT,
     CONF_SITE_GRID_CURRENT_DIRECTION,
@@ -213,8 +218,11 @@ def test_runtime_configuration_uses_established_defaults() -> None:
         == DEFAULT_EV_PROTECTED_BASELINE_A
     )
     assert parsed.ev_connection.voltage_v == DEFAULT_EV_VOLTAGE
+    assert parsed.ev_connection.configured_voltage_v is None
     assert parsed.ev_connection.phase_count == DEFAULT_EV_PHASE_COUNT
     assert parsed.ev_connection.phase_count_valid is True
+    assert parsed.ev_connection.configured_min_current_a is None
+    assert parsed.ev_connection.configured_max_current_a is None
     assert parsed.ev_actuators.direct_entities is None
     assert parsed.ev_actuators.smart_socket_entity is None
     assert parsed.ev_telemetry.soc_entity is None
@@ -281,6 +289,9 @@ def test_runtime_configuration_uses_established_defaults() -> None:
     assert parsed.battery.capacity_entity is None
     assert parsed.battery.charge_power_entity is None
     assert parsed.battery.discharge_power_entity is None
+    assert parsed.battery.configured_capacity_kwh is None
+    assert parsed.battery.configured_floor_percent is None
+    assert parsed.battery.configured_reserve_kwh is None
     assert (
         parsed.battery.free_window_target_percent
         == DEFAULT_BATTERY_FREE_WINDOW_TARGET
@@ -350,6 +361,64 @@ def test_runtime_configuration_preserves_existing_coercion_behavior() -> None:
     assert parsed.inverter.force_charge_power_entity == "number.foxess_charge"
     assert parsed.inverter.force_discharge_power_entity == "number.foxess_discharge"
     assert parsed.inverter.actuator_mapping_complete is True
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        ("12.5", 12.5),
+        (0, 0.0),
+        ("invalid", None),
+        (float("nan"), None),
+        (float("inf"), None),
+    ],
+)
+def test_required_numeric_snapshot_preserves_finite_validation(
+    value: object,
+    expected: float | None,
+) -> None:
+    runtime = RuntimeConfiguration.from_mapping(
+        {
+            CONF_BATTERY_CAPACITY: value,
+            CONF_BATTERY_FLOOR: value,
+            CONF_RESERVE: value,
+            CONF_EV_MIN_CURRENT: value,
+            CONF_EV_MAX_CURRENT: value,
+            CONF_EV_VOLTAGE: value,
+        }
+    )
+
+    assert runtime.battery.configured_capacity_kwh == expected
+    assert runtime.battery.configured_floor_percent == expected
+    assert runtime.battery.configured_reserve_kwh == expected
+    assert runtime.ev_connection.configured_min_current_a == expected
+    assert runtime.ev_connection.configured_max_current_a == expected
+    assert runtime.ev_connection.configured_voltage_v == expected
+
+
+def test_coordinator_required_numeric_bridge_reads_only_the_snapshot() -> None:
+    runtime = RuntimeConfiguration.from_mapping(
+        {
+            CONF_BATTERY_CAPACITY: 20,
+            CONF_BATTERY_FLOOR: 10,
+            CONF_RESERVE: 2,
+            CONF_EV_MIN_CURRENT: 1,
+            CONF_EV_MAX_CURRENT: 16,
+            CONF_EV_VOLTAGE: 230,
+        }
+    )
+    coordinator = SimpleNamespace(runtime_config=runtime)
+
+    assert EnergyCoordinator._configured_float(coordinator, CONF_BATTERY_CAPACITY) == 20
+    assert EnergyCoordinator._configured_float(coordinator, CONF_BATTERY_FLOOR) == 10
+    assert EnergyCoordinator._configured_float(coordinator, CONF_RESERVE) == 2
+    assert EnergyCoordinator._configured_float(coordinator, CONF_EV_MIN_CURRENT) == 1
+    assert EnergyCoordinator._configured_float(coordinator, CONF_EV_MAX_CURRENT) == 16
+    assert EnergyCoordinator._configured_float(coordinator, CONF_EV_VOLTAGE) == 230
+
+    missing = SimpleNamespace(runtime_config=RuntimeConfiguration.from_mapping({}))
+    with pytest.raises(ValueError, match="must be finite"):
+        EnergyCoordinator._configured_float(missing, CONF_BATTERY_CAPACITY)
 
 
 @pytest.mark.parametrize(

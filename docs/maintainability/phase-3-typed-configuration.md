@@ -76,7 +76,10 @@ selectors, validation, migration behavior and the multi-page draft workflow.
   consumes immutable tariff settings, reducing raw runtime mapping operations
   to five. After classifying the two intentional central mutation writes as the
   boundary they provide, three raw runtime reads remain: two numeric
-  coordinator helpers and the EV-controller numeric helper.
+  coordinator helpers and the EV-controller numeric helper. Required battery
+  and EV numbers now come from immutable domain snapshots, leaving two raw
+  runtime reads: the coordinator's optional non-negative helper and the
+  EV-controller numeric helper.
 
 ## Work packages
 

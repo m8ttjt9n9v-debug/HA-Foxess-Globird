@@ -458,9 +458,17 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
         return value if isfinite(value) else None
 
     def _configured_float(self, key: str) -> float:
-        """Read a finite, safe setup value from the config entry."""
-        value = float(self.config[key])
-        if not isfinite(value):
+        """Retain required-number failure behavior during typed migration."""
+        values = {
+            CONF_BATTERY_CAPACITY: self.runtime_config.battery.configured_capacity_kwh,
+            CONF_BATTERY_FLOOR: self.runtime_config.battery.configured_floor_percent,
+            CONF_RESERVE: self.runtime_config.battery.configured_reserve_kwh,
+            CONF_EV_MIN_CURRENT: self.runtime_config.ev_connection.configured_min_current_a,
+            CONF_EV_MAX_CURRENT: self.runtime_config.ev_connection.configured_max_current_a,
+            CONF_EV_VOLTAGE: self.runtime_config.ev_connection.configured_voltage_v,
+        }
+        value = values.get(key)
+        if value is None or not isfinite(value):
             raise ValueError(f"{key} must be finite")
         return value
 

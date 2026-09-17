@@ -15,10 +15,12 @@ from .const import (
     CONF_AUTOMATIC_CONTROL_ENABLED,
     CONF_AUTOMATIC_EXPORT_ENABLED,
     CONF_AUTOMATIC_EXPORT_LIMIT_KWH,
+    CONF_BATTERY_CAPACITY,
     CONF_BATTERY_CAPACITY_ENTITY,
     CONF_BATTERY_CHARGE_POSITIVE,
     CONF_BATTERY_CHARGE_POWER,
     CONF_BATTERY_DISCHARGE_POWER,
+    CONF_BATTERY_FLOOR,
     CONF_BATTERY_FREE_WINDOW_TARGET,
     CONF_BATTERY_POWER,
     CONF_BATTERY_POWER_DIRECTION,
@@ -48,6 +50,8 @@ from .const import (
     CONF_EV_FREE_WINDOW_PRIORITY,
     CONF_EV_LIFETIME_ENERGY,
     CONF_EV_LOCATION_MODE,
+    CONF_EV_MAX_CURRENT,
+    CONF_EV_MIN_CURRENT,
     CONF_EV_PHASE_COUNT,
     CONF_EV_PRE_FREE_ENABLED,
     CONF_EV_PROTECTED_BASELINE_A,
@@ -91,6 +95,7 @@ from .const import (
     CONF_PEAK_WINDOW_END,
     CONF_PEAK_WINDOW_START,
     CONF_REHEARSAL_MODE,
+    CONF_RESERVE,
     CONF_SHOULDER_RATE,
     CONF_SIGN_CONVENTIONS_VERIFIED,
     CONF_SITE_GRID_CURRENT,
@@ -176,6 +181,17 @@ def _optional_number(
         return None
 
 
+def _required_number(data: Mapping[str, object], key: str) -> float | None:
+    """Parse a required finite number without inventing a runtime default."""
+    if key not in data:
+        return None
+    try:
+        value = float(data[key])
+    except (TypeError, ValueError):
+        return None
+    return value if isfinite(value) else None
+
+
 def _optional_time(
     data: Mapping[str, object], key: str, default: str | None = None
 ) -> time | None:
@@ -230,8 +246,11 @@ class EvConnectionSettings:
     cable_connected_entity: str | None
     protected_baseline_a: float
     voltage_v: float
+    configured_voltage_v: float | None
     phase_count: float
     phase_count_valid: bool
+    configured_min_current_a: float | None
+    configured_max_current_a: float | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -377,6 +396,9 @@ class BatterySettings:
     charge_power_entity: str | None
     discharge_power_entity: str | None
     free_window_target_percent: float
+    configured_capacity_kwh: float | None
+    configured_floor_percent: float | None
+    configured_reserve_kwh: float | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -738,11 +760,14 @@ class RuntimeConfiguration:
                     _number(data, CONF_EV_VOLTAGE, DEFAULT_EV_VOLTAGE),
                     0.0,
                 ),
+                configured_voltage_v=_required_number(data, CONF_EV_VOLTAGE),
                 phase_count=max(
                     _number(data, CONF_EV_PHASE_COUNT, DEFAULT_EV_PHASE_COUNT),
                     0.0,
                 ),
                 phase_count_valid=ev_phase_count is not None,
+                configured_min_current_a=_required_number(data, CONF_EV_MIN_CURRENT),
+                configured_max_current_a=_required_number(data, CONF_EV_MAX_CURRENT),
             ),
             ev_actuators=EvActuatorSettings(
                 current_limit_entity=(
@@ -949,6 +974,9 @@ class RuntimeConfiguration:
                     ),
                     0.0,
                 ),
+                configured_capacity_kwh=_required_number(data, CONF_BATTERY_CAPACITY),
+                configured_floor_percent=_required_number(data, CONF_BATTERY_FLOOR),
+                configured_reserve_kwh=_required_number(data, CONF_RESERVE),
             ),
             export=ExportSettings(
                 automatic_limit_kwh=max(
