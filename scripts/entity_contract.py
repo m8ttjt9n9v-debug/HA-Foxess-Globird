@@ -8,7 +8,6 @@ from enum import Enum
 from pathlib import Path
 from typing import Any
 
-from custom_components.home_energy_orchestrator import sensor
 from custom_components.home_energy_orchestrator.entity_catalogue import ENTITY_SPECS
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
@@ -45,7 +44,6 @@ def _description_record(platform: str, description: Any) -> dict[str, Any]:
 def build_entity_contract() -> dict[str, Any]:
     """Return the deterministic current public entity identity contract."""
     records = [
-        *(_description_record("sensor", description) for description in sensor.DESCRIPTIONS),
         *(
             _description_record(spec.platform, spec.description)
             for spec in ENTITY_SPECS

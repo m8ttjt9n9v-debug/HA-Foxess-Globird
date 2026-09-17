@@ -23,19 +23,18 @@ def test_entity_contract_contains_one_hundred_and_seven_unique_entities() -> Non
     assert len(entity_ids) == len(set(entity_ids))
 
 
-def test_non_sensor_catalogue_is_complete_and_unique() -> None:
-    """Every frozen non-sensor identity has exactly one catalogue spec."""
+def test_entity_catalogue_is_complete_and_unique() -> None:
+    """Every frozen public identity has exactly one catalogue spec."""
     contract = build_entity_contract()
     contracted = {
         (item["platform"], item["key"])
         for item in contract["entities"]
-        if item["platform"] != "sensor"
     }
     catalogued = {
         (spec.platform, spec.description.key)
         for spec in ENTITY_SPECS
     }
 
-    assert len(ENTITY_SPECS) == 15
+    assert len(ENTITY_SPECS) == 107
     assert len(catalogued) == len(ENTITY_SPECS)
     assert catalogued == contracted
