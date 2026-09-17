@@ -1217,6 +1217,63 @@ async def test_daily_policy_stops_its_owned_session_at_frozen_energy_target(
     assert stopped == ["switch.car_charge"]
 
 
+async def test_daily_policy_stop_feedback_retry_trace_is_bounded(
+    hass: HomeAssistant,
+) -> None:
+    _set_ev_states(hass)
+    hass.states.async_set("switch.car_charge", "on")
+    stopped = []
+
+    async def stop(call):
+        # Deliberately leave charge-switch feedback on until the final cycle.
+        stopped.append(call.data["entity_id"])
+
+    hass.services.async_register("switch", "turn_off", stop)
+    coordinator = _coordinator(
+        _controller_config(
+            ev_daily_backfill_energy_kwh=5,
+            ev_daily_ready_time="08:00:00",
+            ev_outside_inverter_percent=30,
+            inverter_discharge_limit_kw=15,
+        )
+    )
+    coordinator.data = SimpleNamespace(available_after_reserve_kwh=14)
+    coordinator.learning_remaining_kwh = 3
+    controller = ActiveEvController(hass, coordinator)
+    controller.daily_backfill_cycle_ready_at = datetime(2026, 9, 7, 8, tzinfo=UTC)
+    controller.daily_backfill_active = True
+    controller.daily_backfill_delivered_kwh = 2
+    controller.daily_backfill_session_start_delivered_kwh = 1
+    controller.daily_backfill_session_target_kwh = 1
+    controller.daily_backfill_frozen_start = datetime(2026, 9, 7, 5, tzinfo=UTC)
+    start = datetime(2026, 9, 7, 6, 30, tzinfo=UTC)
+
+    await controller.async_reconcile(start)
+    assert controller.daily_backfill_stop_attempts == 1
+    assert stopped == ["switch.car_charge"]
+
+    await controller.async_reconcile(start + timedelta(seconds=10))
+    assert controller.last_reason == "daily_backfill_stop_awaiting_feedback"
+    assert stopped == ["switch.car_charge"]
+
+    await controller.async_reconcile(start + timedelta(seconds=30))
+    await controller.async_reconcile(start + timedelta(seconds=60))
+    assert controller.daily_backfill_stop_attempts == 3
+    assert stopped == ["switch.car_charge"] * 3
+
+    await controller.async_reconcile(start + timedelta(seconds=90))
+    assert controller.last_reason == "daily_backfill_stop_fault_maximum_attempts"
+    assert stopped == ["switch.car_charge"] * 3
+
+    hass.states.async_set("switch.car_charge", "off")
+    await controller.async_reconcile(start + timedelta(seconds=120))
+    assert controller.last_reason == "daily_backfill_stopped"
+    assert controller.daily_backfill_stop_pending is False
+    assert controller.daily_backfill_stop_attempts == 0
+    assert controller.daily_backfill_last_stop_at is None
+    assert controller.outside_control_active is False
+
+
 async def test_daily_policy_stops_when_live_sellable_energy_disappears(
     hass: HomeAssistant,
 ) -> None:
