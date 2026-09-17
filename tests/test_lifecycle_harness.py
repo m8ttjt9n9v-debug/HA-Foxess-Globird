@@ -801,3 +801,102 @@ async def test_export_anchor_stays_zero_when_import_continues_after_reload(
     assert harness.service_calls == ()
     await harness.unload(entry)
     harness.close()
+
+
+@pytest.mark.freeze_time("2026-09-17 02:30:00+00:00")
+async def test_export_exact_end_restores_self_use_and_clears_on_reload(
+    hass, monkeypatch
+) -> None:
+    """The exact export finish persists restoration until feedback confirms it."""
+    harness = LifecycleHarness(hass)
+    _register_foxess_services(hass, monkeypatch)
+    await _seed_foxess_states(harness, 100)
+    await harness.set_state(
+        "number.test_force_discharge",
+        "10",
+        {"unit_of_measurement": "kW", "max": 10},
+    )
+    await harness.set_state(
+        "select.test_work_mode",
+        "Force Discharge",
+        {"options": ["Self Use", "Force Discharge", "Force Charge"]},
+    )
+    now = [datetime(2026, 9, 17, 2, 30, tzinfo=UTC)]
+    monkeypatch.setattr(
+        "custom_components.home_energy_orchestrator.active.dt_util.now",
+        lambda: now[0],
+    )
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Export end boundary",
+        version=6,
+        data=_active_entry_data(
+            automatic_export_enabled=True,
+            automatic_export_limit_kwh=25.0,
+            bonus_window_start="00:00:00",
+            bonus_window_end="23:58:00",
+            force_discharge_offset_minutes=1.0,
+            inverter_discharge_limit_kw=10.0,
+            house_learning_fallback_kwh=0.0,
+        ),
+    )
+    entry.add_to_hass(hass)
+    store_key = f"home_energy_orchestrator.{entry.entry_id}.export_session"
+    await harness.save_store(
+        store_key,
+        {
+            "phase": "active",
+            "requested_power_kw": 10.0,
+            "attempts": 0,
+            "last_command_at": "2026-09-17T02:00:00+00:00",
+        },
+    )
+
+    await harness.setup(entry)
+    assert harness.service_calls == ()
+
+    now[0] = datetime(2026, 9, 17, 23, 59, tzinfo=UTC)
+    await entry.runtime_data.active_controller.async_reconcile()
+    await hass.async_block_till_done()
+
+    observed_calls = [
+        (call.domain, call.service, call.service_data)
+        for call in harness.service_calls
+    ]
+    assert observed_calls == [
+        (
+            "select",
+            "select_option",
+            {"option": "Self Use", "entity_id": "select.test_work_mode"},
+        ),
+        (
+            "number",
+            "set_value",
+            {"value": 0.0, "entity_id": "number.test_force_discharge"},
+        ),
+    ]
+    persisted = await harness.load_store(store_key)
+    assert persisted is not None
+    assert persisted["phase"] == "stopping"
+    await harness.set_state(
+        "number.test_force_discharge",
+        "0",
+        {"unit_of_measurement": "kW", "max": 10},
+    )
+    await harness.set_state(
+        "select.test_work_mode",
+        "Self Use",
+        {"options": ["Self Use", "Force Discharge", "Force Charge"]},
+    )
+
+    harness.clear_service_calls()
+    await harness.reload(entry)
+
+    assert harness.service_calls == ()
+    persisted = await harness.load_store(store_key)
+    assert persisted is not None
+    assert persisted["phase"] == "idle"
+    await harness.unload(entry)
+    hass.services.async_remove("number", "set_value")
+    hass.services.async_remove("select", "select_option")
+    harness.close()
