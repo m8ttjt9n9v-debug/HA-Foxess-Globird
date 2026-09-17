@@ -1,10 +1,11 @@
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from custom_components.home_energy_orchestrator.planner.ev_daily_backfill import (
     DailyBackfillCycleState,
 )
 from custom_components.home_energy_orchestrator.planner.ev_outside_state import (
     abort_outside_charge_at_battery_floor,
+    advance_charge_to_full,
     cleanup_disconnected_ev,
 )
 
@@ -107,3 +108,63 @@ def test_disconnected_cleanup_reports_disabled_solar_without_config_write():
     )
     assert transition.clear_charge_to_full_config is False
     assert transition.solar_spill.phase == "disabled"
+
+
+def test_charge_to_full_transition_covers_start_completion_timeout_and_cancel():
+    now = datetime(2026, 9, 7, 18, tzinfo=UTC)
+    state = DailyBackfillCycleState()
+    started = advance_charge_to_full(
+        state,
+        requested=True,
+        started_at=None,
+        now=now,
+        vehicle_soc_percent=40,
+        maximum_limit_percent=100,
+        maximum_duration=timedelta(hours=12),
+        protected_baseline_a=0,
+    )
+    assert started.started_at == now
+    assert started.clear_config is False
+    assert started.daily_state is state
+
+    full = advance_charge_to_full(
+        state,
+        requested=True,
+        started_at=now,
+        now=now + timedelta(hours=1),
+        vehicle_soc_percent=100,
+        maximum_limit_percent=100,
+        maximum_duration=timedelta(hours=12),
+        protected_baseline_a=0,
+    )
+    assert full.started_at is None
+    assert full.clear_config is True
+    assert full.daily_state.stop_pending is True
+
+    timed_out = advance_charge_to_full(
+        state,
+        requested=True,
+        started_at=now,
+        now=now + timedelta(hours=12),
+        vehicle_soc_percent=None,
+        maximum_limit_percent=100,
+        maximum_duration=timedelta(hours=12),
+        protected_baseline_a=1,
+    )
+    assert timed_out.started_at is None
+    assert timed_out.clear_config is True
+    assert timed_out.daily_state.stop_pending is False
+
+    cancelled = advance_charge_to_full(
+        state,
+        requested=False,
+        started_at=now,
+        now=now + timedelta(minutes=1),
+        vehicle_soc_percent=40,
+        maximum_limit_percent=100,
+        maximum_duration=timedelta(hours=12),
+        protected_baseline_a=0,
+    )
+    assert cancelled.started_at is None
+    assert cancelled.clear_config is False
+    assert cancelled.daily_state.stop_pending is True

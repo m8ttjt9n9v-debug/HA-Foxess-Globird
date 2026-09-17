@@ -181,6 +181,7 @@ from .planner.ev_learning import (
 )
 from .planner.ev_outside_state import (
     abort_outside_charge_at_battery_floor,
+    advance_charge_to_full,
     cleanup_disconnected_ev,
 )
 from .planner.ev_outside_window import (
@@ -466,42 +467,28 @@ class ActiveEvController:
             if observation is None:
                 self.last_reason = self.eligibility_route.reason
                 return
-            if self._charge_to_full_requested():
-                if self.charge_to_full_started_at is None:
-                    self.charge_to_full_started_at = now
-                maximum = observation.limit_maximum_percent or 100.0
-                timed_out = now - self.charge_to_full_started_at >= timedelta(
+            charge_to_full = advance_charge_to_full(
+                self._daily_backfill_cycle_state(),
+                requested=self._charge_to_full_requested(),
+                started_at=self.charge_to_full_started_at,
+                now=now,
+                vehicle_soc_percent=vehicle_soc,
+                maximum_limit_percent=observation.limit_maximum_percent or 100.0,
+                maximum_duration=timedelta(
                     hours=self._float(
                         CONF_EV_CHARGE_TO_FULL_MAX_HOURS,
                         DEFAULT_EV_CHARGE_TO_FULL_MAX_HOURS,
                     )
-                )
-                if (vehicle_soc is not None and vehicle_soc >= maximum) or timed_out:
-                    await self._async_clear_charge_to_full()
-                    self.charge_to_full_started_at = None
-                    if (
-                        self._float(
-                            CONF_EV_PROTECTED_BASELINE_A,
-                            DEFAULT_EV_PROTECTED_BASELINE_A,
-                        )
-                        <= 0
-                    ):
-                        self.daily_backfill_stop_pending = True
-                        self.daily_backfill_stop_attempts = 0
-                        self.daily_backfill_last_stop_at = None
-            else:
-                if (
-                    self.charge_to_full_started_at is not None
-                    and self._float(
-                        CONF_EV_PROTECTED_BASELINE_A,
-                        DEFAULT_EV_PROTECTED_BASELINE_A,
-                    )
-                    <= 0
-                ):
-                    self.daily_backfill_stop_pending = True
-                    self.daily_backfill_stop_attempts = 0
-                    self.daily_backfill_last_stop_at = None
-                self.charge_to_full_started_at = None
+                ),
+                protected_baseline_a=self._float(
+                    CONF_EV_PROTECTED_BASELINE_A,
+                    DEFAULT_EV_PROTECTED_BASELINE_A,
+                ),
+            )
+            if charge_to_full.clear_config:
+                await self._async_clear_charge_to_full()
+            self.charge_to_full_started_at = charge_to_full.started_at
+            self._apply_daily_backfill_cycle_state(charge_to_full.daily_state)
 
             outside_enabled = bool(
                 self._daily_backfill_enabled()

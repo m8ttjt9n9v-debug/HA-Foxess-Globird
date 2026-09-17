@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
+from datetime import datetime, timedelta
 
 from .ev_candidates import EvStageCandidate, build_ev_stage_candidate
 from .ev_daily_backfill import DailyBackfillCycleState
@@ -40,6 +41,52 @@ class DisconnectedEvCleanupTransition:
     outside_control_active: bool
     outside_target_active: bool
     solar_spill: SolarSpillDecision
+
+
+@dataclass(frozen=True, slots=True)
+class ChargeToFullTransition:
+    """Next paid-grid override timer, stop latch and config-write intent."""
+
+    daily_state: DailyBackfillCycleState
+    started_at: datetime | None
+    clear_config: bool
+
+
+def advance_charge_to_full(
+    daily_state: DailyBackfillCycleState,
+    *,
+    requested: bool,
+    started_at: datetime | None,
+    now: datetime,
+    vehicle_soc_percent: float | None,
+    maximum_limit_percent: float,
+    maximum_duration: timedelta,
+    protected_baseline_a: float,
+) -> ChargeToFullTransition:
+    """Advance start, completion, timeout or manual cancellation exactly once."""
+    effective_start = started_at
+    completed = False
+    if requested:
+        effective_start = effective_start or now
+        completed = (
+            vehicle_soc_percent is not None
+            and vehicle_soc_percent >= maximum_limit_percent
+        ) or now - effective_start >= maximum_duration
+
+    ended_owned_session = completed or (not requested and started_at is not None)
+    next_daily = daily_state
+    if ended_owned_session and protected_baseline_a <= 0:
+        next_daily = replace(
+            daily_state,
+            stop_pending=True,
+            stop_attempts=0,
+            last_stop_at=None,
+        )
+    return ChargeToFullTransition(
+        daily_state=next_daily,
+        started_at=None if completed or not requested else effective_start,
+        clear_config=completed,
+    )
 
 
 def cleanup_disconnected_ev(
