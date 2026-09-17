@@ -401,6 +401,114 @@ async def test_active_export_is_reasserted_then_adopted_after_reload(
 
 
 @pytest.mark.freeze_time("2026-09-17 02:30:00+00:00")
+async def test_active_export_rejects_external_force_charge_across_reload(
+    hass, monkeypatch
+) -> None:
+    """An owned export obligation must not adopt an external forced charge."""
+    harness = LifecycleHarness(hass)
+    _register_foxess_services(harness, monkeypatch)
+    await _seed_foxess_states(harness, 100)
+    await harness.set_state(
+        "number.test_force_charge",
+        "10",
+        {"unit_of_measurement": "kW", "max": 10},
+    )
+    await harness.set_state(
+        "select.test_work_mode",
+        "Force Charge",
+        {"options": ["Self Use", "Force Discharge", "Force Charge"]},
+    )
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Active export with external forced charge",
+        version=6,
+        data=_active_entry_data(
+            automatic_export_enabled=True,
+            automatic_export_limit_kwh=25.0,
+            bonus_window_start="00:00:00",
+            bonus_window_end="23:58:00",
+            force_discharge_offset_minutes=1.0,
+            inverter_discharge_limit_kw=10.0,
+            house_learning_fallback_kwh=0.0,
+        ),
+    )
+    entry.add_to_hass(hass)
+    store_key = f"home_energy_orchestrator.{entry.entry_id}.export_session"
+    await harness.save_store(
+        store_key,
+        {
+            "phase": "active",
+            "requested_power_kw": 10.0,
+            "attempts": 0,
+            "last_command_at": "2026-09-17T01:45:00+00:00",
+        },
+    )
+
+    await harness.setup(entry)
+
+    observed_calls = [
+        (call.domain, call.service, call.service_data)
+        for call in harness.service_calls
+    ]
+    assert observed_calls == [
+        (
+            "number",
+            "set_value",
+            {"value": 0.0, "entity_id": "number.test_force_charge"},
+        ),
+        (
+            "number",
+            "set_value",
+            {"value": 10.0, "entity_id": "number.test_force_discharge"},
+        ),
+        (
+            "select",
+            "select_option",
+            {"option": "Force Discharge", "entity_id": "select.test_work_mode"},
+        ),
+    ]
+    controller = entry.runtime_data.active_controller
+    assert controller.last_reason == "export_start_requested"
+    assert controller.export_session.phase == "starting"
+    persisted = await harness.load_store(store_key)
+    assert persisted is not None
+    assert persisted["phase"] == "starting"
+
+    await harness.set_state(
+        "number.test_force_charge",
+        "0",
+        {"unit_of_measurement": "kW", "max": 10},
+    )
+    await harness.set_state(
+        "number.test_force_discharge",
+        "10",
+        {"unit_of_measurement": "kW", "max": 10},
+    )
+    await harness.set_state(
+        "select.test_work_mode",
+        "Force Discharge",
+        {"options": ["Self Use", "Force Discharge", "Force Charge"]},
+    )
+    harness.clear_service_calls()
+
+    await harness.reload(entry)
+
+    entry.runtime_data.async_update_listeners()
+    await hass.async_block_till_done()
+    export_state = hass.states.get("sensor.home_energy_zerohero_export_status")
+    assert export_state is not None
+    assert export_state.state == "active"
+    assert harness.service_calls == ()
+    persisted = await harness.load_store(store_key)
+    assert persisted is not None
+    assert persisted["phase"] == "active"
+    await harness.unload(entry)
+    hass.services.async_remove("number", "set_value")
+    hass.services.async_remove("select", "select_option")
+    harness.close()
+
+
+@pytest.mark.freeze_time("2026-09-17 02:30:00+00:00")
 async def test_completed_charge_does_not_adopt_external_forced_mode_across_reload(
     hass, monkeypatch
 ) -> None:
