@@ -339,3 +339,74 @@ async def test_active_export_is_reasserted_then_adopted_after_reload(
     hass.services.async_remove("number", "set_value")
     hass.services.async_remove("select", "select_option")
     harness.close()
+
+
+@pytest.mark.freeze_time("2026-09-17 02:30:00+00:00")
+async def test_completed_charge_does_not_adopt_external_forced_mode_across_reload(
+    hass, monkeypatch
+) -> None:
+    """A completed charge latch must not claim an unrelated forced mode."""
+    harness = LifecycleHarness(hass)
+    _register_foxess_services(hass, monkeypatch)
+    await _seed_foxess_states(harness, 50)
+    await harness.set_state(
+        "number.test_force_discharge",
+        "10",
+        {"unit_of_measurement": "kW", "max": 10},
+    )
+    await harness.set_state(
+        "select.test_work_mode",
+        "Force Discharge",
+        {"options": ["Self Use", "Force Discharge", "Force Charge"]},
+    )
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Completed charge with external forced mode",
+        version=6,
+        data=_active_entry_data(
+            automatic_charge_enabled=True,
+            free_charge_schedule_confirmed=True,
+            free_charge_window_start="00:00:00",
+            free_charge_window_end="23:59:00",
+            inverter_charge_limit_kw=10.0,
+        ),
+    )
+    entry.add_to_hass(hass)
+    store_key = f"home_energy_orchestrator.{entry.entry_id}.charge_session"
+    await harness.save_store(
+        store_key,
+        {
+            "phase": "completed",
+            "requested_power_kw": 10.0,
+            "attempts": 0,
+            "last_command_at": None,
+        },
+    )
+
+    await harness.setup(entry)
+    entry.runtime_data.async_update_listeners()
+    await hass.async_block_till_done()
+
+    charge_state = hass.states.get("sensor.home_energy_free_charge_completion")
+    assert charge_state is not None
+    assert charge_state.state == "completed"
+    assert harness.service_calls == ()
+    persisted = await harness.load_store(store_key)
+    assert persisted is not None
+    assert persisted["phase"] == "completed"
+
+    await harness.reload(entry)
+    entry.runtime_data.async_update_listeners()
+    await hass.async_block_till_done()
+
+    charge_state = hass.states.get("sensor.home_energy_free_charge_completion")
+    assert charge_state is not None
+    assert charge_state.state == "completed"
+    assert harness.service_calls == ()
+    persisted = await harness.load_store(store_key)
+    assert persisted is not None
+    assert persisted["phase"] == "completed"
+    await harness.unload(entry)
+    hass.services.async_remove("number", "set_value")
+    hass.services.async_remove("select", "select_option")
+    harness.close()
