@@ -1031,6 +1031,30 @@ async def test_import_to_export_transition_is_checkpointed(hass):
     assert save.await_args.args[0]["last_import_kw"] == 0.0
 
 
+async def test_tariff_meter_repositories_retain_frozen_store_objects(hass):
+    """Repository seams must wrap, not replace, the v0.12.26 Store boundaries."""
+    entry = MockConfigEntry(domain=DOMAIN, title="Meter repository site", data=ENTRY_DATA)
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    coordinator = entry.runtime_data
+    pairs = (
+        (coordinator._daily_import_repository, coordinator._daily_import_store),
+        (coordinator._daily_export_repository, coordinator._daily_export_store),
+        (
+            coordinator._standard_rate_export_repository,
+            coordinator._standard_rate_export_store,
+        ),
+        (coordinator._free_import_repository, coordinator._free_import_store),
+        (coordinator._peak_import_repository, coordinator._peak_import_store),
+        (coordinator._zerohero_import_repository, coordinator._zerohero_import_store),
+        (coordinator._zerohero_export_repository, coordinator._zerohero_export_store),
+    )
+
+    assert all(repository.store is store for repository, store in pairs)
+
+
 async def test_export_to_import_transition_is_checkpointed(hass):
     """Daily export persistence must clear its positive-flow anchor too."""
     hass.states.async_set("sensor.test_battery_soc", "60", {"unit_of_measurement": "%"})

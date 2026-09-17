@@ -18,14 +18,20 @@ their v0.12.26 keys, Store version, privacy flag and payload shape.
 
 ## Current evidence
 
-The first seam adds `TypedStoreRepository` and migrates only the daily-import
+The first seam adds `TypedStoreRepository` and migrates the daily-import
 accumulator. Its Store remains version 1 at the same private key, its serialized
 dictionary is byte-for-byte equivalent as structured data, and existing
 positive-flow-to-zero checkpoint timing is unchanged.
 
+The second seam completes the tariff-meter family: daily export, peak-rate
+export, free-window import, peak-window import, ZEROHERO hourly import and
+ZEROHERO export now use the same mechanics while retaining their original Store
+objects and independent checkpoint rules.
+
 Work-item evidence:
 
 - [daily-import typed repository](work-item-daily-import-repository.md)
+- [tariff-meter typed repositories](work-item-tariff-meter-repositories.md)
 
 ## Exit gate
 
@@ -35,5 +41,6 @@ are documented and tested; all thirteen frozen Store contracts remain intact.
 
 ## Status
 
-In progress. Only the daily-import meter has moved behind the repository
-boundary.
+In progress. The tariff-meter family is behind the repository boundary;
+forecast, learning, inverter sessions, EV sessions and manual diagnostics
+remain on their existing direct persistence paths.

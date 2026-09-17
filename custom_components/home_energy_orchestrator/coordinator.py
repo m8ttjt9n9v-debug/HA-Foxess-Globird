@@ -180,22 +180,34 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
         self._daily_export_store: Store[dict[str, object]] = Store(
             hass, 1, f"{DOMAIN}.{entry_id}.daily_export", private=True
         )
+        self._daily_export_repository = TypedStoreRepository(self._daily_export_store)
         self._daily_export_last_saved: float | None = None
         self._standard_rate_export_store: Store[dict[str, object]] = Store(
             hass, 1, f"{DOMAIN}.{entry_id}.standard_rate_export", private=True
+        )
+        self._standard_rate_export_repository = TypedStoreRepository(
+            self._standard_rate_export_store
         )
         self._standard_rate_export_last_saved: float | None = None
         self._free_import_store: Store[dict[str, object]] = Store(
             hass, 1, f"{DOMAIN}.{entry_id}.free_window_import", private=True
         )
+        self._free_import_repository = TypedStoreRepository(self._free_import_store)
         self._peak_import_store: Store[dict[str, object]] = Store(
             hass, 1, f"{DOMAIN}.{entry_id}.peak_import", private=True
         )
+        self._peak_import_repository = TypedStoreRepository(self._peak_import_store)
         self._zerohero_import_store: Store[dict[str, object]] = Store(
             hass, 1, f"{DOMAIN}.{entry_id}.zerohero_hourly_import", private=True
         )
+        self._zerohero_import_repository = TypedStoreRepository(
+            self._zerohero_import_store
+        )
         self._zerohero_export_store: Store[dict[str, object]] = Store(
             hass, 1, f"{DOMAIN}.{entry_id}.zerohero_export", private=True
+        )
+        self._zerohero_export_repository = TypedStoreRepository(
+            self._zerohero_export_store
         )
         self._free_import_last_saved: float | None = None
         self._peak_import_last_saved: float | None = None
@@ -293,14 +305,14 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
         """Load the persisted same-day tariff accumulators."""
         await self._daily_import_repository.async_restore(self.daily_import, dt_util.now())
         now = dt_util.now()
-        self.daily_export.restore(await self._daily_export_store.async_load(), now)
-        self.standard_rate_export.restore(
-            await self._standard_rate_export_store.async_load(), now
+        await self._daily_export_repository.async_restore(self.daily_export, now)
+        await self._standard_rate_export_repository.async_restore(
+            self.standard_rate_export, now
         )
-        self.free_window_import.restore(await self._free_import_store.async_load(), now)
-        self.peak_import.restore(await self._peak_import_store.async_load(), now)
-        self.zerohero_import.restore(await self._zerohero_import_store.async_load(), now)
-        self.zerohero_export.restore(await self._zerohero_export_store.async_load(), now)
+        await self._free_import_repository.async_restore(self.free_window_import, now)
+        await self._peak_import_repository.async_restore(self.peak_import, now)
+        await self._zerohero_import_repository.async_restore(self.zerohero_import, now)
+        await self._zerohero_export_repository.async_restore(self.zerohero_export, now)
 
     async def async_load_forecast_feedback(self) -> None:
         """Load forecast-only calibration and comparison history."""
@@ -1232,7 +1244,7 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
                 or self.daily_export.imported_kwh - self._daily_export_last_saved >= 0.05
                 or self.daily_export.checkpoint_required
             ):
-                await self._daily_export_store.async_save(self.daily_export.to_payload())
+                await self._daily_export_repository.async_save(self.daily_export)
                 self._daily_export_last_saved = self.daily_export.imported_kwh
         if self.standard_rate_export.observe(export_kw, now):
             standard_exported = self.standard_rate_export.imported_kwh
@@ -1242,8 +1254,8 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
                 or standard_exported - self._standard_rate_export_last_saved >= 0.01
                 or self.standard_rate_export.checkpoint_required
             ):
-                await self._standard_rate_export_store.async_save(
-                    self.standard_rate_export.to_payload()
+                await self._standard_rate_export_repository.async_save(
+                    self.standard_rate_export
                 )
                 self._standard_rate_export_last_saved = standard_exported
         if self.free_window_import.observe(grid, now):
@@ -1253,7 +1265,7 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
                 or self.free_window_import.imported_kwh - self._free_import_last_saved >= 0.05
                 or self.free_window_import.checkpoint_required
             ):
-                await self._free_import_store.async_save(self.free_window_import.to_payload())
+                await self._free_import_repository.async_save(self.free_window_import)
                 self._free_import_last_saved = self.free_window_import.imported_kwh
         if self.peak_import.observe(grid, now):
             if (
@@ -1262,7 +1274,7 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
                 or self.peak_import.imported_kwh - self._peak_import_last_saved >= 0.05
                 or self.peak_import.checkpoint_required
             ):
-                await self._peak_import_store.async_save(self.peak_import.to_payload())
+                await self._peak_import_repository.async_save(self.peak_import)
                 self._peak_import_last_saved = self.peak_import.imported_kwh
         if self.zerohero_import.observe(grid, now):
             zerohero_total = self.zerohero_import.imported_kwh
@@ -1273,7 +1285,7 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
                 or zerohero_total - last_zerohero_total >= 0.01
                 or self.zerohero_import.checkpoint_required
             ):
-                await self._zerohero_import_store.async_save(self.zerohero_import.to_payload())
+                await self._zerohero_import_repository.async_save(self.zerohero_import)
                 self._zerohero_import_last_saved = zerohero_total
         if self.zerohero_export.observe(export_kw, now):
             exported = self.zerohero_export.imported_kwh
@@ -1283,9 +1295,7 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
                 or exported - self._zerohero_export_last_saved >= 0.01
                 or self.zerohero_export.checkpoint_required
             ):
-                await self._zerohero_export_store.async_save(
-                    self.zerohero_export.to_payload()
-                )
+                await self._zerohero_export_repository.async_save(self.zerohero_export)
                 self._zerohero_export_last_saved = exported
         try:
             measured_capacity = self._energy(
