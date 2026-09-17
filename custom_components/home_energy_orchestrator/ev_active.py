@@ -186,6 +186,7 @@ from .planner.ev_outside_state import (
     abort_outside_charge_at_battery_floor,
     advance_charge_to_full,
     cleanup_disconnected_ev,
+    cleanup_outside_ownership_for_free_window,
 )
 from .planner.ev_outside_window import (
     PreFreeCurrentInputs,
@@ -590,10 +591,15 @@ class ActiveEvController:
             if defer_soc_redecision:
                 self.decision_phase = "ev_current_transition_hold"
                 self.allowance_phase = "transition_hold"
-            if in_window and self.pre_free_session.active:
-                self.pre_free_session = PreFreeSessionState()
-                self.outside_control_active = False
-                self.outside_target_active = False
+            window_cleanup = cleanup_outside_ownership_for_free_window(
+                in_free_window=in_window,
+                pre_free_state=self.pre_free_session,
+                outside_control_active=self.outside_control_active,
+                outside_target_active=self.outside_target_active,
+            )
+            self.pre_free_session = window_cleanup.pre_free_state
+            self.outside_control_active = window_cleanup.outside_control_active
+            self.outside_target_active = window_cleanup.outside_target_active
             if should_decide:
                 try:
                     calculated = (

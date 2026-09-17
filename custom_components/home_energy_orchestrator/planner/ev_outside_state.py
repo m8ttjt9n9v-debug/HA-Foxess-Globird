@@ -52,6 +52,40 @@ class ChargeToFullTransition:
     clear_config: bool
 
 
+@dataclass(frozen=True, slots=True)
+class FreeWindowOutsideCleanupTransition:
+    """Pre-free and outside ownership retained or cleared at window entry."""
+
+    pre_free_state: PreFreeSessionState
+    outside_control_active: bool
+    outside_target_active: bool
+    changed: bool
+
+
+def cleanup_outside_ownership_for_free_window(
+    *,
+    in_free_window: bool,
+    pre_free_state: PreFreeSessionState,
+    outside_control_active: bool,
+    outside_target_active: bool,
+) -> FreeWindowOutsideCleanupTransition:
+    """Clear outside ownership only for an active pre-free session at entry."""
+    changed = in_free_window and pre_free_state.active
+    if changed:
+        return FreeWindowOutsideCleanupTransition(
+            pre_free_state=PreFreeSessionState(),
+            outside_control_active=False,
+            outside_target_active=False,
+            changed=True,
+        )
+    return FreeWindowOutsideCleanupTransition(
+        pre_free_state=pre_free_state,
+        outside_control_active=outside_control_active,
+        outside_target_active=outside_target_active,
+        changed=False,
+    )
+
+
 def advance_charge_to_full(
     daily_state: DailyBackfillCycleState,
     *,

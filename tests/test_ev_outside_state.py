@@ -7,6 +7,10 @@ from custom_components.home_energy_orchestrator.planner.ev_outside_state import 
     abort_outside_charge_at_battery_floor,
     advance_charge_to_full,
     cleanup_disconnected_ev,
+    cleanup_outside_ownership_for_free_window,
+)
+from custom_components.home_energy_orchestrator.planner.ev_outside_window import (
+    PreFreeSessionState,
 )
 
 
@@ -108,6 +112,45 @@ def test_disconnected_cleanup_reports_disabled_solar_without_config_write():
     )
     assert transition.clear_charge_to_full_config is False
     assert transition.solar_spill.phase == "disabled"
+
+
+def test_free_window_cleanup_clears_only_active_pre_free_ownership():
+    frozen = datetime(2026, 9, 7, 10, 30, tzinfo=UTC)
+    pre_free = PreFreeSessionState(True, frozen)
+
+    cleared = cleanup_outside_ownership_for_free_window(
+        in_free_window=True,
+        pre_free_state=pre_free,
+        outside_control_active=True,
+        outside_target_active=True,
+    )
+    assert cleared.pre_free_state == PreFreeSessionState()
+    assert cleared.outside_control_active is False
+    assert cleared.outside_target_active is False
+    assert cleared.changed is True
+
+    before_window = cleanup_outside_ownership_for_free_window(
+        in_free_window=False,
+        pre_free_state=pre_free,
+        outside_control_active=True,
+        outside_target_active=True,
+    )
+    assert before_window.pre_free_state is pre_free
+    assert before_window.outside_control_active is True
+    assert before_window.outside_target_active is True
+    assert before_window.changed is False
+
+    inactive = PreFreeSessionState()
+    retained = cleanup_outside_ownership_for_free_window(
+        in_free_window=True,
+        pre_free_state=inactive,
+        outside_control_active=True,
+        outside_target_active=True,
+    )
+    assert retained.pre_free_state is inactive
+    assert retained.outside_control_active is True
+    assert retained.outside_target_active is True
+    assert retained.changed is False
 
 
 def test_charge_to_full_transition_covers_start_completion_timeout_and_cancel():
