@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from math import floor, isfinite
 
+from .ev import EvCommand, EvCommandPlan
+
 
 @dataclass(frozen=True, slots=True)
 class DailyBackfillInputs:
@@ -71,6 +73,72 @@ class DailyBackfillCycleState:
     stop_pending: bool = False
     stop_attempts: int = 0
     last_stop_at: datetime | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class DailyBackfillStopState:
+    """Pending direct-EVSE stop feedback and bounded retry state."""
+
+    pending: bool = False
+    attempts: int = 0
+    last_attempt_at: datetime | None = None
+    outside_control_active: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class DailyBackfillStopTransition:
+    """One stop-feedback decision before any adapter execution."""
+
+    state: DailyBackfillStopState
+    plan: EvCommandPlan
+    save_required: bool = False
+
+
+def reconcile_daily_backfill_stop(
+    state: DailyBackfillStopState,
+    *,
+    charge_switch_on: bool,
+    now: datetime,
+    maximum_attempts: int,
+    retry_interval: timedelta,
+) -> DailyBackfillStopTransition:
+    """Plan one bounded stop-feedback cycle without executing a command."""
+    if not charge_switch_on:
+        return DailyBackfillStopTransition(
+            DailyBackfillStopState(),
+            EvCommandPlan((), "daily_backfill_stopped"),
+            save_required=True,
+        )
+    if state.attempts >= maximum_attempts:
+        return DailyBackfillStopTransition(
+            state,
+            EvCommandPlan((), "daily_backfill_stop_fault_maximum_attempts"),
+        )
+    if (
+        state.last_attempt_at is not None
+        and now - state.last_attempt_at < retry_interval
+    ):
+        return DailyBackfillStopTransition(
+            state,
+            EvCommandPlan((), "daily_backfill_stop_awaiting_feedback"),
+        )
+    return DailyBackfillStopTransition(
+        state,
+        EvCommandPlan((EvCommand("stop_charging"),), "daily_backfill_complete"),
+    )
+
+
+def record_daily_backfill_stop_attempt(
+    state: DailyBackfillStopState,
+    now: datetime,
+) -> DailyBackfillStopState:
+    """Record one successfully issued stop command."""
+    return DailyBackfillStopState(
+        pending=state.pending,
+        attempts=state.attempts + 1,
+        last_attempt_at=now,
+        outside_control_active=state.outside_control_active,
+    )
 
 
 def roll_daily_backfill_cycle(

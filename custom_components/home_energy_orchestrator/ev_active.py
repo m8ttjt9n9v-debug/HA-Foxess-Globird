@@ -121,6 +121,7 @@ from .ev_observation_adapter import (
 from .persistence import TypedValueStoreRepository
 from .planner.ev import (
     DIRECT_EVSE_MAX_ATTEMPTS,
+    DIRECT_EVSE_RETRY_INTERVAL,
     AllowanceCeilingInputs,
     ChargeLimitInputs,
     DirectEvseObservation,
@@ -162,8 +163,11 @@ from .planner.ev_daily_backfill import (
     DailyBackfillEnergyState,
     DailyBackfillInputs,
     DailyBackfillPlan,
+    DailyBackfillStopState,
     calculate_daily_backfill_plan,
     integrate_daily_backfill_energy,
+    reconcile_daily_backfill_stop,
+    record_daily_backfill_stop_attempt,
     roll_daily_backfill_cycle,
 )
 from .planner.ev_learning import (
@@ -635,37 +639,38 @@ class ActiveEvController:
                 )
                 return
             if self.outside_stop_requested:
-                if not observation.charge_switch_on:
-                    self.daily_backfill_stop_pending = False
-                    self.daily_backfill_stop_attempts = 0
-                    self.daily_backfill_last_stop_at = None
-                    self.outside_control_active = False
-                    self.last_reason = "daily_backfill_stopped"
+                stop = reconcile_daily_backfill_stop(
+                    DailyBackfillStopState(
+                        pending=self.daily_backfill_stop_pending,
+                        attempts=self.daily_backfill_stop_attempts,
+                        last_attempt_at=self.daily_backfill_last_stop_at,
+                        outside_control_active=self.outside_control_active,
+                    ),
+                    charge_switch_on=observation.charge_switch_on,
+                    now=now,
+                    maximum_attempts=DIRECT_EVSE_MAX_ATTEMPTS,
+                    retry_interval=DIRECT_EVSE_RETRY_INTERVAL,
+                )
+                self._apply_daily_backfill_stop_state(stop.state)
+                if stop.save_required:
+                    self.last_reason = stop.plan.reason
                     await self._async_save(now)
                     return
-                if self.daily_backfill_stop_attempts >= DIRECT_EVSE_MAX_ATTEMPTS:
-                    self.last_reason = "daily_backfill_stop_fault_maximum_attempts"
+                if not stop.plan.commands:
+                    self.last_reason = stop.plan.reason
                     return
-                if (
-                    self.daily_backfill_last_stop_at is not None
-                    and now - self.daily_backfill_last_stop_at < timedelta(seconds=30)
-                ):
-                    self.last_reason = "daily_backfill_stop_awaiting_feedback"
-                    return
-                commands = (EvCommand("stop_charging"),)
-                plan = EvCommandPlan(commands, "daily_backfill_complete")
                 if gate == "safety_locked":
                     self.last_actions = tuple(
-                        f"would_{command.action}" for command in plan.commands
+                        f"would_{command.action}" for command in stop.plan.commands
                     )
                     self.last_reason = "rehearsal_daily_backfill_complete"
                     return
-                if plan.commands:
-                    await self._async_execute_ev_plan(plan, now)
-                    if self.last_actions == ("stop_charging",):
-                        self.daily_backfill_stop_attempts += 1
-                        self.daily_backfill_last_stop_at = now
-                        await self._async_save(now)
+                await self._async_execute_ev_plan(stop.plan, now)
+                if self.last_actions == ("stop_charging",):
+                    self._apply_daily_backfill_stop_state(
+                        record_daily_backfill_stop_attempt(stop.state, now)
+                    )
+                    await self._async_save(now)
                 return
             if gate == "safety_locked":
                 rehearsal_plan = plan_direct_evse_commands(
@@ -1992,6 +1997,15 @@ class ActiveEvController:
         self.daily_backfill_stop_pending = transition.stop_pending
         self.daily_backfill_stop_attempts = transition.stop_attempts
         self.daily_backfill_last_stop_at = transition.last_stop_at
+
+    def _apply_daily_backfill_stop_state(
+        self,
+        state: DailyBackfillStopState,
+    ) -> None:
+        self.daily_backfill_stop_pending = state.pending
+        self.daily_backfill_stop_attempts = state.attempts
+        self.daily_backfill_last_stop_at = state.last_attempt_at
+        self.outside_control_active = state.outside_control_active
 
     def _update_daily_backfill_energy(self, now: datetime, actual_current_a: float | None) -> None:
         """Integrate confirmed wall current only while this policy owns charging."""

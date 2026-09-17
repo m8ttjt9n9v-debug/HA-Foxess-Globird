@@ -6,8 +6,11 @@ from custom_components.home_energy_orchestrator.planner.ev_daily_backfill import
     DailyBackfillCycleState,
     DailyBackfillEnergyState,
     DailyBackfillInputs,
+    DailyBackfillStopState,
     calculate_daily_backfill_plan,
     integrate_daily_backfill_energy,
+    reconcile_daily_backfill_stop,
+    record_daily_backfill_stop_attempt,
     roll_daily_backfill_cycle,
 )
 
@@ -244,3 +247,70 @@ def test_daily_backfill_cycle_rollover_preserves_existing_inactive_stop_obligati
         last_stop_at=last_stop,
     )
     assert roll_daily_backfill_cycle(transition, new_ready) is transition
+
+
+def test_daily_backfill_stop_transition_matches_bounded_feedback_trace():
+    start = datetime(2026, 9, 10, 6, tzinfo=UTC)
+    state = DailyBackfillStopState(
+        pending=True,
+        outside_control_active=True,
+    )
+
+    command = reconcile_daily_backfill_stop(
+        state,
+        charge_switch_on=True,
+        now=start,
+        maximum_attempts=3,
+        retry_interval=timedelta(seconds=30),
+    )
+    assert tuple(item.action for item in command.plan.commands) == ("stop_charging",)
+    assert command.plan.reason == "daily_backfill_complete"
+    assert command.save_required is False
+
+    state = record_daily_backfill_stop_attempt(command.state, start)
+    assert state == DailyBackfillStopState(True, 1, start, True)
+
+    waiting = reconcile_daily_backfill_stop(
+        state,
+        charge_switch_on=True,
+        now=start + timedelta(seconds=29),
+        maximum_attempts=3,
+        retry_interval=timedelta(seconds=30),
+    )
+    assert waiting.state is state
+    assert waiting.plan.commands == ()
+    assert waiting.plan.reason == "daily_backfill_stop_awaiting_feedback"
+
+    for attempt in (2, 3):
+        at = start + timedelta(seconds=30 * (attempt - 1))
+        retry = reconcile_daily_backfill_stop(
+            state,
+            charge_switch_on=True,
+            now=at,
+            maximum_attempts=3,
+            retry_interval=timedelta(seconds=30),
+        )
+        assert tuple(item.action for item in retry.plan.commands) == ("stop_charging",)
+        state = record_daily_backfill_stop_attempt(retry.state, at)
+
+    fault = reconcile_daily_backfill_stop(
+        state,
+        charge_switch_on=True,
+        now=start + timedelta(seconds=90),
+        maximum_attempts=3,
+        retry_interval=timedelta(seconds=30),
+    )
+    assert fault.state is state
+    assert fault.plan.commands == ()
+    assert fault.plan.reason == "daily_backfill_stop_fault_maximum_attempts"
+
+    stopped = reconcile_daily_backfill_stop(
+        state,
+        charge_switch_on=False,
+        now=start + timedelta(seconds=120),
+        maximum_attempts=3,
+        retry_interval=timedelta(seconds=30),
+    )
+    assert stopped.state == DailyBackfillStopState()
+    assert stopped.plan.reason == "daily_backfill_stopped"
+    assert stopped.save_required is True
