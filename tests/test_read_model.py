@@ -34,11 +34,17 @@ def _coordinator() -> SimpleNamespace:
     controller = SimpleNamespace(
         ownership_status="owned",
         gate_status="ready",
+        last_reason="battery_idle",
+        last_actions=("set_self_use",),
+        writes_performed=2,
         export_effective_enabled=True,
         export_plan=ExportPlan(12.3456, 7.6543, 0.76543, "ready"),
         export_planned_start=datetime(2026, 9, 17, 18, 0, tzinfo=UTC),
         charge_session=SimpleNamespace(phase="charging"),
+        charge_power_target_kw=7.5,
         export_session=SimpleNamespace(phase="exporting"),
+        automatic_export_remaining_kwh=4.5,
+        export_protected_ev_kwh=2.0,
         ev_before_export_decision=SimpleNamespace(
             export_allowed=True,
             reason="target_met",
@@ -184,7 +190,12 @@ def _coordinator() -> SimpleNamespace:
             model="p80",
         ),
         learning_remaining_kwh=2.25,
-        demand_history=SimpleNamespace(samples=(1, 2, 3, 4, 5, 6, 7)),
+        demand_history=SimpleNamespace(
+            samples=(1, 2, 3, 4, 5, 6, 7),
+            max_age_days=35,
+            sample_limit=28,
+        ),
+        demand_sampler=object(),
         heater_history=SimpleNamespace(samples=(1, 2, 3, 4, 5)),
         occupancy_result=SimpleNamespace(
             state="home",
@@ -479,6 +490,60 @@ def test_ev_actuator_diagnostics_preserve_existing_support_values() -> None:
     }
 
 
+def test_status_attributes_preserve_existing_public_values() -> None:
+    model = build_site_read_model(_coordinator())
+
+    assert model.status_attributes() == {
+        "mode": "local_modbus_charge_and_export",
+        "ledger_status": "ready",
+        "control_gate": "ready",
+        "last_control_reason": "battery_idle",
+        "last_control_actions": ("set_self_use",),
+        "writes_performed": 2,
+        "automatic_control_enabled": False,
+        "automatic_charge_enabled": True,
+        "free_charge_schedule_confirmed": False,
+        "sign_conventions_verified": False,
+        "foxess_modbus_control_effective": True,
+        "foxess_control_owner": "local_modbus",
+        "automatic_export_enabled": True,
+        "automatic_export_effective": True,
+        "ev_before_export_status": "target_met",
+        "ev_automatic_control_enabled": False,
+        "ev_control_gate": "ready",
+        "ev_writes_enabled": True,
+        "ev_last_control_reason": "free_window",
+        "ev_last_control_actions": ("set_current",),
+        "ev_writes_performed": 4,
+        "ev_decision_phase": "free_power",
+        "ev_allowance_phase": "within_allowance",
+        "ev_target_current_a": 16.0,
+        "ev_target_limit_percent": 90,
+        "ev_reconciliation_phase": "confirming",
+        "ev_reconciliation_attempts": 2,
+        "ev_last_write_at": datetime(2026, 9, 17, 9, 1, tzinfo=UTC),
+        "ev_driving_learning_mode": "learned",
+        "ev_driving_learning_samples": 3,
+        "ev_learned_general_limit_percent": 82,
+        "export_session_phase": "exporting",
+        "charge_session_phase": "charging",
+        "charge_power_target_kw": 7.5,
+        "export_allowance_remaining_kwh": 4.5,
+        "automatic_export_remaining_kwh": 4.5,
+        "export_protected_ev_kwh": 2.0,
+        "rehearsal_mode": True,
+        "integration": "home_energy_orchestrator",
+        "learning_model": "occupied_combined_p80",
+        "learning_samples": 7,
+        "heater_learning_samples": 5,
+        "house_occupancy": "home",
+        "house_occupancy_reason": "people_home",
+        "learning_max_age_days": 35,
+        "learning_sample_limit": 28,
+        "learning_sampler_enabled": True,
+    }
+
+
 def test_missing_ev_controller_preserves_unavailable_state_defaults() -> None:
     coordinator = _coordinator()
     coordinator.ev_controller = None
@@ -504,6 +569,21 @@ def test_missing_ev_controller_preserves_unavailable_state_defaults() -> None:
     assert diagnostics["ev_reconciliation_phase"] == "unavailable"
     assert diagnostics["ev_smart_socket_recovery_phase"] == "unavailable"
     assert diagnostics["ev_pre_free_session_active"] is False
+
+
+def test_status_attributes_preserve_no_controller_fallbacks() -> None:
+    coordinator = _coordinator()
+    coordinator.active_controller = None
+    coordinator.ev_controller = None
+
+    attributes = build_site_read_model(coordinator).status_attributes()
+
+    assert attributes["control_gate"] == "unavailable"
+    assert attributes["last_control_reason"] == "unavailable"
+    assert attributes["ev_control_gate"] == "disabled"
+    assert attributes["ev_last_control_reason"] == "unavailable"
+    assert attributes["export_session_phase"] == "unavailable"
+    assert attributes["charge_session_phase"] == "unavailable"
 
 
 def test_active_daily_backfill_exposes_frozen_start() -> None:

@@ -52,6 +52,10 @@ The seventh seam makes redacted support diagnostics consume the same EV
 facts, while retaining the configuration-derived control gate used when an EV
 controller is absent.
 
+The eighth seam introduces a typed control submodel and moves the complete
+Status attribute surface onto the canonical model. It retains all legacy
+attribute names, including both automatic-export remaining-energy aliases.
+
 Work-item evidence:
 
 - [core SiteReadModel projection](work-item-core-read-model.md)
@@ -61,6 +65,7 @@ Work-item evidence:
 - [cost entity-state read model](work-item-cost-state-read-model.md)
 - [EV control attribute read model](work-item-ev-control-attribute-read-model.md)
 - [EV support diagnostics read model](work-item-ev-diagnostics-read-model.md)
+- [Status control read model](work-item-status-control-read-model.md)
 
 ## Work packages
 

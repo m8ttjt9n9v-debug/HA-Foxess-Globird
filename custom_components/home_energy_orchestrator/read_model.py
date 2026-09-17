@@ -8,7 +8,8 @@ from typing import TYPE_CHECKING
 
 from homeassistant.util import dt as dt_util
 
-from .const import FOXESS_CONTROL_OWNER_CLOUD
+from .const import DOMAIN, FOXESS_CONTROL_OWNER_CLOUD
+from .ev_adapter import ev_control_gate_status
 from .planner.ev import DIRECT_EVSE_MAX_ATTEMPTS
 from .planner.export import ExportPlan
 
@@ -427,6 +428,35 @@ class EvReadModel:
 
 
 @dataclass(frozen=True, slots=True)
+class ControlReadModel:
+    """Canonical battery, EV and learning control presentation facts."""
+
+    foxess_gate: str
+    last_control_reason: str
+    last_control_actions: tuple[str, ...]
+    writes_performed: int
+    automatic_control_enabled: bool
+    automatic_charge_enabled: bool
+    free_charge_schedule_confirmed: bool
+    sign_conventions_verified: bool
+    foxess_control_owner: str
+    automatic_export_enabled: bool
+    automatic_export_effective: bool
+    ev_before_export_status: str
+    ev_automatic_control_enabled: bool
+    ev_gate: str
+    export_session_phase: str
+    charge_session_phase: str
+    charge_power_target_kw: float | None
+    automatic_export_remaining_kwh: float | None
+    export_protected_ev_kwh: float | None
+    rehearsal_mode: bool
+    learning_max_age_days: int
+    learning_sample_limit: int
+    learning_sampler_enabled: bool
+
+
+@dataclass(frozen=True, slots=True)
 class SiteReadModel:
     """One immutable view of values shared by public presentation surfaces."""
 
@@ -440,9 +470,8 @@ class SiteReadModel:
     planned_export_kwh: float | None
     planned_export_duration_minutes: float | None
     planned_export_start: datetime | None
-    foxess_control_gate: str
-    charging_status: str
     export_status: str
+    control: ControlReadModel
     ev: EvReadModel
     cost: CostReadModel
     scorecard: ScorecardReadModel
@@ -451,6 +480,16 @@ class SiteReadModel:
     latest_zerohero_status: str | None
     ledger_status: str
     tariff_status: str
+
+    @property
+    def foxess_control_gate(self) -> str:
+        """Retain the established Fleet projection name."""
+        return self.control.foxess_gate
+
+    @property
+    def charging_status(self) -> str:
+        """Retain the established Fleet projection name."""
+        return self.control.charge_session_phase
 
     def sensor_values(self) -> dict[str, object]:
         """Project existing individual sensor states without changing formatting."""
@@ -530,6 +569,67 @@ class SiteReadModel:
             "scorecard_actual_cost": self.scorecard.actual_cost,
             "scorecard_error": self.scorecard.forecast_error,
             "scorecard_zerohero_status": self.scorecard.zerohero_status,
+        }
+
+    def status_attributes(self) -> dict[str, object]:
+        """Project the existing Status entity attributes."""
+        control = self.control
+        return {
+            "mode": self.orchestrator_status,
+            "ledger_status": self.ledger_status,
+            "control_gate": control.foxess_gate,
+            "last_control_reason": control.last_control_reason,
+            "last_control_actions": control.last_control_actions,
+            "writes_performed": control.writes_performed,
+            "automatic_control_enabled": control.automatic_control_enabled,
+            "automatic_charge_enabled": control.automatic_charge_enabled,
+            "free_charge_schedule_confirmed": (
+                control.free_charge_schedule_confirmed
+            ),
+            "sign_conventions_verified": control.sign_conventions_verified,
+            "foxess_modbus_control_effective": control.foxess_gate == "ready",
+            "foxess_control_owner": control.foxess_control_owner,
+            "automatic_export_enabled": control.automatic_export_enabled,
+            "automatic_export_effective": control.automatic_export_effective,
+            "ev_before_export_status": control.ev_before_export_status,
+            "ev_automatic_control_enabled": control.ev_automatic_control_enabled,
+            "ev_control_gate": control.ev_gate,
+            "ev_writes_enabled": control.ev_gate == "ready",
+            "ev_last_control_reason": self.ev.control_status,
+            "ev_last_control_actions": self.ev.last_actions,
+            "ev_writes_performed": self.ev.writes_performed,
+            "ev_decision_phase": self.ev.decision_phase,
+            "ev_allowance_phase": self.ev.allowance_phase,
+            "ev_target_current_a": self.ev.target_current_a,
+            "ev_target_limit_percent": self.ev.target_limit_percent,
+            "ev_reconciliation_phase": self.ev.reconciliation_phase,
+            "ev_reconciliation_attempts": self.ev.reconciliation_attempts,
+            "ev_last_write_at": self.ev.last_write_at,
+            "ev_driving_learning_mode": self.ev.learning_status,
+            "ev_driving_learning_samples": self.ev.learning_samples,
+            "ev_learned_general_limit_percent": (
+                self.ev.learned_charge_limit_percent
+            ),
+            "export_session_phase": control.export_session_phase,
+            "charge_session_phase": control.charge_session_phase,
+            "charge_power_target_kw": control.charge_power_target_kw,
+            "export_allowance_remaining_kwh": (
+                control.automatic_export_remaining_kwh
+            ),
+            "automatic_export_remaining_kwh": (
+                control.automatic_export_remaining_kwh
+            ),
+            "export_protected_ev_kwh": control.export_protected_ev_kwh,
+            "rehearsal_mode": control.rehearsal_mode,
+            "integration": DOMAIN,
+            "learning_model": self.learning.model,
+            "learning_samples": self.learning.sample_count,
+            "heater_learning_samples": self.learning.heater_sample_count,
+            "house_occupancy": self.learning.budget_occupancy,
+            "house_occupancy_reason": self.learning.occupancy_reason,
+            "learning_max_age_days": control.learning_max_age_days,
+            "learning_sample_limit": control.learning_sample_limit,
+            "learning_sampler_enabled": control.learning_sampler_enabled,
         }
 
 
@@ -810,6 +910,58 @@ def build_site_read_model(
         all_people_away_for_hours=occupancy.all_people_away_for_hours,
     )
     ev_model = _build_ev_read_model(coordinator, now)
+    automation = coordinator.runtime_config.automation
+    foxess_gate = "unavailable" if controller is None else controller.gate_status
+    ev_gate = (
+        ev_model.gate_status
+        if ev_model.controller_available
+        else ev_control_gate_status(coordinator.runtime_config)
+    )
+    control_model = ControlReadModel(
+        foxess_gate=foxess_gate,
+        last_control_reason=(
+            "unavailable" if controller is None else controller.last_reason
+        ),
+        last_control_actions=() if controller is None else controller.last_actions,
+        writes_performed=0 if controller is None else controller.writes_performed,
+        automatic_control_enabled=automation.master_enabled,
+        automatic_charge_enabled=automation.battery_charge_enabled,
+        free_charge_schedule_confirmed=automation.free_charge_schedule_confirmed,
+        sign_conventions_verified=coordinator.runtime_config.electrical.verified,
+        foxess_control_owner=automation.control_owner,
+        automatic_export_enabled=automation.battery_export_enabled,
+        automatic_export_effective=(
+            False if controller is None else controller.export_effective_enabled
+        ),
+        ev_before_export_status=(
+            "unavailable"
+            if controller is None
+            else controller.ev_before_export_decision.reason
+        ),
+        ev_automatic_control_enabled=automation.ev_control_enabled,
+        ev_gate=ev_gate,
+        export_session_phase=(
+            "unavailable" if controller is None else controller.export_session.phase
+        ),
+        charge_session_phase=(
+            "unavailable" if controller is None else controller.charge_session.phase
+        ),
+        charge_power_target_kw=(
+            None if controller is None else controller.charge_power_target_kw
+        ),
+        automatic_export_remaining_kwh=(
+            None
+            if controller is None
+            else controller.automatic_export_remaining_kwh
+        ),
+        export_protected_ev_kwh=(
+            None if controller is None else controller.export_protected_ev_kwh
+        ),
+        rehearsal_mode=automation.safety_lock,
+        learning_max_age_days=coordinator.demand_history.max_age_days,
+        learning_sample_limit=coordinator.demand_history.sample_limit,
+        learning_sampler_enabled=coordinator.demand_sampler is not None,
+    )
     return SiteReadModel(
         orchestrator_status=control_mode(coordinator),
         battery_soc=None if snapshot is None else snapshot.battery_soc,
@@ -831,13 +983,8 @@ def build_site_read_model(
         planned_export_start=(
             None if plan is None or controller is None else controller.export_planned_start
         ),
-        foxess_control_gate=(
-            "unavailable" if controller is None else controller.gate_status
-        ),
-        charging_status=(
-            "unavailable" if controller is None else controller.charge_session.phase
-        ),
         export_status=export_status(coordinator),
+        control=control_model,
         ev=ev_model,
         cost=cost,
         scorecard=scorecard_model,

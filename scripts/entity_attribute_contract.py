@@ -109,6 +109,8 @@ def build_entity_attribute_contract() -> dict[str, Any]:
         _method(read_model_tree, "LearningReadModel", "occupancy_attributes")
     ) + _dict_return_keys(
         _method(read_model_tree, "EvReadModel", "control_attributes")
+    ) + _dict_return_keys(
+        _method(read_model_tree, "SiteReadModel", "status_attributes")
     )
 
     telemetry = _group_by_sentinel(groups, "positive_direction")
@@ -120,7 +122,7 @@ def build_entity_attribute_contract() -> dict[str, Any]:
     # unavailable fallback exposes only that same key.
     ev_control = _group_by_sentinel(read_model_groups, "decision_phase")
     occupancy = _group_by_sentinel(read_model_groups, "selected_mode")
-    status = _group_by_sentinel(groups, "ledger_status")
+    status = _group_by_sentinel(read_model_groups, "ledger_status")
 
     records = [_record("fleet_summary", fleet_groups[0])]
     records.extend(_record(key, telemetry) for key in _TELEMETRY_KEYS)
