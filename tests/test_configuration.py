@@ -10,10 +10,16 @@ import pytest
 
 from custom_components.home_energy_orchestrator.configuration import RuntimeConfiguration
 from custom_components.home_energy_orchestrator.const import (
+    BATTERY_POSITIVE_CHARGE,
+    BATTERY_POSITIVE_DISCHARGE,
     CONF_AUTOMATIC_CHARGE_ENABLED,
     CONF_AUTOMATIC_CONTROL_ENABLED,
     CONF_AUTOMATIC_EXPORT_ENABLED,
     CONF_BATTERY_CAPACITY_ENTITY,
+    CONF_BATTERY_CHARGE_POSITIVE,
+    CONF_BATTERY_CHARGE_POWER,
+    CONF_BATTERY_DISCHARGE_POWER,
+    CONF_BATTERY_POWER_DIRECTION,
     CONF_BATTERY_SOC,
     CONF_CONFIGURE_EV,
     CONF_CONFIGURE_SOLAR,
@@ -64,6 +70,7 @@ from custom_components.home_energy_orchestrator.const import (
     CONF_SIGN_CONVENTIONS_VERIFIED,
     CONF_SITE_GRID_CURRENT,
     CONF_SITE_PHASE_COUNT,
+    CONF_TELEMETRY_MAX_AGE_SECONDS,
     CONF_ZERO_IMPORT_THRESHOLD_KW,
     DEFAULT_EV_ALLOWANCE_GUARD_ENABLED,
     DEFAULT_EV_BEFORE_EXPORT_SOC_TARGET,
@@ -90,6 +97,7 @@ from custom_components.home_energy_orchestrator.const import (
     DEFAULT_REHEARSAL_MODE,
     DEFAULT_SIGN_CONVENTIONS_VERIFIED,
     DEFAULT_SITE_PHASE_COUNT,
+    DEFAULT_TELEMETRY_MAX_AGE_SECONDS,
     DEFAULT_ZERO_IMPORT_THRESHOLD_KW,
 )
 from custom_components.home_energy_orchestrator.coordinator import EnergyCoordinator
@@ -206,6 +214,9 @@ def test_runtime_configuration_uses_established_defaults() -> None:
     assert parsed.site.grid_current_entity is None
     assert parsed.battery.soc_entity is None
     assert parsed.battery.capacity_entity is None
+    assert parsed.battery.charge_power_entity is None
+    assert parsed.battery.discharge_power_entity is None
+    assert parsed.telemetry.max_age_seconds == DEFAULT_TELEMETRY_MAX_AGE_SECONDS
     assert parsed.ev_required_mapping_complete is False
     assert parsed.house.occupancy_mode == DEFAULT_HOUSE_OCCUPANCY_MODE
     assert parsed.electrical.verified is False
@@ -688,6 +699,78 @@ def test_house_learning_retains_coupled_parse_failure_fallback(
     )
 
     assert coordinator.learning_result.cycle_budget_kwh == DEFAULT_HOUSE_AWAY_FALLBACK_KWH
+
+
+@pytest.mark.parametrize(
+    ("data", "expected"),
+    [
+        (
+            {},
+            (None, None, DEFAULT_TELEMETRY_MAX_AGE_SECONDS, BATTERY_POSITIVE_CHARGE),
+        ),
+        (
+            {
+                CONF_BATTERY_CHARGE_POWER: "sensor.battery_charge",
+                CONF_BATTERY_DISCHARGE_POWER: "sensor.battery_discharge",
+                CONF_TELEMETRY_MAX_AGE_SECONDS: "45",
+                CONF_BATTERY_CHARGE_POSITIVE: False,
+                CONF_BATTERY_POWER_DIRECTION: BATTERY_POSITIVE_CHARGE,
+            },
+            (
+                "sensor.battery_charge",
+                "sensor.battery_discharge",
+                45.0,
+                BATTERY_POSITIVE_CHARGE,
+            ),
+        ),
+        (
+            {
+                CONF_BATTERY_CHARGE_POWER: 123,
+                CONF_BATTERY_DISCHARGE_POWER: "",
+                CONF_TELEMETRY_MAX_AGE_SECONDS: 0,
+                CONF_BATTERY_CHARGE_POSITIVE: False,
+            },
+            (
+                None,
+                None,
+                DEFAULT_TELEMETRY_MAX_AGE_SECONDS,
+                BATTERY_POSITIVE_DISCHARGE,
+            ),
+        ),
+        (
+            {
+                CONF_TELEMETRY_MAX_AGE_SECONDS: "nan",
+                CONF_BATTERY_CHARGE_POSITIVE: False,
+                CONF_BATTERY_POWER_DIRECTION: None,
+            },
+            (
+                None,
+                None,
+                DEFAULT_TELEMETRY_MAX_AGE_SECONDS,
+                BATTERY_POSITIVE_DISCHARGE,
+            ),
+        ),
+        (
+            {
+                CONF_TELEMETRY_MAX_AGE_SECONDS: "invalid",
+                CONF_BATTERY_POWER_DIRECTION: 123,
+            },
+            (None, None, DEFAULT_TELEMETRY_MAX_AGE_SECONDS, "123"),
+        ),
+    ],
+)
+def test_telemetry_snapshot_preserves_freshness_and_battery_compatibility(
+    data: dict[str, object],
+    expected: tuple[str | None, str | None, float, str],
+) -> None:
+    """Characterize freshness validation, mapping types and legacy sign fallback."""
+    parsed = RuntimeConfiguration.from_mapping(data)
+    assert (
+        parsed.battery.charge_power_entity,
+        parsed.battery.discharge_power_entity,
+        parsed.telemetry.max_age_seconds,
+        parsed.electrical.battery_power_positive_direction,
+    ) == expected
 
 
 @pytest.mark.parametrize(

@@ -32,7 +32,9 @@ selectors, validation, migration behavior and the multi-page draft workflow.
   fallbacks, heater mapping and explicitly configured free-window sampler times
   are now typed, reducing direct AST-visible runtime raw access to 13. Nine of
   those are remaining coordinator reads; four are explicit charge-to-full
-  compatibility mutations rather than policy reads.
+  compatibility mutations rather than policy reads. Telemetry freshness,
+  legacy battery sign fallback and split battery mappings are now typed as
+  well, reducing runtime raw access to nine and coordinator raw access to five.
 
 ## Work packages
 

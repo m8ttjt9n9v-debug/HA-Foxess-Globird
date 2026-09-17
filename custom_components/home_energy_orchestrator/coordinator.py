@@ -16,15 +16,12 @@ from homeassistant.util import dt as dt_util
 from .configuration import RuntimeConfiguration
 from .const import (
     BATTERY_POSITIVE_CHARGE,
-    BATTERY_POSITIVE_DISCHARGE,
     CONF_BATTERY_CAPACITY,
     CONF_BATTERY_CAPACITY_ENTITY,
-    CONF_BATTERY_CHARGE_POSITIVE,
     CONF_BATTERY_CHARGE_POWER,
     CONF_BATTERY_DISCHARGE_POWER,
     CONF_BATTERY_FLOOR,
     CONF_BATTERY_POWER,
-    CONF_BATTERY_POWER_DIRECTION,
     CONF_BATTERY_SOC,
     CONF_BONUS_WINDOW_END,
     CONF_BONUS_WINDOW_START,
@@ -68,11 +65,9 @@ from .const import (
     CONF_SOLAR_POWER,
     CONF_SOLAR_POWER_DIRECTION,
     CONF_SUPER_EXPORT_RATE,
-    CONF_TELEMETRY_MAX_AGE_SECONDS,
     CONF_ZERO_IMPORT_CONFIRM_MINUTES,
     CONF_ZERO_IMPORT_THRESHOLD_KW,
     CONF_ZEROHERO_DAILY_CREDIT,
-    DEFAULT_BATTERY_CHARGE_POSITIVE,
     DEFAULT_BONUS_WINDOW_END,
     DEFAULT_BONUS_WINDOW_START,
     DEFAULT_DAILY_CHARGE,
@@ -100,7 +95,6 @@ from .const import (
     DEFAULT_SITE_GRID_CURRENT_DIRECTION,
     DEFAULT_SOLAR_POWER_DIRECTION,
     DEFAULT_SUPER_EXPORT_RATE,
-    DEFAULT_TELEMETRY_MAX_AGE_SECONDS,
     DEFAULT_ZERO_IMPORT_CONFIRM_MINUTES,
     DEFAULT_ZERO_IMPORT_THRESHOLD_KW,
     DEFAULT_ZEROHERO_DAILY_CREDIT,
@@ -991,16 +985,7 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
         )
 
     def _max_telemetry_age(self) -> float:
-        try:
-            value = float(
-                self.config.get(
-                    CONF_TELEMETRY_MAX_AGE_SECONDS,
-                    DEFAULT_TELEMETRY_MAX_AGE_SECONDS,
-                )
-            )
-        except (TypeError, ValueError):
-            return DEFAULT_TELEMETRY_MAX_AGE_SECONDS
-        return value if isfinite(value) and value > 0 else DEFAULT_TELEMETRY_MAX_AGE_SECONDS
+        return self.runtime_config.telemetry.max_age_seconds
 
     def _direction(self, key: str, default: str) -> str:
         value = self.config.get(key, default)
@@ -1046,18 +1031,8 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
             positive_direction=GRID_POSITIVE_IMPORT,
         )
 
-        battery_direction = self._direction(
-            CONF_BATTERY_POWER_DIRECTION,
-            (
-                BATTERY_POSITIVE_CHARGE
-                if bool(
-                    self.config.get(
-                        CONF_BATTERY_CHARGE_POSITIVE,
-                        DEFAULT_BATTERY_CHARGE_POSITIVE,
-                    )
-                )
-                else BATTERY_POSITIVE_DISCHARGE
-            ),
+        battery_direction = (
+            self.runtime_config.electrical.battery_power_positive_direction
         )
         signed_battery = self._power_sample(
             CONF_BATTERY_POWER,
@@ -1066,8 +1041,10 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
             positive_direction=BATTERY_POSITIVE_CHARGE,
         )
 
-        charge_source = self._source(self.config.get(CONF_BATTERY_CHARGE_POWER))
-        discharge_source = self._source(self.config.get(CONF_BATTERY_DISCHARGE_POWER))
+        charge_source = self._source(self.runtime_config.battery.charge_power_entity)
+        discharge_source = self._source(
+            self.runtime_config.battery.discharge_power_entity
+        )
         if charge_source is not None or discharge_source is not None:
             charge = (
                 normalize_power_sample(

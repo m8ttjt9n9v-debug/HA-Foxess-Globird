@@ -1,5 +1,5 @@
 {
-  "access_count": 441,
+  "access_count": 440,
   "accesses": [
     {
       "access": "subscript_store",
@@ -3753,6 +3753,36 @@
     },
     {
       "access": "get",
+      "constant": "CONF_BATTERY_CHARGE_POSITIVE",
+      "key": "battery_charge_positive",
+      "kind": "raw_mapping",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "RuntimeConfiguration.from_mapping",
+      "source": "custom_components/home_energy_orchestrator/configuration.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_BATTERY_CHARGE_POWER",
+      "key": "battery_charge_power_entity",
+      "kind": "raw_mapping",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "RuntimeConfiguration.from_mapping",
+      "source": "custom_components/home_energy_orchestrator/configuration.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_BATTERY_DISCHARGE_POWER",
+      "key": "battery_discharge_power_entity",
+      "kind": "raw_mapping",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "RuntimeConfiguration.from_mapping",
+      "source": "custom_components/home_energy_orchestrator/configuration.py"
+    },
+    {
+      "access": "get",
       "constant": "CONF_BATTERY_POWER_DIRECTION",
       "key": "battery_power_positive_direction",
       "kind": "raw_mapping",
@@ -4242,46 +4272,6 @@
       "source": "custom_components/home_energy_orchestrator/coordinator.py"
     },
     {
-      "access": "get",
-      "constant": "CONF_TELEMETRY_MAX_AGE_SECONDS",
-      "key": "telemetry_max_age_seconds",
-      "kind": "raw_mapping",
-      "layer": "runtime",
-      "receiver": "self.config",
-      "scope": "EnergyCoordinator._max_telemetry_age",
-      "source": "custom_components/home_energy_orchestrator/coordinator.py"
-    },
-    {
-      "access": "get",
-      "constant": "CONF_BATTERY_CHARGE_POSITIVE",
-      "key": "battery_charge_positive",
-      "kind": "raw_mapping",
-      "layer": "runtime",
-      "receiver": "self.config",
-      "scope": "EnergyCoordinator._normalized_telemetry",
-      "source": "custom_components/home_energy_orchestrator/coordinator.py"
-    },
-    {
-      "access": "get",
-      "constant": "CONF_BATTERY_CHARGE_POWER",
-      "key": "battery_charge_power_entity",
-      "kind": "raw_mapping",
-      "layer": "runtime",
-      "receiver": "self.config",
-      "scope": "EnergyCoordinator._normalized_telemetry",
-      "source": "custom_components/home_energy_orchestrator/coordinator.py"
-    },
-    {
-      "access": "get",
-      "constant": "CONF_BATTERY_DISCHARGE_POWER",
-      "key": "battery_discharge_power_entity",
-      "kind": "raw_mapping",
-      "layer": "runtime",
-      "receiver": "self.config",
-      "scope": "EnergyCoordinator._normalized_telemetry",
-      "source": "custom_components/home_energy_orchestrator/coordinator.py"
-    },
-    {
       "access": "pop",
       "constant": "CONF_EV_CHARGE_TO_FULL",
       "key": "ev_charge_to_full_entity",
@@ -4414,17 +4404,17 @@
   ],
   "accesses_by_kind": {
     "managed_mutation": 9,
-    "raw_mapping": 432
+    "raw_mapping": 431
   },
   "accesses_by_layer": {
-    "boundary": 419,
-    "runtime": 22
+    "boundary": 422,
+    "runtime": 18
   },
   "accesses_by_source": {
     "custom_components/home_energy_orchestrator/__init__.py": 24,
     "custom_components/home_energy_orchestrator/config_flow.py": 347,
-    "custom_components/home_energy_orchestrator/configuration.py": 48,
-    "custom_components/home_energy_orchestrator/coordinator.py": 9,
+    "custom_components/home_energy_orchestrator/configuration.py": 51,
+    "custom_components/home_energy_orchestrator/coordinator.py": 5,
     "custom_components/home_energy_orchestrator/ev_active.py": 3,
     "custom_components/home_energy_orchestrator/number.py": 1,
     "custom_components/home_energy_orchestrator/select.py": 1,
@@ -4432,8 +4422,8 @@
   },
   "key_count": 129,
   "raw_accesses_by_layer": {
-    "boundary": 419,
-    "runtime": 13
+    "boundary": 422,
+    "runtime": 9
   },
   "release_baseline": "0.12.26",
   "schema_version": 2

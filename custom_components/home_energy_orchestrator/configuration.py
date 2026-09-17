@@ -5,13 +5,19 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import time
+from math import isfinite
 from typing import cast
 
 from .const import (
+    BATTERY_POSITIVE_CHARGE,
+    BATTERY_POSITIVE_DISCHARGE,
     CONF_AUTOMATIC_CHARGE_ENABLED,
     CONF_AUTOMATIC_CONTROL_ENABLED,
     CONF_AUTOMATIC_EXPORT_ENABLED,
     CONF_BATTERY_CAPACITY_ENTITY,
+    CONF_BATTERY_CHARGE_POSITIVE,
+    CONF_BATTERY_CHARGE_POWER,
+    CONF_BATTERY_DISCHARGE_POWER,
     CONF_BATTERY_POWER_DIRECTION,
     CONF_BATTERY_SOC,
     CONF_CONFIGURE_EV,
@@ -69,11 +75,12 @@ from .const import (
     CONF_SITE_PHASE_COUNT,
     CONF_SOLAR_POWER_DIRECTION,
     CONF_SUPER_EXPORT_RATE,
+    CONF_TELEMETRY_MAX_AGE_SECONDS,
     CONF_ZERO_IMPORT_THRESHOLD_KW,
     DEFAULT_AUTOMATIC_CHARGE_ENABLED,
     DEFAULT_AUTOMATIC_CONTROL_ENABLED,
     DEFAULT_AUTOMATIC_EXPORT_ENABLED,
-    DEFAULT_BATTERY_POWER_DIRECTION,
+    DEFAULT_BATTERY_CHARGE_POSITIVE,
     DEFAULT_EV_ALLOWANCE_GUARD_ENABLED,
     DEFAULT_EV_AUTOMATIC_CONTROL_ENABLED,
     DEFAULT_EV_BEFORE_EXPORT_ENABLED,
@@ -107,6 +114,7 @@ from .const import (
     DEFAULT_SITE_PHASE_COUNT,
     DEFAULT_SOLAR_POWER_DIRECTION,
     DEFAULT_SUPER_EXPORT_RATE,
+    DEFAULT_TELEMETRY_MAX_AGE_SECONDS,
     DEFAULT_ZERO_IMPORT_THRESHOLD_KW,
     HOUSE_OCCUPANCY_MODES,
 )
@@ -265,6 +273,15 @@ class BatterySettings:
 
     soc_entity: str | None
     capacity_entity: str | None
+    charge_power_entity: str | None
+    discharge_power_entity: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class TelemetrySettings:
+    """Shared telemetry freshness policy after legacy-compatible parsing."""
+
+    max_age_seconds: float
 
 
 @dataclass(frozen=True, slots=True)
@@ -324,6 +341,7 @@ class RuntimeConfiguration:
     windows: WindowSettings
     site: SiteSettings
     battery: BatterySettings
+    telemetry: TelemetrySettings
     electrical: ElectricalSettings
     tariff: TariffSettings
     inverter: InverterSettings
@@ -371,6 +389,8 @@ class RuntimeConfiguration:
         ev_lifetime_energy_entity = data.get(CONF_EV_LIFETIME_ENERGY)
         battery_soc_entity = data.get(CONF_BATTERY_SOC)
         battery_capacity_entity = data.get(CONF_BATTERY_CAPACITY_ENTITY)
+        battery_charge_power_entity = data.get(CONF_BATTERY_CHARGE_POWER)
+        battery_discharge_power_entity = data.get(CONF_BATTERY_DISCHARGE_POWER)
         site_grid_current_entity = data.get(CONF_SITE_GRID_CURRENT)
         heater_power_entity = data.get(CONF_HEATER_POWER)
         ev_phase_count = _optional_number(
@@ -385,6 +405,27 @@ class RuntimeConfiguration:
                 DEFAULT_EV_CONTROL_COMMISSIONED,
             )
         )
+        legacy_battery_direction = (
+            BATTERY_POSITIVE_CHARGE
+            if bool(
+                data.get(
+                    CONF_BATTERY_CHARGE_POSITIVE,
+                    DEFAULT_BATTERY_CHARGE_POSITIVE,
+                )
+            )
+            else BATTERY_POSITIVE_DISCHARGE
+        )
+        battery_direction = data.get(
+            CONF_BATTERY_POWER_DIRECTION,
+            legacy_battery_direction,
+        )
+        max_telemetry_age = _number(
+            data,
+            CONF_TELEMETRY_MAX_AGE_SECONDS,
+            DEFAULT_TELEMETRY_MAX_AGE_SECONDS,
+        )
+        if not isfinite(max_telemetry_age) or max_telemetry_age <= 0:
+            max_telemetry_age = DEFAULT_TELEMETRY_MAX_AGE_SECONDS
         return cls(
             automation=AutomationSettings(
                 master_enabled=bool(
@@ -623,6 +664,21 @@ class RuntimeConfiguration:
                 capacity_entity=(
                     str(battery_capacity_entity) if battery_capacity_entity else None
                 ),
+                charge_power_entity=(
+                    battery_charge_power_entity
+                    if isinstance(battery_charge_power_entity, str)
+                    and battery_charge_power_entity
+                    else None
+                ),
+                discharge_power_entity=(
+                    battery_discharge_power_entity
+                    if isinstance(battery_discharge_power_entity, str)
+                    and battery_discharge_power_entity
+                    else None
+                ),
+            ),
+            telemetry=TelemetrySettings(
+                max_age_seconds=max_telemetry_age,
             ),
             electrical=ElectricalSettings(
                 verified=bool(
@@ -638,12 +694,10 @@ class RuntimeConfiguration:
                         DEFAULT_GRID_POWER_DIRECTION,
                     ),
                 ),
-                battery_power_positive_direction=cast(
-                    str,
-                    data.get(
-                        CONF_BATTERY_POWER_DIRECTION,
-                        DEFAULT_BATTERY_POWER_DIRECTION,
-                    ),
+                battery_power_positive_direction=(
+                    str(battery_direction)
+                    if battery_direction
+                    else legacy_battery_direction
                 ),
                 solar_generation_direction=cast(
                     str,
