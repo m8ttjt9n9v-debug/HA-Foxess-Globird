@@ -6,6 +6,8 @@ from dataclasses import dataclass, replace
 from datetime import date, datetime, time, timedelta
 from math import isfinite
 
+from .tariff import calculate_daily_financials
+
 
 @dataclass(frozen=True, slots=True)
 class OptimisticCostForecast:
@@ -17,6 +19,35 @@ class OptimisticCostForecast:
     export_realisation_fraction: float
     forecast_remaining_export_kwh: float
     forecast_additional_export_revenue: float
+    learned_cost_bias: float
+
+
+@dataclass(frozen=True, slots=True)
+class ForecastFinancialInputs:
+    """Complete immutable accounting snapshot for one optimistic forecast."""
+
+    total_import_kwh: float
+    free_window_import_kwh: float
+    peak_import_kwh: float
+    free_allowance_kwh: float
+    peak_rate: float
+    offpeak_rate: float
+    offpeak_balance_rate: float
+    shoulder_rate: float
+    daily_charge: float
+    total_export_kwh: float
+    standard_window_export_kwh: float
+    boosted_window_export_kwh: float
+    boosted_export_allowance_kwh: float
+    export_rate: float
+    offpeak_export_rate: float
+    boosted_export_rate: float
+    measured_gross_cost: float
+    measured_export_revenue: float
+    assumed_zerohero_credit: float
+    planned_remaining_export_kwh: float
+    export_realisation_fraction: float
+    standard_rate_fraction: float
     learned_cost_bias: float
 
 
@@ -348,6 +379,61 @@ def calculate_optimistic_cost_forecast(
             forecast_additional_export_revenue, 4
         ),
         learned_cost_bias=round(learned_cost_bias, 4),
+    )
+
+
+def calculate_tariffed_optimistic_forecast(
+    inputs: ForecastFinancialInputs,
+) -> OptimisticCostForecast:
+    """Tariff the forecast export and return the existing optimistic result.
+
+    Measured accounting and forecast accounting deliberately use the same
+    tariff engine. This boundary owns no Home Assistant state, time lookup,
+    persistence or controller behavior.
+    """
+    if not isfinite(inputs.standard_rate_fraction) or not (
+        0 <= inputs.standard_rate_fraction <= 1
+    ):
+        raise ValueError("standard-rate fraction must be between zero and one")
+    additional_export = (
+        inputs.planned_remaining_export_kwh * inputs.export_realisation_fraction
+    )
+    hypothetical = calculate_daily_financials(
+        total_import_kwh=inputs.total_import_kwh,
+        free_window_import_kwh=inputs.free_window_import_kwh,
+        peak_import_kwh=inputs.peak_import_kwh,
+        free_allowance_kwh=inputs.free_allowance_kwh,
+        peak_rate=inputs.peak_rate,
+        offpeak_rate=inputs.offpeak_rate,
+        offpeak_balance_rate=inputs.offpeak_balance_rate,
+        shoulder_rate=inputs.shoulder_rate,
+        daily_charge=inputs.daily_charge,
+        total_export_kwh=inputs.total_export_kwh + additional_export,
+        standard_window_export_kwh=(
+            inputs.standard_window_export_kwh
+            + additional_export * inputs.standard_rate_fraction
+        ),
+        boosted_window_export_kwh=(
+            inputs.boosted_window_export_kwh + additional_export
+        ),
+        boosted_export_allowance_kwh=inputs.boosted_export_allowance_kwh,
+        export_rate=inputs.export_rate,
+        offpeak_export_rate=inputs.offpeak_export_rate,
+        boosted_export_rate=inputs.boosted_export_rate,
+        zerohero_credit=inputs.assumed_zerohero_credit,
+    )
+    additional_revenue = max(
+        hypothetical.export_revenue - inputs.measured_export_revenue,
+        0.0,
+    )
+    return calculate_optimistic_cost_forecast(
+        measured_gross_cost=inputs.measured_gross_cost,
+        measured_export_revenue=inputs.measured_export_revenue,
+        assumed_zerohero_credit=inputs.assumed_zerohero_credit,
+        planned_remaining_export_kwh=inputs.planned_remaining_export_kwh,
+        export_realisation_fraction=inputs.export_realisation_fraction,
+        forecast_additional_export_revenue=additional_revenue,
+        learned_cost_bias=inputs.learned_cost_bias,
     )
 
 

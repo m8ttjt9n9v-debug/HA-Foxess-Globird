@@ -93,8 +93,9 @@ from .planner.daily_meter import (
 )
 from .planner.forecast import (
     ForecastFeedbackState,
+    ForecastFinancialInputs,
     OptimisticCostForecast,
-    calculate_optimistic_cost_forecast,
+    calculate_tariffed_optimistic_forecast,
     window_overlap_fraction,
 )
 from .planner.learning import (
@@ -821,67 +822,63 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
         if any(value is None for value in required):
             return None
         fraction = self.forecast_feedback.export_realisation_fraction
-        additional_export = planned_remaining_kwh * fraction
         standard_fraction = self._forecast_standard_rate_fraction(now)
         try:
-            hypothetical = calculate_daily_financials(
-                total_import_kwh=float(ledger.daily_import_kwh),
-                free_window_import_kwh=float(ledger.free_window_import_kwh),
-                peak_import_kwh=float(self.peak_import.imported_kwh),
-                free_allowance_kwh=self._configured_nonnegative(
-                    CONF_DAILY_FREE_ALLOWANCE_KWH, DEFAULT_DAILY_FREE_ALLOWANCE_KWH
-                ),
-                peak_rate=self._configured_nonnegative(CONF_PEAK_RATE, DEFAULT_PEAK_RATE),
-                offpeak_rate=self._configured_nonnegative(
-                    CONF_OFFPEAK_RATE, DEFAULT_OFFPEAK_RATE
-                ),
-                offpeak_balance_rate=self._configured_nonnegative(
-                    CONF_OFFPEAK_BALANCE_RATE, DEFAULT_OFFPEAK_BALANCE_RATE
-                ),
-                shoulder_rate=self._configured_nonnegative(
-                    CONF_SHOULDER_RATE, DEFAULT_SHOULDER_RATE
-                ),
-                daily_charge=self._configured_nonnegative(
-                    CONF_DAILY_CHARGE, DEFAULT_DAILY_CHARGE
-                ),
-                total_export_kwh=float(ledger.daily_export_kwh) + additional_export,
-                standard_window_export_kwh=(
-                    float(ledger.standard_window_export_kwh)
-                    + additional_export * standard_fraction
-                ),
-                boosted_window_export_kwh=(
-                    float(ledger.boosted_window_export_kwh) + additional_export
-                ),
-                boosted_export_allowance_kwh=self._configured_nonnegative(
-                    CONF_EXPORT_ALLOWANCE_KWH, DEFAULT_EXPORT_ALLOWANCE_KWH
-                ),
-                export_rate=self._configured_nonnegative(
-                    CONF_EXPORT_RATE, DEFAULT_EXPORT_RATE
-                ),
-                offpeak_export_rate=self._configured_nonnegative(
-                    CONF_OFFPEAK_EXPORT_RATE, DEFAULT_OFFPEAK_EXPORT_RATE
-                ),
-                boosted_export_rate=self._configured_nonnegative(
-                    CONF_SUPER_EXPORT_RATE, DEFAULT_SUPER_EXPORT_RATE
-                ),
-                zerohero_credit=self._configured_nonnegative(
-                    CONF_ZEROHERO_DAILY_CREDIT, DEFAULT_ZEROHERO_DAILY_CREDIT
-                ),
-            )
-            additional_revenue = max(
-                hypothetical.export_revenue - float(ledger.estimated_export_revenue),
-                0.0,
-            )
-            return calculate_optimistic_cost_forecast(
-                measured_gross_cost=float(ledger.estimated_energy_cost),
-                measured_export_revenue=float(ledger.estimated_export_revenue),
-                assumed_zerohero_credit=self._configured_nonnegative(
-                    CONF_ZEROHERO_DAILY_CREDIT, DEFAULT_ZEROHERO_DAILY_CREDIT
-                ),
-                planned_remaining_export_kwh=planned_remaining_kwh,
-                export_realisation_fraction=fraction,
-                forecast_additional_export_revenue=additional_revenue,
-                learned_cost_bias=self.forecast_feedback.learned_cost_bias,
+            return calculate_tariffed_optimistic_forecast(
+                ForecastFinancialInputs(
+                    total_import_kwh=float(ledger.daily_import_kwh),
+                    free_window_import_kwh=float(ledger.free_window_import_kwh),
+                    peak_import_kwh=float(self.peak_import.imported_kwh),
+                    free_allowance_kwh=self._configured_nonnegative(
+                        CONF_DAILY_FREE_ALLOWANCE_KWH,
+                        DEFAULT_DAILY_FREE_ALLOWANCE_KWH,
+                    ),
+                    peak_rate=self._configured_nonnegative(
+                        CONF_PEAK_RATE, DEFAULT_PEAK_RATE
+                    ),
+                    offpeak_rate=self._configured_nonnegative(
+                        CONF_OFFPEAK_RATE, DEFAULT_OFFPEAK_RATE
+                    ),
+                    offpeak_balance_rate=self._configured_nonnegative(
+                        CONF_OFFPEAK_BALANCE_RATE, DEFAULT_OFFPEAK_BALANCE_RATE
+                    ),
+                    shoulder_rate=self._configured_nonnegative(
+                        CONF_SHOULDER_RATE, DEFAULT_SHOULDER_RATE
+                    ),
+                    daily_charge=self._configured_nonnegative(
+                        CONF_DAILY_CHARGE, DEFAULT_DAILY_CHARGE
+                    ),
+                    total_export_kwh=float(ledger.daily_export_kwh),
+                    standard_window_export_kwh=float(
+                        ledger.standard_window_export_kwh
+                    ),
+                    boosted_window_export_kwh=float(
+                        ledger.boosted_window_export_kwh
+                    ),
+                    boosted_export_allowance_kwh=self._configured_nonnegative(
+                        CONF_EXPORT_ALLOWANCE_KWH, DEFAULT_EXPORT_ALLOWANCE_KWH
+                    ),
+                    export_rate=self._configured_nonnegative(
+                        CONF_EXPORT_RATE, DEFAULT_EXPORT_RATE
+                    ),
+                    offpeak_export_rate=self._configured_nonnegative(
+                        CONF_OFFPEAK_EXPORT_RATE, DEFAULT_OFFPEAK_EXPORT_RATE
+                    ),
+                    boosted_export_rate=self._configured_nonnegative(
+                        CONF_SUPER_EXPORT_RATE, DEFAULT_SUPER_EXPORT_RATE
+                    ),
+                    measured_gross_cost=float(ledger.estimated_energy_cost),
+                    measured_export_revenue=float(
+                        ledger.estimated_export_revenue
+                    ),
+                    assumed_zerohero_credit=self._configured_nonnegative(
+                        CONF_ZEROHERO_DAILY_CREDIT, DEFAULT_ZEROHERO_DAILY_CREDIT
+                    ),
+                    planned_remaining_export_kwh=planned_remaining_kwh,
+                    export_realisation_fraction=fraction,
+                    standard_rate_fraction=standard_fraction,
+                    learned_cost_bias=self.forecast_feedback.learned_cost_bias,
+                )
             )
         except (TypeError, ValueError):
             return None

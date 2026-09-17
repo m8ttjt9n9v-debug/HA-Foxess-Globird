@@ -249,6 +249,9 @@ behind immutable inputs and outputs. Do not change scheduling in this phase.
 recorded-day replay produces the same ledger, forecast and learning trace with
 no increase in persistence or hardware writes.
 
+Current work package and extraction order:
+[Phase 6 accounting and coordinator extraction](maintainability/phase-6-coordinator-extraction.md).
+
 ### Phase 7 — controller decomposition
 
 Estimated effort: 15–22 engineer-days. This is the highest-risk phase.

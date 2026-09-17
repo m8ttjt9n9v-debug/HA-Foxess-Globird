@@ -6,10 +6,42 @@ import pytest
 
 from custom_components.home_energy_orchestrator.planner.forecast import (
     ForecastFeedbackState,
+    ForecastFinancialInputs,
     calculate_optimistic_cost_forecast,
+    calculate_tariffed_optimistic_forecast,
     update_cost_bias,
     update_export_realisation_fraction,
 )
+
+
+def _financial_inputs(**overrides: float) -> ForecastFinancialInputs:
+    values = {
+        "total_import_kwh": 0.0,
+        "free_window_import_kwh": 0.0,
+        "peak_import_kwh": 0.0,
+        "free_allowance_kwh": 50.0,
+        "peak_rate": 0.57,
+        "offpeak_rate": 0.0,
+        "offpeak_balance_rate": 0.30,
+        "shoulder_rate": 0.46,
+        "daily_charge": 2.04,
+        "total_export_kwh": 0.0,
+        "standard_window_export_kwh": 0.0,
+        "boosted_window_export_kwh": 0.0,
+        "boosted_export_allowance_kwh": 15.0,
+        "export_rate": 0.05,
+        "offpeak_export_rate": 0.02,
+        "boosted_export_rate": 0.10,
+        "measured_gross_cost": 2.04,
+        "measured_export_revenue": 0.0,
+        "assumed_zerohero_credit": 1.0,
+        "planned_remaining_export_kwh": 20.0,
+        "export_realisation_fraction": 0.75,
+        "standard_rate_fraction": 1.0,
+        "learned_cost_bias": 0.0,
+    }
+    values.update(overrides)
+    return ForecastFinancialInputs(**values)
 
 
 def test_optimistic_forecast_assumes_credit_and_tariffed_export() -> None:
@@ -26,6 +58,21 @@ def test_optimistic_forecast_assumes_credit_and_tariffed_export() -> None:
     assert forecast.forecast_remaining_export_kwh == 15.0
     assert forecast.raw_net_cost == pytest.approx(-0.7)
     assert forecast.calibrated_net_cost == pytest.approx(-0.6)
+
+
+def test_tariffed_forecast_uses_same_rate_tiers_as_measured_accounting() -> None:
+    forecast = calculate_tariffed_optimistic_forecast(_financial_inputs())
+
+    assert forecast.forecast_remaining_export_kwh == 15.0
+    assert forecast.forecast_additional_export_revenue == pytest.approx(2.25)
+    assert forecast.raw_net_cost == pytest.approx(-1.21)
+
+
+def test_tariffed_forecast_rejects_invalid_window_allocation() -> None:
+    with pytest.raises(ValueError):
+        calculate_tariffed_optimistic_forecast(
+            _financial_inputs(standard_rate_fraction=1.01)
+        )
 
 
 def test_export_realisation_learning_is_bounded_per_day() -> None:
