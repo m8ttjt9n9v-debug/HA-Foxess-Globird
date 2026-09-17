@@ -4418,8 +4418,8 @@
       "constant": null,
       "key": null,
       "key_expression": "remove_key",
-      "kind": "raw_mapping",
-      "layer": "runtime",
+      "kind": "mutation_boundary",
+      "layer": "boundary",
       "receiver": "self.config",
       "scope": "EnergyCoordinator.update_config_value",
       "source": "custom_components/home_energy_orchestrator/coordinator.py"
@@ -4429,8 +4429,8 @@
       "constant": null,
       "key": null,
       "key_expression": "key",
-      "kind": "raw_mapping",
-      "layer": "runtime",
+      "kind": "mutation_boundary",
+      "layer": "boundary",
       "receiver": "self.config",
       "scope": "EnergyCoordinator.update_config_value",
       "source": "custom_components/home_energy_orchestrator/coordinator.py"
@@ -4559,11 +4559,12 @@
   ],
   "accesses_by_kind": {
     "managed_mutation": 11,
-    "raw_mapping": 444
+    "mutation_boundary": 2,
+    "raw_mapping": 442
   },
   "accesses_by_layer": {
-    "boundary": 439,
-    "runtime": 16
+    "boundary": 441,
+    "runtime": 14
   },
   "accesses_by_source": {
     "custom_components/home_energy_orchestrator/__init__.py": 24,
@@ -4579,8 +4580,8 @@
   "key_count": 130,
   "raw_accesses_by_layer": {
     "boundary": 439,
-    "runtime": 5
+    "runtime": 3
   },
   "release_baseline": "0.12.26",
-  "schema_version": 3
+  "schema_version": 4
 }

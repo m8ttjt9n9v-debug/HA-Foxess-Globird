@@ -71,22 +71,35 @@ class _UsageVisitor(ast.NodeVisitor):
         elif not self._is_runtime_config_receiver(receiver_text):
             return
         relative = self.source.relative_to(REPOSITORY_ROOT).as_posix()
+        scope = ".".join(self.scope) or "<module>"
+        mutation_boundary = (
+            self.source.name == "coordinator.py"
+            and scope == "EnergyCoordinator.update_config_value"
+            and receiver_text == "self.config"
+            and access in {"pop", "subscript_store"}
+        )
         kind = (
-            "managed_mutation"
-            if access in {"update_config_value", "update_persisted_config_value"}
-            else "raw_mapping"
+            "mutation_boundary"
+            if mutation_boundary
+            else (
+                "managed_mutation"
+                if access in {"update_config_value", "update_persisted_config_value"}
+                else "raw_mapping"
+            )
         )
         self.records.append(
             {
                 "constant": constant,
                 "key": key,
                 "source": relative,
-                "scope": ".".join(self.scope) or "<module>",
+                "scope": scope,
                 "receiver": receiver_text,
                 "access": access,
                 "kind": kind,
                 "layer": (
-                    "boundary" if self.source.name in _BOUNDARY_FILES else "runtime"
+                    "boundary"
+                    if self.source.name in _BOUNDARY_FILES or mutation_boundary
+                    else "runtime"
                 ),
                 **(
                     {"key_expression": ast.unparse(constant_node)}
@@ -177,7 +190,7 @@ def build_config_usage_contract() -> dict[str, Any]:
     )
     by_source = Counter(item["source"] for item in records)
     return {
-        "schema_version": 3,
+        "schema_version": 4,
         "release_baseline": "0.12.26",
         "access_count": len(records),
         "key_count": len(

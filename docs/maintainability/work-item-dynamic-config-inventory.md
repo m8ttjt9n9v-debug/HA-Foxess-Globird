@@ -45,6 +45,9 @@ previous-release rehearsal must pass.
 - Runtime inventory initially reported 24 accesses: 11 managed mutation calls and 13
   direct mapping operations. The two direct writes are confined to the
   coordinator's central `update_config_value` implementation.
+- Contract schema v4 now classifies those two exact implementation writes as
+  the mutation boundary while continuing to inventory them. No uncontrolled
+  raw runtime write remains.
 - Focused usage/configuration tests: 73 passed.
 - Complete regression suite: 601 passed.
 - Ruff, all generated/frozen contracts and the v0.12.26 previous-release

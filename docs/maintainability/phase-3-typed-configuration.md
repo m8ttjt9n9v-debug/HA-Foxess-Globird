@@ -57,12 +57,13 @@ selectors, validation, migration behavior and the multi-page draft workflow.
   runtime meaning, while ten domain-invalid page scenarios prove the complete
   multi-page draft survives correction and final commit. The completion audit
   also identified dynamic-key raw configuration helpers that the v2 AST usage
-  inventory did not count. Contract schema v3 now exposes 13 raw runtime
+  inventory did not count. Contract schema v3 exposed 13 raw runtime
   mapping operations (eleven variable-key, one literal legacy fallback and one
   constant-key membership test), in
-  addition to 11 managed mutation calls. Phase 3 therefore remains open until
-  those raw runtime reads are migrated and the central mutation implementation
-  is explicitly classified as the boundary it provides. The first corrected
+  addition to 11 managed mutation calls. Schema v4 now separately freezes the
+  coordinator's two central mutation implementation writes as boundary
+  operations. Phase 3 therefore remains open until the remaining raw runtime
+  reads are migrated. The first corrected
   seam moved power-source mappings, listener registration and effective grid,
   solar and service-current directions into the immutable snapshot, reducing
   raw runtime mapping operations from 13 to nine without changing telemetry.
@@ -73,8 +74,9 @@ selectors, validation, migration behavior and the multi-page draft workflow.
   runtime time parser while preserving its compatibility interface. Raw runtime
   mapping operations fell to six. Manual diagnostic tariff selection now also
   consumes immutable tariff settings, reducing raw runtime mapping operations
-  to five. The remaining reads are numeric coordinator and EV-controller
-  helpers plus the centralized mutation implementation.
+  to five. After classifying the two intentional central mutation writes as the
+  boundary they provide, three raw runtime reads remain: two numeric
+  coordinator helpers and the EV-controller numeric helper.
 
 ## Work packages
 

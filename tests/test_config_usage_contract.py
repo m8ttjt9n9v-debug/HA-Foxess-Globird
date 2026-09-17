@@ -37,14 +37,15 @@ def test_config_usage_only_references_declared_keys() -> None:
 def test_dynamic_runtime_config_reads_are_inventory_visible() -> None:
     """Variable-key helpers must not disappear from the raw-access metric."""
     contract = build_config_usage_contract()
-    dynamic = [
+    dynamic = [item for item in contract["accesses"] if item["key"] is None]
+    dynamic_runtime = [
         item
-        for item in contract["accesses"]
+        for item in dynamic
         if item["layer"] == "runtime" and item["key"] is None
     ]
     assert contract["dynamic_access_count"] == len(dynamic)
-    assert dynamic
-    assert {item["receiver"] for item in dynamic} <= {
+    assert dynamic_runtime
+    assert {item["receiver"] for item in dynamic_runtime} <= {
         "config",
         "self.config",
         "self.coordinator.config",
@@ -64,9 +65,16 @@ def test_runtime_config_writes_use_the_coordinator_boundary() -> None:
         if item["kind"] == "raw_mapping"
         and item["access"] in {"pop", "subscript_store"}
     ]
-    assert raw_writes
+    assert raw_writes == []
+    boundary_writes = [
+        item
+        for item in build_config_usage_contract()["accesses"]
+        if item["kind"] == "mutation_boundary"
+    ]
+    assert len(boundary_writes) == 2
+    assert {item["layer"] for item in boundary_writes} == {"boundary"}
     assert {
-        (item["scope"], item["receiver"]) for item in raw_writes
+        (item["scope"], item["receiver"]) for item in boundary_writes
     } == {("EnergyCoordinator.update_config_value", "self.config")}
     mutations = [item for item in runtime if item["kind"] == "managed_mutation"]
     assert len(mutations) == 11
