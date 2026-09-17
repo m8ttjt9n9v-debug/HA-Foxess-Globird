@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from homeassistant.components.binary_sensor import BinarySensorEntity
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -25,6 +24,7 @@ from .const import (
     DOMAIN,
 )
 from .coordinator import EnergyCoordinator
+from .entity_catalogue import SIGN_CONVENTIONS_DESCRIPTION as DESCRIPTION
 
 
 async def async_setup_entry(
@@ -41,10 +41,8 @@ class SignConventionsVerifiedBinarySensor(
 ):
     """True only after an operator verifies the normalized electrical signs."""
 
-    _attr_name = "Sign Conventions Verified"
-    _attr_icon = "mdi:swap-horizontal-bold"
-    _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_has_entity_name = True
+    entity_description = DESCRIPTION
 
     def __init__(self, coordinator: EnergyCoordinator, entry: ConfigEntry) -> None:
         super().__init__(coordinator)

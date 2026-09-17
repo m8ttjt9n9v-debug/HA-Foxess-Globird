@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from homeassistant.components.number import NumberEntity, NumberEntityDescription
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import PERCENTAGE, EntityCategory, UnitOfPower
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
@@ -19,46 +18,11 @@ from .const import (
     DEFAULT_INVERTER_DISCHARGE_LIMIT_KW,
 )
 from .coordinator import EnergyCoordinator
-
-DESCRIPTIONS = (
-    NumberEntityDescription(
-        key="test_charge_power",
-        name="Test Charge Power",
-        icon="mdi:battery-arrow-up",
-        native_unit_of_measurement=UnitOfPower.KILO_WATT,
-        native_min_value=0.1,
-        native_max_value=0.1,
-        native_step=0.1,
-    ),
-    NumberEntityDescription(
-        key="test_discharge_power",
-        name="Test Discharge Power",
-        icon="mdi:battery-arrow-down",
-        native_unit_of_measurement=UnitOfPower.KILO_WATT,
-        native_min_value=0.1,
-        native_max_value=0.1,
-        native_step=0.1,
-    ),
-    NumberEntityDescription(
-        key="test_duration",
-        name="Test Duration",
-        icon="mdi:timer-outline",
-        native_unit_of_measurement="min",
-        native_min_value=1.0,
-        native_max_value=120.0,
-        native_step=1.0,
-    ),
+from .entity_catalogue import (
+    EV_BEFORE_EXPORT_TARGET_DESCRIPTION,
 )
-
-EV_BEFORE_EXPORT_TARGET_DESCRIPTION = NumberEntityDescription(
-    key="ev_before_export_soc_target",
-    name="EV Before Export SoC Target",
-    icon="mdi:battery-charging-40",
-    native_unit_of_measurement=PERCENTAGE,
-    native_min_value=0.0,
-    native_max_value=100.0,
-    native_step=1.0,
-    entity_category=EntityCategory.CONFIG,
+from .entity_catalogue import (
+    NUMBER_DESCRIPTIONS as DESCRIPTIONS,
 )
 
 

@@ -10,24 +10,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from . import EnergyConfigEntry
 from .coordinator import EnergyCoordinator
-
-DESCRIPTIONS = (
-    ButtonEntityDescription(
-        key="test_force_charge",
-        name="Start Charge Diagnostic",
-        icon="mdi:battery-arrow-up-outline",
-    ),
-    ButtonEntityDescription(
-        key="test_force_discharge",
-        name="Start Discharge Diagnostic",
-        icon="mdi:battery-arrow-down-outline",
-    ),
-    ButtonEntityDescription(
-        key="test_stop",
-        name="Stop Diagnostic and Restore Self Use",
-        icon="mdi:stop-circle-outline",
-    ),
-)
+from .entity_catalogue import BUTTON_DESCRIPTIONS as DESCRIPTIONS
 
 
 async def async_setup_entry(

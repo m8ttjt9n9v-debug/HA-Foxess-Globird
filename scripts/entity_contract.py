@@ -8,13 +8,8 @@ from enum import Enum
 from pathlib import Path
 from typing import Any
 
-from custom_components.home_energy_orchestrator import (
-    button,
-    number,
-    select,
-    sensor,
-    switch,
-)
+from custom_components.home_energy_orchestrator import sensor
+from custom_components.home_energy_orchestrator.entity_catalogue import ENTITY_SPECS
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 BASELINE_PATH = REPOSITORY_ROOT / "docs" / "maintainability" / "entity-contract-v0.12.26.json"
@@ -49,40 +44,13 @@ def _description_record(platform: str, description: Any) -> dict[str, Any]:
 
 def build_entity_contract() -> dict[str, Any]:
     """Return the deterministic current public entity identity contract."""
-    descriptions = {
-        "sensor": sensor.DESCRIPTIONS,
-        "switch": (
-            switch.SAFETY_DESCRIPTION,
-            switch.CHARGE_DESCRIPTION,
-            switch.EXPORT_DESCRIPTION,
-            switch.EV_DESCRIPTION,
-            switch.EV_BEFORE_EXPORT_DESCRIPTION,
-            switch.CHARGE_TO_FULL_DESCRIPTION,
-        ),
-        "number": (*number.DESCRIPTIONS, number.EV_BEFORE_EXPORT_TARGET_DESCRIPTION),
-        "button": button.DESCRIPTIONS,
-        "select": (select.DESCRIPTION,),
-    }
     records = [
-        _description_record(platform, description)
-        for platform, platform_descriptions in descriptions.items()
-        for description in platform_descriptions
+        *(_description_record("sensor", description) for description in sensor.DESCRIPTIONS),
+        *(
+            _description_record(spec.platform, spec.description)
+            for spec in ENTITY_SPECS
+        ),
     ]
-    records.append(
-        {
-            "platform": "binary_sensor",
-            "key": "sign_conventions_verified",
-            "unique_id_template": "{config_entry_id}_sign_conventions_verified",
-            "default_entity_id": "binary_sensor.home_energy_sign_conventions_verified",
-            "name": "Sign Conventions Verified",
-            "translation_key": None,
-            "unit": None,
-            "device_class": None,
-            "state_class": None,
-            "entity_category": "diagnostic",
-            "enabled_by_default": True,
-        }
-    )
     records.sort(key=lambda item: (item["platform"], item["key"]))
     return {
         "schema_version": 1,

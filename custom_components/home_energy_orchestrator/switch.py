@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from homeassistant.components.switch import SwitchEntity, SwitchEntityDescription
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -25,42 +24,13 @@ from .const import (
     DEFAULT_EV_CHARGE_TO_FULL_ENABLED,
 )
 from .coordinator import EnergyCoordinator
-
-SAFETY_DESCRIPTION = SwitchEntityDescription(
-    key="safety_lock",
-    name="Safety Lock",
-    icon="mdi:lock",
-    entity_category=EntityCategory.CONFIG,
-)
-EXPORT_DESCRIPTION = SwitchEntityDescription(
-    key="automatic_export",
-    name="Automatic ZEROHERO Export",
-    icon="mdi:transmission-tower-export",
-    entity_category=EntityCategory.CONFIG,
-)
-CHARGE_DESCRIPTION = SwitchEntityDescription(
-    key="automatic_charge",
-    name="Automatic Battery Free Charge",
-    icon="mdi:battery-arrow-up",
-    entity_category=EntityCategory.CONFIG,
-)
-EV_DESCRIPTION = SwitchEntityDescription(
-    key="automatic_ev_control",
-    name="Automatic EV Control",
-    icon="mdi:ev-station",
-    entity_category=EntityCategory.CONFIG,
-)
-EV_BEFORE_EXPORT_DESCRIPTION = SwitchEntityDescription(
-    key="ev_before_export",
-    name="Prioritise EV Before Export",
-    icon="mdi:car-electric-outline",
-    entity_category=EntityCategory.CONFIG,
-)
-CHARGE_TO_FULL_DESCRIPTION = SwitchEntityDescription(
-    key="ev_charge_to_full",
-    name="EV Charge to Full",
-    icon="mdi:battery-arrow-up",
-    entity_category=EntityCategory.CONFIG,
+from .entity_catalogue import (
+    CHARGE_DESCRIPTION,
+    CHARGE_TO_FULL_DESCRIPTION,
+    EV_BEFORE_EXPORT_DESCRIPTION,
+    EV_DESCRIPTION,
+    EXPORT_DESCRIPTION,
+    SAFETY_DESCRIPTION,
 )
 
 

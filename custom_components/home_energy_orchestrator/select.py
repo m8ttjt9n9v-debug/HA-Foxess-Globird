@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
-from homeassistant.components.select import SelectEntity, SelectEntityDescription
+from homeassistant.components.select import SelectEntity
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
@@ -16,13 +15,7 @@ from .const import (
     HOUSE_OCCUPANCY_MODES,
 )
 from .coordinator import EnergyCoordinator
-
-DESCRIPTION = SelectEntityDescription(
-    key="house_occupancy_mode",
-    name="House Energy Occupancy Mode",
-    icon="mdi:home-account",
-    entity_category=EntityCategory.CONFIG,
-)
+from .entity_catalogue import HOUSE_OCCUPANCY_DESCRIPTION as DESCRIPTION
 
 
 async def async_setup_entry(

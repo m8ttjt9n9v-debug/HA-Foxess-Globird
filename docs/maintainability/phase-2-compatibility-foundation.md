@@ -54,7 +54,8 @@ separate reviewable work items.
 - The portable dashboard is strictly parsed and every HEO entity and attribute
   reference is checked against the frozen v0.12.26 contracts.
 - The true previous-release rollback/downgrade rehearsal is still open.
-- Runtime `EntitySpec` adoption and translations have not started.
+- Runtime `EntitySpec` adoption has started with the 15 non-sensor entities;
+  the 92 sensors and translations remain untouched.
 - Nine display-label proposals await project-owner approval; no label is
   inferred as approved from engineering analysis.
 
