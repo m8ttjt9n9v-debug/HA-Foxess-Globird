@@ -1,10 +1,12 @@
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
 from custom_components.home_energy_orchestrator.planner.ev_daily_backfill import (
+    DailyBackfillEnergyState,
     DailyBackfillInputs,
     calculate_daily_backfill_plan,
+    integrate_daily_backfill_energy,
 )
 
 
@@ -117,3 +119,80 @@ def test_ready_must_be_before_next_free_window():
         calculate_daily_backfill_plan(
             _inputs(ready_at=datetime(2026, 9, 10, 13, 0, tzinfo=UTC))
         )
+
+
+def test_daily_backfill_energy_integrates_confirmed_current_trapezoid():
+    start = datetime(2026, 9, 10, 6, 0, tzinfo=UTC)
+    state = DailyBackfillEnergyState(1.0, start, 10.0)
+
+    transition = integrate_daily_backfill_energy(
+        state,
+        active=True,
+        now=start + timedelta(seconds=60),
+        actual_current_a=14.0,
+        voltage_v=230.0,
+        phase_count=3,
+        maximum_sample_age_seconds=90.0,
+    )
+
+    assert transition.delivered_kwh == pytest.approx(1.138)
+    assert transition.last_sample_at == start + timedelta(seconds=60)
+    assert transition.last_actual_current_a == 14.0
+
+
+def test_daily_backfill_energy_restarts_sampling_after_stale_or_missing_feedback():
+    start = datetime(2026, 9, 10, 6, 0, tzinfo=UTC)
+    state = DailyBackfillEnergyState(1.0, start, 10.0)
+
+    stale = integrate_daily_backfill_energy(
+        state,
+        active=True,
+        now=start + timedelta(seconds=91),
+        actual_current_a=14.0,
+        voltage_v=230.0,
+        phase_count=3,
+        maximum_sample_age_seconds=90.0,
+    )
+    assert stale == DailyBackfillEnergyState(
+        1.0, start + timedelta(seconds=91), 14.0
+    )
+
+    missing = integrate_daily_backfill_energy(
+        stale,
+        active=True,
+        now=start + timedelta(seconds=121),
+        actual_current_a=None,
+        voltage_v=230.0,
+        phase_count=3,
+        maximum_sample_age_seconds=90.0,
+    )
+    assert missing == DailyBackfillEnergyState(
+        1.0, start + timedelta(seconds=121), None
+    )
+
+    out_of_order = integrate_daily_backfill_energy(
+        state,
+        active=True,
+        now=start - timedelta(seconds=1),
+        actual_current_a=8.0,
+        voltage_v=230.0,
+        phase_count=3,
+        maximum_sample_age_seconds=90.0,
+    )
+    assert out_of_order == DailyBackfillEnergyState(
+        1.0, start - timedelta(seconds=1), 8.0
+    )
+
+
+def test_daily_backfill_energy_clears_samples_when_policy_is_inactive():
+    start = datetime(2026, 9, 10, 6, 0, tzinfo=UTC)
+    transition = integrate_daily_backfill_energy(
+        DailyBackfillEnergyState(1.0, start, 10.0),
+        active=False,
+        now=start + timedelta(seconds=30),
+        actual_current_a=10.0,
+        voltage_v=230.0,
+        phase_count=3,
+        maximum_sample_age_seconds=90.0,
+    )
+    assert transition == DailyBackfillEnergyState(1.0, None, None)

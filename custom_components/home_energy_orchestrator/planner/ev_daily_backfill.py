@@ -49,6 +49,47 @@ class DailyBackfillPlan:
     phase: str
 
 
+@dataclass(frozen=True, slots=True)
+class DailyBackfillEnergyState:
+    """Transient samples and accumulated wall energy for one ready cycle."""
+
+    delivered_kwh: float = 0.0
+    last_sample_at: datetime | None = None
+    last_actual_current_a: float | None = None
+
+
+def integrate_daily_backfill_energy(
+    state: DailyBackfillEnergyState,
+    *,
+    active: bool,
+    now: datetime,
+    actual_current_a: float | None,
+    voltage_v: float,
+    phase_count: int,
+    maximum_sample_age_seconds: float,
+) -> DailyBackfillEnergyState:
+    """Integrate confirmed wall current only while daily backfill owns charging."""
+    delivered_kwh = state.delivered_kwh
+    previous_at = state.last_sample_at
+    previous_current = state.last_actual_current_a
+    if (
+        active
+        and actual_current_a is not None
+        and previous_at is not None
+        and previous_current is not None
+        and now >= previous_at
+        and now - previous_at <= timedelta(seconds=maximum_sample_age_seconds)
+    ):
+        hours = (now - previous_at).total_seconds() / 3600
+        average_current = (previous_current + actual_current_a) / 2
+        delivered_kwh += average_current * voltage_v * phase_count / 1000 * hours
+    return DailyBackfillEnergyState(
+        delivered_kwh,
+        now if active else None,
+        actual_current_a if active else None,
+    )
+
+
 def calculate_daily_backfill_plan(inputs: DailyBackfillInputs) -> DailyBackfillPlan:
     """Plan wall energy without assuming who controlled the inverter earlier.
 

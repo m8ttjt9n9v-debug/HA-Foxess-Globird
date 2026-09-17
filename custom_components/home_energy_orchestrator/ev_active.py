@@ -158,9 +158,11 @@ from .planner.ev_candidates import (
     select_outside_stage_candidate,
 )
 from .planner.ev_daily_backfill import (
+    DailyBackfillEnergyState,
     DailyBackfillInputs,
     DailyBackfillPlan,
     calculate_daily_backfill_plan,
+    integrate_daily_backfill_energy,
 )
 from .planner.ev_learning import (
     DrivingSnapshotState,
@@ -1974,35 +1976,25 @@ class ActiveEvController:
             return
         ready_at, _, _ = self._daily_ready_cycle(now)
         self._roll_daily_backfill_cycle(ready_at)
-        previous_at = self.daily_backfill_last_sample_at
-        previous_current = self.daily_backfill_last_actual_current_a
-        if (
-            self.daily_backfill_active
-            and actual_current_a is not None
-            and previous_at is not None
-            and previous_current is not None
-            and now >= previous_at
-            and now - previous_at
-            <= timedelta(
-                seconds=self._float(
-                    CONF_EV_TELEMETRY_MAX_AGE_SECONDS,
-                    DEFAULT_EV_TELEMETRY_MAX_AGE_SECONDS,
-                )
-            )
-        ):
-            hours = (now - previous_at).total_seconds() / 3600
-            average_current = (previous_current + actual_current_a) / 2
-            self.daily_backfill_delivered_kwh += (
-                average_current
-                * self._float(CONF_EV_VOLTAGE, DEFAULT_EV_VOLTAGE)
-                * int(self._float(CONF_EV_PHASE_COUNT, DEFAULT_EV_PHASE_COUNT))
-                / 1000
-                * hours
-            )
-        self.daily_backfill_last_sample_at = now if self.daily_backfill_active else None
-        self.daily_backfill_last_actual_current_a = (
-            actual_current_a if self.daily_backfill_active else None
+        transition = integrate_daily_backfill_energy(
+            DailyBackfillEnergyState(
+                self.daily_backfill_delivered_kwh,
+                self.daily_backfill_last_sample_at,
+                self.daily_backfill_last_actual_current_a,
+            ),
+            active=self.daily_backfill_active,
+            now=now,
+            actual_current_a=actual_current_a,
+            voltage_v=self._float(CONF_EV_VOLTAGE, DEFAULT_EV_VOLTAGE),
+            phase_count=int(self._float(CONF_EV_PHASE_COUNT, DEFAULT_EV_PHASE_COUNT)),
+            maximum_sample_age_seconds=self._float(
+                CONF_EV_TELEMETRY_MAX_AGE_SECONDS,
+                DEFAULT_EV_TELEMETRY_MAX_AGE_SECONDS,
+            ),
         )
+        self.daily_backfill_delivered_kwh = transition.delivered_kwh
+        self.daily_backfill_last_sample_at = transition.last_sample_at
+        self.daily_backfill_last_actual_current_a = transition.last_actual_current_a
 
     def daily_backfill_protection_kwh(self, now: datetime) -> float:
         """Energy Local-Modbus export must retain for the next ready deadline."""
