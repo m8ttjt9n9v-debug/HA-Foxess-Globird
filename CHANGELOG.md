@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.12.26 — restore GloBird scorecard mappings on upgrade
+
+- Migrate existing entries to the complete, unambiguous GloBird Latest Daily
+  Cost and ZEROHERO Status pair when those optional scorecard mappings were not
+  present before v0.12.25. Preserve explicit and partial user mappings for
+  manual review rather than combining accounts.
+- Accept the GloBird integration's `missed` ZEROHERO result and normalize it to
+  HEO's retained `not_achieved` scorecard value. Pending, incomplete, unknown,
+  and mismatched-date results remain ineligible.
+- Restore Latest Actual Cost, Forecast Error, and Latest ZEROHERO Status in the
+  Fleet Summary after a qualifying completed retailer day is matched.
+
 ## 0.12.25 — optimistic forecast, scorecard, and fleet summary
 
 - Separate factual measured net cost from an optimistic daily forecast that

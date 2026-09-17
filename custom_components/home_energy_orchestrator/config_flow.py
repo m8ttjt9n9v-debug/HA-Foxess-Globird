@@ -342,7 +342,7 @@ def _schedule_confirmation(start: time, end: time) -> dict[str, str]:
 class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Create and maintain one observer per independently configured site."""
 
-    VERSION = 5
+    VERSION = 6
 
     _pending_input: dict[str, object] | None = None
     _pending_reconfigure = False

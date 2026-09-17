@@ -940,8 +940,14 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
         except (TypeError, ValueError):
             self.forecast_scorecard_status = "retailer_cost_invalid"
             return False
-        zerohero_status = str(status_state.state).casefold()
-        if zerohero_status not in {"achieved", "not_achieved"}:
+        zerohero_status = {
+            "achieved": "achieved",
+            "missed": "not_achieved",
+            # Retain compatibility with scorecard fixtures and any older
+            # GloBird integration version that exposed this spelling.
+            "not_achieved": "not_achieved",
+        }.get(str(status_state.state).casefold())
+        if zerohero_status is None:
             self.forecast_scorecard_status = "retailer_status_unrecognized"
             return False
         previous = self.forecast_feedback.record_for(cost_date)

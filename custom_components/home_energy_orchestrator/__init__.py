@@ -6,6 +6,7 @@ from datetime import time
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import entity_registry as er
 
 from .active import ActiveFoxessController
 from .const import (
@@ -22,6 +23,8 @@ from .const import (
     CONF_FORCE_DISCHARGE_FINISH,
     CONF_FORCE_DISCHARGE_OFFSET_MINUTES,
     CONF_FREE_CHARGE_SCHEDULE_CONFIRMED,
+    CONF_GLOBIRD_LATEST_DAILY_COST,
+    CONF_GLOBIRD_ZEROHERO_STATUS,
     CONF_GRID_IMPORT_POSITIVE,
     CONF_GRID_POWER_DIRECTION,
     CONF_OFFPEAK_EXPORT_RATE,
@@ -44,6 +47,7 @@ from .const import (
     PLATFORMS,
 )
 from .coordinator import EnergyCoordinator
+from .discovery import DiscoveryEntity, discover_entity_defaults
 from .ev_active import ActiveEvController
 from .manual_test import ManualTestController
 from .services import register_services, unregister_services
@@ -53,7 +57,7 @@ type EnergyConfigEntry = ConfigEntry[EnergyCoordinator]
 
 async def async_migrate_entry(hass: HomeAssistant, entry: EnergyConfigEntry) -> bool:
     """Migrate ambiguous legacy booleans to explicit, locked conventions."""
-    if entry.version > 5:
+    if entry.version > 6:
         return False
     if entry.version == 1:
         data = dict(entry.data)
@@ -120,6 +124,35 @@ async def async_migrate_entry(hass: HomeAssistant, entry: EnergyConfigEntry) -> 
             offset_minutes = DEFAULT_FORCE_DISCHARGE_OFFSET_MINUTES
         data.setdefault(CONF_FORCE_DISCHARGE_OFFSET_MINUTES, offset_minutes)
         hass.config_entries.async_update_entry(entry, data=data, version=5)
+    if entry.version == 5:
+        data = dict(entry.data)
+        # v0.12.25 introduced optional GloBird scorecard mappings after the
+        # existing entries had already been commissioned. Migrate only a
+        # complete, unambiguous pair from one GloBird config entry. An explicit
+        # or partial user mapping is preserved for manual review.
+        if not data.get(CONF_GLOBIRD_LATEST_DAILY_COST) and not data.get(
+            CONF_GLOBIRD_ZEROHERO_STATUS
+        ):
+            registry = er.async_get(hass)
+            suggestions = discover_entity_defaults(
+                [
+                    DiscoveryEntity(
+                        entity_id=registry_entry.entity_id,
+                        platform=registry_entry.platform,
+                        config_entry_id=registry_entry.config_entry_id,
+                        original_name=registry_entry.original_name,
+                        disabled=registry_entry.disabled_by is not None,
+                    )
+                    for registry_entry in registry.entities.values()
+                    if registry_entry.platform == "globird_ha"
+                ]
+            )
+            cost_entity = suggestions.get(CONF_GLOBIRD_LATEST_DAILY_COST)
+            status_entity = suggestions.get(CONF_GLOBIRD_ZEROHERO_STATUS)
+            if cost_entity and status_entity:
+                data[CONF_GLOBIRD_LATEST_DAILY_COST] = cost_entity
+                data[CONF_GLOBIRD_ZEROHERO_STATUS] = status_entity
+        hass.config_entries.async_update_entry(entry, data=data, version=6)
     return True
 
 

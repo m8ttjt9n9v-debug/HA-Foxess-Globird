@@ -56,6 +56,11 @@ layers around the proven algorithm, not replacement algorithms.
   it never changes export, charge, EV, inverter, or Safety Lock decisions.
   Days on which ZEROHERO was not achieved remain visible but do not train the
   residual because they violate the forecast's explicit optimistic assumption.
+  Existing entries migrate a complete, unambiguous pair of GloBird scorecard
+  entities from one GloBird config entry; explicit or partial mappings remain
+  untouched for manual review. The GloBird `missed` result is normalized to
+  HEO's retained `not_achieved` value. Incomplete, pending, unknown, and
+  mismatched-date results never enter the scorecard.
 - ZEROHERO automatic export requests the configured inverter discharge maximum,
   capped only by the mapped actuator maximum. The inverter enforces its own grid
   export limit. A lower legacy user-entered discharge preference is ignored so

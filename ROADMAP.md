@@ -50,6 +50,12 @@ Status here describes behavioral parity, not merely the presence of code.
 
 ## Completed and retained
 
+- [x] Existing-entry GloBird scorecard migration. Upgrade entries that predate
+  the optional scorecard mappings from one complete, unambiguous GloBird
+  entity pair, preserve explicit/partial mappings, and normalize the
+  integration's `missed` status to the retained `not_achieved` outcome so
+  Latest Actual Cost and Forecast Error are not permanently unavailable.
+
 - [x] Forecast-only GloBird feedback and scorecard: keep factual measured net
   cost separate from an optimistic forecast, assume the configured ZEROHERO
   credit and initially 75% of remaining planned export, freeze the daily

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from datetime import UTC, datetime, time, timedelta
+from datetime import UTC, date, datetime, time, timedelta
 from unittest.mock import AsyncMock
 from zoneinfo import ZoneInfo
 
@@ -20,6 +20,10 @@ from custom_components.home_energy_orchestrator.diagnostics import (
 )
 from custom_components.home_energy_orchestrator.models import SiteSnapshot
 from custom_components.home_energy_orchestrator.planner.export import ExportPlan
+from custom_components.home_energy_orchestrator.planner.forecast import (
+    ForecastDayRecord,
+    ForecastFeedbackState,
+)
 from custom_components.home_energy_orchestrator.planner.learning import DemandCycleSampler
 
 ENTRY_DATA = {
@@ -372,7 +376,7 @@ async def test_version_one_sign_booleans_migrate_locked(hass):
 
     assert await async_migrate_entry(hass, entry)
 
-    assert entry.version == 5
+    assert entry.version == 6
     assert entry.data["grid_power_positive_direction"] == "positive_export"
     assert entry.data["battery_power_positive_direction"] == "positive_discharge"
     assert entry.data["sign_conventions_verified"] is False
@@ -490,7 +494,7 @@ async def test_version_two_migration_disables_unconfirmed_automatic_charge(hass)
 
     assert await async_migrate_entry(hass, entry)
 
-    assert entry.version == 5
+    assert entry.version == 6
     assert entry.data["automatic_charge_enabled"] is False
     assert entry.data["free_charge_schedule_confirmed"] is False
     assert entry.data["automatic_export_limit_kwh"] == 15.0
@@ -516,7 +520,7 @@ async def test_version_three_migration_preserves_old_export_control_cap(hass):
 
     assert await async_migrate_entry(hass, entry)
 
-    assert entry.version == 5
+    assert entry.version == 6
     assert entry.data["export_allowance_kwh"] == 20.0
     assert entry.data["automatic_export_limit_kwh"] == 20.0
     assert entry.data["export_rate_window_start"] == "16:00:00"
@@ -541,9 +545,132 @@ async def test_version_four_migration_preserves_force_discharge_finish_as_offset
 
     assert await async_migrate_entry(hass, entry)
 
-    assert entry.version == 5
+    assert entry.version == 6
     assert entry.data["force_discharge_offset_minutes"] == 5.0
     assert entry.data["offpeak_export_rate_per_kwh"] == 0.0
+
+
+async def test_version_five_migration_discovers_complete_globird_scorecard_pair(hass):
+    globird = MockConfigEntry(domain="globird_ha")
+    globird.add_to_hass(hass)
+    registry = er.async_get(hass)
+    cost = registry.async_get_or_create(
+        "sensor",
+        "globird_ha",
+        "latest_daily_cost",
+        suggested_object_id="globird_energy_latest_daily_cost",
+        config_entry=globird,
+    )
+    status = registry.async_get_or_create(
+        "sensor",
+        "globird_ha",
+        "zerohero_status",
+        suggested_object_id="globird_energy_zerohero_status",
+        config_entry=globird,
+    )
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Existing scorecard site",
+        version=5,
+        data=ENTRY_DATA,
+    )
+    entry.add_to_hass(hass)
+
+    assert await async_migrate_entry(hass, entry)
+
+    assert entry.version == 6
+    assert entry.data["globird_latest_daily_cost_entity"] == cost.entity_id
+    assert entry.data["globird_zerohero_status_entity"] == status.entity_id
+
+
+async def test_version_five_migration_preserves_partial_globird_mapping(hass):
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Explicit scorecard site",
+        version=5,
+        data={
+            **ENTRY_DATA,
+            "globird_latest_daily_cost_entity": "sensor.user_selected_cost",
+        },
+    )
+    entry.add_to_hass(hass)
+
+    assert await async_migrate_entry(hass, entry)
+
+    assert entry.version == 6
+    assert entry.data["globird_latest_daily_cost_entity"] == "sensor.user_selected_cost"
+    assert "globird_zerohero_status_entity" not in entry.data
+
+
+async def test_version_five_migration_rejects_ambiguous_globird_accounts(hass):
+    registry = er.async_get(hass)
+    for suffix in ("one", "two"):
+        globird = MockConfigEntry(domain="globird_ha")
+        globird.add_to_hass(hass)
+        registry.async_get_or_create(
+            "sensor",
+            "globird_ha",
+            f"latest_daily_cost_{suffix}",
+            suggested_object_id=f"globird_{suffix}_latest_daily_cost",
+            config_entry=globird,
+        )
+        registry.async_get_or_create(
+            "sensor",
+            "globird_ha",
+            f"zerohero_status_{suffix}",
+            suggested_object_id=f"globird_{suffix}_zerohero_status",
+            config_entry=globird,
+        )
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Ambiguous scorecard site",
+        version=5,
+        data=ENTRY_DATA,
+    )
+    entry.add_to_hass(hass)
+
+    assert await async_migrate_entry(hass, entry)
+
+    assert entry.version == 6
+    assert "globird_latest_daily_cost_entity" not in entry.data
+    assert "globird_zerohero_status_entity" not in entry.data
+
+
+def test_scorecard_accepts_globird_missed_status(hass):
+    result_date = date(2026, 9, 16)
+    attributes = {
+        "latest_available_day": "2026/09/16",
+        "latest_available_day_complete": True,
+    }
+    hass.states.async_set("sensor.globird_cost", "2.00", attributes)
+    hass.states.async_set("sensor.globird_status", "missed", attributes)
+    coordinator = EnergyCoordinator(
+        hass,
+        {
+            "globird_latest_daily_cost_entity": "sensor.globird_cost",
+            "globird_zerohero_status_entity": "sensor.globird_status",
+        },
+        "globird-missed-test",
+    )
+    coordinator.forecast_feedback = ForecastFeedbackState(
+        current=ForecastDayRecord(date(2026, 9, 17)),
+        history=[
+            ForecastDayRecord(
+                result_date,
+                frozen_forecast_cost=1.25,
+                frozen_raw_forecast_cost=1.25,
+            )
+        ],
+    )
+    assert coordinator._match_retailer_scorecard()
+    assert coordinator.forecast_scorecard_status == "matched_credit_not_achieved"
+    assert coordinator.forecast_scorecard_date == result_date
+    record = coordinator.forecast_feedback.record_for(result_date)
+    assert record is not None
+    assert record.retailer_actual_cost == 2.0
+    assert record.forecast_error == 0.75
+    assert record.retailer_zerohero_status == "not_achieved"
+    coordinator.shutdown()
 
 
 async def test_ev_before_export_controls_are_integration_owned_and_persist(hass):
