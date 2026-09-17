@@ -13,7 +13,9 @@
       "key": "name",
       "order": 1,
       "page": "site",
-      "required": true
+      "reconfigure_label": "Site name",
+      "required": true,
+      "setup_label": "Site name"
     },
     {
       "default": false,
@@ -23,7 +25,9 @@
       "key": "configure_solar",
       "order": 2,
       "page": "site",
-      "required": true
+      "reconfigure_label": "Configure solar at this site",
+      "required": true,
+      "setup_label": "Configure solar at this site"
     },
     {
       "default": false,
@@ -33,7 +37,9 @@
       "key": "configure_ev",
       "order": 3,
       "page": "site",
-      "required": true
+      "reconfigure_label": "Configure EV charging at this site",
+      "required": true,
+      "setup_label": "Configure EV charging at this site"
     },
     {
       "default": null,
@@ -49,7 +55,9 @@
       "key": "battery_soc_entity",
       "order": 1,
       "page": "battery",
-      "required": true
+      "reconfigure_label": "Battery state of charge sensor",
+      "required": true,
+      "setup_label": "Battery state of charge sensor"
     },
     {
       "default": null,
@@ -65,7 +73,9 @@
       "key": "battery_power_entity",
       "order": 2,
       "page": "battery",
-      "required": false
+      "reconfigure_label": "Signed battery power sensor (fallback when separate charge/discharge sensors are unavailable)",
+      "required": false,
+      "setup_label": "Signed battery power sensor (fallback when separate charge/discharge sensors are unavailable)"
     },
     {
       "default": null,
@@ -81,7 +91,9 @@
       "key": "battery_charge_power_entity",
       "order": 3,
       "page": "battery",
-      "required": false
+      "reconfigure_label": "Battery charging-power magnitude sensor (optional; map with discharge)",
+      "required": false,
+      "setup_label": "Battery charging-power magnitude sensor (optional; map with discharge)"
     },
     {
       "default": null,
@@ -97,7 +109,9 @@
       "key": "battery_discharge_power_entity",
       "order": 4,
       "page": "battery",
-      "required": false
+      "reconfigure_label": "Battery discharging-power magnitude sensor (optional; map with charge)",
+      "required": false,
+      "setup_label": "Battery discharging-power magnitude sensor (optional; map with charge)"
     },
     {
       "default": "positive_charge",
@@ -115,7 +129,9 @@
       "key": "battery_power_positive_direction",
       "order": 5,
       "page": "battery",
-      "required": true
+      "reconfigure_label": "Signed battery sensor positive direction",
+      "required": true,
+      "setup_label": "Signed battery sensor positive direction"
     },
     {
       "default": null,
@@ -131,7 +147,9 @@
       "key": "battery_capacity_entity",
       "order": 6,
       "page": "battery",
-      "required": false
+      "reconfigure_label": "Battery potential capacity sensor (optional)",
+      "required": false,
+      "setup_label": "Battery potential capacity sensor (optional)"
     },
     {
       "default": null,
@@ -143,7 +161,9 @@
       "key": "battery_capacity_kwh",
       "order": 7,
       "page": "battery",
-      "required": false
+      "reconfigure_label": "Fallback battery capacity (kWh; used only when live capacity is unavailable)",
+      "required": false,
+      "setup_label": "Fallback battery capacity (kWh; used only when live capacity is unavailable)"
     },
     {
       "default": 10.0,
@@ -155,7 +175,9 @@
       "key": "battery_floor_percent",
       "order": 8,
       "page": "battery",
-      "required": true
+      "reconfigure_label": "Minimum battery state of charge (%)",
+      "required": true,
+      "setup_label": "Minimum battery state of charge (%)"
     },
     {
       "default": 0.0,
@@ -167,7 +189,9 @@
       "key": "reserve_kwh",
       "order": 9,
       "page": "battery",
-      "required": true
+      "reconfigure_label": "Additional protected energy reserve (kWh)",
+      "required": true,
+      "setup_label": "Additional protected energy reserve (kWh)"
     },
     {
       "default": 100.0,
@@ -179,7 +203,9 @@
       "key": "battery_free_window_target_percent",
       "order": 10,
       "page": "battery",
-      "required": true
+      "reconfigure_label": "Expected free-window home-battery target (%)",
+      "required": true,
+      "setup_label": "Expected free-window home-battery target (%)"
     },
     {
       "default": 95.0,
@@ -191,7 +217,9 @@
       "key": "battery_charge_efficiency_percent",
       "order": 11,
       "page": "battery",
-      "required": true
+      "reconfigure_label": "Home-battery charging efficiency (%)",
+      "required": true,
+      "setup_label": "Home-battery charging efficiency (%)"
     },
     {
       "default": 95.0,
@@ -203,7 +231,9 @@
       "key": "discharge_efficiency_percent",
       "order": 12,
       "page": "battery",
-      "required": true
+      "reconfigure_label": "Battery discharge efficiency (%)",
+      "required": true,
+      "setup_label": "Battery discharge efficiency (%)"
     },
     {
       "default": null,
@@ -219,7 +249,9 @@
       "key": "foxess_work_mode_entity",
       "order": 1,
       "page": "inverter",
-      "required": false
+      "reconfigure_label": "FoxESS work-mode selector (required for local battery control or diagnostics)",
+      "required": false,
+      "setup_label": "FoxESS work-mode selector (required for local battery control or diagnostics)"
     },
     {
       "default": null,
@@ -235,7 +267,9 @@
       "key": "foxess_force_charge_power_entity",
       "order": 2,
       "page": "inverter",
-      "required": false
+      "reconfigure_label": "FoxESS force-charge power number (required for automatic charging or diagnostics)",
+      "required": false,
+      "setup_label": "FoxESS force-charge power number (required for automatic charging or diagnostics)"
     },
     {
       "default": null,
@@ -251,7 +285,9 @@
       "key": "foxess_force_discharge_power_entity",
       "order": 3,
       "page": "inverter",
-      "required": false
+      "reconfigure_label": "FoxESS force-discharge power number (required for ZEROHERO export or diagnostics)",
+      "required": false,
+      "setup_label": "FoxESS force-discharge power number (required for ZEROHERO export or diagnostics)"
     },
     {
       "default": 0.0,
@@ -263,7 +299,9 @@
       "key": "inverter_charge_limit_kw",
       "order": 4,
       "page": "inverter",
-      "required": true
+      "reconfigure_label": "Inverter charge limit (kW; 0 if not commissioned)",
+      "required": true,
+      "setup_label": "Inverter charge limit (kW; 0 if not commissioned)"
     },
     {
       "default": 0.0,
@@ -275,7 +313,9 @@
       "key": "inverter_discharge_limit_kw",
       "order": 5,
       "page": "inverter",
-      "required": true
+      "reconfigure_label": "Inverter discharge limit (kW; 0 if not commissioned)",
+      "required": true,
+      "setup_label": "Inverter discharge limit (kW; 0 if not commissioned)"
     },
     {
       "default": 0.0,
@@ -287,7 +327,9 @@
       "key": "export_limit_kw",
       "order": 6,
       "page": "inverter",
-      "required": true
+      "reconfigure_label": "Regulated export limit (kW; 0 if not commissioned)",
+      "required": true,
+      "setup_label": "Regulated export limit (kW; 0 if not commissioned)"
     },
     {
       "default": null,
@@ -303,7 +345,9 @@
       "key": "grid_power_entity",
       "order": 1,
       "page": "grid",
-      "required": true
+      "reconfigure_label": "Signed grid power sensor",
+      "required": true,
+      "setup_label": "Signed grid power sensor"
     },
     {
       "default": "positive_import",
@@ -321,7 +365,9 @@
       "key": "grid_power_positive_direction",
       "order": 2,
       "page": "grid",
-      "required": true
+      "reconfigure_label": "Grid power sensor positive direction",
+      "required": true,
+      "setup_label": "Grid power sensor positive direction"
     },
     {
       "default": 1,
@@ -333,7 +379,9 @@
       "key": "site_phase_count",
       "order": 3,
       "page": "grid",
-      "required": true
+      "reconfigure_label": "Site supply phase count",
+      "required": true,
+      "setup_label": "Site supply phase count"
     },
     {
       "default": 0.0,
@@ -345,7 +393,9 @@
       "key": "service_import_limit_a",
       "order": 4,
       "page": "grid",
-      "required": true
+      "reconfigure_label": "Service import limit per phase (A; 0 if not commissioned)",
+      "required": true,
+      "setup_label": "Service import limit per phase (A; 0 if not commissioned)"
     },
     {
       "default": null,
@@ -364,7 +414,9 @@
       "key": "site_grid_current_entity",
       "order": 5,
       "page": "grid",
-      "required": false
+      "reconfigure_label": "Most-loaded phase signed grid current (A; required for multiphase EV control)",
+      "required": false,
+      "setup_label": "Most-loaded phase signed grid current (A; required for multiphase EV control)"
     },
     {
       "default": "positive_import",
@@ -382,7 +434,9 @@
       "key": "site_grid_current_positive_direction",
       "order": 6,
       "page": "grid",
-      "required": true
+      "reconfigure_label": "Site grid-current sensor positive direction",
+      "required": true,
+      "setup_label": "Site grid-current sensor positive direction"
     },
     {
       "default": 1.0,
@@ -394,7 +448,9 @@
       "key": "site_grid_headroom_current_a",
       "order": 7,
       "page": "grid",
-      "required": true
+      "reconfigure_label": "Service-current safety headroom per phase (A)",
+      "required": true,
+      "setup_label": "Service-current safety headroom per phase (A)"
     },
     {
       "default": 90.0,
@@ -406,7 +462,9 @@
       "key": "telemetry_max_age_seconds",
       "order": 8,
       "page": "grid",
-      "required": true
+      "reconfigure_label": "Maximum age for normalized site telemetry (seconds)",
+      "required": true,
+      "setup_label": "Maximum age for normalized site telemetry (seconds)"
     },
     {
       "default": 0.03,
@@ -418,7 +476,9 @@
       "key": "zero_import_threshold_kw",
       "order": 9,
       "page": "grid",
-      "required": true
+      "reconfigure_label": "ZEROHERO average import threshold (kWh/hour; contract says 0.03)",
+      "required": true,
+      "setup_label": "ZEROHERO average import threshold (kWh/hour; contract says 0.03)"
     },
     {
       "default": 5.0,
@@ -430,7 +490,9 @@
       "key": "zero_import_confirm_minutes",
       "order": 10,
       "page": "grid",
-      "required": true
+      "reconfigure_label": "Local telemetry debounce only (minutes)",
+      "required": true,
+      "setup_label": "Local telemetry debounce only (minutes)"
     },
     {
       "default": null,
@@ -446,7 +508,9 @@
       "key": "daily_import_entity",
       "order": 1,
       "page": "tariff",
-      "required": false
+      "reconfigure_label": "Cumulative import today sensor (optional)",
+      "required": false,
+      "setup_label": "Cumulative import today sensor (optional)"
     },
     {
       "default": null,
@@ -462,7 +526,9 @@
       "key": "globird_latest_daily_cost_entity",
       "order": 2,
       "page": "tariff",
-      "required": false
+      "reconfigure_label": "GloBird latest completed daily-cost sensor (optional)",
+      "required": false,
+      "setup_label": "GloBird latest completed daily-cost sensor (optional)"
     },
     {
       "default": null,
@@ -478,7 +544,9 @@
       "key": "globird_zerohero_status_entity",
       "order": 3,
       "page": "tariff",
-      "required": false
+      "reconfigure_label": "GloBird latest ZEROHERO result sensor (optional)",
+      "required": false,
+      "setup_label": "GloBird latest ZEROHERO result sensor (optional)"
     },
     {
       "default": 2.035,
@@ -490,7 +558,9 @@
       "key": "daily_charge",
       "order": 4,
       "page": "tariff",
-      "required": true
+      "reconfigure_label": "Daily supply charge ($/day)",
+      "required": true,
+      "setup_label": "Daily supply charge ($/day)"
     },
     {
       "default": 0.594,
@@ -502,7 +572,9 @@
       "key": "peak_rate_per_kwh",
       "order": 5,
       "page": "tariff",
-      "required": true
+      "reconfigure_label": "Peak import rate ($/kWh)",
+      "required": true,
+      "setup_label": "Peak import rate ($/kWh)"
     },
     {
       "default": 0.0,
@@ -514,7 +586,9 @@
       "key": "offpeak_rate_per_kwh",
       "order": 6,
       "page": "tariff",
-      "required": true
+      "reconfigure_label": "Off-peak rate within allowance ($/kWh)",
+      "required": true,
+      "setup_label": "Off-peak rate within allowance ($/kWh)"
     },
     {
       "default": 0.308,
@@ -526,7 +600,9 @@
       "key": "offpeak_balance_rate_per_kwh",
       "order": 7,
       "page": "tariff",
-      "required": true
+      "reconfigure_label": "Off-peak rate above allowance ($/kWh)",
+      "required": true,
+      "setup_label": "Off-peak rate above allowance ($/kWh)"
     },
     {
       "default": 0.528,
@@ -538,7 +614,9 @@
       "key": "shoulder_rate_per_kwh",
       "order": 8,
       "page": "tariff",
-      "required": true
+      "reconfigure_label": "Shoulder import rate ($/kWh)",
+      "required": true,
+      "setup_label": "Shoulder import rate ($/kWh)"
     },
     {
       "default": 0.0,
@@ -550,7 +628,9 @@
       "key": "export_rate_per_kwh",
       "order": 9,
       "page": "tariff",
-      "required": true
+      "reconfigure_label": "Peak Solar/GenerationFeedin ($/kWh)",
+      "required": true,
+      "setup_label": "Peak Solar/GenerationFeedin ($/kWh)"
     },
     {
       "default": 0.0,
@@ -562,7 +642,9 @@
       "key": "offpeak_export_rate_per_kwh",
       "order": 10,
       "page": "tariff",
-      "required": true
+      "reconfigure_label": "Off-peak Solar/GenerationFeedin ($/kWh)",
+      "required": true,
+      "setup_label": "Off-peak Solar/GenerationFeedin ($/kWh)"
     },
     {
       "default": 0.1,
@@ -574,7 +656,9 @@
       "key": "super_export_rate_per_kwh",
       "order": 11,
       "page": "tariff",
-      "required": true
+      "reconfigure_label": "Additional ZEROHERO boost rate ($/kWh)",
+      "required": true,
+      "setup_label": "Additional ZEROHERO boost rate ($/kWh)"
     },
     {
       "default": 1.0,
@@ -586,7 +670,9 @@
       "key": "zerohero_daily_credit",
       "order": 12,
       "page": "tariff",
-      "required": true
+      "reconfigure_label": "ZEROHERO daily credit ($)",
+      "required": true,
+      "setup_label": "ZEROHERO daily credit ($)"
     },
     {
       "default": 50.0,
@@ -598,7 +684,9 @@
       "key": "daily_free_allowance_kwh",
       "order": 13,
       "page": "tariff",
-      "required": true
+      "reconfigure_label": "Daily free-import allowance (kWh)",
+      "required": true,
+      "setup_label": "Daily free-import allowance (kWh)"
     },
     {
       "default": 15.0,
@@ -610,7 +698,9 @@
       "key": "export_allowance_kwh",
       "order": 14,
       "page": "tariff",
-      "required": true
+      "reconfigure_label": "Maximum export eligible for additional boost per day (kWh)",
+      "required": true,
+      "setup_label": "Maximum export eligible for additional boost per day (kWh)"
     },
     {
       "default": 15.0,
@@ -622,7 +712,9 @@
       "key": "automatic_export_limit_kwh",
       "order": 15,
       "page": "tariff",
-      "required": true
+      "reconfigure_label": "Maximum automatic export per day (kWh)",
+      "required": true,
+      "setup_label": "Maximum automatic export per day (kWh)"
     },
     {
       "default": "16:00:00",
@@ -632,7 +724,9 @@
       "key": "peak_window_start",
       "order": 16,
       "page": "tariff",
-      "required": true
+      "reconfigure_label": "Peak window start",
+      "required": true,
+      "setup_label": "Peak window start"
     },
     {
       "default": "23:00:00",
@@ -642,7 +736,9 @@
       "key": "peak_window_end",
       "order": 17,
       "page": "tariff",
-      "required": true
+      "reconfigure_label": "Peak window end",
+      "required": true,
+      "setup_label": "Peak window end"
     },
     {
       "default": "12:01:00",
@@ -652,7 +748,9 @@
       "key": "free_charge_window_start",
       "order": 18,
       "page": "tariff",
-      "required": true
+      "reconfigure_label": "Battery free-power window start (confirm the AM/PM value carefully)",
+      "required": true,
+      "setup_label": "Battery free-power window start (confirm the AM/PM value carefully)"
     },
     {
       "default": "14:59:00",
@@ -662,7 +760,9 @@
       "key": "free_charge_window_end",
       "order": 19,
       "page": "tariff",
-      "required": true
+      "reconfigure_label": "Battery free-power window end (confirm the AM/PM value carefully)",
+      "required": true,
+      "setup_label": "Battery free-power window end (confirm the AM/PM value carefully)"
     },
     {
       "default": "18:00:00",
@@ -672,7 +772,9 @@
       "key": "bonus_window_start",
       "order": 20,
       "page": "tariff",
-      "required": true
+      "reconfigure_label": "Bonus zero-import window start",
+      "required": true,
+      "setup_label": "Bonus zero-import window start"
     },
     {
       "default": "21:00:00",
@@ -682,7 +784,9 @@
       "key": "bonus_window_end",
       "order": 21,
       "page": "tariff",
-      "required": true
+      "reconfigure_label": "Bonus zero-import window end",
+      "required": true,
+      "setup_label": "Bonus zero-import window end"
     },
     {
       "default": 1.0,
@@ -694,7 +798,9 @@
       "key": "force_discharge_offset_minutes",
       "order": 22,
       "page": "tariff",
-      "required": true
+      "reconfigure_label": "ZEROHERO forced-discharge finish offset (minutes)",
+      "required": true,
+      "setup_label": "ZEROHERO forced-discharge finish offset (minutes)"
     },
     {
       "default": "16:00:00",
@@ -704,7 +810,9 @@
       "key": "export_rate_window_start",
       "order": 23,
       "page": "tariff",
-      "required": true
+      "reconfigure_label": "Standard Solar/Generation feed-in rate start",
+      "required": true,
+      "setup_label": "Standard Solar/Generation feed-in rate start"
     },
     {
       "default": "23:00:00",
@@ -714,7 +822,9 @@
       "key": "export_rate_window_end",
       "order": 24,
       "page": "tariff",
-      "required": true
+      "reconfigure_label": "Standard Solar/Generation feed-in rate end",
+      "required": true,
+      "setup_label": "Standard Solar/Generation feed-in rate end"
     },
     {
       "default": null,
@@ -730,7 +840,9 @@
       "key": "solar_power_entity",
       "order": 1,
       "page": "solar",
-      "required": false
+      "reconfigure_label": "AC-coupled solar power sensor (optional)",
+      "required": false,
+      "setup_label": "AC-coupled solar power sensor (optional)"
     },
     {
       "default": "generation_positive",
@@ -748,7 +860,9 @@
       "key": "solar_power_generation_direction",
       "order": 2,
       "page": "solar",
-      "required": true
+      "reconfigure_label": "Solar sensor generation direction",
+      "required": true,
+      "setup_label": "Solar sensor generation direction"
     },
     {
       "default": null,
@@ -764,7 +878,9 @@
       "key": "house_load_entity",
       "order": 1,
       "page": "house",
-      "required": false
+      "reconfigure_label": "Protected house-load sensor (optional; non-heater base load at the Working Single Phase Pilot Site)",
+      "required": false,
+      "setup_label": "Protected house-load sensor (optional; non-heater base load at the Working Single Phase Pilot Site)"
     },
     {
       "default": false,
@@ -774,7 +890,9 @@
       "key": "house_load_includes_ev",
       "order": 2,
       "page": "house",
-      "required": true
+      "reconfigure_label": "Mapped house-load sensor includes EV charging",
+      "required": true,
+      "setup_label": "Mapped house-load sensor includes EV charging"
     },
     {
       "default": null,
@@ -790,7 +908,9 @@
       "key": "heater_power_entity",
       "order": 3,
       "page": "house",
-      "required": false
+      "reconfigure_label": "Separately metered heater power sensor (optional)",
+      "required": false,
+      "setup_label": "Separately metered heater power sensor (optional)"
     },
     {
       "default": 17.5,
@@ -802,7 +922,9 @@
       "key": "house_learning_fallback_kwh",
       "order": 4,
       "page": "house",
-      "required": true
+      "reconfigure_label": "Occupied protected-cycle fallback (kWh)",
+      "required": true,
+      "setup_label": "Occupied protected-cycle fallback (kWh)"
     },
     {
       "default": 6.5,
@@ -814,7 +936,9 @@
       "key": "house_away_fallback_kwh",
       "order": 5,
       "page": "house",
-      "required": true
+      "reconfigure_label": "Away protected-cycle fallback (kWh)",
+      "required": true,
+      "setup_label": "Away protected-cycle fallback (kWh)"
     },
     {
       "default": 6.0,
@@ -826,7 +950,9 @@
       "key": "house_away_confirmation_hours",
       "order": 6,
       "page": "house",
-      "required": true
+      "reconfigure_label": "All-person away confirmation (hours)",
+      "required": true,
+      "setup_label": "All-person away confirmation (hours)"
     },
     {
       "default": "auto",
@@ -845,7 +971,9 @@
       "key": "house_occupancy_mode",
       "order": 7,
       "page": "house",
-      "required": true
+      "reconfigure_label": "House-energy occupancy policy",
+      "required": true,
+      "setup_label": "House-energy occupancy policy"
     },
     {
       "default": null,
@@ -861,7 +989,9 @@
       "key": "ev_soc_entity",
       "order": 1,
       "page": "car",
-      "required": false
+      "reconfigure_label": "EV state of charge sensor (optional)",
+      "required": false,
+      "setup_label": "EV state of charge sensor (optional)"
     },
     {
       "default": null,
@@ -874,7 +1004,9 @@
       "key": "ev_at_home_entity",
       "order": 2,
       "page": "car",
-      "required": false
+      "reconfigure_label": "EV at-home evidence entity (required when mandatory EV baseline is non-zero)",
+      "required": false,
+      "setup_label": "EV at-home evidence entity (required when mandatory EV baseline is non-zero)"
     },
     {
       "default": null,
@@ -887,7 +1019,9 @@
       "key": "ev_cable_connected_entity",
       "order": 3,
       "page": "car",
-      "required": false
+      "reconfigure_label": "EV cable-connected entity (required when mandatory EV baseline is non-zero)",
+      "required": false,
+      "setup_label": "EV cable-connected entity (required when mandatory EV baseline is non-zero)"
     },
     {
       "default": null,
@@ -903,7 +1037,9 @@
       "key": "ev_charging_state_entity",
       "order": 4,
       "page": "car",
-      "required": false
+      "reconfigure_label": "Tessie charging-state sensor",
+      "required": false,
+      "setup_label": "Tessie charging-state sensor"
     },
     {
       "default": null,
@@ -919,7 +1055,9 @@
       "key": "ev_actual_current_entity",
       "order": 5,
       "page": "car",
-      "required": false
+      "reconfigure_label": "Tessie actual charging-current sensor",
+      "required": false,
+      "setup_label": "Tessie actual charging-current sensor"
     },
     {
       "default": null,
@@ -935,7 +1073,9 @@
       "key": "ev_stored_energy_entity",
       "order": 6,
       "page": "car",
-      "required": false
+      "reconfigure_label": "Tessie stored-energy sensor",
+      "required": false,
+      "setup_label": "Tessie stored-energy sensor"
     },
     {
       "default": null,
@@ -951,7 +1091,9 @@
       "key": "ev_lifetime_energy_entity",
       "order": 7,
       "page": "car",
-      "required": false
+      "reconfigure_label": "Tessie cumulative lifetime energy-used sensor (optional driving learning)",
+      "required": false,
+      "setup_label": "Tessie cumulative lifetime energy-used sensor (optional driving learning)"
     },
     {
       "default": null,
@@ -967,7 +1109,9 @@
       "key": "ev_current_limit_entity",
       "order": 1,
       "page": "charger",
-      "required": false
+      "reconfigure_label": "Tessie writable charging-current number",
+      "required": false,
+      "setup_label": "Tessie writable charging-current number"
     },
     {
       "default": null,
@@ -983,7 +1127,9 @@
       "key": "ev_charge_limit_entity",
       "order": 2,
       "page": "charger",
-      "required": false
+      "reconfigure_label": "Tessie writable charge-limit number",
+      "required": false,
+      "setup_label": "Tessie writable charge-limit number"
     },
     {
       "default": null,
@@ -999,7 +1145,9 @@
       "key": "ev_charge_switch_entity",
       "order": 3,
       "page": "charger",
-      "required": false
+      "reconfigure_label": "Tessie charge switch",
+      "required": false,
+      "setup_label": "Tessie charge switch"
     },
     {
       "default": "direct_evse",
@@ -1017,7 +1165,9 @@
       "key": "ev_charge_path",
       "order": 4,
       "page": "charger",
-      "required": true
+      "reconfigure_label": "EV charging supply",
+      "required": true,
+      "setup_label": "EV charging supply"
     },
     {
       "default": null,
@@ -1033,7 +1183,9 @@
       "key": "ev_smart_socket_entity",
       "order": 5,
       "page": "charger",
-      "required": false
+      "reconfigure_label": "Smart-socket power switch (required only for smart-socket supply)",
+      "required": false,
+      "setup_label": "Smart-socket power switch (required only for smart-socket supply)"
     },
     {
       "default": 0.0,
@@ -1045,7 +1197,9 @@
       "key": "ev_smart_socket_current_limit_a",
       "order": 6,
       "page": "charger",
-      "required": true
+      "reconfigure_label": "Commissioned smart-socket current limit (A; 0 when unused)",
+      "required": true,
+      "setup_label": "Commissioned smart-socket current limit (A; 0 when unused)"
     },
     {
       "default": 15.0,
@@ -1057,7 +1211,9 @@
       "key": "ev_smart_socket_settle_seconds",
       "order": 7,
       "page": "charger",
-      "required": true
+      "reconfigure_label": "Smart-socket connector settle time (seconds)",
+      "required": true,
+      "setup_label": "Smart-socket connector settle time (seconds)"
     },
     {
       "default": 300.0,
@@ -1069,7 +1225,9 @@
       "key": "ev_smart_socket_retry_seconds",
       "order": 8,
       "page": "charger",
-      "required": true
+      "reconfigure_label": "Smart-socket staged-current retry interval (seconds)",
+      "required": true,
+      "setup_label": "Smart-socket staged-current retry interval (seconds)"
     },
     {
       "default": false,
@@ -1079,7 +1237,9 @@
       "key": "ev_smart_socket_power_switching",
       "order": 9,
       "page": "charger",
-      "required": true
+      "reconfigure_label": "Allow zero-demand smart-socket power switching outside the free window",
+      "required": true,
+      "setup_label": "Allow zero-demand smart-socket power switching outside the free window"
     },
     {
       "default": 230.0,
@@ -1091,7 +1251,9 @@
       "key": "ev_voltage",
       "order": 10,
       "page": "charger",
-      "required": true
+      "reconfigure_label": "EV charging voltage (V)",
+      "required": true,
+      "setup_label": "EV charging voltage (V)"
     },
     {
       "default": 1,
@@ -1103,7 +1265,9 @@
       "key": "ev_phase_count",
       "order": 11,
       "page": "charger",
-      "required": true
+      "reconfigure_label": "EV charging phase count",
+      "required": true,
+      "setup_label": "EV charging phase count"
     },
     {
       "default": 0.0,
@@ -1115,7 +1279,9 @@
       "key": "ev_min_current",
       "order": 12,
       "page": "charger",
-      "required": true
+      "reconfigure_label": "Commissioned EV minimum current (A)",
+      "required": true,
+      "setup_label": "Commissioned EV minimum current (A)"
     },
     {
       "default": 0.0,
@@ -1127,7 +1293,9 @@
       "key": "ev_max_current",
       "order": 13,
       "page": "charger",
-      "required": true
+      "reconfigure_label": "Commissioned EV maximum current (A)",
+      "required": true,
+      "setup_label": "Commissioned EV maximum current (A)"
     },
     {
       "default": false,
@@ -1137,7 +1305,9 @@
       "key": "ev_control_commissioned",
       "order": 14,
       "page": "charger",
-      "required": true
+      "reconfigure_label": "EV mappings and electrical limits commissioned",
+      "required": true,
+      "setup_label": "EV mappings and electrical limits commissioned"
     },
     {
       "default": "auto",
@@ -1156,7 +1326,9 @@
       "key": "ev_location_mode",
       "order": 1,
       "page": "ev_policies",
-      "required": true
+      "reconfigure_label": "EV location policy",
+      "required": true,
+      "setup_label": "EV location policy"
     },
     {
       "default": "ev",
@@ -1174,7 +1346,9 @@
       "key": "ev_free_window_priority",
       "order": 2,
       "page": "ev_policies",
-      "required": true
+      "reconfigure_label": "Free-window charging priority",
+      "required": true,
+      "setup_label": "Free-window charging priority"
     },
     {
       "default": 90.0,
@@ -1186,7 +1360,9 @@
       "key": "ev_free_window_charge_limit_percent",
       "order": 3,
       "page": "ev_policies",
-      "required": true
+      "reconfigure_label": "Free-window EV charge target (%)",
+      "required": true,
+      "setup_label": "Free-window EV charge target (%)"
     },
     {
       "default": 1.0,
@@ -1198,7 +1374,9 @@
       "key": "ev_free_window_minimum_current_a",
       "order": 4,
       "page": "ev_policies",
-      "required": true
+      "reconfigure_label": "Guaranteed free-window EV current (A)",
+      "required": true,
+      "setup_label": "Guaranteed free-window EV current (A)"
     },
     {
       "default": 5.0,
@@ -1210,7 +1388,9 @@
       "key": "ev_free_window_settle_minutes",
       "order": 5,
       "page": "ev_policies",
-      "required": true
+      "reconfigure_label": "Battery-charging settle time before house-priority control (minutes)",
+      "required": true,
+      "setup_label": "Battery-charging settle time before house-priority control (minutes)"
     },
     {
       "default": 2.0,
@@ -1222,7 +1402,9 @@
       "key": "ev_direct_limit_headroom_percent",
       "order": 6,
       "page": "ev_policies",
-      "required": true
+      "reconfigure_label": "Powered-connector charge-limit headroom (%)",
+      "required": true,
+      "setup_label": "Powered-connector charge-limit headroom (%)"
     },
     {
       "default": 12.0,
@@ -1234,7 +1416,9 @@
       "key": "ev_charge_to_full_max_hours",
       "order": 7,
       "page": "ev_policies",
-      "required": true
+      "reconfigure_label": "Charge to Full automatic timeout (hours)",
+      "required": true,
+      "setup_label": "Charge to Full automatic timeout (hours)"
     },
     {
       "default": 90.0,
@@ -1246,7 +1430,9 @@
       "key": "ev_charge_efficiency_percent",
       "order": 8,
       "page": "ev_policies",
-      "required": true
+      "reconfigure_label": "EV wall-to-battery charging efficiency (%)",
+      "required": true,
+      "setup_label": "EV wall-to-battery charging efficiency (%)"
     },
     {
       "default": 20.0,
@@ -1258,7 +1444,9 @@
       "key": "ev_arrival_reserve_soc_percent",
       "order": 9,
       "page": "ev_policies",
-      "required": true
+      "reconfigure_label": "EV learned-policy arrival reserve (%)",
+      "required": true,
+      "setup_label": "EV learned-policy arrival reserve (%)"
     },
     {
       "default": 14,
@@ -1270,7 +1458,9 @@
       "key": "ev_learning_minimum_samples",
       "order": 10,
       "page": "ev_policies",
-      "required": true
+      "reconfigure_label": "EV driving samples required for P85 learning",
+      "required": true,
+      "setup_label": "EV driving samples required for P85 learning"
     },
     {
       "default": true,
@@ -1280,7 +1470,9 @@
       "key": "ev_allowance_guard_enabled",
       "order": 11,
       "page": "ev_policies",
-      "required": true
+      "reconfigure_label": "Keep free-window EV charging within the free-energy allowance",
+      "required": true,
+      "setup_label": "Keep free-window EV charging within the free-energy allowance"
     },
     {
       "default": 0.0,
@@ -1292,7 +1484,9 @@
       "key": "ev_allowance_safety_margin_kwh",
       "order": 12,
       "page": "ev_policies",
-      "required": true
+      "reconfigure_label": "Free-energy allowance safety margin (kWh)",
+      "required": true,
+      "setup_label": "Free-energy allowance safety margin (kWh)"
     },
     {
       "default": false,
@@ -1302,7 +1496,9 @@
       "key": "ev_solar_spill_enabled",
       "order": 13,
       "page": "ev_policies",
-      "required": true
+      "reconfigure_label": "Enable measured solar-spill EV charging",
+      "required": true,
+      "setup_label": "Enable measured solar-spill EV charging"
     },
     {
       "default": 100.0,
@@ -1314,7 +1510,9 @@
       "key": "ev_solar_spill_battery_soc_percent",
       "order": 14,
       "page": "ev_policies",
-      "required": true
+      "reconfigure_label": "Battery SoC required for solar-spill charging (%)",
+      "required": true,
+      "setup_label": "Battery SoC required for solar-spill charging (%)"
     },
     {
       "default": false,
@@ -1324,7 +1522,9 @@
       "key": "ev_pre_free_backfill_enabled",
       "order": 15,
       "page": "ev_policies",
-      "required": true
+      "reconfigure_label": "Enable latest-start reserve-aware pre-free EV backfill",
+      "required": true,
+      "setup_label": "Enable latest-start reserve-aware pre-free EV backfill"
     },
     {
       "default": 0.0,
@@ -1336,7 +1536,9 @@
       "key": "ev_daily_backfill_energy_kwh",
       "order": 16,
       "page": "ev_policies",
-      "required": true
+      "reconfigure_label": "Daily EV energy protected for ready-by backfill (wall-side kWh; 0 disables)",
+      "required": true,
+      "setup_label": "Daily EV energy protected for ready-by backfill (wall-side kWh; 0 disables)"
     },
     {
       "default": "08:00:00",
@@ -1346,7 +1548,9 @@
       "key": "ev_daily_ready_time",
       "order": 17,
       "page": "ev_policies",
-      "required": true
+      "reconfigure_label": "Daily EV ready-by time (must be before free-power window)",
+      "required": true,
+      "setup_label": "Daily EV ready-by time (must be before free-power window)"
     },
     {
       "default": 0.0,
@@ -1358,7 +1562,9 @@
       "key": "ev_outside_inverter_percent",
       "order": 18,
       "page": "ev_policies",
-      "required": true
+      "reconfigure_label": "Maximum EV charging power outside free power (% of inverter output)",
+      "required": true,
+      "setup_label": "Maximum EV charging power outside free power (% of inverter output)"
     },
     {
       "default": 0.0,
@@ -1370,7 +1576,9 @@
       "key": "ev_backfill_buffer_minutes",
       "order": 19,
       "page": "ev_policies",
-      "required": true
+      "reconfigure_label": "Ready-by planning buffer (minutes)",
+      "required": true,
+      "setup_label": "Ready-by planning buffer (minutes)"
     },
     {
       "default": 90.0,
@@ -1382,7 +1590,9 @@
       "key": "ev_telemetry_max_age_seconds",
       "order": 20,
       "page": "ev_policies",
-      "required": true
+      "reconfigure_label": "Maximum age for outside-window power telemetry (seconds)",
+      "required": true,
+      "setup_label": "Maximum age for outside-window power telemetry (seconds)"
     },
     {
       "default": 30.0,
@@ -1394,7 +1604,9 @@
       "key": "ev_telemetry_max_skew_seconds",
       "order": 21,
       "page": "ev_policies",
-      "required": true
+      "reconfigure_label": "Maximum timestamp skew between outside-window power sensors (seconds)",
+      "required": true,
+      "setup_label": "Maximum timestamp skew between outside-window power sensors (seconds)"
     },
     {
       "default": 0.0,
@@ -1406,7 +1618,9 @@
       "key": "ev_protected_baseline_a",
       "order": 22,
       "page": "ev_policies",
-      "required": true
+      "reconfigure_label": "Mandatory connected-EV baseline until free power (A; 0 if none)",
+      "required": true,
+      "setup_label": "Mandatory connected-EV baseline until free power (A; 0 if none)"
     },
     {
       "default": false,
@@ -1416,7 +1630,9 @@
       "key": "ev_before_export_enabled",
       "order": 23,
       "page": "ev_policies",
-      "required": true
+      "reconfigure_label": "Prioritise EV before automatic export",
+      "required": true,
+      "setup_label": "Prioritise EV before automatic export"
     },
     {
       "default": 40.0,
@@ -1428,7 +1644,9 @@
       "key": "ev_before_export_soc_target_percent",
       "order": 24,
       "page": "ev_policies",
-      "required": true
+      "reconfigure_label": "Withhold export while EV SoC is below (%)",
+      "required": true,
+      "setup_label": "Withhold export while EV SoC is below (%)"
     },
     {
       "default": 120.0,
@@ -1440,7 +1658,9 @@
       "key": "ev_smart_recovery_no_power_seconds",
       "order": 1,
       "page": "recovery",
-      "required": true
+      "reconfigure_label": "No-power duration before one-shot recovery (seconds)",
+      "required": true,
+      "setup_label": "No-power duration before one-shot recovery (seconds)"
     },
     {
       "default": 60.0,
@@ -1452,7 +1672,9 @@
       "key": "ev_smart_recovery_current_confirm_seconds",
       "order": 2,
       "page": "recovery",
-      "required": true
+      "reconfigure_label": "Recovery current confirmation timeout (seconds)",
+      "required": true,
+      "setup_label": "Recovery current confirmation timeout (seconds)"
     },
     {
       "default": 15.0,
@@ -1464,7 +1686,9 @@
       "key": "ev_smart_recovery_socket_confirm_seconds",
       "order": 3,
       "page": "recovery",
-      "required": true
+      "reconfigure_label": "Recovery socket confirmation timeout (seconds)",
+      "required": true,
+      "setup_label": "Recovery socket confirmation timeout (seconds)"
     },
     {
       "default": 30.0,
@@ -1476,7 +1700,9 @@
       "key": "ev_smart_recovery_power_off_seconds",
       "order": 4,
       "page": "recovery",
-      "required": true
+      "reconfigure_label": "Recovery socket power-off duration (seconds)",
+      "required": true,
+      "setup_label": "Recovery socket power-off duration (seconds)"
     },
     {
       "default": 20.0,
@@ -1488,7 +1714,9 @@
       "key": "ev_smart_recovery_post_power_seconds",
       "order": 5,
       "page": "recovery",
-      "required": true
+      "reconfigure_label": "Recovery settle time after socket power-on (seconds)",
+      "required": true,
+      "setup_label": "Recovery settle time after socket power-on (seconds)"
     },
     {
       "default": 180.0,
@@ -1500,7 +1728,9 @@
       "key": "ev_smart_recovery_charging_confirm_seconds",
       "order": 6,
       "page": "recovery",
-      "required": true
+      "reconfigure_label": "Recovery charging confirmation timeout (seconds)",
+      "required": true,
+      "setup_label": "Recovery charging confirmation timeout (seconds)"
     },
     {
       "default": 120.0,
@@ -1512,7 +1742,9 @@
       "key": "ev_smart_recovery_rearm_seconds",
       "order": 7,
       "page": "recovery",
-      "required": true
+      "reconfigure_label": "Healthy charging duration before recovery rearm (seconds)",
+      "required": true,
+      "setup_label": "Healthy charging duration before recovery rearm (seconds)"
     },
     {
       "default": 0.5,
@@ -1524,7 +1756,9 @@
       "key": "ev_smart_recovery_idle_current_a",
       "order": 8,
       "page": "recovery",
-      "required": true
+      "reconfigure_label": "Maximum actual current treated as no charging during recovery (A)",
+      "required": true,
+      "setup_label": "Maximum actual current treated as no charging during recovery (A)"
     },
     {
       "default": false,
@@ -1534,7 +1768,9 @@
       "key": "sign_conventions_verified",
       "order": 1,
       "page": "verification",
-      "required": true
+      "reconfigure_label": "Verify electrical directions",
+      "required": true,
+      "setup_label": "Verify electrical directions"
     },
     {
       "default": "observer_only",
@@ -1553,7 +1789,9 @@
       "key": "foxess_control_owner",
       "order": 1,
       "page": "automation",
-      "required": true
+      "reconfigure_label": "FoxESS control owner (never mix cloud scheduler and Modbus)",
+      "required": true,
+      "setup_label": "FoxESS control owner (never mix cloud scheduler and Modbus)"
     },
     {
       "default": false,
@@ -1563,7 +1801,9 @@
       "key": "automatic_control_enabled",
       "order": 2,
       "page": "automation",
-      "required": true
+      "reconfigure_label": "Enable HEO Local Modbus master gate",
+      "required": true,
+      "setup_label": "Enable HEO Local Modbus master gate"
     },
     {
       "default": false,
@@ -1573,7 +1813,9 @@
       "key": "automatic_charge_enabled",
       "order": 3,
       "page": "automation",
-      "required": true
+      "reconfigure_label": "Enable automatic battery free charging (the exact schedule must be confirmed on the next screen)",
+      "required": true,
+      "setup_label": "Enable automatic battery free charging (the exact schedule must be confirmed on the next screen)"
     },
     {
       "default": false,
@@ -1583,7 +1825,9 @@
       "key": "automatic_export_enabled",
       "order": 4,
       "page": "automation",
-      "required": true
+      "reconfigure_label": "Enable automatic ZEROHERO export (Local Modbus owner only)",
+      "required": true,
+      "setup_label": "Enable automatic ZEROHERO export (Local Modbus owner only)"
     },
     {
       "default": false,
@@ -1593,7 +1837,9 @@
       "key": "ev_automatic_control_enabled",
       "order": 5,
       "page": "automation",
-      "required": true
+      "reconfigure_label": "Request automatic EV control (independent of FoxESS ownership)",
+      "required": true,
+      "setup_label": "Request automatic EV control (independent of FoxESS ownership)"
     },
     {
       "default": true,
@@ -1603,7 +1849,9 @@
       "key": "rehearsal_mode",
       "order": 6,
       "page": "automation",
-      "required": true
+      "reconfigure_label": "Safety Lock (ON = no hardware writes)",
+      "required": true,
+      "setup_label": "Safety Lock (ON = no hardware writes)"
     }
   ],
   "release_baseline": "0.12.26",

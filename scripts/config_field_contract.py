@@ -20,6 +20,13 @@ BASELINE_PATH = (
     / "maintainability"
     / "config-field-contract-v0.12.26.json"
 )
+TRANSLATION_PATH = (
+    REPOSITORY_ROOT
+    / "custom_components"
+    / "home_energy_orchestrator"
+    / "translations"
+    / "en.json"
+)
 
 
 def _json_value(value: Any) -> Any:
@@ -63,6 +70,11 @@ def build_config_field_contract() -> dict[str, Any]:
     """Return each actual wizard page field in display order."""
     flow = ConfigFlow()
     defaults = flow._apply_defaults({})  # noqa: SLF001
+    translations = json.loads(TRANSLATION_PATH.read_text(encoding="utf-8"))["config"][
+        "step"
+    ]
+    setup_labels = translations["user"]["data"]
+    reconfigure_labels = translations["reconfigure"]["data"]
     records: list[dict[str, Any]] = []
     for page, expected_keys in flow._PAGE_FIELDS.items():  # noqa: SLF001
         schema = flow._page_schema(page, defaults)  # noqa: SLF001
@@ -72,9 +84,12 @@ def build_config_field_contract() -> dict[str, Any]:
         for order, (marker, validator) in enumerate(schema.schema.items(), start=1):
             has_default, default = _default(marker)
             input_kind, selector_config = _input_contract(validator)
+            key = marker.schema
+            if key not in setup_labels or key not in reconfigure_labels:
+                raise ValueError(f"configuration label is missing for {key!r}")
             records.append(
                 {
-                    "key": marker.schema,
+                    "key": key,
                     "page": page,
                     "order": order,
                     "required": isinstance(marker, vol.Required),
@@ -82,6 +97,8 @@ def build_config_field_contract() -> dict[str, Any]:
                     "default": default,
                     "input_kind": input_kind,
                     "input_config": selector_config,
+                    "setup_label": setup_labels[key],
+                    "reconfigure_label": reconfigure_labels[key],
                 }
             )
     return {

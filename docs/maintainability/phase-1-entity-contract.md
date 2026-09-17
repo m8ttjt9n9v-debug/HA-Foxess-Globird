@@ -37,8 +37,8 @@ blast radius.
 ## Deliverables
 
 1. Immutable v0.12.26 identity and custom-attribute baselines.
-2. Immutable wizard-field page/order, required/default, input-kind and selector
-   configuration baseline.
+2. Immutable wizard-field page/order, required/default, input-kind, selector
+   configuration and setup/reconfigure label baseline.
 3. Mechanical drift checks run by the ordinary test suite.
 4. A semantic worksheet covering every entity and attribute: definition,
    producer, role, unit/sign/time basis, availability, vocabulary, audience,
