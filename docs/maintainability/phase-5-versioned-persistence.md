@@ -41,6 +41,10 @@ models and routes all active-controller persistence through separate typed
 repositories. Missing and malformed evidence retain their ownership-safety
 distinction.
 
+The sixth seam moves the manual-diagnostic restoration obligation into a typed
+state codec and repository while preserving its valid/missing/malformed safety
+status and bounded cleanup lifecycle.
+
 Work-item evidence:
 
 - [daily-import typed repository](work-item-daily-import-repository.md)
@@ -48,6 +52,7 @@ Work-item evidence:
 - [forecast-feedback typed repository](work-item-forecast-repository.md)
 - [house-learning typed repository](work-item-learning-repository.md)
 - [inverter-session typed repositories](work-item-inverter-session-repositories.md)
+- [manual-diagnostic typed repository](work-item-manual-test-repository.md)
 
 ## Exit gate
 
@@ -57,6 +62,5 @@ are documented and tested; all thirteen frozen Store contracts remain intact.
 
 ## Status
 
-In progress. Tariff meters, forecast feedback, house learning and inverter
-sessions are behind repository boundaries; EV sessions and manual diagnostics
-remain on their existing direct persistence paths.
+In progress. Every state family except the composite EV controller Store is
+behind a typed repository boundary.

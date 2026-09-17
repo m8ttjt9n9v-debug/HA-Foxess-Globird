@@ -34,6 +34,7 @@ from .const import (
 from .coordinator import EnergyCoordinator
 from .foxess_adapter import FoxessEntityMap, FoxessServiceAdapter
 from .normalise import power_to_kw
+from .persistence import TypedValueStoreRepository
 from .planner.foxess import (
     ControlDecision,
     FoxessCommand,
@@ -41,7 +42,12 @@ from .planner.foxess import (
     FoxessObservation,
     plan_foxess_commands,
 )
-from .planner.manual_test import ManualTestEstimate, estimate_charge, estimate_discharge
+from .planner.manual_test import (
+    ManualTestEstimate,
+    ManualTestPersistenceState,
+    estimate_charge,
+    estimate_discharge,
+)
 
 
 class ManualTestError(ValueError):
@@ -77,6 +83,14 @@ class ManualTestController:
             1,
             f"home_energy_orchestrator.{coordinator.entry_id}.manual_test",
             private=True,
+        )
+        self._repository = TypedValueStoreRepository(
+            self._store,
+            decode=lambda payload: ManualTestPersistenceState.from_payload(
+                payload,
+                maximum_restore_attempts=self.MAX_RESTORE_ATTEMPTS,
+            ),
+            encode=ManualTestPersistenceState.to_payload,
         )
 
     @property
@@ -378,50 +392,21 @@ class ManualTestController:
             self.coordinator.async_update_listeners()
 
     async def _async_load(self) -> None:
-        payload = await self._store.async_load()
-        if payload is None:
-            self.storage_status = "missing"
+        restored = await self._repository.async_load()
+        status = self._repository.last_restore_status
+        self.storage_status = {
+            "restored": "valid",
+            "missing": "missing",
+            "invalid": "malformed",
+        }[status]
+        if status != "restored" or restored.active_kind is None:
             return
-        if not isinstance(payload, dict):
-            self.storage_status = "malformed"
-            return
-        if payload.get("active_kind") is None:
-            if payload.get("phase", "idle") != "idle":
-                self.storage_status = "malformed"
-                return
-            self.storage_status = "valid"
-            return
-        try:
-            kind = str(payload["active_kind"])
-            phase = str(payload["phase"])
-            started_at = datetime.fromisoformat(str(payload["started_at"]))
-            ends_at = datetime.fromisoformat(str(payload["ends_at"]))
-            attempts = int(payload.get("restore_attempts", 0))
-            last_raw = payload.get("last_restore_at")
-            last_restore_at = datetime.fromisoformat(str(last_raw)) if last_raw else None
-            if (
-                kind not in {"charge", "discharge"}
-                or phase
-                not in {"starting", "running", "stopping", "restore_failed"}
-                or started_at.tzinfo is None
-                or ends_at.tzinfo is None
-                or ends_at < started_at
-                or attempts < 0
-                or attempts > self.MAX_RESTORE_ATTEMPTS
-                or last_restore_at is not None
-                and last_restore_at.tzinfo is None
-            ):
-                raise ValueError
-        except (KeyError, TypeError, ValueError):
-            self.storage_status = "malformed"
-            return
-        self.active_kind = kind
-        self.phase = phase
-        self.started_at = started_at
-        self.ends_at = ends_at
-        self.restore_attempts = attempts
-        self.last_restore_at = last_restore_at
-        self.storage_status = "valid"
+        self.active_kind = restored.active_kind
+        self.phase = restored.phase
+        self.started_at = restored.started_at
+        self.ends_at = restored.ends_at
+        self.restore_attempts = restored.restore_attempts
+        self.last_restore_at = restored.last_restore_at
 
     async def async_checkpoint_safe_idle(self) -> None:
         """Replace degraded evidence only after externally verified Self Use."""
@@ -432,17 +417,15 @@ class ManualTestController:
         self.storage_status = "valid"
 
     async def _async_save(self) -> None:
-        await self._store.async_save(
-            {
-                "active_kind": self.active_kind,
-                "phase": self.phase,
-                "started_at": self.started_at.isoformat() if self.started_at else None,
-                "ends_at": self.ends_at.isoformat() if self.ends_at else None,
-                "restore_attempts": self.restore_attempts,
-                "last_restore_at": (
-                    self.last_restore_at.isoformat() if self.last_restore_at else None
-                ),
-            }
+        await self._repository.async_save(
+            ManualTestPersistenceState(
+                active_kind=self.active_kind,
+                phase=self.phase,
+                started_at=self.started_at,
+                ends_at=self.ends_at,
+                restore_attempts=self.restore_attempts,
+                last_restore_at=self.last_restore_at,
+            )
         )
 
     def _require_gate(self) -> None:

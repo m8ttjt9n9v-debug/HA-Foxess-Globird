@@ -42,9 +42,33 @@ from custom_components.home_energy_orchestrator.planner.charge_session import (
     ChargeSessionState,
 )
 from custom_components.home_energy_orchestrator.planner.manual_test import (
+    ManualTestPersistenceState,
     estimate_charge,
     estimate_discharge,
 )
+
+
+def test_manual_test_payload_codec_round_trips_restoration_obligation() -> None:
+    state = ManualTestPersistenceState(
+        active_kind="discharge",
+        phase="stopping",
+        started_at=datetime(2026, 9, 13, 18, 42, tzinfo=UTC),
+        ends_at=datetime(2026, 9, 13, 20, 42, tzinfo=UTC),
+        restore_attempts=2,
+        last_restore_at=datetime(2026, 9, 13, 20, 43, tzinfo=UTC),
+    )
+
+    assert ManualTestPersistenceState.from_payload(
+        state.to_payload(), maximum_restore_attempts=3
+    ) == state
+
+
+def test_manual_test_payload_codec_rejects_active_kind_without_valid_phase() -> None:
+    with pytest.raises((KeyError, TypeError, ValueError)):
+        ManualTestPersistenceState.from_payload(
+            {"active_kind": "discharge", "phase": "idle"},
+            maximum_restore_attempts=3,
+        )
 
 
 def test_charge_preview_uses_free_allowance_before_balance_rate() -> None:
