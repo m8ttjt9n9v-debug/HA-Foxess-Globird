@@ -540,6 +540,83 @@ async def test_ev_outside_charge_stops_at_house_battery_floor(hass, monkeypatch)
     harness.close()
 
 
+@pytest.mark.freeze_time("2026-09-17 12:30:00+00:00")
+async def test_disconnected_ev_retains_read_only_learning_across_reload(
+    hass, monkeypatch
+) -> None:
+    """Connection gates actuation, not valid retained driving/capacity learning."""
+    harness = LifecycleHarness(hass)
+    _register_ev_services(harness, monkeypatch)
+    await _seed_foxess_states(harness, 60)
+    await _seed_ev_states(
+        harness,
+        soc=50,
+        actual_current=0,
+        requested_current=16,
+        stored_energy=45,
+        house_load=1,
+        site_current=1,
+    )
+    await harness.set_state("device_tracker.test_ev", "not_home")
+    await harness.set_state("binary_sensor.test_ev_cable", "off")
+    await harness.set_state("sensor.test_ev_charging", "disconnected")
+    await harness.set_state("switch.test_ev_charge", "off")
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Disconnected EV learning",
+        version=6,
+        data=_ev_entry_data(ev_learning_minimum_samples=14),
+    )
+    entry.add_to_hass(hass)
+    samples = [
+        {
+            "observed_at": datetime(2026, 9, day, 12, 0, tzinfo=UTC).isoformat(),
+            "energy_kwh": energy,
+        }
+        for day, energy in zip(range(11, 17), (12.0, 15.0, 9.0, 18.0, 11.0, 14.0))
+    ]
+    await harness.save_store(
+        f"home_energy_orchestrator.{entry.entry_id}.ev_control",
+        {"driving_history": {"samples": samples}},
+    )
+
+    await harness.setup(entry)
+    entry.runtime_data.async_update_listeners()
+    await hass.async_block_till_done()
+
+    controller = entry.runtime_data.ev_controller
+    assert controller.last_reason == "ev_location_not_confirmed_home"
+    assert len(controller.driving_history.samples) == 6
+    status = hass.states.get("sensor.home_energy_ev_driving_learning_status")
+    capacity = hass.states.get("sensor.home_energy_ev_usable_capacity")
+    gain = hass.states.get("sensor.home_energy_ev_free_window_soc_gain")
+    limit = hass.states.get("sensor.home_energy_ev_learned_charge_limit")
+    p85 = hass.states.get("sensor.home_energy_ev_driving_p85")
+    assert status is not None and status.state == "learning_full_window_fallback"
+    assert capacity is not None and capacity.state == "90.0"
+    assert gain is not None and gain.state == "33.12"
+    assert limit is not None and limit.state == "56.0"
+    assert p85 is not None and p85.state == "unknown"
+    assert harness.service_calls == ()
+
+    await harness.reload(entry)
+    entry.runtime_data.async_update_listeners()
+    await hass.async_block_till_done()
+
+    assert hass.states.get("sensor.home_energy_ev_driving_learning_status").state == (
+        "learning_full_window_fallback"
+    )
+    assert hass.states.get("sensor.home_energy_ev_usable_capacity").state == "90.0"
+    assert hass.states.get("sensor.home_energy_ev_learned_charge_limit").state == "56.0"
+    assert len(entry.runtime_data.ev_controller.driving_history.samples) == 6
+    assert harness.service_calls == ()
+    await harness.unload(entry)
+    hass.services.async_remove("number", "set_value")
+    hass.services.async_remove("switch", "turn_on")
+    hass.services.async_remove("switch", "turn_off")
+    harness.close()
+
+
 @pytest.mark.freeze_time("2026-09-17 02:30:00+00:00")
 async def test_safety_lock_blocks_all_commands_across_reload(hass) -> None:
     """Requested automation cannot write before or after a locked reload."""

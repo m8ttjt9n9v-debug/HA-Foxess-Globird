@@ -105,6 +105,12 @@ the deterministic suite without private hostnames, addresses or credentials.
 Current coverage and evidence gaps are tracked in the
 [incident fixture catalogue](incident-fixture-catalogue.md).
 
+The retained-sample EV learning incident now has a disconnected setup/reload
+system replay and focused exact-maturity, missing-input and unplug/replug
+coverage. Learning is evaluated from its own read-only evidence before the
+connection and Safety Lock actuation gates; these tests assert an empty command
+trace.
+
 ### OM-006 — Continuous enforcement
 
 - Run deterministic lifecycle fixtures on every pull request and release tag.
@@ -125,3 +131,10 @@ tests remain green.
 - Safety Lock, exclusive owner and bounded restoration invariants are enforced
   at system level.
 - No production policy or actuator behaviour changed during the phase.
+
+The ordinary-day restart-equivalence gate and every currently resolved
+incident class now have deterministic evidence. Phase 0 remains open only at
+the documented malformed-session ownership boundary: actuator feedback cannot
+prove ownership after wholly missing or unreadable persistence, so that
+behaviour requires the explicit safety decision recorded in
+[malformed session storage safety decision](malformed-session-storage.md).

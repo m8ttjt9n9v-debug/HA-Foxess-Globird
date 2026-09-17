@@ -172,7 +172,7 @@ Status here describes behavioral parity, not merely the presence of code.
 
 ## Confirmed bugs
 
-- [ ] Decouple EV driving and charge-limit learning from the live cable-
+- [x] Decouple EV driving and charge-limit learning from the live cable-
   connection gate. A disconnected vehicle currently causes the EV controller
   to return before evaluating otherwise valid stored-energy, SoC, actuator
   capability, free-window, and persisted driving-history evidence. The
@@ -186,7 +186,10 @@ Status here describes behavioral parity, not merely the presence of code.
   switch to the learned P85 result only at maturity. Add regression coverage
   for disconnected startup, unplug/replug, restart, stale source telemetry,
   missing actuator capabilities, pre-maturity fallback, and the exact maturity
-  boundary without weakening any EV command gate.
+  boundary without weakening any EV command gate. Completed on the
+  maintainability branch with a setup/reload lifecycle replay plus focused
+  source-recovery, actuator-metadata, unplug/replug, Safety Lock, and exact
+  13-to-14-sample maturity regressions; all command traces remain empty.
 
 - [x] Separate the automatic export-energy cap from the tariff's boosted-energy
   allowance. Preserve the old shared value as the new automatic cap during

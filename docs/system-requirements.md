@@ -103,6 +103,13 @@ free-window policy requires explicitly mapped capabilities equivalent to:
 - charge-limit state/control where the source policy requires it; and
 - an explicit charge-start switch.
 
+Daily-driving and general charge-limit learning is read-only. When its own SoC,
+stored-energy, charge-limit metadata, free-window configuration and retained
+history inputs are valid, HEO keeps the learning result available while the
+vehicle is away, unplugged or not charging. Location, cable and charging state
+continue to gate actuation absolutely; they do not erase valid learning
+evidence. Missing or invalid learning inputs still make the result unavailable.
+
 Single-phase sites may derive service current from signed grid power. A
 multiphase site must additionally provide signed current in amperes for the
 most-loaded service phase, positive for import. This may be a trustworthy

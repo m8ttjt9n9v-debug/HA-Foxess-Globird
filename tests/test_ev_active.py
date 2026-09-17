@@ -1456,6 +1456,103 @@ async def test_runtime_fails_closed_when_vehicle_soc_is_unavailable(
     assert calls == []
 
 
+@pytest.mark.parametrize(
+    ("sample_count", "expected_mode"),
+    ((13, "learning_full_window_fallback"), (14, "learned_p85")),
+)
+async def test_disconnected_learning_changes_only_at_exact_maturity(
+    hass: HomeAssistant,
+    sample_count: int,
+    expected_mode: str,
+) -> None:
+    _set_ev_states(hass)
+    hass.states.async_set("device_tracker.car", "not_home")
+    hass.states.async_set("binary_sensor.car_cable", "off")
+    hass.states.async_set("sensor.car_charging", "disconnected")
+    hass.states.async_set("switch.car_charge", "off")
+    controller = ActiveEvController(
+        hass,
+        _coordinator(_controller_config(ev_learning_minimum_samples=14)),
+    )
+    now = datetime(2026, 9, 17, 12, 30, tzinfo=UTC)
+    for index in range(sample_count):
+        controller.driving_history.add(
+            now - timedelta(days=sample_count - index),
+            8 + index,
+        )
+
+    await controller.async_reconcile(now)
+
+    assert controller.last_reason == "ev_location_not_confirmed_home"
+    assert controller.learned_charge_limit is not None
+    assert controller.learned_charge_limit.mode == expected_mode
+    assert (controller.learned_charge_limit.p85_daily_energy_kwh is not None) is (
+        sample_count == 14
+    )
+    assert controller.writes_performed == 0
+
+
+async def test_disconnected_learning_requires_current_source_and_actuator_metadata(
+    hass: HomeAssistant,
+) -> None:
+    _set_ev_states(hass)
+    hass.states.async_set("device_tracker.car", "not_home")
+    hass.states.async_set("binary_sensor.car_cable", "off")
+    hass.states.async_set("sensor.car_charging", "disconnected")
+    hass.states.async_set("switch.car_charge", "off")
+    controller = ActiveEvController(hass, _coordinator(_controller_config()))
+    now = datetime(2026, 9, 17, 12, 30, tzinfo=UTC)
+
+    hass.states.async_set("sensor.car_energy", "unavailable")
+    await controller.async_reconcile(now)
+    assert controller.learned_charge_limit is None
+
+    hass.states.async_set("sensor.car_energy", "30", {"unit_of_measurement": "kWh"})
+    hass.states.async_set("number.car_limit", "80")
+    await controller.async_reconcile(now + timedelta(seconds=30))
+    assert controller.learned_charge_limit is None
+
+    hass.states.async_set(
+        "number.car_limit",
+        "80",
+        {"min": 50, "max": 100, "step": 1},
+    )
+    await controller.async_reconcile(now + timedelta(seconds=60))
+    assert controller.learned_charge_limit is not None
+    assert controller.learned_charge_limit.mode == "learning_full_window_fallback"
+    assert controller.last_reason == "ev_location_not_confirmed_home"
+    assert controller.writes_performed == 0
+
+
+async def test_learning_survives_unplug_and_replug_without_bypassing_safety_lock(
+    hass: HomeAssistant,
+) -> None:
+    _set_ev_states(hass)
+    controller = ActiveEvController(
+        hass,
+        _coordinator(_controller_config(rehearsal_mode=True)),
+    )
+    now = datetime(2026, 9, 17, 12, 30, tzinfo=UTC)
+
+    await controller.async_reconcile(now)
+    connected_limit = controller.learned_charge_limit
+    assert connected_limit is not None
+
+    hass.states.async_set("device_tracker.car", "not_home")
+    hass.states.async_set("binary_sensor.car_cable", "off")
+    hass.states.async_set("sensor.car_charging", "disconnected")
+    await controller.async_reconcile(now + timedelta(seconds=30))
+    assert controller.learned_charge_limit == connected_limit
+
+    hass.states.async_set("device_tracker.car", "home")
+    hass.states.async_set("binary_sensor.car_cable", "on")
+    hass.states.async_set("sensor.car_charging", "stopped")
+    await controller.async_reconcile(now + timedelta(seconds=60))
+    assert controller.learned_charge_limit == connected_limit
+    assert controller.last_reason == "rehearsal_direct_path_ready"
+    assert controller.writes_performed == 0
+
+
 async def test_daily_driving_snapshot_survives_restart_and_ignores_missed_days(
     hass: HomeAssistant,
     monkeypatch: pytest.MonkeyPatch,

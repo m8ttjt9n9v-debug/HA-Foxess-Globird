@@ -342,6 +342,11 @@ class ActiveEvController:
                 self.requested_current_a = observation.requested_current_a
                 self.applied_limit_percent = observation.charge_limit_percent
                 self.charge_switch_on = observation.charge_switch_on
+            vehicle_soc = self._entity_number(CONF_EV_SOC)
+            if observation is not None and vehicle_soc is not None:
+                self._learned_general_limit(observation, vehicle_soc=vehicle_soc)
+            else:
+                self.learned_charge_limit = None
             self.grid_average.observe(now, grid_current, source_valid=grid_valid)
             self.ev_average.observe(now, ev_current, source_valid=ev_valid)
             self._update_daily_backfill_energy(
@@ -417,9 +422,6 @@ class ActiveEvController:
             if observation is None:
                 self.last_reason = "ev_actuator_feedback_unavailable"
                 return
-            vehicle_soc = self._entity_number(CONF_EV_SOC)
-            if vehicle_soc is not None:
-                self._learned_general_limit(observation, vehicle_soc=vehicle_soc)
             if self._charge_to_full_requested():
                 if self.charge_to_full_started_at is None:
                     self.charge_to_full_started_at = now

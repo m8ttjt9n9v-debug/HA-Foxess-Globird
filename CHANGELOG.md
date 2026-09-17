@@ -13,6 +13,11 @@
   while recovering an interrupted manual diagnostic. Block every restoration
   service call without consuming retry attempts, while retaining the persisted
   cleanup obligation for a later eligible retry.
+- Keep valid EV driving and general charge-limit learning available while the
+  vehicle is away or disconnected. Learning now depends on its own read-only
+  SoC, stored-energy, actuator-metadata and retained-history inputs, while all
+  existing location, cable, Safety Lock and commissioning gates continue to
+  control actuation.
 
 ## 0.12.26 — restore GloBird scorecard mappings on upgrade
 
