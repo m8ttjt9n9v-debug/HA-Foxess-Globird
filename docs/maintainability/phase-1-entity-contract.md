@@ -47,14 +47,13 @@ blast radius.
    change.
 
 The semantic worksheet is deliberately completed in reviewed domain slices.
-Six domain slices now define all 107 electrical, accounting, learning,
+Six domain slices define all 107 electrical, accounting, learning,
 operator-control, controller, EV and aggregate diagnostic entities plus every
-custom public attribute profile. Records remain
-`engineering_draft`
-until the complete proposed vocabulary is presented to the project owner in
-one batch; no piecemeal approval interrupts the inventory work.
+custom public attribute profile. The nine proposed relabel records were
+approved together by the project owner on 2026-09-17. All other records retain
+their reviewed engineering status and existing names.
 
-The consolidated nine-name proposal is ready in the
+The consolidated nine-name approval is recorded in the
 [v0.12.26 entity terminology review](terminology-review-v0.12.26.md).
 
 ## Compatibility
@@ -100,6 +99,6 @@ new contract without changing runtime data, registry state or hardware mode.
 - [x] Custom public attributes characterised
 - [x] Existing wizard field mechanics characterised
 - [x] Semantic worksheet complete (107 of 107 entities drafted)
-- [ ] Project-owner terminology review complete (consolidated proposal ready)
-- [ ] Compatibility checks passed for any proposed naming release
+- [x] Project-owner terminology review complete (nine names approved)
+- [ ] Compatibility checks passed for the naming-only release
 - [ ] Independent review complete

@@ -81,7 +81,16 @@ def build_usability_audit() -> dict[str, Any]:
             and item["entity_category"] != "diagnostic"
         ],
         "relabel_candidates": [
-            item for item in records if item["decision"] == "relabel"
+            item
+            for item in records
+            if item["decision"] == "relabel"
+            and semantics[item["key"]]["review_status"] != "owner_approved"
+        ],
+        "approved_relabels": [
+            item
+            for item in records
+            if item["decision"] == "relabel"
+            and semantics[item["key"]]["review_status"] == "owner_approved"
         ],
     }
 
@@ -92,8 +101,9 @@ def rendered_audit() -> str:
     lines = [
         "# Clean-install usability audit — v0.12.26 baseline",
         "",
-        "This generated report identifies presentation gaps without approving",
-        "or applying any display-name, category or dashboard change.",
+        "This generated report identifies remaining presentation gaps and records",
+        "the owner-approved display-name changes. Category and dashboard decisions",
+        "remain separate.",
         "",
         "## Summary",
         "",
@@ -103,6 +113,7 @@ def rendered_audit() -> str:
         f"| Portable dashboard references | {audit['dashboard_reference_count']} |",
         f"| Entity translation keys | {audit['translated_count']} |",
         f"| Proposed relabels awaiting owner review | {len(audit['relabel_candidates'])} |",
+        f"| Owner-approved relabels | {len(audit['approved_relabels'])} |",
         "",
         "## Dashboard coverage by reviewed audience",
         "",
@@ -152,12 +163,12 @@ def rendered_audit() -> str:
             "",
             "## Remaining Phase 2 decisions",
             "",
-            "- Approve, amend or reject the nine proposed display-name changes in",
-            "  `terminology-review-v0.12.26.md`.",
+            "- The nine display-name changes in `terminology-review-v0.12.26.md`",
+            "  are owner-approved and implemented in the catalogue.",
             "- Decide whether the two missing primary entities belong on the portable",
             "  dashboard or should be reclassified.",
             "- Review diagnostic-category candidates before registry presentation changes.",
-            "- Translation adoption begins only after approved English labels are frozen.",
+            "- Translation adoption can now begin from the approved English labels.",
             "",
         )
     )

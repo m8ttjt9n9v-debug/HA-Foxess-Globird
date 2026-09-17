@@ -1,7 +1,8 @@
 # Clean-install usability audit — v0.12.26 baseline
 
-This generated report identifies presentation gaps without approving
-or applying any display-name, category or dashboard change.
+This generated report identifies remaining presentation gaps and records
+the owner-approved display-name changes. Category and dashboard decisions
+remain separate.
 
 ## Summary
 
@@ -10,7 +11,8 @@ or applying any display-name, category or dashboard change.
 | Catalogue entities | 107 |
 | Portable dashboard references | 98 |
 | Entity translation keys | 0 |
-| Proposed relabels awaiting owner review | 9 |
+| Proposed relabels awaiting owner review | 0 |
+| Owner-approved relabels | 9 |
 
 ## Dashboard coverage by reviewed audience
 
@@ -50,7 +52,7 @@ a review list, not approval to change upgraded installations.
 | `sensor.home_energy_forecast_export_realisation` | Forecast Export Realisation | none |
 | `sensor.home_energy_forecast_scorecard_status` | Forecast Scorecard Status | none |
 | `sensor.home_energy_free_charge_completion` | Free-Window Battery Charge Status | none |
-| `sensor.home_energy_bonus_zero_import_allowed` | ZEROHERO Telemetry Guard Qualified | none |
+| `sensor.home_energy_bonus_zero_import_allowed` | ZEROHERO Local Telemetry Qualified | none |
 | `sensor.home_energy_tariff_status` | Tariff Guard Status | none |
 | `sensor.home_energy_learning_samples` | House Learning Samples | none |
 | `sensor.home_energy_learning_status` | House Learning Status | none |
@@ -70,9 +72,9 @@ a review list, not approval to change upgraded installations.
 
 ## Remaining Phase 2 decisions
 
-- Approve, amend or reject the nine proposed display-name changes in
-  `terminology-review-v0.12.26.md`.
+- The nine display-name changes in `terminology-review-v0.12.26.md`
+  are owner-approved and implemented in the catalogue.
 - Decide whether the two missing primary entities belong on the portable
   dashboard or should be reclassified.
 - Review diagnostic-category candidates before registry presentation changes.
-- Translation adoption begins only after approved English labels are frozen.
+- Translation adoption can now begin from the approved English labels.

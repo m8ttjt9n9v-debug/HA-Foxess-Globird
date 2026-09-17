@@ -15,15 +15,28 @@ from custom_components.home_energy_orchestrator import (
     switch,
 )
 from custom_components.home_energy_orchestrator.entity_catalogue import ENTITY_SPECS
-from scripts.entity_contract import BASELINE_PATH, build_entity_contract, rendered_contract
+from scripts.entity_contract import (
+    APPROVED_DISPLAY_NAMES,
+    BASELINE_PATH,
+    build_entity_contract,
+    validate_against_release_baseline,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
 def test_entity_contract_matches_reviewed_release_baseline() -> None:
-    """Public entity identity changes require an explicit baseline review."""
-    assert json.loads(BASELINE_PATH.read_text(encoding="utf-8")) == build_entity_contract()
-    assert BASELINE_PATH.read_text(encoding="utf-8") == rendered_contract()
+    """Only approved names may differ from the immutable release baseline."""
+    validate_against_release_baseline()
+    baseline = json.loads(BASELINE_PATH.read_text(encoding="utf-8"))
+    current = build_entity_contract()
+    old_names = {item["key"]: item["name"] for item in baseline["entities"]}
+    new_names = {item["key"]: item["name"] for item in current["entities"]}
+    assert {
+        key: new_names[key]
+        for key in new_names
+        if new_names[key] != old_names[key]
+    } == APPROVED_DISPLAY_NAMES
 
 
 def test_entity_contract_contains_one_hundred_and_seven_unique_entities() -> None:

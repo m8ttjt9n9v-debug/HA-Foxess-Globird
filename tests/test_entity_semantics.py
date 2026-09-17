@@ -17,11 +17,8 @@ def test_reviewed_entity_semantics_are_complete_and_current() -> None:
     assert entities_awaiting_review(contract) == []
 
 
-def test_semantic_decisions_remain_draft_until_owner_review() -> None:
+def test_semantic_decisions_record_the_owner_approved_relabels() -> None:
     contract = load_semantic_contract()
-    assert {item["review_status"] for item in contract["entities"]} == {
-        "engineering_draft"
-    }
     proposed = {
         item["key"]: item["proposed_display_name"]
         for item in contract["entities"]
@@ -29,3 +26,14 @@ def test_semantic_decisions_remain_draft_until_owner_review() -> None:
     }
     assert len(proposed) == 9
     assert len(proposed.values()) == len(set(proposed.values()))
+    approved = {
+        item["key"]
+        for item in contract["entities"]
+        if item["review_status"] == "owner_approved"
+    }
+    assert approved == set(proposed)
+    assert all(
+        item["review_status"] == "engineering_draft"
+        for item in contract["entities"]
+        if item["key"] not in approved
+    )

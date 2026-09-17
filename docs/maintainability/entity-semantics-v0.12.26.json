@@ -725,7 +725,7 @@
       "consumers": ["Export controller", "configuration dashboard", "Status attributes"],
       "decision": "relabel",
       "proposed_display_name": "Automatic Battery Export",
-      "review_status": "engineering_draft"
+      "review_status": "owner_approved"
     },
     {
       "key": "bonus_zero_import_allowed",
@@ -741,7 +741,7 @@
       "consumers": ["ZEROHERO accounting", "tariff diagnostics"],
       "decision": "relabel",
       "proposed_display_name": "ZEROHERO Local Telemetry Qualified",
-      "review_status": "engineering_draft"
+      "review_status": "owner_approved"
     },
     {
       "key": "ev_before_export",
@@ -968,7 +968,7 @@
       "consumers": ["Battery free-charge controller", "battery charging dashboard"],
       "decision": "relabel",
       "proposed_display_name": "Battery Free-Charge Energy Allowed",
-      "review_status": "engineering_draft"
+      "review_status": "owner_approved"
     },
     {
       "key": "free_charge_completion",
@@ -1194,7 +1194,7 @@
       "consumers": ["Export dashboard", "Fleet Summary"],
       "decision": "relabel",
       "proposed_display_name": "Automatic Battery Export Status",
-      "review_status": "engineering_draft"
+      "review_status": "owner_approved"
     },
     {
       "key": "zerohero_export_window",
@@ -1241,7 +1241,7 @@
       "consumers": ["Export dashboard", "planned start calculation"],
       "decision": "relabel",
       "proposed_display_name": "Automatic Export Planned Duration",
-      "review_status": "engineering_draft"
+      "review_status": "owner_approved"
     },
     {
       "key": "zerohero_planned_export_energy",
@@ -1257,7 +1257,7 @@
       "consumers": ["Export dashboard", "optimistic forecast", "Fleet Summary"],
       "decision": "relabel",
       "proposed_display_name": "Automatic Export Planned Energy",
-      "review_status": "engineering_draft"
+      "review_status": "owner_approved"
     },
     {
       "key": "zerohero_planned_start",
@@ -1273,7 +1273,7 @@
       "consumers": ["Export dashboard", "export session scheduler"],
       "decision": "relabel",
       "proposed_display_name": "Automatic Export Planned Start",
-      "review_status": "engineering_draft"
+      "review_status": "owner_approved"
     },
     {
       "key": "zerohero_sellable_energy",
@@ -1289,7 +1289,7 @@
       "consumers": ["Export dashboard", "automatic export plan", "Fleet Summary"],
       "decision": "relabel",
       "proposed_display_name": "Sellable Battery Energy",
-      "review_status": "engineering_draft"
+      "review_status": "owner_approved"
     },
     {
       "key": "ev_actual_current",
@@ -1832,7 +1832,7 @@
       "consumers": ["Protection dashboard", "automations", "Fleet Summary", "diagnostics"],
       "decision": "relabel",
       "proposed_display_name": "Orchestrator Status",
-      "review_status": "engineering_draft",
+      "review_status": "owner_approved",
       "attribute_profile": "orchestrator_status_v1"
     }
   ]

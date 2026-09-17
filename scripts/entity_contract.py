@@ -13,6 +13,18 @@ from custom_components.home_energy_orchestrator.entity_catalogue import ENTITY_S
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 BASELINE_PATH = REPOSITORY_ROOT / "docs" / "maintainability" / "entity-contract-v0.12.26.json"
 
+APPROVED_DISPLAY_NAMES = {
+    "automatic_export": "Automatic Battery Export",
+    "bonus_zero_import_allowed": "ZEROHERO Local Telemetry Qualified",
+    "free_charge_allowed": "Battery Free-Charge Energy Allowed",
+    "status": "Orchestrator Status",
+    "zerohero_export_status": "Automatic Battery Export Status",
+    "zerohero_planned_duration": "Automatic Export Planned Duration",
+    "zerohero_planned_export_energy": "Automatic Export Planned Energy",
+    "zerohero_planned_start": "Automatic Export Planned Start",
+    "zerohero_sellable_energy": "Sellable Battery Energy",
+}
+
 
 def _json_value(value: Any) -> Any:
     if isinstance(value, Enum):
@@ -62,6 +74,32 @@ def rendered_contract() -> str:
     return json.dumps(build_entity_contract(), indent=2, sort_keys=True) + "\n"
 
 
+def validate_against_release_baseline() -> None:
+    """Allow only owner-approved display-name deltas from v0.12.26."""
+    baseline = json.loads(BASELINE_PATH.read_text(encoding="utf-8"))
+    current = build_entity_contract()
+    if baseline["entity_count"] != current["entity_count"]:
+        raise ValueError("entity count changed from the frozen release baseline")
+    baseline_records = {
+        (item["platform"], item["key"]): item for item in baseline["entities"]
+    }
+    current_records = {
+        (item["platform"], item["key"]): item for item in current["entities"]
+    }
+    if baseline_records.keys() != current_records.keys():
+        raise ValueError("entity identity changed from the frozen release baseline")
+    for identity, old in baseline_records.items():
+        new = current_records[identity]
+        expected_name = APPROVED_DISPLAY_NAMES.get(old["key"], old["name"])
+        if new["name"] != expected_name:
+            raise ValueError(f"unapproved display-name change for {old['key']!r}")
+        for field in old.keys() - {"name"}:
+            if new[field] != old[field]:
+                raise ValueError(
+                    f"incompatible {field} change for {old['key']!r}"
+                )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--write", action="store_true")
@@ -71,10 +109,10 @@ def main() -> int:
     if args.write:
         BASELINE_PATH.write_text(rendered, encoding="utf-8")
     if args.check:
-        if not BASELINE_PATH.is_file() or BASELINE_PATH.read_text(encoding="utf-8") != rendered:
-            raise SystemExit(
-                "Entity contract changed; review the compatibility impact and regenerate explicitly"
-            )
+        try:
+            validate_against_release_baseline()
+        except ValueError as err:
+            raise SystemExit(str(err)) from err
     if not args.write and not args.check:
         print(rendered, end="")
     return 0

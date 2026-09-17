@@ -43,7 +43,9 @@ class EntitySpec:
 
 
 SENSOR_DESCRIPTIONS = (
-    SensorEntityDescription(key="status", name="Status", icon="mdi:eye-outline"),
+    SensorEntityDescription(
+        key="status", name="Orchestrator Status", icon="mdi:eye-outline"
+    ),
     SensorEntityDescription(
         key="fleet_summary",
         name="Fleet Summary",
@@ -462,7 +464,7 @@ SENSOR_DESCRIPTIONS = (
     ),
     SensorEntityDescription(
         key="free_charge_allowed",
-        name="Free Charge Allowance Remaining",
+        name="Battery Free-Charge Energy Allowed",
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
         device_class="energy",
         suggested_display_precision=2,
@@ -482,7 +484,7 @@ SENSOR_DESCRIPTIONS = (
     ),
     SensorEntityDescription(
         key="bonus_zero_import_allowed",
-        name="ZEROHERO Telemetry Guard Qualified",
+        name="ZEROHERO Local Telemetry Qualified",
         icon="mdi:cash-check",
     ),
     SensorEntityDescription(
@@ -504,31 +506,33 @@ SENSOR_DESCRIPTIONS = (
     ),
     SensorEntityDescription(
         key="zerohero_sellable_energy",
-        name="ZEROHERO Sellable Energy",
+        name="Sellable Battery Energy",
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
         device_class="energy",
         suggested_display_precision=2,
     ),
     SensorEntityDescription(
         key="zerohero_planned_export_energy",
-        name="ZEROHERO Planned Export Energy",
+        name="Automatic Export Planned Energy",
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
         device_class="energy",
         suggested_display_precision=2,
     ),
     SensorEntityDescription(
         key="zerohero_planned_duration",
-        name="ZEROHERO Planned Duration",
+        name="Automatic Export Planned Duration",
         native_unit_of_measurement="min",
         device_class="duration",
         suggested_display_precision=1,
     ),
     SensorEntityDescription(
         key="zerohero_planned_start",
-        name="ZEROHERO Planned Start",
+        name="Automatic Export Planned Start",
         device_class="timestamp",
     ),
-    SensorEntityDescription(key="zerohero_export_status", name="ZEROHERO Export Status"),
+    SensorEntityDescription(
+        key="zerohero_export_status", name="Automatic Battery Export Status"
+    ),
     SensorEntityDescription(
         key="ev_before_export_status",
         name="EV Before Export Status",
@@ -688,7 +692,7 @@ SAFETY_DESCRIPTION = SwitchEntityDescription(
 )
 EXPORT_DESCRIPTION = SwitchEntityDescription(
     key="automatic_export",
-    name="Automatic ZEROHERO Export",
+    name="Automatic Battery Export",
     icon="mdi:transmission-tower-export",
     entity_category=EntityCategory.CONFIG,
 )
