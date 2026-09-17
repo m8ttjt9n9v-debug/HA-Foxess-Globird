@@ -444,7 +444,7 @@ class ActiveEvController:
                 self.pre_free_phase = "not_eligible"
                 self.outside_control_active = False
                 self.outside_target_active = False
-                if smart_path and observation is not None and self._home_control_active():
+                if self.eligibility_route.route == "disconnected_smart_socket":
                     await self._async_reconcile_disconnected_smart_socket(
                         now,
                         observation,
@@ -455,10 +455,10 @@ class ActiveEvController:
                         ("smart_socket_", "rehearsal_smart_socket_")
                     ):
                         return
-                self.last_reason = connection_reason
+                self.last_reason = self.eligibility_route.reason
                 return
             if observation is None:
-                self.last_reason = "ev_actuator_feedback_unavailable"
+                self.last_reason = self.eligibility_route.reason
                 return
             if self._charge_to_full_requested():
                 if self.charge_to_full_started_at is None:
@@ -512,7 +512,7 @@ class ActiveEvController:
                 outside_enabled=outside_enabled,
                 outside_control_active=self.outside_control_active,
             )
-            if not in_window and not outside_enabled and not self.outside_control_active:
+            if self.policy_route.route == "general_limit":
                 await self._async_reconcile_general_limit_only(
                     now,
                     observation,
@@ -605,7 +605,7 @@ class ActiveEvController:
                             elapsed_minutes=elapsed_minutes,
                             remaining_hours=remaining_hours,
                         )
-                        if in_window
+                        if self.policy_route.route == "free_window"
                         else self._calculate_outside_target(now, observation)
                     )
                 except ValueError:
