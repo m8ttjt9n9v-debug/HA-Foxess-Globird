@@ -277,12 +277,13 @@ class EvChargeToFullSwitch(CoordinatorEntity[EnergyCoordinator], SwitchEntity):
     @property
     def is_on(self) -> bool:
         """Return the explicit HEO-owned override state."""
-        if CONF_EV_CHARGE_TO_FULL_ENABLED not in self.coordinator.config:
-            legacy_entity = self.coordinator.config.get(CONF_EV_CHARGE_TO_FULL)
-            return isinstance(legacy_entity, str) and self.hass.states.is_state(
-                legacy_entity, "on"
+        preference = self.coordinator.runtime_config.ev_preferences
+        if not preference.charge_to_full_configured:
+            legacy_entity = preference.legacy_charge_to_full_entity
+            return bool(
+                legacy_entity and self.hass.states.is_state(legacy_entity, "on")
             )
-        return self.coordinator.runtime_config.ev_preferences.charge_to_full_enabled
+        return preference.charge_to_full_enabled
 
     async def async_turn_on(self, **kwargs: object) -> None:
         """Request charge-to-full policy without bypassing any safety gate."""

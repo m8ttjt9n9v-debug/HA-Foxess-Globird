@@ -9,6 +9,7 @@ from homeassistant.const import EVENT_CALL_SERVICE
 from homeassistant.core import HomeAssistant
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
+from custom_components.home_energy_orchestrator.configuration import RuntimeConfiguration
 from custom_components.home_energy_orchestrator.ev_active import ActiveEvController
 from custom_components.home_energy_orchestrator.models import SiteSnapshot
 from custom_components.home_energy_orchestrator.planner.ev import (
@@ -74,8 +75,9 @@ def _coordinator(config):
     observed_at = datetime(2026, 9, 7, 12, 1, tzinfo=UTC)
     grid_source = TelemetrySource("sensor.site_grid", 10, "kW", observed_at)
     grid = NormalizedSample(10, "kW", (grid_source,), "positive_import", True, True, "ok")
-    return SimpleNamespace(
+    coordinator = SimpleNamespace(
         config=config,
+        runtime_config=RuntimeConfiguration.from_mapping(config),
         entry_id="ev-runtime-test",
         snapshot=SiteSnapshot(
             battery_soc=20,
@@ -122,9 +124,15 @@ def _coordinator(config):
             export_session=ExportSessionState(),
         ),
         _configured_time=lambda key, default: time.fromisoformat(str(config.get(key, default))),
-        update_config_value=lambda key, value: config.__setitem__(key, value),
         async_update_listeners=lambda: None,
     )
+
+    def update_config_value(key, value):
+        config[key] = value
+        coordinator.runtime_config = RuntimeConfiguration.from_mapping(config)
+
+    coordinator.update_config_value = update_config_value
+    return coordinator
 
 
 def _set_power_telemetry(coordinator, hass: HomeAssistant, *, grid_kw, battery_kw):

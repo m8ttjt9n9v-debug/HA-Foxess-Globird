@@ -17,6 +17,7 @@ from .const import (
     CONF_EV_BEFORE_EXPORT_ENABLED,
     CONF_EV_BEFORE_EXPORT_SOC_TARGET,
     CONF_EV_CABLE_CONNECTED,
+    CONF_EV_CHARGE_TO_FULL,
     CONF_EV_CHARGE_TO_FULL_ENABLED,
     CONF_EV_CONTROL_COMMISSIONED,
     CONF_EV_PHASE_COUNT,
@@ -94,7 +95,9 @@ class EvPreferenceSettings:
 
     before_export_enabled: bool
     before_export_soc_target: float
+    charge_to_full_configured: bool
     charge_to_full_enabled: bool
+    legacy_charge_to_full_entity: str | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -185,6 +188,7 @@ class RuntimeConfiguration:
         force_discharge_power_entity = data.get(CONF_FOXESS_FORCE_DISCHARGE_POWER)
         ev_at_home_entity = data.get(CONF_EV_AT_HOME)
         ev_cable_connected_entity = data.get(CONF_EV_CABLE_CONNECTED)
+        legacy_charge_to_full_entity = data.get(CONF_EV_CHARGE_TO_FULL)
         ev_control_commissioned = bool(
             data.get(
                 CONF_EV_CONTROL_COMMISSIONED,
@@ -243,11 +247,19 @@ class RuntimeConfiguration:
                     CONF_EV_BEFORE_EXPORT_SOC_TARGET,
                     DEFAULT_EV_BEFORE_EXPORT_SOC_TARGET,
                 ),
+                charge_to_full_configured=(
+                    CONF_EV_CHARGE_TO_FULL_ENABLED in data
+                ),
                 charge_to_full_enabled=bool(
                     data.get(
                         CONF_EV_CHARGE_TO_FULL_ENABLED,
                         DEFAULT_EV_CHARGE_TO_FULL_ENABLED,
                     )
+                ),
+                legacy_charge_to_full_entity=(
+                    str(legacy_charge_to_full_entity)
+                    if legacy_charge_to_full_entity
+                    else None
                 ),
             ),
             ev_connection=EvConnectionSettings(

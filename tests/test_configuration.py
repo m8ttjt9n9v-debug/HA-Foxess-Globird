@@ -16,6 +16,8 @@ from custom_components.home_energy_orchestrator.const import (
     CONF_EV_AT_HOME,
     CONF_EV_BEFORE_EXPORT_SOC_TARGET,
     CONF_EV_CABLE_CONNECTED,
+    CONF_EV_CHARGE_TO_FULL,
+    CONF_EV_CHARGE_TO_FULL_ENABLED,
     CONF_EV_CONTROL_COMMISSIONED,
     CONF_EV_PHASE_COUNT,
     CONF_EV_PROTECTED_BASELINE_A,
@@ -106,7 +108,9 @@ def test_runtime_configuration_uses_established_defaults() -> None:
     assert parsed.ev_preferences.before_export_soc_target == (
         DEFAULT_EV_BEFORE_EXPORT_SOC_TARGET
     )
+    assert parsed.ev_preferences.charge_to_full_configured is False
     assert parsed.ev_preferences.charge_to_full_enabled is False
+    assert parsed.ev_preferences.legacy_charge_to_full_entity is None
     assert parsed.ev_connection.configured is False
     assert parsed.ev_connection.control_commissioned is False
     assert parsed.ev_connection.at_home_entity is None
@@ -170,6 +174,41 @@ def test_runtime_configuration_preserves_existing_coercion_behavior() -> None:
     assert parsed.inverter.force_charge_power_entity == "number.foxess_charge"
     assert parsed.inverter.force_discharge_power_entity == "number.foxess_discharge"
     assert parsed.inverter.actuator_mapping_complete is True
+
+
+@pytest.mark.parametrize(
+    ("data", "configured", "enabled", "legacy_entity"),
+    [
+        ({}, False, False, None),
+        (
+            {CONF_EV_CHARGE_TO_FULL: "input_boolean.old_charge_to_full"},
+            False,
+            False,
+            "input_boolean.old_charge_to_full",
+        ),
+        (
+            {
+                CONF_EV_CHARGE_TO_FULL_ENABLED: True,
+                CONF_EV_CHARGE_TO_FULL: "input_boolean.old_charge_to_full",
+            },
+            True,
+            True,
+            "input_boolean.old_charge_to_full",
+        ),
+        ({CONF_EV_CHARGE_TO_FULL_ENABLED: ""}, True, False, None),
+    ],
+)
+def test_charge_to_full_snapshot_preserves_owned_switch_precedence_inputs(
+    data: dict[str, object],
+    configured: bool,
+    enabled: bool,
+    legacy_entity: str | None,
+) -> None:
+    """Characterize the owned-key presence test and legacy helper mapping."""
+    preference = RuntimeConfiguration.from_mapping(data).ev_preferences
+    assert preference.charge_to_full_configured is configured
+    assert preference.charge_to_full_enabled is enabled
+    assert preference.legacy_charge_to_full_entity == legacy_entity
 
 
 @pytest.mark.parametrize(

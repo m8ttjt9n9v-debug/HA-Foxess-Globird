@@ -96,7 +96,6 @@ from .const import (
     DEFAULT_EV_BACKFILL_BUFFER_MINUTES,
     DEFAULT_EV_CHARGE_EFFICIENCY,
     DEFAULT_EV_CHARGE_PATH,
-    DEFAULT_EV_CHARGE_TO_FULL_ENABLED,
     DEFAULT_EV_CHARGE_TO_FULL_MAX_HOURS,
     DEFAULT_EV_DAILY_BACKFILL_ENERGY,
     DEFAULT_EV_DAILY_READY_TIME,
@@ -2243,14 +2242,13 @@ class ActiveEvController:
 
     def _charge_to_full_requested(self) -> bool:
         """Use HEO's switch, with the old mapped helper as upgrade fallback."""
-        if CONF_EV_CHARGE_TO_FULL_ENABLED in self.coordinator.config:
-            return bool(
-                self.coordinator.config.get(
-                    CONF_EV_CHARGE_TO_FULL_ENABLED,
-                    DEFAULT_EV_CHARGE_TO_FULL_ENABLED,
-                )
-            )
-        return self._is_on(CONF_EV_CHARGE_TO_FULL)
+        preference = self.coordinator.runtime_config.ev_preferences
+        if preference.charge_to_full_configured:
+            return preference.charge_to_full_enabled
+        legacy_entity = preference.legacy_charge_to_full_entity
+        return bool(
+            legacy_entity and self.hass.states.is_state(legacy_entity, "on")
+        )
 
     async def _async_clear_charge_to_full(self) -> None:
         """Clear the HEO-owned paid-grid override after its bounded session."""
