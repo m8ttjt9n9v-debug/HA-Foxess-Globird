@@ -48,6 +48,8 @@ Store payload, service payload, timer, retry or runtime behavior.
 - Missing/stopped/charging actual-current branches.
 - Duplicate mappings read once.
 - Raw versus finite numeric behavior.
+- Exact shadow comparison with retained controller state, number, current,
+  energy and direct-actuator helpers.
 - Full EV/lifecycle, compatibility-contract and previous-release gates.
 
 ## Rollback

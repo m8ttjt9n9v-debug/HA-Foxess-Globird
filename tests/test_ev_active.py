@@ -11,6 +11,10 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.home_energy_orchestrator.configuration import RuntimeConfiguration
 from custom_components.home_energy_orchestrator.ev_active import ActiveEvController
+from custom_components.home_energy_orchestrator.ev_observation_adapter import (
+    capture_ev_feedback,
+    ev_observation_entity_map,
+)
 from custom_components.home_energy_orchestrator.models import SiteSnapshot
 from custom_components.home_energy_orchestrator.planner.ev import (
     SmartSocketRecoveryState,
@@ -217,6 +221,44 @@ def test_connected_at_home_preserves_location_mode_and_mapping_semantics(
     )
 
     assert controller._connected_at_home() == expected  # noqa: SLF001
+
+
+def test_composite_ev_snapshot_matches_retained_controller_helpers(hass) -> None:
+    config = _controller_config(
+        ev_lifetime_energy_entity="sensor.car_lifetime",
+        ev_smart_socket_entity="switch.car_socket",
+    )
+    _set_ev_states(hass)
+    hass.states.async_set(
+        "sensor.car_lifetime", "1234", {"unit_of_measurement": "kWh"}
+    )
+    hass.states.async_set("switch.car_socket", "on")
+    coordinator = _coordinator(config)
+    controller = ActiveEvController(hass, coordinator)
+
+    feedback = capture_ev_feedback(
+        hass,
+        ev_observation_entity_map(coordinator.runtime_config),
+    )
+
+    assert feedback.actual_current_result == controller._actual_ev_current_a()  # noqa: SLF001
+    assert feedback.direct_observation == controller._observation()  # noqa: SLF001
+    assert feedback.at_home.available_state == controller._mapped_state(  # noqa: SLF001
+        "device_tracker.car"
+    )
+    assert feedback.cable_connected.available_state == controller._mapped_state(  # noqa: SLF001
+        "binary_sensor.car_cable"
+    )
+    assert feedback.charging_state.available_state == controller._mapped_state(  # noqa: SLF001
+        "sensor.car_charging"
+    )
+    assert feedback.soc.number == controller._mapped_number("sensor.car_soc")  # noqa: SLF001
+    assert feedback.stored_energy.energy_kwh == controller._mapped_energy(  # noqa: SLF001
+        "sensor.car_energy"
+    )
+    assert feedback.lifetime_energy.energy_kwh == controller._mapped_energy(  # noqa: SLF001
+        "sensor.car_lifetime"
+    )
 
 
 @pytest.mark.parametrize("entity_state", ["unknown", "unavailable"])
