@@ -102,37 +102,43 @@ def _coordinator(**config):
 
 
 @pytest.mark.parametrize(
-    ("overrides", "expected_gate", "expected_reason"),
+    ("overrides", "expected_gate", "expected_reason", "clears_actions"),
     [
         (
             {CONF_FOXESS_CONTROL_OWNER: FOXESS_CONTROL_OWNER_CLOUD},
             "foxcloud_scheduler_owner",
             "foxcloud_scheduler_owns_inverter",
+            True,
         ),
         (
             {CONF_FOXESS_CONTROL_OWNER: "observer_only"},
             "observer_owner",
             "foxess_observer_owner",
+            True,
         ),
         (
             {CONF_AUTOMATIC_CONTROL_ENABLED: False},
             "disabled",
             "automatic_control_disabled",
+            False,
         ),
         (
             {CONF_REHEARSAL_MODE: True},
             "rehearsal",
             "rehearsal_mode",
+            False,
         ),
         (
             {CONF_SIGN_CONVENTIONS_VERIFIED: False},
             "sign_conventions_unverified",
             "sign_conventions_unverified",
+            False,
         ),
         (
             {CONF_FOXESS_FORCE_DISCHARGE_POWER: ""},
             "blocked_incomplete_mapping",
             "incomplete_foxess_mapping",
+            False,
         ),
     ],
 )
@@ -141,6 +147,7 @@ async def test_active_gate_precedence_is_a_no_write_contract(
     overrides: dict[str, object],
     expected_gate: str,
     expected_reason: str,
+    clears_actions: bool,
 ) -> None:
     """Characterize the exact absolute-gate outcome before typed migration."""
     calls = []
@@ -156,13 +163,45 @@ async def test_active_gate_precedence_is_a_no_write_contract(
             }
         ),
     )
+    controller.last_actions = ("previous_action",)
 
     await controller.async_reconcile()
 
     assert controller.gate_status == expected_gate
     assert controller.last_reason == expected_reason
+    assert controller.last_actions == (() if clears_actions else ("previous_action",))
     assert controller.writes_performed == 0
     assert calls == []
+
+
+async def test_manual_and_telemetry_gate_action_metadata_matches_pure_contract(
+    hass,
+) -> None:
+    controller = _loaded_controller(
+        hass,
+        _coordinator(
+            **{
+                CONF_AUTOMATIC_CONTROL_ENABLED: True,
+                CONF_REHEARSAL_MODE: False,
+            }
+        ),
+    )
+    controller.last_actions = ("previous_action",)
+    controller.coordinator.manual_test.is_active = True
+
+    await controller.async_reconcile()
+
+    assert controller.last_reason == "manual_test_active"
+    assert controller.last_actions == ()
+
+    controller.coordinator.manual_test.is_active = False
+    controller.coordinator.snapshot = None
+    controller.last_actions = ("previous_action",)
+
+    await controller.async_reconcile()
+
+    assert controller.last_reason == "telemetry_unavailable"
+    assert controller.last_actions == ("previous_action",)
 
 
 def _loaded_controller(hass, coordinator):
