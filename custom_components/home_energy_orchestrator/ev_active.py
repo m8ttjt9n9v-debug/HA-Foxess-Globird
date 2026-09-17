@@ -112,11 +112,12 @@ from .const import (
 from .coordinator import EnergyCoordinator
 from .ev_adapter import EvEntityMap, EvServiceAdapter, EvWriteBlocked, ev_control_gate_status
 from .ev_observation_adapter import (
+    EvEntityFeedback,
     EvFeedbackSnapshot,
+    capture_ev_entity_feedback,
     capture_ev_feedback,
     ev_observation_entity_map,
 )
-from .normalise import current_to_a, energy_to_kwh
 from .persistence import TypedValueStoreRepository
 from .planner.ev import (
     DIRECT_EVSE_MAX_ATTEMPTS,
@@ -173,7 +174,6 @@ from .planner.learning import DemandHistory
 from .planner.timed_average import TimedAverageWindow
 
 _LOGGER = logging.getLogger(__name__)
-_UNKNOWN_STATES = {"unknown", "unavailable", ""}
 _CYCLE_FEEDBACK: ContextVar[EvFeedbackSnapshot | None] = ContextVar(
     "heo_ev_cycle_feedback",
     default=None,
@@ -935,12 +935,12 @@ class ActiveEvController:
         self, now: datetime, observation: DirectEvseObservation
     ) -> SmartSocketObservation | None:
         socket_entity = self.coordinator.runtime_config.ev_actuators.smart_socket_entity
-        socket_state = self.hass.states.get(socket_entity) if socket_entity else None
-        if socket_state is None or socket_state.state.lower() not in {"on", "off"}:
+        socket = self._entity_feedback(socket_entity)
+        if socket.available_state not in {"on", "off"} or socket.last_changed is None:
             return None
-        socket_on = socket_state.state.lower() == "on"
+        socket_on = socket.available_state == "on"
         socket_on_seconds = (
-            max((now - socket_state.last_changed).total_seconds(), 0.0) if socket_on else 0.0
+            max((now - socket.last_changed).total_seconds(), 0.0) if socket_on else 0.0
         )
         return SmartSocketObservation(
             requested_current_a=observation.requested_current_a,
@@ -961,60 +961,40 @@ class ActiveEvController:
         physical_minimum_a: float,
     ) -> SmartSocketRecoveryObservation:
         ev_telemetry = self.coordinator.runtime_config.ev_telemetry
-        charging_entity = ev_telemetry.charging_state_entity
-        charging_state = self.hass.states.get(charging_entity) if charging_entity else None
-        charging_value = (
-            charging_state.state.lower()
-            if charging_state is not None and charging_state.state.lower() not in _UNKNOWN_STATES
-            else None
-        )
+        charging = self._entity_feedback(ev_telemetry.charging_state_entity)
+        charging_value = charging.available_state
         stable_seconds = self._float(
             CONF_EV_SMART_RECOVERY_NO_POWER_SECONDS,
             DEFAULT_EV_SMART_RECOVERY_NO_POWER_SECONDS,
         )
         connection = self.coordinator.runtime_config.ev_connection
-        at_home_state = (
-            self.hass.states.get(connection.at_home_entity)
-            if connection.at_home_entity
-            else None
-        )
-        cable_state = (
-            self.hass.states.get(connection.cable_connected_entity)
-            if connection.cable_connected_entity
-            else None
-        )
+        at_home = self._entity_feedback(connection.at_home_entity)
+        cable = self._entity_feedback(connection.cable_connected_entity)
         charge_switch_entity = (
             self.coordinator.runtime_config.ev_actuators.charge_switch_entity
         )
-        charge_switch_state = (
-            self.hass.states.get(charge_switch_entity)
-            if charge_switch_entity
-            else None
-        )
-        evidence_states = (at_home_state, cable_state, charge_switch_state)
+        charge_switch = self._entity_feedback(charge_switch_entity)
+        evidence = (at_home, cable, charge_switch)
         evidence_age_stable = all(
-            state is not None
-            and state.state.lower() not in _UNKNOWN_STATES
-            and 0 <= (now - state.last_changed).total_seconds()
-            and (now - state.last_changed).total_seconds() >= stable_seconds
-            for state in evidence_states
+            item.available_state is not None
+            and item.last_changed is not None
+            and 0 <= (now - item.last_changed).total_seconds()
+            and (now - item.last_changed).total_seconds() >= stable_seconds
+            for item in evidence
         )
         cloud_stable = bool(
             evidence_age_stable
-            and at_home_state is not None
-            and at_home_state.state.lower() in {"home", "on"}
-            and cable_state is not None
-            and cable_state.state.lower() == "on"
-            and charge_switch_state is not None
-            and charge_switch_state.state.lower() in {"on", "off"}
+            and at_home.available_state in {"home", "on"}
+            and cable.available_state == "on"
+            and charge_switch.available_state in {"on", "off"}
         )
         vehicle_soc = self._mapped_number(ev_telemetry.soc_entity)
         actual_current, actual_valid = self._actual_ev_current_a()
         return SmartSocketRecoveryObservation(
             charging_state=charging_value,
             charging_state_seconds=(
-                max((now - charging_state.last_changed).total_seconds(), 0.0)
-                if charging_state is not None
+                max((now - charging.last_changed).total_seconds(), 0.0)
+                if charging.last_changed is not None
                 else 0.0
             ),
             home_control_active=self._home_control_active(),
@@ -1973,15 +1953,9 @@ class ActiveEvController:
         actual_current_entity = (
             self.coordinator.runtime_config.ev_telemetry.actual_current_entity
         )
-        actual_state = (
-            self.hass.states.get(actual_current_entity)
-            if actual_current_entity
-            else None
-        )
+        actual = self._entity_feedback(actual_current_entity)
         battery_soc_entity = self.coordinator.runtime_config.battery.soc_entity
-        soc_state = (
-            self.hass.states.get(battery_soc_entity) if battery_soc_entity else None
-        )
+        battery_soc_feedback = self._entity_feedback(battery_soc_entity)
         ev_current, ev_valid = self._actual_ev_current_a()
         timestamps = [
             source.updated_at
@@ -2012,8 +1986,8 @@ class ActiveEvController:
             and battery is not None
             and battery.value is not None
             and ev_valid
-            and actual_state is not None
-            and soc_state is not None
+            and actual.present
+            and battery_soc_feedback.present
             and all(
                 source.updated_at is not None
                 for sample in (grid, battery)
@@ -2132,19 +2106,7 @@ class ActiveEvController:
             return 0.0, False
         if charging != "charging":
             return 0.0, True
-        state = (
-            self.hass.states.get(ev_telemetry.actual_current_entity)
-            if ev_telemetry.actual_current_entity
-            else None
-        )
-        try:
-            value = (
-                current_to_a(float(state.state), state.attributes.get("unit_of_measurement"))
-                if state is not None
-                else None
-            )
-        except (TypeError, ValueError):
-            value = None
+        value = self._entity_feedback(ev_telemetry.actual_current_entity).current_a
         if value is None:
             return 0.0, False
         if value < 0:
@@ -2160,25 +2122,32 @@ class ActiveEvController:
         limit_entity = actuators.charge_limit_entity
         if not current_entity or not limit_entity:
             return None
-        current_state = self.hass.states.get(current_entity)
-        limit_state = self.hass.states.get(limit_entity)
+        current = self._entity_feedback(current_entity)
+        limit = self._entity_feedback(limit_entity)
         switch = self._mapped_state(actuators.charge_switch_entity)
-        if current_state is None or limit_state is None or switch is None:
+        required = (
+            current.raw_number,
+            limit.raw_number,
+            current.minimum,
+            current.maximum,
+            current.step,
+            limit.minimum,
+            limit.maximum,
+            limit.step,
+        )
+        if switch is None or any(value is None for value in required):
             return None
-        try:
-            return DirectEvseObservation(
-                requested_current_a=float(current_state.state),
-                charge_limit_percent=float(limit_state.state),
-                charge_switch_on=switch == "on",
-                current_minimum_a=float(current_state.attributes["min"]),
-                current_maximum_a=float(current_state.attributes["max"]),
-                current_step_a=float(current_state.attributes["step"]),
-                limit_minimum_percent=float(limit_state.attributes["min"]),
-                limit_maximum_percent=float(limit_state.attributes["max"]),
-                limit_step_percent=float(limit_state.attributes["step"]),
-            )
-        except (KeyError, TypeError, ValueError):
-            return None
+        return DirectEvseObservation(
+            requested_current_a=current.raw_number,  # type: ignore[arg-type]
+            charge_limit_percent=limit.raw_number,  # type: ignore[arg-type]
+            charge_switch_on=switch == "on",
+            current_minimum_a=current.minimum,
+            current_maximum_a=current.maximum,
+            current_step_a=current.step,
+            limit_minimum_percent=limit.minimum,
+            limit_maximum_percent=limit.maximum,
+            limit_step_percent=limit.step,
+        )
 
     @staticmethod
     def _physical_charging_minimum_a(
@@ -2229,40 +2198,21 @@ class ActiveEvController:
 
     def _mapped_state(self, entity_id: str | None) -> str | None:
         """Return one mapped entity state, excluding unreadable values."""
-        feedback = _CYCLE_FEEDBACK.get()
-        captured = feedback.for_entity(entity_id) if feedback is not None else None
-        if captured is not None:
-            return captured.available_state
-        state = self.hass.states.get(entity_id) if entity_id else None
-        if state is None or state.state.lower() in _UNKNOWN_STATES:
-            return None
-        return state.state.lower()
+        return self._entity_feedback(entity_id).available_state
 
     def _mapped_number(self, entity_id: str | None) -> float | None:
-        feedback = _CYCLE_FEEDBACK.get()
-        captured = feedback.for_entity(entity_id) if feedback is not None else None
-        if captured is not None:
-            return captured.number
-        state = self.hass.states.get(entity_id) if entity_id else None
-        try:
-            value = float(state.state) if state is not None else None
-        except (TypeError, ValueError):
-            return None
-        return value if value is not None and isfinite(value) else None
+        return self._entity_feedback(entity_id).number
 
     def _mapped_energy(self, entity_id: str | None) -> float | None:
+        return self._entity_feedback(entity_id).energy_kwh
+
+    def _entity_feedback(self, entity_id: str | None) -> EvEntityFeedback:
+        """Return cycle feedback when mapped, otherwise capture one live read."""
         feedback = _CYCLE_FEEDBACK.get()
         captured = feedback.for_entity(entity_id) if feedback is not None else None
         if captured is not None:
-            return captured.energy_kwh
-        state = self.hass.states.get(entity_id) if entity_id else None
-        if state is None:
-            return None
-        try:
-            value = energy_to_kwh(float(state.state), state.attributes.get("unit_of_measurement"))
-        except (TypeError, ValueError):
-            return None
-        return value if isfinite(value) and value >= 0 else None
+            return captured
+        return capture_ev_entity_feedback(self.hass, entity_id)
 
     def _charge_to_full_requested(self) -> bool:
         """Use HEO's switch, with the old mapped helper as upgrade fallback."""
@@ -2270,13 +2220,7 @@ class ActiveEvController:
         if preference.charge_to_full_configured:
             return preference.charge_to_full_enabled
         legacy_entity = preference.legacy_charge_to_full_entity
-        feedback = _CYCLE_FEEDBACK.get()
-        captured = feedback.for_entity(legacy_entity) if feedback is not None else None
-        if captured is not None:
-            return captured.reported_state == "on"
-        return bool(
-            legacy_entity and self.hass.states.is_state(legacy_entity, "on")
-        )
+        return self._entity_feedback(legacy_entity).reported_state == "on"
 
     async def _async_clear_charge_to_full(self) -> None:
         """Clear the HEO-owned paid-grid override after its bounded session."""

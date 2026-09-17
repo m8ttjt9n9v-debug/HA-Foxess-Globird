@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import replace
+from dataclasses import fields, replace
 from datetime import UTC, datetime, time, timedelta
 from types import SimpleNamespace
 
@@ -262,24 +262,40 @@ def test_composite_ev_snapshot_matches_retained_controller_helpers(hass) -> None
 
 
 @pytest.mark.asyncio
-async def test_reconcile_reads_core_ev_feedback_once_per_cycle(hass, monkeypatch) -> None:
-    """Repeated policy helper access must use the cycle's immutable snapshot."""
+async def test_reconcile_reads_each_mapped_ev_entity_once_per_cycle(
+    hass, monkeypatch
+) -> None:
+    """Core and smart-socket helpers must share one immutable cycle snapshot."""
     _set_ev_states(hass)
-    controller = ActiveEvController(hass, _coordinator(_controller_config()))
+    hass.states.async_set("switch.car_socket", "on")
+    coordinator = _coordinator(
+        _controller_config(
+            ev_charge_path="smart_socket",
+            ev_smart_socket_entity="switch.car_socket",
+            ev_smart_socket_current_limit_a=10,
+        )
+    )
+    controller = ActiveEvController(hass, coordinator)
+    mapped = ev_observation_entity_map(coordinator.runtime_config)
+    tracked = {
+        entity_id
+        for field in fields(mapped)
+        if (entity_id := getattr(mapped, field.name)) is not None
+    }
     state_machine_type = type(hass.states)
     original_get = state_machine_type.get
-    calls: list[str] = []
+    calls = dict.fromkeys(tracked, 0)
 
     def counted_get(state_machine, entity_id: str):
-        if entity_id == "sensor.car_soc":
-            calls.append(entity_id)
+        if entity_id in calls:
+            calls[entity_id] += 1
         return original_get(state_machine, entity_id)
 
     monkeypatch.setattr(state_machine_type, "get", counted_get)
 
     await controller.async_reconcile(datetime(2026, 9, 7, 12, 1, tzinfo=UTC))
 
-    assert calls == ["sensor.car_soc"]
+    assert calls == dict.fromkeys(tracked, 1)
 
 
 @pytest.mark.asyncio
