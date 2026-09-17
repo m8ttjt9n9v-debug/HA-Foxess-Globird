@@ -10,6 +10,8 @@ import pytest
 from custom_components.home_energy_orchestrator.configuration import RuntimeConfiguration
 from custom_components.home_energy_orchestrator.const import (
     CONF_AUTOMATIC_CHARGE_ENABLED,
+    CONF_AUTOMATIC_CONTROL_ENABLED,
+    CONF_AUTOMATIC_EXPORT_ENABLED,
     CONF_EV_BEFORE_EXPORT_SOC_TARGET,
     CONF_EXPORT_RATE,
     CONF_FOXESS_CONTROL_OWNER,
@@ -20,6 +22,8 @@ from custom_components.home_energy_orchestrator.const import (
     CONF_GRID_POWER_DIRECTION,
     CONF_HOUSE_OCCUPANCY_MODE,
     CONF_INVERTER_CHARGE_LIMIT_KW,
+    CONF_REHEARSAL_MODE,
+    CONF_SIGN_CONVENTIONS_VERIFIED,
     CONF_ZERO_IMPORT_THRESHOLD_KW,
     DEFAULT_EV_BEFORE_EXPORT_SOC_TARGET,
     DEFAULT_EXPORT_RATE,
@@ -27,9 +31,55 @@ from custom_components.home_energy_orchestrator.const import (
     DEFAULT_GRID_POWER_DIRECTION,
     DEFAULT_HOUSE_OCCUPANCY_MODE,
     DEFAULT_INVERTER_CHARGE_LIMIT_KW,
+    DEFAULT_REHEARSAL_MODE,
+    DEFAULT_SIGN_CONVENTIONS_VERIFIED,
     DEFAULT_ZERO_IMPORT_THRESHOLD_KW,
 )
 from custom_components.home_energy_orchestrator.coordinator import EnergyCoordinator
+
+
+def _legacy_active_gate_status(data: dict[str, object]) -> str:
+    """Reproduce the pre-typed active-controller gate contract."""
+    owner = data.get(CONF_FOXESS_CONTROL_OWNER, DEFAULT_FOXESS_CONTROL_OWNER)
+    if owner == "foxcloud_scheduler":
+        return "foxcloud_scheduler_owner"
+    if owner != "local_modbus":
+        return "observer_owner"
+    if not data.get(CONF_AUTOMATIC_CONTROL_ENABLED, False):
+        return "disabled"
+    if data.get(CONF_REHEARSAL_MODE, DEFAULT_REHEARSAL_MODE):
+        return "rehearsal"
+    if not data.get(
+        CONF_SIGN_CONVENTIONS_VERIFIED,
+        DEFAULT_SIGN_CONVENTIONS_VERIFIED,
+    ):
+        return "sign_conventions_unverified"
+    mapping = (
+        data.get(CONF_FOXESS_WORK_MODE),
+        data.get(CONF_FOXESS_FORCE_CHARGE_POWER),
+        data.get(CONF_FOXESS_FORCE_DISCHARGE_POWER),
+    )
+    return "ready" if all(mapping) else "blocked_incomplete_mapping"
+
+
+def _typed_active_gate_status(data: dict[str, object]) -> str:
+    """Project the same gate through the immutable runtime snapshot."""
+    runtime = RuntimeConfiguration.from_mapping(data)
+    if runtime.automation.control_owner == "foxcloud_scheduler":
+        return "foxcloud_scheduler_owner"
+    if runtime.automation.control_owner != "local_modbus":
+        return "observer_owner"
+    if not runtime.automation.master_enabled:
+        return "disabled"
+    if runtime.automation.safety_lock:
+        return "rehearsal"
+    if not runtime.electrical.verified:
+        return "sign_conventions_unverified"
+    return (
+        "ready"
+        if runtime.inverter.actuator_mapping_complete
+        else "blocked_incomplete_mapping"
+    )
 
 
 def test_runtime_configuration_uses_established_defaults() -> None:
@@ -98,6 +148,89 @@ def test_runtime_configuration_preserves_existing_coercion_behavior() -> None:
     assert parsed.inverter.force_charge_power_entity == "number.foxess_charge"
     assert parsed.inverter.force_discharge_power_entity == "number.foxess_discharge"
     assert parsed.inverter.actuator_mapping_complete is True
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        {},
+        {CONF_FOXESS_CONTROL_OWNER: None},
+        {CONF_FOXESS_CONTROL_OWNER: "observer_only"},
+        {CONF_FOXESS_CONTROL_OWNER: "foxcloud_scheduler"},
+        {
+            CONF_FOXESS_CONTROL_OWNER: "local_modbus",
+            CONF_AUTOMATIC_CONTROL_ENABLED: False,
+        },
+        {
+            CONF_FOXESS_CONTROL_OWNER: "local_modbus",
+            CONF_AUTOMATIC_CONTROL_ENABLED: True,
+            CONF_REHEARSAL_MODE: True,
+        },
+        {
+            CONF_FOXESS_CONTROL_OWNER: "local_modbus",
+            CONF_AUTOMATIC_CONTROL_ENABLED: True,
+            CONF_REHEARSAL_MODE: False,
+            CONF_SIGN_CONVENTIONS_VERIFIED: False,
+        },
+        {
+            CONF_FOXESS_CONTROL_OWNER: "local_modbus",
+            CONF_AUTOMATIC_CONTROL_ENABLED: True,
+            CONF_REHEARSAL_MODE: False,
+            CONF_SIGN_CONVENTIONS_VERIFIED: True,
+        },
+        {
+            CONF_FOXESS_CONTROL_OWNER: "local_modbus",
+            CONF_AUTOMATIC_CONTROL_ENABLED: True,
+            CONF_REHEARSAL_MODE: False,
+            CONF_SIGN_CONVENTIONS_VERIFIED: True,
+            CONF_FOXESS_WORK_MODE: "select.foxess_mode",
+            CONF_FOXESS_FORCE_CHARGE_POWER: "number.foxess_charge",
+            CONF_FOXESS_FORCE_DISCHARGE_POWER: "number.foxess_discharge",
+        },
+        {
+            CONF_FOXESS_CONTROL_OWNER: "local_modbus",
+            CONF_AUTOMATIC_CONTROL_ENABLED: "enabled",
+            CONF_REHEARSAL_MODE: "",
+            CONF_SIGN_CONVENTIONS_VERIFIED: "verified",
+            CONF_FOXESS_WORK_MODE: "select.foxess_mode",
+            CONF_FOXESS_FORCE_CHARGE_POWER: "number.foxess_charge",
+            CONF_FOXESS_FORCE_DISCHARGE_POWER: "number.foxess_discharge",
+        },
+    ],
+)
+def test_typed_active_gate_preserves_legacy_precedence_and_coercion(
+    data: dict[str, object],
+) -> None:
+    """Lock the old gate outcome before active control adopts typed config."""
+    assert _typed_active_gate_status(data) == _legacy_active_gate_status(data)
+
+
+def test_typed_active_policy_requests_preserve_legacy_boolean_semantics() -> None:
+    """Lock independent request/default behavior before controller migration."""
+    cases = (
+        {},
+        {
+            CONF_AUTOMATIC_CHARGE_ENABLED: "requested",
+            CONF_AUTOMATIC_EXPORT_ENABLED: 1,
+            CONF_FREE_CHARGE_SCHEDULE_CONFIRMED: "confirmed",
+        },
+        {
+            CONF_AUTOMATIC_CHARGE_ENABLED: "",
+            CONF_AUTOMATIC_EXPORT_ENABLED: 0,
+            CONF_FREE_CHARGE_SCHEDULE_CONFIRMED: None,
+        },
+    )
+    for data in cases:
+        runtime = RuntimeConfiguration.from_mapping(data)
+        assert runtime.automation.battery_charge_enabled is bool(
+            data.get(CONF_AUTOMATIC_CHARGE_ENABLED, False)
+        )
+        assert runtime.automation.battery_export_enabled is bool(
+            data.get(CONF_AUTOMATIC_EXPORT_ENABLED, False)
+        )
+        assert runtime.automation.free_charge_schedule_confirmed is bool(
+            data.get(CONF_FREE_CHARGE_SCHEDULE_CONFIRMED, False)
+        )
 
 
 def test_runtime_configuration_is_immutable() -> None:

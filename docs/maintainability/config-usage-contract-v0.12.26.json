@@ -1,5 +1,5 @@
 {
-  "access_count": 504,
+  "access_count": 484,
   "accesses": [
     {
       "access": "subscript_store",
@@ -243,66 +243,6 @@
     },
     {
       "access": "get",
-      "constant": "CONF_AUTOMATIC_CHARGE_ENABLED",
-      "key": "automatic_charge_enabled",
-      "kind": "raw_mapping",
-      "layer": "runtime",
-      "receiver": "self.coordinator.config",
-      "scope": "ActiveFoxessController._async_reconcile_charge",
-      "source": "custom_components/home_energy_orchestrator/active.py"
-    },
-    {
-      "access": "get",
-      "constant": "CONF_FREE_CHARGE_SCHEDULE_CONFIRMED",
-      "key": "free_charge_schedule_confirmed",
-      "kind": "raw_mapping",
-      "layer": "runtime",
-      "receiver": "self.coordinator.config",
-      "scope": "ActiveFoxessController._async_reconcile_charge",
-      "source": "custom_components/home_energy_orchestrator/active.py"
-    },
-    {
-      "access": "get",
-      "constant": "CONF_AUTOMATIC_EXPORT_ENABLED",
-      "key": "automatic_export_enabled",
-      "kind": "raw_mapping",
-      "layer": "runtime",
-      "receiver": "self.coordinator.config",
-      "scope": "ActiveFoxessController._async_reconcile_export",
-      "source": "custom_components/home_energy_orchestrator/active.py"
-    },
-    {
-      "access": "get",
-      "constant": "CONF_EV_BEFORE_EXPORT_ENABLED",
-      "key": "ev_before_export_enabled",
-      "kind": "raw_mapping",
-      "layer": "runtime",
-      "receiver": "self.coordinator.config",
-      "scope": "ActiveFoxessController._async_reconcile_export",
-      "source": "custom_components/home_energy_orchestrator/active.py"
-    },
-    {
-      "access": "get",
-      "constant": "CONF_AUTOMATIC_CHARGE_ENABLED",
-      "key": "automatic_charge_enabled",
-      "kind": "raw_mapping",
-      "layer": "runtime",
-      "receiver": "self.coordinator.config",
-      "scope": "ActiveFoxessController._enabled_control_windows_overlap",
-      "source": "custom_components/home_energy_orchestrator/active.py"
-    },
-    {
-      "access": "get",
-      "constant": "CONF_AUTOMATIC_EXPORT_ENABLED",
-      "key": "automatic_export_enabled",
-      "kind": "raw_mapping",
-      "layer": "runtime",
-      "receiver": "self.coordinator.config",
-      "scope": "ActiveFoxessController._enabled_control_windows_overlap",
-      "source": "custom_components/home_energy_orchestrator/active.py"
-    },
-    {
-      "access": "get",
       "constant": "CONF_CONFIGURE_EV",
       "key": "configure_ev",
       "kind": "raw_mapping",
@@ -349,146 +289,6 @@
       "layer": "runtime",
       "receiver": "self.coordinator.config",
       "scope": "ActiveFoxessController._protected_keepalive_energy_kwh",
-      "source": "custom_components/home_energy_orchestrator/active.py"
-    },
-    {
-      "access": "get",
-      "constant": "CONF_AUTOMATIC_CONTROL_ENABLED",
-      "key": "automatic_control_enabled",
-      "kind": "raw_mapping",
-      "layer": "runtime",
-      "receiver": "self.coordinator.config",
-      "scope": "ActiveFoxessController.async_reconcile",
-      "source": "custom_components/home_energy_orchestrator/active.py"
-    },
-    {
-      "access": "get",
-      "constant": "CONF_FOXESS_CONTROL_OWNER",
-      "key": "foxess_control_owner",
-      "kind": "raw_mapping",
-      "layer": "runtime",
-      "receiver": "self.coordinator.config",
-      "scope": "ActiveFoxessController.async_reconcile",
-      "source": "custom_components/home_energy_orchestrator/active.py"
-    },
-    {
-      "access": "get",
-      "constant": "CONF_FOXESS_FORCE_CHARGE_POWER",
-      "key": "foxess_force_charge_power_entity",
-      "kind": "raw_mapping",
-      "layer": "runtime",
-      "receiver": "self.coordinator.config",
-      "scope": "ActiveFoxessController.async_reconcile",
-      "source": "custom_components/home_energy_orchestrator/active.py"
-    },
-    {
-      "access": "get",
-      "constant": "CONF_FOXESS_FORCE_DISCHARGE_POWER",
-      "key": "foxess_force_discharge_power_entity",
-      "kind": "raw_mapping",
-      "layer": "runtime",
-      "receiver": "self.coordinator.config",
-      "scope": "ActiveFoxessController.async_reconcile",
-      "source": "custom_components/home_energy_orchestrator/active.py"
-    },
-    {
-      "access": "get",
-      "constant": "CONF_FOXESS_WORK_MODE",
-      "key": "foxess_work_mode_entity",
-      "kind": "raw_mapping",
-      "layer": "runtime",
-      "receiver": "self.coordinator.config",
-      "scope": "ActiveFoxessController.async_reconcile",
-      "source": "custom_components/home_energy_orchestrator/active.py"
-    },
-    {
-      "access": "get",
-      "constant": "CONF_REHEARSAL_MODE",
-      "key": "rehearsal_mode",
-      "kind": "raw_mapping",
-      "layer": "runtime",
-      "receiver": "self.coordinator.config",
-      "scope": "ActiveFoxessController.async_reconcile",
-      "source": "custom_components/home_energy_orchestrator/active.py"
-    },
-    {
-      "access": "get",
-      "constant": "CONF_SIGN_CONVENTIONS_VERIFIED",
-      "key": "sign_conventions_verified",
-      "kind": "raw_mapping",
-      "layer": "runtime",
-      "receiver": "self.coordinator.config",
-      "scope": "ActiveFoxessController.async_reconcile",
-      "source": "custom_components/home_energy_orchestrator/active.py"
-    },
-    {
-      "access": "get",
-      "constant": "CONF_AUTOMATIC_CONTROL_ENABLED",
-      "key": "automatic_control_enabled",
-      "kind": "raw_mapping",
-      "layer": "runtime",
-      "receiver": "self.coordinator.config",
-      "scope": "ActiveFoxessController.gate_status",
-      "source": "custom_components/home_energy_orchestrator/active.py"
-    },
-    {
-      "access": "get",
-      "constant": "CONF_FOXESS_CONTROL_OWNER",
-      "key": "foxess_control_owner",
-      "kind": "raw_mapping",
-      "layer": "runtime",
-      "receiver": "self.coordinator.config",
-      "scope": "ActiveFoxessController.gate_status",
-      "source": "custom_components/home_energy_orchestrator/active.py"
-    },
-    {
-      "access": "get",
-      "constant": "CONF_FOXESS_FORCE_CHARGE_POWER",
-      "key": "foxess_force_charge_power_entity",
-      "kind": "raw_mapping",
-      "layer": "runtime",
-      "receiver": "self.coordinator.config",
-      "scope": "ActiveFoxessController.gate_status",
-      "source": "custom_components/home_energy_orchestrator/active.py"
-    },
-    {
-      "access": "get",
-      "constant": "CONF_FOXESS_FORCE_DISCHARGE_POWER",
-      "key": "foxess_force_discharge_power_entity",
-      "kind": "raw_mapping",
-      "layer": "runtime",
-      "receiver": "self.coordinator.config",
-      "scope": "ActiveFoxessController.gate_status",
-      "source": "custom_components/home_energy_orchestrator/active.py"
-    },
-    {
-      "access": "get",
-      "constant": "CONF_FOXESS_WORK_MODE",
-      "key": "foxess_work_mode_entity",
-      "kind": "raw_mapping",
-      "layer": "runtime",
-      "receiver": "self.coordinator.config",
-      "scope": "ActiveFoxessController.gate_status",
-      "source": "custom_components/home_energy_orchestrator/active.py"
-    },
-    {
-      "access": "get",
-      "constant": "CONF_REHEARSAL_MODE",
-      "key": "rehearsal_mode",
-      "kind": "raw_mapping",
-      "layer": "runtime",
-      "receiver": "self.coordinator.config",
-      "scope": "ActiveFoxessController.gate_status",
-      "source": "custom_components/home_energy_orchestrator/active.py"
-    },
-    {
-      "access": "get",
-      "constant": "CONF_SIGN_CONVENTIONS_VERIFIED",
-      "key": "sign_conventions_verified",
-      "kind": "raw_mapping",
-      "layer": "runtime",
-      "receiver": "self.coordinator.config",
-      "scope": "ActiveFoxessController.gate_status",
       "source": "custom_components/home_energy_orchestrator/active.py"
     },
     {
@@ -5044,15 +4844,15 @@
   ],
   "accesses_by_kind": {
     "managed_mutation": 9,
-    "raw_mapping": 495
+    "raw_mapping": 475
   },
   "accesses_by_layer": {
     "boundary": 389,
-    "runtime": 115
+    "runtime": 95
   },
   "accesses_by_source": {
     "custom_components/home_energy_orchestrator/__init__.py": 24,
-    "custom_components/home_energy_orchestrator/active.py": 25,
+    "custom_components/home_energy_orchestrator/active.py": 5,
     "custom_components/home_energy_orchestrator/config_flow.py": 347,
     "custom_components/home_energy_orchestrator/configuration.py": 18,
     "custom_components/home_energy_orchestrator/coordinator.py": 31,
@@ -5065,7 +4865,7 @@
   "key_count": 129,
   "raw_accesses_by_layer": {
     "boundary": 389,
-    "runtime": 106
+    "runtime": 86
   },
   "release_baseline": "0.12.26",
   "schema_version": 2

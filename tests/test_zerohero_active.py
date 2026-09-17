@@ -5,9 +5,11 @@ from __future__ import annotations
 from datetime import UTC, datetime, time, timedelta
 from types import SimpleNamespace
 
+import pytest
 from homeassistant.const import EVENT_CALL_SERVICE
 
 from custom_components.home_energy_orchestrator.active import ActiveFoxessController
+from custom_components.home_energy_orchestrator.configuration import RuntimeConfiguration
 from custom_components.home_energy_orchestrator.const import (
     CONF_AUTOMATIC_CHARGE_ENABLED,
     CONF_AUTOMATIC_CONTROL_ENABLED,
@@ -83,6 +85,7 @@ def _coordinator(**config):
 
     return SimpleNamespace(
         config=values,
+        runtime_config=RuntimeConfiguration.from_mapping(values),
         snapshot=SimpleNamespace(battery_soc=60.0),
         data=SimpleNamespace(
             available_after_reserve_kwh=0.0,
@@ -95,6 +98,70 @@ def _coordinator(**config):
         learning_remaining_kwh=4.0,
         zerohero_export=SimpleNamespace(imported_kwh=0.0),
     )
+
+
+@pytest.mark.parametrize(
+    ("overrides", "expected_gate", "expected_reason"),
+    [
+        (
+            {CONF_FOXESS_CONTROL_OWNER: FOXESS_CONTROL_OWNER_CLOUD},
+            "foxcloud_scheduler_owner",
+            "foxcloud_scheduler_owns_inverter",
+        ),
+        (
+            {CONF_FOXESS_CONTROL_OWNER: "observer_only"},
+            "observer_owner",
+            "foxess_observer_owner",
+        ),
+        (
+            {CONF_AUTOMATIC_CONTROL_ENABLED: False},
+            "disabled",
+            "automatic_control_disabled",
+        ),
+        (
+            {CONF_REHEARSAL_MODE: True},
+            "rehearsal",
+            "rehearsal_mode",
+        ),
+        (
+            {CONF_SIGN_CONVENTIONS_VERIFIED: False},
+            "sign_conventions_unverified",
+            "sign_conventions_unverified",
+        ),
+        (
+            {CONF_FOXESS_FORCE_DISCHARGE_POWER: ""},
+            "blocked_incomplete_mapping",
+            "incomplete_foxess_mapping",
+        ),
+    ],
+)
+async def test_active_gate_precedence_is_a_no_write_contract(
+    hass,
+    overrides: dict[str, object],
+    expected_gate: str,
+    expected_reason: str,
+) -> None:
+    """Characterize the exact absolute-gate outcome before typed migration."""
+    calls = []
+    hass.bus.async_listen(EVENT_CALL_SERVICE, calls.append)
+    controller = _loaded_controller(
+        hass,
+        _coordinator(
+            **{
+                CONF_AUTOMATIC_CONTROL_ENABLED: True,
+                CONF_REHEARSAL_MODE: False,
+                CONF_SIGN_CONVENTIONS_VERIFIED: True,
+                **overrides,
+            }
+        ),
+    )
+
+    await controller.async_reconcile()
+
+    assert controller.gate_status == expected_gate
+    assert controller.last_reason == expected_reason
+    assert controller.writes_performed == 0
+    assert calls == []
 
 
 def _loaded_controller(hass, coordinator):

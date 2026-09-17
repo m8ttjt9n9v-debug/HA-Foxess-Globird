@@ -19,8 +19,9 @@ selectors, validation, migration behavior and the multi-page draft workflow.
   access from the frozen 167-access baseline to 106 without changing the
   serialized configuration surface. Sensor presentation and diagnostics use
   typed projections, operator mutations rebuild the immutable snapshot, and
-  manual FoxESS diagnostics now use typed ownership, Safety Lock, actuator
-  mapping and inverter-limit values.
+  manual plus automatic FoxESS control gates now use typed ownership, Safety
+  Lock, actuator mapping and independent request values. Direct AST-visible
+  runtime raw access is now 86.
 
 ## Work packages
 

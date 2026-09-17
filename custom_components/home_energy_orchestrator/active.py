@@ -17,9 +17,6 @@ from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
 from .const import (
-    CONF_AUTOMATIC_CHARGE_ENABLED,
-    CONF_AUTOMATIC_CONTROL_ENABLED,
-    CONF_AUTOMATIC_EXPORT_ENABLED,
     CONF_AUTOMATIC_EXPORT_LIMIT_KWH,
     CONF_BATTERY_FREE_WINDOW_TARGET,
     CONF_BONUS_WINDOW_END,
@@ -27,8 +24,6 @@ from .const import (
     CONF_CONFIGURE_EV,
     CONF_DISCHARGE_EFFICIENCY_PERCENT,
     CONF_EV_AT_HOME,
-    CONF_EV_BEFORE_EXPORT_ENABLED,
-    CONF_EV_BEFORE_EXPORT_SOC_TARGET,
     CONF_EV_CABLE_CONNECTED,
     CONF_EV_CONTROL_COMMISSIONED,
     CONF_EV_PHASE_COUNT,
@@ -36,38 +31,25 @@ from .const import (
     CONF_EV_VOLTAGE,
     CONF_FORCE_DISCHARGE_FINISH,
     CONF_FORCE_DISCHARGE_OFFSET_MINUTES,
-    CONF_FOXESS_CONTROL_OWNER,
-    CONF_FOXESS_FORCE_CHARGE_POWER,
-    CONF_FOXESS_FORCE_DISCHARGE_POWER,
-    CONF_FOXESS_WORK_MODE,
     CONF_FREE_CHARGE_END,
-    CONF_FREE_CHARGE_SCHEDULE_CONFIRMED,
     CONF_FREE_CHARGE_START,
     CONF_INVERTER_CHARGE_LIMIT_KW,
     CONF_INVERTER_DISCHARGE_LIMIT_KW,
-    CONF_REHEARSAL_MODE,
-    CONF_SIGN_CONVENTIONS_VERIFIED,
-    DEFAULT_AUTOMATIC_CHARGE_ENABLED,
-    DEFAULT_AUTOMATIC_EXPORT_ENABLED,
     DEFAULT_AUTOMATIC_EXPORT_LIMIT_KWH,
     DEFAULT_BATTERY_FREE_WINDOW_TARGET,
     DEFAULT_BONUS_WINDOW_END,
     DEFAULT_BONUS_WINDOW_START,
     DEFAULT_DISCHARGE_EFFICIENCY_PERCENT,
-    DEFAULT_EV_BEFORE_EXPORT_ENABLED,
-    DEFAULT_EV_BEFORE_EXPORT_SOC_TARGET,
     DEFAULT_EV_CONTROL_COMMISSIONED,
     DEFAULT_EV_PHASE_COUNT,
     DEFAULT_EV_PROTECTED_BASELINE_A,
     DEFAULT_EV_VOLTAGE,
     DEFAULT_FORCE_DISCHARGE_FINISH,
     DEFAULT_FORCE_DISCHARGE_OFFSET_MINUTES,
-    DEFAULT_FOXESS_CONTROL_OWNER,
     DEFAULT_FREE_CHARGE_END,
     DEFAULT_FREE_CHARGE_START,
     DEFAULT_INVERTER_CHARGE_LIMIT_KW,
     DEFAULT_INVERTER_DISCHARGE_LIMIT_KW,
-    DEFAULT_SIGN_CONVENTIONS_VERIFIED,
     FOXESS_CONTROL_OWNER_CLOUD,
     FOXESS_CONTROL_OWNER_MODBUS,
 )
@@ -131,28 +113,23 @@ class ActiveFoxessController:
     @property
     def gate_status(self) -> str:
         """Return a human-readable commissioning gate state."""
-        owner = self.coordinator.config.get(
-            CONF_FOXESS_CONTROL_OWNER, DEFAULT_FOXESS_CONTROL_OWNER
-        )
+        runtime = self.coordinator.runtime_config
+        owner = runtime.automation.control_owner
         if owner == FOXESS_CONTROL_OWNER_CLOUD:
             return "foxcloud_scheduler_owner"
         if owner != FOXESS_CONTROL_OWNER_MODBUS:
             return "observer_owner"
-        if not self.coordinator.config.get(CONF_AUTOMATIC_CONTROL_ENABLED, False):
+        if not runtime.automation.master_enabled:
             return "disabled"
-        if self.coordinator.config.get(CONF_REHEARSAL_MODE, True):
+        if runtime.automation.safety_lock:
             return "rehearsal"
-        if not self.coordinator.config.get(
-            CONF_SIGN_CONVENTIONS_VERIFIED,
-            DEFAULT_SIGN_CONVENTIONS_VERIFIED,
-        ):
+        if not runtime.electrical.verified:
             return "sign_conventions_unverified"
-        mapping = (
-            self.coordinator.config.get(CONF_FOXESS_WORK_MODE),
-            self.coordinator.config.get(CONF_FOXESS_FORCE_CHARGE_POWER),
-            self.coordinator.config.get(CONF_FOXESS_FORCE_DISCHARGE_POWER),
+        return (
+            "ready"
+            if runtime.inverter.actuator_mapping_complete
+            else "blocked_incomplete_mapping"
         )
-        return "ready" if all(mapping) else "blocked_incomplete_mapping"
 
     async def async_start(self) -> None:
         """Start the bounded reconciliation timer and perform one evaluation."""
@@ -185,9 +162,8 @@ class ActiveFoxessController:
             self.last_reason = "manual_test_active"
             self.last_actions = ()
             return
-        owner = self.coordinator.config.get(
-            CONF_FOXESS_CONTROL_OWNER, DEFAULT_FOXESS_CONTROL_OWNER
-        )
+        runtime = self.coordinator.runtime_config
+        owner = runtime.automation.control_owner
         if owner == FOXESS_CONTROL_OWNER_CLOUD:
             self.last_reason = "foxcloud_scheduler_owns_inverter"
             self.last_actions = ()
@@ -196,24 +172,21 @@ class ActiveFoxessController:
             self.last_reason = "foxess_observer_owner"
             self.last_actions = ()
             return
-        if not self.coordinator.config.get(CONF_AUTOMATIC_CONTROL_ENABLED, False):
+        if not runtime.automation.master_enabled:
             self.last_reason = "automatic_control_disabled"
             return
-        if self.coordinator.config.get(CONF_REHEARSAL_MODE, True):
+        if runtime.automation.safety_lock:
             self.last_reason = "rehearsal_mode"
             return
-        if not self.coordinator.config.get(
-            CONF_SIGN_CONVENTIONS_VERIFIED,
-            DEFAULT_SIGN_CONVENTIONS_VERIFIED,
-        ):
+        if not runtime.electrical.verified:
             self.last_reason = "sign_conventions_unverified"
             return
         mapping = (
-            self.coordinator.config.get(CONF_FOXESS_WORK_MODE),
-            self.coordinator.config.get(CONF_FOXESS_FORCE_CHARGE_POWER),
-            self.coordinator.config.get(CONF_FOXESS_FORCE_DISCHARGE_POWER),
+            runtime.inverter.work_mode_entity,
+            runtime.inverter.force_charge_power_entity,
+            runtime.inverter.force_discharge_power_entity,
         )
-        if not all(mapping):
+        if not runtime.inverter.actuator_mapping_complete:
             self.last_reason = "incomplete_foxess_mapping"
             _LOGGER.warning("Automatic control held: FoxESS mapping is incomplete")
             return
@@ -258,15 +231,9 @@ class ActiveFoxessController:
         now: datetime,
     ) -> bool:
         """Run the default-off fixed-power free-window charge extension."""
-        requested_enabled = bool(
-            self.coordinator.config.get(
-                CONF_AUTOMATIC_CHARGE_ENABLED,
-                DEFAULT_AUTOMATIC_CHARGE_ENABLED,
-            )
-        )
-        schedule_confirmed = bool(
-            self.coordinator.config.get(CONF_FREE_CHARGE_SCHEDULE_CONFIRMED, False)
-        )
+        automation = self.coordinator.runtime_config.automation
+        requested_enabled = automation.battery_charge_enabled
+        schedule_confirmed = automation.free_charge_schedule_confirmed
         enabled = requested_enabled and schedule_confirmed
         window_active = self.coordinator._free_window_hours_remaining(now) > 0  # noqa: SLF001
         configured_max = self._configured(
@@ -373,23 +340,12 @@ class ActiveFoxessController:
         now: datetime,
     ) -> bool:
         """Run the ported pilot-site ZEROHERO session, when it owns this tick."""
-        enabled = bool(
-            self.coordinator.config.get(
-                CONF_AUTOMATIC_EXPORT_ENABLED, DEFAULT_AUTOMATIC_EXPORT_ENABLED
-            )
-        )
+        runtime = self.coordinator.runtime_config
+        enabled = runtime.automation.battery_export_enabled
         self.ev_before_export_decision = decide_ev_before_export(
-            enabled=bool(
-                self.coordinator.config.get(
-                    CONF_EV_BEFORE_EXPORT_ENABLED,
-                    DEFAULT_EV_BEFORE_EXPORT_ENABLED,
-                )
-            ),
+            enabled=runtime.ev_preferences.before_export_enabled,
             ev_soc_percent=getattr(self.coordinator.snapshot, "ev_soc", None),
-            target_soc_percent=self._configured(
-                CONF_EV_BEFORE_EXPORT_SOC_TARGET,
-                DEFAULT_EV_BEFORE_EXPORT_SOC_TARGET,
-            ),
+            target_soc_percent=runtime.ev_preferences.before_export_soc_target,
         )
         self.export_effective_enabled = (
             enabled and self.ev_before_export_decision.export_allowed
@@ -727,15 +683,10 @@ class ActiveFoxessController:
         return max((target - now).total_seconds() / 3600, 0.0)
 
     def _enabled_control_windows_overlap(self) -> bool:
+        automation = self.coordinator.runtime_config.automation
         if not (
-            self.coordinator.config.get(
-                CONF_AUTOMATIC_CHARGE_ENABLED,
-                DEFAULT_AUTOMATIC_CHARGE_ENABLED,
-            )
-            and self.coordinator.config.get(
-                CONF_AUTOMATIC_EXPORT_ENABLED,
-                DEFAULT_AUTOMATIC_EXPORT_ENABLED,
-            )
+            automation.battery_charge_enabled
+            and automation.battery_export_enabled
         ):
             return False
         charge_start = self.coordinator._configured_time(  # noqa: SLF001
