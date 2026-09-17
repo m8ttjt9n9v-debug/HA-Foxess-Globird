@@ -70,6 +70,29 @@ def _active_entry_data(**overrides) -> dict[str, object]:
     }
 
 
+async def _apply_reconfiguration(
+    hass,
+    entry: MockConfigEntry,
+    data: dict[str, object],
+    *,
+    name: str,
+) -> None:
+    """Submit the complete reconfigure flow and wait for its reload."""
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": SOURCE_RECONFIGURE, "entry_id": entry.entry_id},
+        data={"name": name, **data},
+    )
+    if result["type"] is FlowResultType.FORM:
+        assert result["step_id"] == "confirm_schedule"
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], user_input={"confirm_schedule": True}
+        )
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "reconfigure_successful"
+    await hass.async_block_till_done()
+
+
 @pytest.mark.freeze_time("2026-09-17 01:00:00+00:00")
 async def test_observer_public_state_is_equivalent_after_reload(hass) -> None:
     """A reload with identical evidence must not change public truth or write."""
@@ -649,23 +672,98 @@ async def test_active_charge_survives_applied_reconfiguration_without_duplicate_
     await harness.setup(entry)
     assert harness.service_calls == ()
 
-    result = await hass.config_entries.flow.async_init(
-        DOMAIN,
-        context={"source": SOURCE_RECONFIGURE, "entry_id": entry.entry_id},
-        data={"name": "Active charge reconfigured", **configured, "battery_capacity_kwh": 25.0},
+    await _apply_reconfiguration(
+        hass,
+        entry,
+        {**configured, "battery_capacity_kwh": 25.0},
+        name="Active charge reconfigured",
     )
-    assert result["step_id"] == "confirm_schedule"
-    result = await hass.config_entries.flow.async_configure(
-        result["flow_id"], user_input={"confirm_schedule": True}
-    )
-    assert result["type"] is FlowResultType.ABORT
-    assert result["reason"] == "reconfigure_successful"
-    await hass.async_block_till_done()
 
     assert entry.title == "Active charge reconfigured"
     assert entry.data["battery_capacity_kwh"] == 25.0
     assert harness.service_calls == ()
     assert entry.runtime_data.active_controller.charge_session.phase == "active"
+    persisted = await harness.load_store(store_key)
+    assert persisted is not None
+    assert persisted["phase"] == "active"
+    await harness.unload(entry)
+    hass.services.async_remove("number", "set_value")
+    hass.services.async_remove("select", "select_option")
+    harness.close()
+
+
+@pytest.mark.freeze_time("2026-09-17 02:30:00+00:00")
+async def test_active_export_survives_safety_lock_reconfiguration(
+    hass, monkeypatch
+) -> None:
+    """Lock changes issue no commands and retain active export ownership."""
+    harness = LifecycleHarness(hass)
+    _register_foxess_services(hass, monkeypatch)
+    await _seed_foxess_states(harness, 100)
+    await harness.set_state(
+        "number.test_force_discharge",
+        "10",
+        {"unit_of_measurement": "kW", "max": 10},
+    )
+    await harness.set_state(
+        "select.test_work_mode",
+        "Force Discharge",
+        {"options": ["Self Use", "Force Discharge", "Force Charge"]},
+    )
+    configured = _active_entry_data(
+        automatic_export_enabled=True,
+        automatic_export_limit_kwh=25.0,
+        bonus_window_start="00:00:00",
+        bonus_window_end="23:58:00",
+        force_discharge_offset_minutes=1.0,
+        inverter_discharge_limit_kw=10.0,
+        house_learning_fallback_kwh=0.0,
+    )
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Active export reconfigure",
+        version=6,
+        data=configured,
+    )
+    entry.add_to_hass(hass)
+    store_key = f"home_energy_orchestrator.{entry.entry_id}.export_session"
+    await harness.save_store(
+        store_key,
+        {
+            "phase": "active",
+            "requested_power_kw": 10.0,
+            "attempts": 0,
+            "last_command_at": "2026-09-17T01:45:00+00:00",
+        },
+    )
+    await harness.setup(entry)
+    assert harness.service_calls == ()
+
+    await _apply_reconfiguration(
+        hass,
+        entry,
+        {**configured, "rehearsal_mode": True},
+        name="Active export locked",
+    )
+
+    assert harness.service_calls == ()
+    assert entry.runtime_data.active_controller.export_session.phase == "active"
+    persisted = await harness.load_store(store_key)
+    assert persisted is not None
+    assert persisted["phase"] == "active"
+    status = hass.states.get("sensor.home_energy_status")
+    assert status is not None
+    assert status.attributes["control_gate"] == "rehearsal"
+
+    await _apply_reconfiguration(
+        hass,
+        entry,
+        configured,
+        name="Active export unlocked",
+    )
+
+    assert harness.service_calls == ()
+    assert entry.runtime_data.active_controller.export_session.phase == "active"
     persisted = await harness.load_store(store_key)
     assert persisted is not None
     assert persisted["phase"] == "active"
