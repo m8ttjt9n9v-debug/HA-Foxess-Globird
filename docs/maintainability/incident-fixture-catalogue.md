@@ -17,6 +17,7 @@ Status meanings:
 |---|---|---|---|
 | Safety Lock with requested automation | `test_rehearsal_mode_is_an_absolute_no_write_gate`; `test_safety_lock_blocks_all_commands_across_reload` | System | Extend to generated transition sequences |
 | Free-window Force Charge recovery after restart | `test_persisted_active_charge_restarts_after_ha_restart_feedback_settles`; `test_active_free_charge_restarts_from_self_use_while_still_eligible`; `test_active_free_charge_is_reasserted_then_adopted_after_reload` | System | Extend the system replay to every session phase and exact window boundary |
+| ZEROHERO Force Discharge recovery after restart | export-session persistence/controller tests; `test_active_export_is_reasserted_then_adopted_after_reload` | System | Extend the system replay to stopping/recovering phases and exact window boundary |
 | Completed charge incorrectly reasserted | `test_completed_charge_session_round_trips_through_ha_storage`; live eligibility/restart regressions in `test_zerohero_active.py` | Focused | Add explicit completed-hold system trace |
 | Free-window end restores Self Use | `test_latched_free_charge_restores_self_use_after_window` | Focused | Advance deterministic clock through exact boundary and reload |
 | Manual diagnostic loses restoration obligation | `test_restart_restores_a_persisted_unfinished_test`; `test_failed_restore_remains_persisted_for_next_startup`; `test_restore_attempts_are_bounded_and_fault_remains_active` | Focused | Add config-entry reload and malformed-store system traces |
