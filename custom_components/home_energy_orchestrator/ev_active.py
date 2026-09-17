@@ -187,6 +187,7 @@ from .planner.ev_outside_state import (
     advance_charge_to_full,
     cleanup_disconnected_ev,
     cleanup_outside_ownership_for_free_window,
+    reconcile_outside_ownership,
 )
 from .planner.ev_outside_window import (
     PreFreeCurrentInputs,
@@ -1662,43 +1663,22 @@ class ActiveEvController:
             self.outside_stage_selection.target_current_a,
             self.outside_stage_selection.reason,
         )
-        self.outside_target_active = bool(
-            charge_to_full
-            or self.daily_backfill_active
-            or self.pre_free_session.active
-            or self.solar_spill.current_a >= current_minimum
+        ownership = reconcile_outside_ownership(
+            self._daily_backfill_cycle_state(),
+            charge_to_full=charge_to_full,
+            pre_free_active=self.pre_free_session.active,
+            solar_current_a=self.solar_spill.current_a,
+            physical_minimum_a=current_minimum,
+            baseline_a=baseline,
+            configured_baseline_a=configured_baseline,
+            charge_switch_on=observation.charge_switch_on,
+            previous_target_current_a=self.target_current_a,
+            outside_control_active=self.outside_control_active,
         )
-        if self.outside_target_active:
-            self.outside_control_active = True
-        elif baseline > 0:
-            # The pilot's mandatory connected baseline owns current, while the
-            # independently learned general charge limit remains authoritative.
-            self.outside_control_active = True
-        elif (
-            self.daily_backfill_stop_pending
-            and self._float(
-                CONF_EV_PROTECTED_BASELINE_A,
-                DEFAULT_EV_PROTECTED_BASELINE_A,
-            )
-            <= 0
-            and not self.pre_free_session.active
-            and self.solar_spill.current_a < current_minimum
-        ):
-            self.outside_stop_requested = True
-            self.outside_control_active = True
-        elif (
-            baseline < current_minimum
-            and observation.charge_switch_on
-            and self.target_current_a is not None
-            and self.target_current_a >= current_minimum
-        ):
-            # Stop a free-window command that HEO was controlling when no safe
-            # outside-window policy takes ownership after the boundary.
-            self.daily_backfill_stop_pending = True
-            self.daily_backfill_stop_attempts = 0
-            self.daily_backfill_last_stop_at = None
-            self.outside_stop_requested = True
-            self.outside_control_active = True
+        self._apply_daily_backfill_cycle_state(ownership.daily_state)
+        self.outside_target_active = ownership.outside_target_active
+        self.outside_control_active = ownership.outside_control_active
+        self.outside_stop_requested = ownership.outside_stop_requested
         if not self.outside_target_active and not self.outside_control_active:
             self.decision_phase = selected.phase
             self.last_reason = "outside_window_no_active_policy"

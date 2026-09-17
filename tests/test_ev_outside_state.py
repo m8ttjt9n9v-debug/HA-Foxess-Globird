@@ -8,6 +8,7 @@ from custom_components.home_energy_orchestrator.planner.ev_outside_state import 
     advance_charge_to_full,
     cleanup_disconnected_ev,
     cleanup_outside_ownership_for_free_window,
+    reconcile_outside_ownership,
 )
 from custom_components.home_energy_orchestrator.planner.ev_outside_window import (
     PreFreeSessionState,
@@ -151,6 +152,99 @@ def test_free_window_cleanup_clears_only_active_pre_free_ownership():
     assert retained.outside_control_active is True
     assert retained.outside_target_active is True
     assert retained.changed is False
+
+
+def test_outside_ownership_preserves_stage_priority_and_stop_latches():
+    active_daily = DailyBackfillCycleState(active=True)
+    owned = reconcile_outside_ownership(
+        active_daily,
+        charge_to_full=False,
+        pre_free_active=False,
+        solar_current_a=0,
+        physical_minimum_a=1,
+        baseline_a=0,
+        configured_baseline_a=0,
+        charge_switch_on=False,
+        previous_target_current_a=None,
+        outside_control_active=False,
+    )
+    assert owned.outside_target_active is True
+    assert owned.outside_control_active is True
+    assert owned.outside_stop_requested is False
+
+    pending = DailyBackfillCycleState(
+        stop_pending=True,
+        stop_attempts=2,
+        last_stop_at=datetime(2026, 9, 7, 6, tzinfo=UTC),
+    )
+    retained_stop = reconcile_outside_ownership(
+        pending,
+        charge_to_full=False,
+        pre_free_active=False,
+        solar_current_a=0,
+        physical_minimum_a=1,
+        baseline_a=0,
+        configured_baseline_a=0,
+        charge_switch_on=False,
+        previous_target_current_a=None,
+        outside_control_active=False,
+    )
+    assert retained_stop.daily_state is pending
+    assert retained_stop.outside_stop_requested is True
+    assert retained_stop.outside_control_active is True
+
+    carried = reconcile_outside_ownership(
+        DailyBackfillCycleState(),
+        charge_to_full=False,
+        pre_free_active=False,
+        solar_current_a=0,
+        physical_minimum_a=1,
+        baseline_a=0,
+        configured_baseline_a=0,
+        charge_switch_on=True,
+        previous_target_current_a=16,
+        outside_control_active=False,
+    )
+    assert carried.daily_state.stop_pending is True
+    assert carried.daily_state.stop_attempts == 0
+    assert carried.daily_state.last_stop_at is None
+    assert carried.outside_stop_requested is True
+    assert carried.outside_control_active is True
+
+
+def test_outside_ownership_retains_baseline_and_prior_control_semantics():
+    state = DailyBackfillCycleState()
+    baseline = reconcile_outside_ownership(
+        state,
+        charge_to_full=False,
+        pre_free_active=False,
+        solar_current_a=0,
+        physical_minimum_a=1,
+        baseline_a=1,
+        configured_baseline_a=1,
+        charge_switch_on=False,
+        previous_target_current_a=None,
+        outside_control_active=False,
+    )
+    assert baseline.outside_target_active is False
+    assert baseline.outside_control_active is True
+    assert baseline.outside_stop_requested is False
+
+    retained = reconcile_outside_ownership(
+        state,
+        charge_to_full=False,
+        pre_free_active=False,
+        solar_current_a=0,
+        physical_minimum_a=1,
+        baseline_a=0,
+        configured_baseline_a=0,
+        charge_switch_on=False,
+        previous_target_current_a=None,
+        outside_control_active=True,
+    )
+    assert retained.outside_target_active is False
+    assert retained.outside_control_active is True
+    assert retained.outside_stop_requested is False
 
 
 def test_charge_to_full_transition_covers_start_completion_timeout_and_cancel():

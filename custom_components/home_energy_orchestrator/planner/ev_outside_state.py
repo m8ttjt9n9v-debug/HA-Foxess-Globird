@@ -62,6 +62,71 @@ class FreeWindowOutsideCleanupTransition:
     changed: bool
 
 
+@dataclass(frozen=True, slots=True)
+class OutsideOwnershipTransition:
+    """Outside-window target ownership and any carried-charge stop latch."""
+
+    daily_state: DailyBackfillCycleState
+    outside_target_active: bool
+    outside_control_active: bool
+    outside_stop_requested: bool
+
+
+def reconcile_outside_ownership(
+    daily_state: DailyBackfillCycleState,
+    *,
+    charge_to_full: bool,
+    pre_free_active: bool,
+    solar_current_a: float,
+    physical_minimum_a: float,
+    baseline_a: float,
+    configured_baseline_a: float,
+    charge_switch_on: bool,
+    previous_target_current_a: float | None,
+    outside_control_active: bool,
+) -> OutsideOwnershipTransition:
+    """Preserve outside ownership and stop obligations after stage selection."""
+    target_active = bool(
+        charge_to_full
+        or daily_state.active
+        or pre_free_active
+        or solar_current_a >= physical_minimum_a
+    )
+    control_active = outside_control_active
+    stop_requested = False
+    next_daily = daily_state
+    if target_active or baseline_a > 0:
+        control_active = True
+    elif (
+        daily_state.stop_pending
+        and configured_baseline_a <= 0
+        and not pre_free_active
+        and solar_current_a < physical_minimum_a
+    ):
+        stop_requested = True
+        control_active = True
+    elif (
+        baseline_a < physical_minimum_a
+        and charge_switch_on
+        and previous_target_current_a is not None
+        and previous_target_current_a >= physical_minimum_a
+    ):
+        next_daily = replace(
+            daily_state,
+            stop_pending=True,
+            stop_attempts=0,
+            last_stop_at=None,
+        )
+        stop_requested = True
+        control_active = True
+    return OutsideOwnershipTransition(
+        daily_state=next_daily,
+        outside_target_active=target_active,
+        outside_control_active=control_active,
+        outside_stop_requested=stop_requested,
+    )
+
+
 def cleanup_outside_ownership_for_free_window(
     *,
     in_free_window: bool,
