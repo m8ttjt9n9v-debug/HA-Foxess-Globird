@@ -1399,10 +1399,30 @@ async def test_battery_floor_stops_automatic_outside_charge(
     coordinator.data = SimpleNamespace(available_after_reserve_kwh=0)
     coordinator.learning_remaining_kwh = 3
     controller = ActiveEvController(hass, coordinator)
+    controller.daily_backfill_active = True
+    controller.daily_backfill_session_target_kwh = 2
+    controller.daily_backfill_session_start_delivered_kwh = 0.5
+    controller.daily_backfill_frozen_start = datetime(2026, 9, 7, 5, tzinfo=UTC)
+    controller.pre_free_session = PreFreeSessionState(
+        True,
+        datetime(2026, 9, 7, 5, 30, tzinfo=UTC),
+    )
+    now = datetime(2026, 9, 7, 6, 30, tzinfo=UTC)
 
-    await controller.async_reconcile(datetime(2026, 9, 7, 6, 30, tzinfo=UTC))
+    await controller.async_reconcile(now)
 
     assert controller.decision_phase == "battery_floor_reached"
+    assert controller.target_current_a == 0
+    assert controller.daily_backfill_active is False
+    assert controller.daily_backfill_session_target_kwh == 0
+    assert controller.daily_backfill_session_start_delivered_kwh == 0
+    assert controller.daily_backfill_frozen_start is None
+    assert controller.pre_free_session == PreFreeSessionState()
+    assert controller.pre_free_phase == "battery_floor_reached"
+    assert controller.daily_backfill_stop_pending is True
+    assert controller.daily_backfill_stop_attempts == 1
+    assert controller.daily_backfill_last_stop_at == now
+    assert controller.outside_control_active is True
     assert controller.last_actions == ("stop_charging",)
     assert stopped == ["switch.car_charge"]
 
