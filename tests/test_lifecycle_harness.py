@@ -8,6 +8,7 @@ import pytest
 from homeassistant.config_entries import SOURCE_RECONFIGURE
 from homeassistant.core import ServiceRegistry
 from homeassistant.data_entry_flow import FlowResultType
+from homeassistant.helpers import entity_registry as er
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.home_energy_orchestrator.const import DOMAIN
@@ -1812,6 +1813,91 @@ async def test_battery_only_site_ignores_retained_ev_reservation_across_reload(
     assert controller.export_plan is not None
     assert controller.export_plan.planned_export_energy_kwh == 25.0
     assert hass.states.get("sensor.home_energy_zerohero_planned_export_energy").state == "25.0"
+    assert harness.service_calls == ()
+    await harness.unload(entry)
+    hass.services.async_remove("number", "set_value")
+    hass.services.async_remove("select", "select_option")
+    harness.close()
+
+
+@pytest.mark.freeze_time("2026-09-17 10:00:00+00:00")
+async def test_v5_scorecard_mapping_survives_upgrade_setup_and_reload(
+    hass, monkeypatch
+) -> None:
+    """Discovered GloBird mappings populate Fleet actual/error across reload."""
+    harness = LifecycleHarness(hass)
+    _register_foxess_services(harness, monkeypatch)
+    await _seed_foxess_states(harness, 60)
+    globird = MockConfigEntry(domain="globird_ha")
+    globird.add_to_hass(hass)
+    registry = er.async_get(hass)
+    cost = registry.async_get_or_create(
+        "sensor",
+        "globird_ha",
+        "latest_daily_cost",
+        suggested_object_id="globird_energy_latest_daily_cost",
+        config_entry=globird,
+    )
+    status = registry.async_get_or_create(
+        "sensor",
+        "globird_ha",
+        "zerohero_status",
+        suggested_object_id="globird_energy_zerohero_status",
+        config_entry=globird,
+    )
+    result_attributes = {
+        "latest_available_day": "2026/09/16",
+        "latest_available_day_complete": True,
+    }
+    await harness.set_state(cost.entity_id, "2.00", result_attributes)
+    await harness.set_state(status.entity_id, "achieved", result_attributes)
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Upgraded scorecard site",
+        version=5,
+        data=ENTRY_DATA,
+    )
+    entry.add_to_hass(hass)
+    await harness.save_store(
+        f"home_energy_orchestrator.{entry.entry_id}.forecast_feedback",
+        {
+            "current": {"date": "2026-09-17"},
+            "export_realisation_fraction": 0.75,
+            "learned_cost_bias": 0.0,
+            "history": [
+                {
+                    "date": "2026-09-16",
+                    "frozen_forecast_cost": 1.25,
+                    "frozen_raw_forecast_cost": 1.25,
+                }
+            ],
+        },
+    )
+
+    await harness.setup(entry)
+    entry.runtime_data.async_update_listeners()
+    await hass.async_block_till_done()
+
+    assert entry.version == 6
+    assert entry.data["globird_latest_daily_cost_entity"] == cost.entity_id
+    assert entry.data["globird_zerohero_status_entity"] == status.entity_id
+    fleet = hass.states.get("sensor.home_energy_fleet_summary")
+    assert fleet is not None
+    assert fleet.attributes["latest_actual_cost"] == 2.0
+    assert fleet.attributes["forecast_error"] == 0.75
+    assert fleet.attributes["latest_zerohero_status"] == "achieved"
+    assert fleet.attributes["forecast_scorecard_status"] == "matched"
+    assert harness.service_calls == ()
+
+    await harness.reload(entry)
+    entry.runtime_data.async_update_listeners()
+    await hass.async_block_till_done()
+
+    fleet = hass.states.get("sensor.home_energy_fleet_summary")
+    assert fleet is not None
+    assert fleet.attributes["latest_actual_cost"] == 2.0
+    assert fleet.attributes["forecast_error"] == 0.75
+    assert fleet.attributes["forecast_scorecard_status"] == "matched"
     assert harness.service_calls == ()
     await harness.unload(entry)
     hass.services.async_remove("number", "set_value")

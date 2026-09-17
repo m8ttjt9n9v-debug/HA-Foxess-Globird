@@ -36,7 +36,7 @@ Status meanings:
 | Battery-only site retains stale EV reservation | `test_battery_only_site_ignores_retained_ev_baseline`; `test_battery_only_site_ignores_retained_ev_reservation_across_reload` | System | Retain clean, upgraded and reload snapshots as a mandatory regression gate |
 | Learning becomes unavailable while valid EV samples remain | confirmed roadmap bug; existing learning arithmetic and restart tests | Open bug | First add disconnected setup/unplug/restart failing regressions; connection gates actuation only |
 | House learning loses or duplicates EV/heater subtraction | source-composition tests in `test_setup.py` | Focused | Add multi-cycle persisted sampler replay |
-| GloBird scorecard mappings disappear on upgrade | v5 migration and scorecard status tests | Focused | Add full config-entry upgrade/setup/Fleet snapshot |
+| GloBird scorecard mappings disappear on upgrade | v5 migration and scorecard status tests; `test_v5_scorecard_mapping_survives_upgrade_setup_and_reload` | System | Retain discovered mappings and Fleet actual/error/status through upgrade and reload |
 | User entity IDs are reclaimed on setup | `test_setup_preserves_user_owned_entity_ids_and_names` | System | Expand to upgrade, downgrade and collision fixtures |
 
 ## Fixture completion rule
