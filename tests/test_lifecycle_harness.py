@@ -805,6 +805,76 @@ async def test_active_export_survives_safety_lock_reconfiguration(
     harness.close()
 
 
+@pytest.mark.freeze_time("2026-09-17 00:30:00+00:00")
+async def test_export_cap_reconfiguration_keeps_sellable_energy_available(
+    hass, monkeypatch
+) -> None:
+    """Changing 15 to 20 kWh updates the plan without invalidating inputs."""
+    harness = LifecycleHarness(hass)
+    _register_foxess_services(harness, monkeypatch)
+    await _seed_foxess_states(harness, 100)
+    configured = _active_entry_data(
+        automatic_export_enabled=True,
+        automatic_export_limit_kwh=15.0,
+        export_allowance_kwh=15.0,
+        battery_capacity_kwh=40.32,
+        inverter_discharge_limit_kw=10.0,
+        house_learning_fallback_kwh=0.0,
+    )
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Export cap reconfigure",
+        version=6,
+        data=configured,
+    )
+    entry.add_to_hass(hass)
+    await harness.setup(entry)
+    controller = entry.runtime_data.active_controller
+    assert controller.export_plan is not None, (
+        controller.last_reason,
+        controller.gate_status,
+        entry.runtime_data.data.available_after_reserve_kwh,
+        entry.runtime_data.learning_remaining_kwh,
+        controller.automatic_export_remaining_kwh,
+    )
+    entry.runtime_data.async_update_listeners()
+    await hass.async_block_till_done()
+
+    sellable_entity = "sensor.home_energy_zerohero_sellable_energy"
+    planned_entity = "sensor.home_energy_zerohero_planned_export_energy"
+    sellable_before = hass.states.get(sellable_entity)
+    planned_before = hass.states.get(planned_entity)
+    assert sellable_before is not None
+    assert planned_before is not None
+    assert float(sellable_before.state) > 20.0
+    assert planned_before.state == "15.0"
+    assert harness.service_calls == ()
+
+    await _apply_reconfiguration(
+        hass,
+        entry,
+        {**configured, "automatic_export_limit_kwh": 20.0},
+        name="Export cap reconfigured",
+    )
+    entry.runtime_data.async_update_listeners()
+    await hass.async_block_till_done()
+
+    sellable_after = hass.states.get(sellable_entity)
+    planned_after = hass.states.get(planned_entity)
+    assert sellable_after is not None
+    assert planned_after is not None
+    assert sellable_after.state == sellable_before.state
+    assert planned_after.state == "20.0"
+    assert entry.data["automatic_export_limit_kwh"] == 20.0
+    assert entry.data["export_allowance_kwh"] == 15.0
+    assert entry.data["sign_conventions_verified"] is True
+    assert harness.service_calls == ()
+    await harness.unload(entry)
+    hass.services.async_remove("number", "set_value")
+    hass.services.async_remove("select", "select_option")
+    harness.close()
+
+
 @pytest.mark.freeze_time("2026-09-17 02:30:00+00:00")
 async def test_import_anchor_stays_zero_when_export_continues_after_reload(
     hass, monkeypatch
