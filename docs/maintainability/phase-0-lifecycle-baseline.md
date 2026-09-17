@@ -50,6 +50,9 @@ The retained Home Assistant storage keys, schema versions and privacy flags are
 frozen in the
 [v0.12.26 persistence contract](persistence-contract-v0.12.26.json). Any change
 to that contract requires an explicit migration and compatibility review.
+The unresolved ownership boundary for missing or malformed session state is
+specified separately in
+[malformed session storage safety decision](malformed-session-storage.md).
 
 ### OM-004 — Lifecycle harness core
 
