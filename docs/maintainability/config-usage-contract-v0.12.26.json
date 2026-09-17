@@ -1,5 +1,5 @@
 {
-  "access_count": 480,
+  "access_count": 475,
   "accesses": [
     {
       "access": "subscript_store",
@@ -3803,6 +3803,26 @@
     },
     {
       "access": "get",
+      "constant": "CONF_EV_CHARGE_LIMIT",
+      "key": "ev_charge_limit_entity",
+      "kind": "raw_mapping",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "RuntimeConfiguration.from_mapping",
+      "source": "custom_components/home_energy_orchestrator/configuration.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_CHARGE_SWITCH",
+      "key": "ev_charge_switch_entity",
+      "kind": "raw_mapping",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "RuntimeConfiguration.from_mapping",
+      "source": "custom_components/home_energy_orchestrator/configuration.py"
+    },
+    {
+      "access": "get",
       "constant": "CONF_EV_CHARGE_TO_FULL",
       "key": "ev_charge_to_full_entity",
       "kind": "raw_mapping",
@@ -3843,8 +3863,28 @@
     },
     {
       "access": "get",
+      "constant": "CONF_EV_CURRENT_LIMIT",
+      "key": "ev_current_limit_entity",
+      "kind": "raw_mapping",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "RuntimeConfiguration.from_mapping",
+      "source": "custom_components/home_energy_orchestrator/configuration.py"
+    },
+    {
+      "access": "get",
       "constant": "CONF_EV_LOCATION_MODE",
       "key": "ev_location_mode",
+      "kind": "raw_mapping",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "RuntimeConfiguration.from_mapping",
+      "source": "custom_components/home_energy_orchestrator/configuration.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_SMART_SOCKET",
+      "key": "ev_smart_socket_entity",
       "kind": "raw_mapping",
       "layer": "boundary",
       "receiver": "data",
@@ -4393,76 +4433,6 @@
     },
     {
       "access": "get",
-      "constant": "CONF_EV_CHARGE_LIMIT",
-      "key": "ev_charge_limit_entity",
-      "kind": "raw_mapping",
-      "layer": "runtime",
-      "receiver": "config",
-      "scope": "ActiveEvController._create_adapter",
-      "source": "custom_components/home_energy_orchestrator/ev_active.py"
-    },
-    {
-      "access": "get",
-      "constant": "CONF_EV_CHARGE_SWITCH",
-      "key": "ev_charge_switch_entity",
-      "kind": "raw_mapping",
-      "layer": "runtime",
-      "receiver": "config",
-      "scope": "ActiveEvController._create_adapter",
-      "source": "custom_components/home_energy_orchestrator/ev_active.py"
-    },
-    {
-      "access": "get",
-      "constant": "CONF_EV_CURRENT_LIMIT",
-      "key": "ev_current_limit_entity",
-      "kind": "raw_mapping",
-      "layer": "runtime",
-      "receiver": "config",
-      "scope": "ActiveEvController._create_adapter",
-      "source": "custom_components/home_energy_orchestrator/ev_active.py"
-    },
-    {
-      "access": "get",
-      "constant": "CONF_EV_SMART_SOCKET",
-      "key": "ev_smart_socket_entity",
-      "kind": "raw_mapping",
-      "layer": "runtime",
-      "receiver": "config",
-      "scope": "ActiveEvController._create_adapter",
-      "source": "custom_components/home_energy_orchestrator/ev_active.py"
-    },
-    {
-      "access": "subscript_load",
-      "constant": "CONF_EV_SMART_SOCKET",
-      "key": "ev_smart_socket_entity",
-      "kind": "raw_mapping",
-      "layer": "runtime",
-      "receiver": "config",
-      "scope": "ActiveEvController._create_adapter",
-      "source": "custom_components/home_energy_orchestrator/ev_active.py"
-    },
-    {
-      "access": "get",
-      "constant": "CONF_EV_CHARGE_LIMIT",
-      "key": "ev_charge_limit_entity",
-      "kind": "raw_mapping",
-      "layer": "runtime",
-      "receiver": "self.coordinator.config",
-      "scope": "ActiveEvController._observation",
-      "source": "custom_components/home_energy_orchestrator/ev_active.py"
-    },
-    {
-      "access": "get",
-      "constant": "CONF_EV_CURRENT_LIMIT",
-      "key": "ev_current_limit_entity",
-      "kind": "raw_mapping",
-      "layer": "runtime",
-      "receiver": "self.coordinator.config",
-      "scope": "ActiveEvController._observation",
-      "source": "custom_components/home_energy_orchestrator/ev_active.py"
-    },
-    {
-      "access": "get",
       "constant": "CONF_EV_CHARGE_PATH",
       "key": "ev_charge_path",
       "kind": "raw_mapping",
@@ -4473,32 +4443,12 @@
     },
     {
       "access": "get",
-      "constant": "CONF_EV_CHARGE_SWITCH",
-      "key": "ev_charge_switch_entity",
-      "kind": "raw_mapping",
-      "layer": "runtime",
-      "receiver": "self.coordinator.config",
-      "scope": "ActiveEvController._smart_recovery_observation",
-      "source": "custom_components/home_energy_orchestrator/ev_active.py"
-    },
-    {
-      "access": "get",
       "constant": "CONF_EV_CHARGING_STATE",
       "key": "ev_charging_state_entity",
       "kind": "raw_mapping",
       "layer": "runtime",
       "receiver": "self.coordinator.config",
       "scope": "ActiveEvController._smart_recovery_observation",
-      "source": "custom_components/home_energy_orchestrator/ev_active.py"
-    },
-    {
-      "access": "get",
-      "constant": "CONF_EV_SMART_SOCKET",
-      "key": "ev_smart_socket_entity",
-      "kind": "raw_mapping",
-      "layer": "runtime",
-      "receiver": "self.coordinator.config",
-      "scope": "ActiveEvController._smart_socket_observation",
       "source": "custom_components/home_energy_orchestrator/ev_active.py"
     },
     {
@@ -4804,18 +4754,18 @@
   ],
   "accesses_by_kind": {
     "managed_mutation": 9,
-    "raw_mapping": 471
+    "raw_mapping": 466
   },
   "accesses_by_layer": {
-    "boundary": 396,
-    "runtime": 84
+    "boundary": 400,
+    "runtime": 75
   },
   "accesses_by_source": {
     "custom_components/home_energy_orchestrator/__init__.py": 24,
     "custom_components/home_energy_orchestrator/config_flow.py": 347,
-    "custom_components/home_energy_orchestrator/configuration.py": 25,
+    "custom_components/home_energy_orchestrator/configuration.py": 29,
     "custom_components/home_energy_orchestrator/coordinator.py": 31,
-    "custom_components/home_energy_orchestrator/ev_active.py": 33,
+    "custom_components/home_energy_orchestrator/ev_active.py": 24,
     "custom_components/home_energy_orchestrator/ev_adapter.py": 10,
     "custom_components/home_energy_orchestrator/number.py": 1,
     "custom_components/home_energy_orchestrator/select.py": 1,
@@ -4823,8 +4773,8 @@
   },
   "key_count": 129,
   "raw_accesses_by_layer": {
-    "boundary": 396,
-    "runtime": 75
+    "boundary": 400,
+    "runtime": 66
   },
   "release_baseline": "0.12.26",
   "schema_version": 2

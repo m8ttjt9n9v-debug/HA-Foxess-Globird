@@ -29,14 +29,11 @@ from .const import (
     CONF_EV_ARRIVAL_RESERVE_SOC,
     CONF_EV_BACKFILL_BUFFER_MINUTES,
     CONF_EV_CHARGE_EFFICIENCY,
-    CONF_EV_CHARGE_LIMIT,
     CONF_EV_CHARGE_PATH,
-    CONF_EV_CHARGE_SWITCH,
     CONF_EV_CHARGE_TO_FULL,
     CONF_EV_CHARGE_TO_FULL_ENABLED,
     CONF_EV_CHARGE_TO_FULL_MAX_HOURS,
     CONF_EV_CHARGING_STATE,
-    CONF_EV_CURRENT_LIMIT,
     CONF_EV_DAILY_BACKFILL_ENERGY,
     CONF_EV_DAILY_READY_TIME,
     CONF_EV_DIRECT_LIMIT_HEADROOM,
@@ -59,7 +56,6 @@ from .const import (
     CONF_EV_SMART_RECOVERY_POWER_OFF_SECONDS,
     CONF_EV_SMART_RECOVERY_REARM_SECONDS,
     CONF_EV_SMART_RECOVERY_SOCKET_CONFIRM_SECONDS,
-    CONF_EV_SMART_SOCKET,
     CONF_EV_SMART_SOCKET_CURRENT_LIMIT,
     CONF_EV_SMART_SOCKET_POWER_SWITCHING,
     CONF_EV_SMART_SOCKET_RETRY_SECONDS,
@@ -949,8 +945,8 @@ class ActiveEvController:
     def _smart_socket_observation(
         self, now: datetime, observation: DirectEvseObservation
     ) -> SmartSocketObservation | None:
-        socket_entity = self.coordinator.config.get(CONF_EV_SMART_SOCKET)
-        socket_state = self.hass.states.get(str(socket_entity)) if socket_entity else None
+        socket_entity = self.coordinator.runtime_config.ev_actuators.smart_socket_entity
+        socket_state = self.hass.states.get(socket_entity) if socket_entity else None
         if socket_state is None or socket_state.state.lower() not in {"on", "off"}:
             return None
         socket_on = socket_state.state.lower() == "on"
@@ -997,8 +993,13 @@ class ActiveEvController:
             if connection.cable_connected_entity
             else None
         )
-        charge_switch_state = self.hass.states.get(
-            str(self.coordinator.config.get(CONF_EV_CHARGE_SWITCH, ""))
+        charge_switch_entity = (
+            self.coordinator.runtime_config.ev_actuators.charge_switch_entity
+        )
+        charge_switch_state = (
+            self.hass.states.get(charge_switch_entity)
+            if charge_switch_entity
+            else None
         )
         evidence_states = (at_home_state, cable_state, charge_switch_state)
         evidence_age_stable = all(
@@ -2141,13 +2142,14 @@ class ActiveEvController:
         return value, True
 
     def _observation(self) -> DirectEvseObservation | None:
-        current_entity = self.coordinator.config.get(CONF_EV_CURRENT_LIMIT)
-        limit_entity = self.coordinator.config.get(CONF_EV_CHARGE_LIMIT)
+        actuators = self.coordinator.runtime_config.ev_actuators
+        current_entity = actuators.current_limit_entity
+        limit_entity = actuators.charge_limit_entity
         if not current_entity or not limit_entity:
             return None
-        current_state = self.hass.states.get(str(current_entity))
-        limit_state = self.hass.states.get(str(limit_entity))
-        switch = self._entity_state(CONF_EV_CHARGE_SWITCH)
+        current_state = self.hass.states.get(current_entity)
+        limit_state = self.hass.states.get(limit_entity)
+        switch = self._mapped_state(actuators.charge_switch_entity)
         if current_state is None or limit_state is None or switch is None:
             return None
         try:
@@ -2198,21 +2200,15 @@ class ActiveEvController:
         )
 
     def _create_adapter(self) -> EvServiceAdapter | None:
-        config = self.coordinator.config
-        mapping = (
-            config.get(CONF_EV_CURRENT_LIMIT),
-            config.get(CONF_EV_CHARGE_LIMIT),
-            config.get(CONF_EV_CHARGE_SWITCH),
-        )
-        if not all(mapping):
+        actuators = self.coordinator.runtime_config.ev_actuators
+        direct_entities = actuators.direct_entities
+        if direct_entities is None:
             return None
         return EvServiceAdapter(
             self.hass,
             EvEntityMap(
-                *(str(value) for value in mapping),
-                smart_socket_entity=(
-                    str(config[CONF_EV_SMART_SOCKET]) if config.get(CONF_EV_SMART_SOCKET) else None
-                ),
+                *direct_entities,
+                smart_socket_entity=actuators.smart_socket_entity,
             ),
             allow_writes=True,
             write_guard=lambda: self.gate_status == "ready",

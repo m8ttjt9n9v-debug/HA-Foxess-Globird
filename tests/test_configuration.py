@@ -16,12 +16,16 @@ from custom_components.home_energy_orchestrator.const import (
     CONF_EV_AT_HOME,
     CONF_EV_BEFORE_EXPORT_SOC_TARGET,
     CONF_EV_CABLE_CONNECTED,
+    CONF_EV_CHARGE_LIMIT,
+    CONF_EV_CHARGE_SWITCH,
     CONF_EV_CHARGE_TO_FULL,
     CONF_EV_CHARGE_TO_FULL_ENABLED,
     CONF_EV_CONTROL_COMMISSIONED,
+    CONF_EV_CURRENT_LIMIT,
     CONF_EV_LOCATION_MODE,
     CONF_EV_PHASE_COUNT,
     CONF_EV_PROTECTED_BASELINE_A,
+    CONF_EV_SMART_SOCKET,
     CONF_EV_VOLTAGE,
     CONF_EXPORT_RATE,
     CONF_FOXESS_CONTROL_OWNER,
@@ -124,6 +128,8 @@ def test_runtime_configuration_uses_established_defaults() -> None:
     )
     assert parsed.ev_connection.voltage_v == DEFAULT_EV_VOLTAGE
     assert parsed.ev_connection.phase_count == DEFAULT_EV_PHASE_COUNT
+    assert parsed.ev_actuators.direct_entities is None
+    assert parsed.ev_actuators.smart_socket_entity is None
     assert parsed.house.occupancy_mode == DEFAULT_HOUSE_OCCUPANCY_MODE
     assert parsed.electrical.verified is False
     assert (
@@ -279,6 +285,53 @@ def test_ev_connection_snapshot_preserves_keepalive_input_semantics(
         ev.voltage_v,
         ev.phase_count,
     ) == expected
+
+
+@pytest.mark.parametrize(
+    ("data", "expected_direct", "expected_socket"),
+    [
+        ({}, None, None),
+        (
+            {
+                CONF_EV_CURRENT_LIMIT: "number.car_current",
+                CONF_EV_CHARGE_LIMIT: "number.car_limit",
+                CONF_EV_CHARGE_SWITCH: "switch.car_charge",
+                CONF_EV_SMART_SOCKET: "switch.car_socket",
+            },
+            ("number.car_current", "number.car_limit", "switch.car_charge"),
+            "switch.car_socket",
+        ),
+        (
+            {
+                CONF_EV_CURRENT_LIMIT: 123,
+                CONF_EV_CHARGE_LIMIT: 456,
+                CONF_EV_CHARGE_SWITCH: 789,
+                CONF_EV_SMART_SOCKET: 101,
+            },
+            ("123", "456", "789"),
+            "101",
+        ),
+        (
+            {
+                CONF_EV_CURRENT_LIMIT: "number.car_current",
+                CONF_EV_CHARGE_LIMIT: "",
+                CONF_EV_CHARGE_SWITCH: "switch.car_charge",
+                CONF_EV_SMART_SOCKET: False,
+            },
+            None,
+            None,
+        ),
+    ],
+)
+def test_ev_actuator_snapshot_preserves_mapping_coercion(
+    data: dict[str, object],
+    expected_direct: tuple[str, str, str] | None,
+    expected_socket: str | None,
+) -> None:
+    """Truthy mappings stringify; falsey or incomplete mappings fail closed."""
+    actuators = RuntimeConfiguration.from_mapping(data).ev_actuators
+    assert actuators.direct_entities == expected_direct
+    assert actuators.smart_socket_entity == expected_socket
 
 
 @pytest.mark.parametrize(

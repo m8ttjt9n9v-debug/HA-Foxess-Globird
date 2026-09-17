@@ -17,12 +17,16 @@ from .const import (
     CONF_EV_BEFORE_EXPORT_ENABLED,
     CONF_EV_BEFORE_EXPORT_SOC_TARGET,
     CONF_EV_CABLE_CONNECTED,
+    CONF_EV_CHARGE_LIMIT,
+    CONF_EV_CHARGE_SWITCH,
     CONF_EV_CHARGE_TO_FULL,
     CONF_EV_CHARGE_TO_FULL_ENABLED,
     CONF_EV_CONTROL_COMMISSIONED,
+    CONF_EV_CURRENT_LIMIT,
     CONF_EV_LOCATION_MODE,
     CONF_EV_PHASE_COUNT,
     CONF_EV_PROTECTED_BASELINE_A,
+    CONF_EV_SMART_SOCKET,
     CONF_EV_VOLTAGE,
     CONF_EXPORT_RATE,
     CONF_FOXESS_CONTROL_OWNER,
@@ -117,6 +121,31 @@ class EvConnectionSettings:
 
 
 @dataclass(frozen=True, slots=True)
+class EvActuatorSettings:
+    """Explicit Home Assistant entities used for EV command feedback/writes."""
+
+    current_limit_entity: str | None
+    charge_limit_entity: str | None
+    charge_switch_entity: str | None
+    smart_socket_entity: str | None
+
+    @property
+    def direct_entities(self) -> tuple[str, str, str] | None:
+        """Return the complete direct-EVSE mapping, or fail closed."""
+        if (
+            self.current_limit_entity is None
+            or self.charge_limit_entity is None
+            or self.charge_switch_entity is None
+        ):
+            return None
+        return (
+            self.current_limit_entity,
+            self.charge_limit_entity,
+            self.charge_switch_entity,
+        )
+
+
+@dataclass(frozen=True, slots=True)
 class HouseSettings:
     """Operator-owned house-energy occupancy selection."""
 
@@ -173,6 +202,7 @@ class RuntimeConfiguration:
     automation: AutomationSettings
     ev_preferences: EvPreferenceSettings
     ev_connection: EvConnectionSettings
+    ev_actuators: EvActuatorSettings
     house: HouseSettings
     electrical: ElectricalSettings
     tariff: TariffSettings
@@ -191,6 +221,10 @@ class RuntimeConfiguration:
         force_discharge_power_entity = data.get(CONF_FOXESS_FORCE_DISCHARGE_POWER)
         ev_at_home_entity = data.get(CONF_EV_AT_HOME)
         ev_cable_connected_entity = data.get(CONF_EV_CABLE_CONNECTED)
+        ev_current_limit_entity = data.get(CONF_EV_CURRENT_LIMIT)
+        ev_charge_limit_entity = data.get(CONF_EV_CHARGE_LIMIT)
+        ev_charge_switch_entity = data.get(CONF_EV_CHARGE_SWITCH)
+        ev_smart_socket_entity = data.get(CONF_EV_SMART_SOCKET)
         legacy_charge_to_full_entity = data.get(CONF_EV_CHARGE_TO_FULL)
         ev_control_commissioned = bool(
             data.get(
@@ -302,6 +336,20 @@ class RuntimeConfiguration:
                 phase_count=max(
                     _number(data, CONF_EV_PHASE_COUNT, DEFAULT_EV_PHASE_COUNT),
                     0.0,
+                ),
+            ),
+            ev_actuators=EvActuatorSettings(
+                current_limit_entity=(
+                    str(ev_current_limit_entity) if ev_current_limit_entity else None
+                ),
+                charge_limit_entity=(
+                    str(ev_charge_limit_entity) if ev_charge_limit_entity else None
+                ),
+                charge_switch_entity=(
+                    str(ev_charge_switch_entity) if ev_charge_switch_entity else None
+                ),
+                smart_socket_entity=(
+                    str(ev_smart_socket_entity) if ev_smart_socket_entity else None
                 ),
             ),
             house=HouseSettings(occupancy_mode=occupancy),
