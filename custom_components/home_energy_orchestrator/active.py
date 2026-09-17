@@ -21,6 +21,7 @@ from .const import (
     FOXESS_CONTROL_OWNER_MODBUS,
 )
 from .coordinator import EnergyCoordinator
+from .ev_observation_adapter import capture_ev_entity_feedback
 from .foxess_adapter import FoxessEntityMap, FoxessServiceAdapter
 from .foxess_observation_adapter import (
     FoxessFeedbackSnapshot,
@@ -630,7 +631,7 @@ class ActiveFoxessController:
         return FoxessCommandPlan(tuple(commands), plan.reason)
 
     def _state(self, entity_id: str) -> str | None:
-        state = self.hass.states.get(entity_id)
-        if state is None or state.state in {"unknown", "unavailable"}:
+        reported = capture_ev_entity_feedback(self.hass, entity_id).reported_state
+        if reported is None or reported in {"unknown", "unavailable"}:
             return None
-        return state.state
+        return reported

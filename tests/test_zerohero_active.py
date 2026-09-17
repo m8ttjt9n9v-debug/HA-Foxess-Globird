@@ -745,6 +745,35 @@ async def test_export_protects_only_explicit_connected_ev_baseline(hass):
     assert controller._protected_keepalive_energy_kwh(15) == 0.0
 
 
+@pytest.mark.parametrize(
+    ("home_state", "expected"),
+    [("unknown", None), ("unavailable", None), ("UNKNOWN", 0.0), ("", 0.0)],
+)
+async def test_export_ev_baseline_retains_legacy_state_case_semantics(
+    hass,
+    home_state,
+    expected,
+):
+    """Boundary extraction must not silently broaden legacy accepted states."""
+    hass.states.async_set("device_tracker.car", home_state)
+    hass.states.async_set("binary_sensor.car_cable", "on")
+    controller = _loaded_controller(
+        hass,
+        _coordinator(
+            **{
+                CONF_EV_CONTROL_COMMISSIONED: True,
+                CONF_EV_PROTECTED_BASELINE_A: 1.0,
+                CONF_EV_VOLTAGE: 230.0,
+                CONF_EV_PHASE_COUNT: 1,
+                CONF_EV_AT_HOME: "device_tracker.car",
+                CONF_EV_CABLE_CONNECTED: "binary_sensor.car_cable",
+            }
+        ),
+    )
+
+    assert controller._protected_keepalive_energy_kwh(15) == expected
+
+
 async def test_nonzero_ev_baseline_fails_closed_without_explicit_evidence(hass):
     controller = _loaded_controller(
         hass,
