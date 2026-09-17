@@ -26,7 +26,6 @@ from .foxess_observation_adapter import (
     FoxessFeedbackSnapshot,
     capture_foxess_feedback,
 )
-from .normalise import power_to_kw
 from .persistence import TypedValueStoreRepository
 from .planner.charge_session import ChargeSessionState, advance_charge_session
 from .planner.ev_before_export import (
@@ -651,38 +650,6 @@ class ActiveFoxessController:
         phases = ev.phase_count
         return round(max(hours_until_free, 0.0) * baseline_a * voltage * phases / 1000, 3)
 
-    def _export_source_available(self, mode_entity: str) -> bool:
-        state = self.hass.states.get(mode_entity)
-        if state is None:
-            return False
-        options = state.attributes.get("options")
-        return isinstance(options, (list, tuple)) and {
-            "Force Discharge",
-            "Self Use",
-        }.issubset(options)
-
-    def _charge_source_available(self, mode_entity: str) -> bool:
-        state = self.hass.states.get(mode_entity)
-        if state is None:
-            return False
-        options = state.attributes.get("options")
-        return isinstance(options, (list, tuple)) and {
-            "Force Charge",
-            "Self Use",
-        }.issubset(options)
-
-    def _entity_power_max(self, entity_id: str) -> float:
-        state = self.hass.states.get(entity_id)
-        if state is None:
-            return 0.0
-        try:
-            return power_to_kw(
-                float(state.attributes.get("max", 0.0)),
-                state.attributes.get("unit_of_measurement"),
-            )
-        except (TypeError, ValueError):
-            return 0.0
-
     @staticmethod
     def _force_mode_command_delays(plan: FoxessCommandPlan) -> FoxessCommandPlan:
         commands = list(plan.commands)
@@ -700,13 +667,3 @@ class ActiveFoxessController:
         if state is None or state.state in {"unknown", "unavailable"}:
             return None
         return state.state
-
-    def _power_state(self, entity_id: str) -> float | None:
-        state = self.hass.states.get(entity_id)
-        if state is None:
-            return None
-        try:
-            value = float(state.state)
-            return power_to_kw(value, state.attributes.get("unit_of_measurement"))
-        except (TypeError, ValueError):
-            return None

@@ -64,6 +64,14 @@ remain unused. No storage migration or state conversion is involved.
   before the commit.
 - `README.md` unchanged.
 
+## Post-wiring cleanup
+
+After the wired implementation passed the complete gate, the four duplicate
+legacy helpers for force-power conversion, native maxima and mode capability
+were removed in a separate commit. Their characterization remains as literal
+snapshot expectations. The unrelated EV home/cable read helper remains until
+the EV observation phase, preserving scope separation.
+
 ## Completion record
 
 - [x] Existing behaviour characterised

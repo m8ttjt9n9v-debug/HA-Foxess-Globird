@@ -9,7 +9,6 @@ from custom_components.home_energy_orchestrator.foxess_observation_adapter impor
 from custom_components.home_energy_orchestrator.planner.foxess import (
     FoxessObservation,
 )
-from tests.test_zerohero_active import _coordinator, _loaded_controller
 
 ENTITIES = FoxessEntityMap(
     work_mode_entity="select.foxess_mode",
@@ -99,7 +98,7 @@ def test_capture_fails_closed_for_missing_or_unavailable_entities(hass) -> None:
     assert result.export_source_available is False
 
 
-def test_snapshot_matches_legacy_controller_reads_in_shadow(hass) -> None:
+def test_snapshot_freezes_legacy_controller_read_results(hass) -> None:
     hass.states.async_set(
         ENTITIES.work_mode_entity,
         "Force Discharge",
@@ -115,26 +114,13 @@ def test_snapshot_matches_legacy_controller_reads_in_shadow(hass) -> None:
         "4.25",
         {"unit_of_measurement": "kW", "max": 12},
     )
-    legacy = _loaded_controller(hass, _coordinator())
-
     result = capture_foxess_feedback(hass, ENTITIES)
 
-    assert result.mode == legacy._state(ENTITIES.work_mode_entity)  # noqa: SLF001
-    assert result.charge_power_kw == legacy._power_state(  # noqa: SLF001
-        ENTITIES.force_charge_power_entity
-    )
-    assert result.discharge_power_kw == legacy._power_state(  # noqa: SLF001
-        ENTITIES.force_discharge_power_entity
-    )
-    assert result.charge_power_max_kw == legacy._entity_power_max(  # noqa: SLF001
-        ENTITIES.force_charge_power_entity
-    )
-    assert result.discharge_power_max_kw == legacy._entity_power_max(  # noqa: SLF001
-        ENTITIES.force_discharge_power_entity
-    )
-    assert result.charge_source_available is legacy._charge_source_available(  # noqa: SLF001
-        ENTITIES.work_mode_entity
-    )
-    assert result.export_source_available is legacy._export_source_available(  # noqa: SLF001
-        ENTITIES.work_mode_entity
-    )
+    assert result.observation == FoxessObservation("Force Discharge", 1.25, 4.25)
+    assert result.mode == "Force Discharge"
+    assert result.charge_power_kw == 1.25
+    assert result.discharge_power_kw == 4.25
+    assert result.charge_power_max_kw == 9.0
+    assert result.discharge_power_max_kw == 12.0
+    assert result.charge_source_available is True
+    assert result.export_source_available is True
