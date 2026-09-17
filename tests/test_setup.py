@@ -268,6 +268,117 @@ async def test_setup_preserves_user_owned_entity_ids_and_names(hass):
     assert hass.states.get("switch.my_heo_hardware_lock").state == "on"
     assert hass.states.get("switch.home_energy_automatic_export") is None
 
+    assert await hass.config_entries.async_reload(entry.entry_id)
+    await hass.async_block_till_done()
+
+    status_entry = registry.async_get("sensor.my_heo_control_mode")
+    safety_entry = registry.async_get("switch.my_heo_hardware_lock")
+    export_entry = registry.async_get("switch.home_energy_automatic_export")
+    assert status_entry is not None
+    assert status_entry.name == "My HEO control mode"
+    assert status_entry.area_id == "energy_area"
+    assert status_entry.hidden_by is er.RegistryEntryHider.USER
+    assert status_entry.labels == {"energy_label"}
+    assert safety_entry is not None and safety_entry.name == "My hardware lock"
+    assert export_entry is not None
+    assert export_entry.disabled_by is er.RegistryEntryDisabler.USER
+    assert hass.states.get("sensor.my_heo_control_mode").state == "observe"
+    assert hass.states.get("switch.my_heo_hardware_lock").state == "on"
+    assert hass.states.get("switch.home_energy_automatic_export") is None
+
+
+async def test_upgrade_preserves_user_owned_registry_customizations(hass):
+    """Config-entry migration must not churn unrelated entity-registry ownership."""
+    hass.states.async_set("sensor.test_battery_soc", "60", {"unit_of_measurement": "%"})
+    hass.states.async_set("sensor.test_grid_power", "0", {"unit_of_measurement": "kW"})
+    hass.states.async_set("sensor.test_house_load", "0.8", {"unit_of_measurement": "kW"})
+    legacy = {
+        key: value
+        for key, value in ENTRY_DATA.items()
+        if key
+        not in {
+            "battery_power_positive_direction",
+            "grid_power_positive_direction",
+        }
+    }
+    legacy["battery_charge_positive"] = True
+    legacy["grid_import_positive"] = True
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Registry upgrade contract",
+        version=1,
+        data=legacy,
+    )
+    entry.add_to_hass(hass)
+    registry = er.async_get(hass)
+    status = registry.async_get_or_create(
+        "sensor",
+        DOMAIN,
+        f"{entry.entry_id}_status",
+        suggested_object_id="home_energy_status",
+        config_entry=entry,
+    )
+    registry.async_update_entity(
+        status.entity_id,
+        new_entity_id="sensor.my_upgraded_heo_status",
+        name="My upgraded HEO status",
+        area_id="energy_area",
+        hidden_by=er.RegistryEntryHider.USER,
+        labels={"energy_label"},
+    )
+
+    assert await async_migrate_entry(hass, entry)
+    assert entry.version == 6
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    status_entry = registry.async_get("sensor.my_upgraded_heo_status")
+    assert status_entry is not None
+    assert status_entry.name == "My upgraded HEO status"
+    assert status_entry.area_id == "energy_area"
+    assert status_entry.hidden_by is er.RegistryEntryHider.USER
+    assert status_entry.labels == {"energy_label"}
+    assert registry.async_get("sensor.home_energy_status") is None
+    assert hass.states.get("sensor.my_upgraded_heo_status").state == "observe"
+
+
+async def test_default_entity_id_collision_preserves_both_registry_owners(hass):
+    """A foreign owner keeps the preferred ID and HEO receives one stable suffix."""
+    hass.states.async_set("sensor.test_battery_soc", "60", {"unit_of_measurement": "%"})
+    hass.states.async_set("sensor.test_grid_power", "0", {"unit_of_measurement": "kW"})
+    hass.states.async_set("sensor.test_house_load", "0.8", {"unit_of_measurement": "kW"})
+    registry = er.async_get(hass)
+    foreign = registry.async_get_or_create(
+        "sensor",
+        "test_foreign_platform",
+        "foreign_status",
+        suggested_object_id="home_energy_status",
+    )
+    assert foreign.entity_id == "sensor.home_energy_status"
+    entry = MockConfigEntry(domain=DOMAIN, title="Registry collision", data=ENTRY_DATA)
+    entry.add_to_hass(hass)
+
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    heo_entity_id = registry.async_get_entity_id(
+        "sensor",
+        DOMAIN,
+        f"{entry.entry_id}_status",
+    )
+    assert heo_entity_id == "sensor.home_energy_status_2"
+    assert registry.async_get("sensor.home_energy_status") == foreign
+    assert hass.states.get("sensor.home_energy_status_2").state == "observe"
+
+    assert await hass.config_entries.async_reload(entry.entry_id)
+    await hass.async_block_till_done()
+    assert registry.async_get_entity_id(
+        "sensor",
+        DOMAIN,
+        f"{entry.entry_id}_status",
+    ) == "sensor.home_energy_status_2"
+    assert registry.async_get("sensor.home_energy_status") == foreign
+
 
 async def test_reversed_foxess_signs_expose_one_canonical_surface(hass):
     hass.states.async_set("sensor.test_battery_soc", "60", {"unit_of_measurement": "%"})

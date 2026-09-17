@@ -37,7 +37,7 @@ Status meanings:
 | Learning becomes unavailable while valid EV samples remain | `test_disconnected_ev_retains_read_only_learning_across_reload`; `test_disconnected_learning_changes_only_at_exact_maturity`; `test_disconnected_learning_requires_current_source_and_actuator_metadata`; `test_learning_survives_unplug_and_replug_without_bypassing_safety_lock` | System | Retain disconnected setup/reload, source recovery, actuator-metadata, exact-maturity and unplug/replug traces as mandatory regressions; connection gates actuation only |
 | House learning loses or duplicates EV/heater subtraction | source-composition tests in `test_setup.py` | Focused | Add multi-cycle persisted sampler replay |
 | GloBird scorecard mappings disappear on upgrade | v5 migration and scorecard status tests; `test_v5_scorecard_mapping_survives_upgrade_setup_and_reload` | System | Retain discovered mappings and Fleet actual/error/status through upgrade and reload |
-| User entity IDs are reclaimed on setup | `test_setup_preserves_user_owned_entity_ids_and_names` | System | Expand to upgrade, downgrade and collision fixtures |
+| User entity IDs are reclaimed on setup | `test_setup_preserves_user_owned_entity_ids_and_names`; `test_upgrade_preserves_user_owned_registry_customizations`; `test_default_entity_id_collision_preserves_both_registry_owners` | System | Add a true previous-release downgrade fixture; setup, reload, migration and foreign-owner collision are covered |
 
 ## Fixture completion rule
 

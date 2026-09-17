@@ -66,6 +66,13 @@ custom attributes, not standard Home Assistant attributes such as
 dashboard, automation, Fleet, documentation and rollback consequences have
 been reviewed.
 
+System-level registry fixtures also prove that setup and reload retain a
+user-owned entity ID, display name, area, label, visibility and disabled
+state. A version-1 entry retains those customizations through migration and
+setup, while a foreign integration that already owns an HEO preferred entity
+ID keeps it and HEO receives one stable suffixed ID across reload. A true
+previous-release downgrade fixture remains deliberately unclaimed.
+
 ## Test plan
 
 - Regenerate both contracts from a clean checkout and compare byte-for-byte.
@@ -84,6 +91,7 @@ new contract without changing runtime data, registry state or hardware mode.
 - `PYTHONPATH=. python -m scripts.entity_attribute_contract --check`
 - `PYTHONPATH=. python -m scripts.config_field_contract --check`
 - `pytest -q -p no:cacheprovider tests/test_entity_attribute_contract.py`
+- `pytest -q -p no:cacheprovider tests/test_setup.py::test_setup_preserves_user_owned_entity_ids_and_names tests/test_setup.py::test_upgrade_preserves_user_owned_registry_customizations tests/test_setup.py::test_default_entity_id_collision_preserves_both_registry_owners`
 - full test suite and Ruff
 
 ## Completion record
