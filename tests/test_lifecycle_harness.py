@@ -1760,6 +1760,65 @@ async def test_export_cap_reconfiguration_keeps_sellable_energy_available(
     harness.close()
 
 
+@pytest.mark.freeze_time("2026-09-17 00:30:00+00:00")
+@pytest.mark.parametrize("entry_version", [3, 6])
+async def test_battery_only_site_ignores_retained_ev_reservation_across_reload(
+    hass, monkeypatch, entry_version: int
+) -> None:
+    """Clean and upgraded battery-only entries never reserve stale EV energy."""
+    harness = LifecycleHarness(hass)
+    _register_foxess_services(harness, monkeypatch)
+    await _seed_foxess_states(harness, 100)
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title=f"Battery-only v{entry_version}",
+        version=entry_version,
+        data=_active_entry_data(
+            configure_ev=False,
+            ev_control_commissioned=True,
+            ev_protected_baseline_a=1.0,
+            automatic_export_enabled=True,
+            automatic_export_limit_kwh=25.0,
+            battery_capacity_kwh=40.32,
+            inverter_discharge_limit_kw=10.0,
+            house_learning_fallback_kwh=0.0,
+        ),
+    )
+    entry.add_to_hass(hass)
+
+    await harness.setup(entry)
+
+    controller = entry.runtime_data.active_controller
+    assert entry.version == 6
+    assert controller.export_protected_ev_kwh == 0.0
+    assert controller.export_plan is not None
+    assert controller.export_plan.planned_export_energy_kwh == 25.0
+    entry.runtime_data.async_update_listeners()
+    await hass.async_block_till_done()
+    sellable = hass.states.get("sensor.home_energy_zerohero_sellable_energy")
+    planned = hass.states.get("sensor.home_energy_zerohero_planned_export_energy")
+    ev_status = hass.states.get("sensor.home_energy_ev_control_status")
+    assert sellable is not None and sellable.state != "unknown"
+    assert planned is not None and planned.state == "25.0"
+    assert ev_status is not None and ev_status.state == "disabled"
+    assert harness.service_calls == ()
+
+    await harness.reload(entry)
+    entry.runtime_data.async_update_listeners()
+    await hass.async_block_till_done()
+
+    controller = entry.runtime_data.active_controller
+    assert controller.export_protected_ev_kwh == 0.0
+    assert controller.export_plan is not None
+    assert controller.export_plan.planned_export_energy_kwh == 25.0
+    assert hass.states.get("sensor.home_energy_zerohero_planned_export_energy").state == "25.0"
+    assert harness.service_calls == ()
+    await harness.unload(entry)
+    hass.services.async_remove("number", "set_value")
+    hass.services.async_remove("select", "select_option")
+    harness.close()
+
+
 @pytest.mark.freeze_time("2026-09-17 02:30:00+00:00")
 async def test_import_anchor_stays_zero_when_export_continues_after_reload(
     hass, monkeypatch

@@ -33,7 +33,7 @@ Status meanings:
 | EV policy drains protected house battery | `test_battery_floor_stops_automatic_outside_charge`; sellable-energy shrink/stop tests; `test_ev_outside_charge_stops_at_house_battery_floor` | System | Extend the timeline through a gradual approach to the floor and delayed stop feedback |
 | Vehicle update races current convergence | `test_soc_update_does_not_recalculate_whole_house_allowance_during_current_ramp`; safety-boundary tests | Focused | Move into deterministic state-event replay |
 | Sign-verification or owner change during reconfiguration | migration and gate tests; `test_owner_and_sign_gate_reconfiguration_is_atomic` | System | Retain idle/active blocked-and-restored traces as a mandatory regression gate |
-| Battery-only site retains stale EV reservation | `test_battery_only_site_ignores_retained_ev_baseline` | Focused | Add clean setup and upgraded-entry system snapshots |
+| Battery-only site retains stale EV reservation | `test_battery_only_site_ignores_retained_ev_baseline`; `test_battery_only_site_ignores_retained_ev_reservation_across_reload` | System | Retain clean, upgraded and reload snapshots as a mandatory regression gate |
 | Learning becomes unavailable while valid EV samples remain | confirmed roadmap bug; existing learning arithmetic and restart tests | Open bug | First add disconnected setup/unplug/restart failing regressions; connection gates actuation only |
 | House learning loses or duplicates EV/heater subtraction | source-composition tests in `test_setup.py` | Focused | Add multi-cycle persisted sampler replay |
 | GloBird scorecard mappings disappear on upgrade | v5 migration and scorecard status tests | Focused | Add full config-entry upgrade/setup/Fleet snapshot |
