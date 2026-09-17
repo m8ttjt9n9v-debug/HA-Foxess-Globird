@@ -56,6 +56,10 @@ The eighth seam introduces a typed control submodel and moves the complete
 Status attribute surface onto the canonical model. It retains all legacy
 attribute names, including both automatic-export remaining-energy aliases.
 
+The ninth seam moves every remaining native sensor state into typed
+operational and manual-test submodels. `EnergySensor.native_value` is now a
+pure keyed projection of one canonical read-model snapshot.
+
 Work-item evidence:
 
 - [core SiteReadModel projection](work-item-core-read-model.md)
@@ -66,6 +70,7 @@ Work-item evidence:
 - [EV control attribute read model](work-item-ev-control-attribute-read-model.md)
 - [EV support diagnostics read model](work-item-ev-diagnostics-read-model.md)
 - [Status control read model](work-item-status-control-read-model.md)
+- [complete native-state read model](work-item-native-state-read-model.md)
 
 ## Work packages
 

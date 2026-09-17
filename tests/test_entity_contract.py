@@ -82,26 +82,23 @@ def test_sensor_specs_match_native_value_projection_keys() -> None:
             encoding="utf-8"
         )
     )
-    projection: ast.Dict | None = None
-    for node in ast.walk(sensor_tree):
-        if not isinstance(node, ast.ClassDef) or node.name != "EnergySensor":
-            continue
-        for child in ast.walk(node):
-            if not isinstance(child, ast.Assign):
-                continue
-            if any(
-                isinstance(target, ast.Name) and target.id == "values"
-                for target in child.targets
-            ):
-                assert isinstance(child.value, ast.Dict)
-                projection = child.value
-                break
-    assert projection is not None
-    projected_keys = {
-        ast.literal_eval(key)
-        for key in projection.keys
-        if key is not None
-    }
+    energy_sensor = next(
+        node
+        for node in sensor_tree.body
+        if isinstance(node, ast.ClassDef) and node.name == "EnergySensor"
+    )
+    native_value = next(
+        node
+        for node in energy_sensor.body
+        if isinstance(node, ast.FunctionDef) and node.name == "native_value"
+    )
+    returns = [node for node in ast.walk(native_value) if isinstance(node, ast.Return)]
+    assert len(returns) == 1
+    assert (
+        ast.unparse(returns[0].value)
+        == "read_model.sensor_values()[self.entity_description.key]"
+    )
+    projected_keys: set[str] = set()
     read_model_projections: list[ast.Dict] = []
     for node in ast.walk(read_model_tree):
         if not isinstance(node, ast.FunctionDef) or node.name != "sensor_values":
@@ -113,7 +110,7 @@ def test_sensor_specs_match_native_value_projection_keys() -> None:
         ]
         assert len(returns) == 1
         read_model_projections.append(returns[0].value)
-    assert len(read_model_projections) == 4
+    assert len(read_model_projections) == 6
     for read_model_projection in read_model_projections:
         projected_keys.update(
             ast.literal_eval(key)

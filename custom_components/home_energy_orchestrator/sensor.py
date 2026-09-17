@@ -73,57 +73,8 @@ class EnergySensor(CoordinatorEntity[EnergyCoordinator], SensorEntity):
 
     @property
     def native_value(self):
-        ledger = self.coordinator.data
-        telemetry = self.coordinator.telemetry
         read_model = build_site_read_model(self.coordinator)
-        values = {
-            **read_model.sensor_values(),
-            "battery_potential_capacity": ledger.battery_potential_capacity_kwh,
-            "battery_energy": ledger.battery_energy_kwh,
-            "available_energy": ledger.available_after_reserve_kwh,
-            "grid_import": ledger.grid_import_kw,
-            "grid_export": ledger.grid_export_kw,
-            "site_grid_current": (None if telemetry is None else telemetry.site_grid_current.value),
-            "free_energy_remaining": ledger.free_energy_remaining_kwh,
-            "daily_import": ledger.daily_import_kwh,
-            "free_window_import": ledger.free_window_import_kwh,
-            "daily_export": ledger.daily_export_kwh,
-            "standard_export_window": ledger.standard_window_export_kwh,
-            "offpeak_export": ledger.offpeak_rate_export_kwh,
-            "free_charge_allowed": ledger.free_charge_allowed_kwh,
-            "free_charge_power_target": (
-                None
-                if self.coordinator.active_controller is None
-                else self.coordinator.active_controller.charge_power_target_kw
-            ),
-            "free_charge_completion": (
-                "unavailable"
-                if self.coordinator.active_controller is None
-                else self.coordinator.active_controller.charge_session.phase
-            ),
-            "bonus_zero_import_allowed": ledger.bonus_zero_import_allowed,
-            "zerohero_import_window": (
-                None
-                if self.coordinator.zerohero_import.last_at is None
-                else round(sum(self.coordinator.zerohero_import.hourly_import_kwh.values()), 3)
-            ),
-            "tariff_status": ledger.tariff_reason,
-            "zerohero_export_window": round(self.coordinator.zerohero_export.imported_kwh, 3),
-            "ev_before_export_status": (
-                "unavailable"
-                if self.coordinator.active_controller is None
-                else self.coordinator.active_controller.ev_before_export_decision.reason
-            ),
-            "test_charge_estimated_cost": self.coordinator.manual_test.preview_charge().amount,
-            "test_charge_import_rate": self.coordinator.manual_test.current_import_rate(),
-            "test_discharge_estimated_earning": (
-                self.coordinator.manual_test.preview_discharge().amount
-            ),
-            "test_discharge_export_rate": self.coordinator.manual_test.current_export_rate(),
-            "test_status": self.coordinator.manual_test.status,
-            "test_remaining_minutes": self.coordinator.manual_test.remaining_minutes,
-        }
-        return values[self.entity_description.key]
+        return read_model.sensor_values()[self.entity_description.key]
 
     @property
     def extra_state_attributes(self):

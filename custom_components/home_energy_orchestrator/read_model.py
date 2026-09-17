@@ -70,6 +70,75 @@ def _rounded(value: float | None, digits: int = 3) -> float | None:
 
 
 @dataclass(frozen=True, slots=True)
+class OperationalReadModel:
+    """Canonical ledger, telemetry and accumulator entity-state facts."""
+
+    battery_potential_capacity_kwh: float | None
+    battery_energy_kwh: float | None
+    available_energy_kwh: float | None
+    grid_import_kw: float | None
+    grid_export_kw: float | None
+    site_grid_current_a: float | None
+    free_energy_remaining_kwh: float | None
+    daily_import_kwh: float | None
+    free_window_import_kwh: float | None
+    daily_export_kwh: float | None
+    standard_export_window_kwh: float | None
+    offpeak_export_kwh: float | None
+    free_charge_allowed_kwh: float | None
+    bonus_zero_import_allowed: bool
+    zerohero_import_window_kwh: float | None
+    zerohero_export_window_kwh: float
+    ledger_status: str
+    tariff_status: str
+
+    def sensor_values(self) -> dict[str, object]:
+        """Project existing operational sensor states."""
+        return {
+            "battery_potential_capacity": self.battery_potential_capacity_kwh,
+            "battery_energy": self.battery_energy_kwh,
+            "available_energy": self.available_energy_kwh,
+            "grid_import": self.grid_import_kw,
+            "grid_export": self.grid_export_kw,
+            "site_grid_current": self.site_grid_current_a,
+            "free_energy_remaining": self.free_energy_remaining_kwh,
+            "daily_import": self.daily_import_kwh,
+            "free_window_import": self.free_window_import_kwh,
+            "daily_export": self.daily_export_kwh,
+            "standard_export_window": self.standard_export_window_kwh,
+            "offpeak_export": self.offpeak_export_kwh,
+            "free_charge_allowed": self.free_charge_allowed_kwh,
+            "bonus_zero_import_allowed": self.bonus_zero_import_allowed,
+            "zerohero_import_window": self.zerohero_import_window_kwh,
+            "tariff_status": self.tariff_status,
+            "zerohero_export_window": self.zerohero_export_window_kwh,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class ManualTestReadModel:
+    """Canonical read-only manual charge/discharge test presentation."""
+
+    charge_estimated_cost: float
+    charge_import_rate: float
+    discharge_estimated_earning: float
+    discharge_export_rate: float
+    status: str
+    remaining_minutes: float
+
+    def sensor_values(self) -> dict[str, object]:
+        """Project existing manual-test sensor states."""
+        return {
+            "test_charge_estimated_cost": self.charge_estimated_cost,
+            "test_charge_import_rate": self.charge_import_rate,
+            "test_discharge_estimated_earning": self.discharge_estimated_earning,
+            "test_discharge_export_rate": self.discharge_export_rate,
+            "test_status": self.status,
+            "test_remaining_minutes": self.remaining_minutes,
+        }
+
+
+@dataclass(frozen=True, slots=True)
 class CostReadModel:
     """Canonical measured and forecast cost presentation values."""
 
@@ -471,6 +540,8 @@ class SiteReadModel:
     planned_export_duration_minutes: float | None
     planned_export_start: datetime | None
     export_status: str
+    operational: OperationalReadModel
+    manual_test: ManualTestReadModel
     control: ControlReadModel
     ev: EvReadModel
     cost: CostReadModel
@@ -478,8 +549,16 @@ class SiteReadModel:
     learning: LearningReadModel
     zerohero_status: str
     latest_zerohero_status: str | None
-    ledger_status: str
-    tariff_status: str
+
+    @property
+    def ledger_status(self) -> str:
+        """Retain the established ledger status projection name."""
+        return self.operational.ledger_status
+
+    @property
+    def tariff_status(self) -> str:
+        """Retain the established tariff status projection name."""
+        return self.operational.tariff_status
 
     @property
     def foxess_control_gate(self) -> str:
@@ -511,6 +590,11 @@ class SiteReadModel:
             "zerohero_planned_duration": self.planned_export_duration_minutes,
             "zerohero_planned_start": self.planned_export_start,
             "zerohero_export_status": self.export_status,
+            "free_charge_power_target": self.control.charge_power_target_kw,
+            "free_charge_completion": self.control.charge_session_phase,
+            "ev_before_export_status": self.control.ev_before_export_status,
+            **self.operational.sensor_values(),
+            **self.manual_test.sensor_values(),
             **self.cost.sensor_values(),
             **self.learning.sensor_values(),
             **self.ev.sensor_values(),
@@ -962,6 +1046,45 @@ def build_site_read_model(
         learning_sample_limit=coordinator.demand_history.sample_limit,
         learning_sampler_enabled=coordinator.demand_sampler is not None,
     )
+    zerohero_import = coordinator.zerohero_import
+    operational_model = OperationalReadModel(
+        battery_potential_capacity_kwh=ledger.battery_potential_capacity_kwh,
+        battery_energy_kwh=ledger.battery_energy_kwh,
+        available_energy_kwh=ledger.available_after_reserve_kwh,
+        grid_import_kw=ledger.grid_import_kw,
+        grid_export_kw=ledger.grid_export_kw,
+        site_grid_current_a=(
+            None if telemetry is None else telemetry.site_grid_current.value
+        ),
+        free_energy_remaining_kwh=ledger.free_energy_remaining_kwh,
+        daily_import_kwh=ledger.daily_import_kwh,
+        free_window_import_kwh=ledger.free_window_import_kwh,
+        daily_export_kwh=ledger.daily_export_kwh,
+        standard_export_window_kwh=ledger.standard_window_export_kwh,
+        offpeak_export_kwh=ledger.offpeak_rate_export_kwh,
+        free_charge_allowed_kwh=ledger.free_charge_allowed_kwh,
+        bonus_zero_import_allowed=ledger.bonus_zero_import_allowed,
+        zerohero_import_window_kwh=(
+            None
+            if zerohero_import.last_at is None
+            else round(sum(zerohero_import.hourly_import_kwh.values()), 3)
+        ),
+        zerohero_export_window_kwh=round(
+            coordinator.zerohero_export.imported_kwh,
+            3,
+        ),
+        ledger_status=ledger.reason,
+        tariff_status=ledger.tariff_reason,
+    )
+    manual_test = coordinator.manual_test
+    manual_test_model = ManualTestReadModel(
+        charge_estimated_cost=manual_test.preview_charge().amount,
+        charge_import_rate=manual_test.current_import_rate(),
+        discharge_estimated_earning=manual_test.preview_discharge().amount,
+        discharge_export_rate=manual_test.current_export_rate(),
+        status=manual_test.status,
+        remaining_minutes=manual_test.remaining_minutes,
+    )
     return SiteReadModel(
         orchestrator_status=control_mode(coordinator),
         battery_soc=None if snapshot is None else snapshot.battery_soc,
@@ -984,6 +1107,8 @@ def build_site_read_model(
             None if plan is None or controller is None else controller.export_planned_start
         ),
         export_status=export_status(coordinator),
+        operational=operational_model,
+        manual_test=manual_test_model,
         control=control_model,
         ev=ev_model,
         cost=cost,
@@ -993,6 +1118,4 @@ def build_site_read_model(
         latest_zerohero_status=(
             None if scorecard is None else scorecard.retailer_zerohero_status
         ),
-        ledger_status=ledger.reason,
-        tariff_status=ledger.tariff_reason,
     )
