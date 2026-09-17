@@ -234,6 +234,8 @@ rollback boundaries are documented and tested.
 
 Current work package and completion evidence:
 [Phase 5 versioned persistence repositories](maintainability/phase-5-versioned-persistence.md).
+The technical Phase 5 exit gate was satisfied on 2026-09-17; the linked record
+contains the frozen Store, lifecycle and previous-release evidence.
 
 ### Phase 6 — accounting and coordinator extraction
 

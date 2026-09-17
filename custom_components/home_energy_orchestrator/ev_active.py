@@ -111,6 +111,7 @@ from .const import (
 from .coordinator import EnergyCoordinator
 from .ev_adapter import EvEntityMap, EvServiceAdapter, EvWriteBlocked, ev_control_gate_status
 from .normalise import current_to_a, energy_to_kwh
+from .persistence import TypedValueStoreRepository
 from .planner.ev import (
     DIRECT_EVSE_MAX_ATTEMPTS,
     AllowanceCeilingInputs,
@@ -161,6 +162,7 @@ from .planner.ev_outside_window import (
     plan_solar_spill_current,
     select_outside_window_current,
 )
+from .planner.ev_persistence import EvPersistenceState
 from .planner.learning import DemandHistory
 from .planner.timed_average import TimedAverageWindow
 
@@ -183,6 +185,13 @@ class ActiveEvController:
             1,
             f"home_energy_orchestrator.{coordinator.entry_id}.ev_control",
             private=True,
+        )
+        self._repository = TypedValueStoreRepository(
+            self._store,
+            decode=lambda payload: EvPersistenceState.from_payload(
+                payload, dt_util.now()
+            ),
+            encode=EvPersistenceState.to_payload,
         )
         self.grid_average = TimedAverageWindow(timedelta(minutes=3))
         self.ev_average = TimedAverageWindow(timedelta(minutes=3))
@@ -2250,10 +2259,11 @@ class ActiveEvController:
         return self._float(CONF_EV_MAX_CURRENT, 0.0)
 
     async def _async_restore(self) -> None:
-        payload = await self._store.async_load()
-        if not isinstance(payload, dict):
+        persisted = await self._repository.async_load()
+        if self._repository.last_restore_status != "restored":
             return
-        now = dt_util.now()
+        payload = persisted.to_payload()
+        now = persisted.restored_at
         self.grid_average.restore(payload.get("grid_average"), now)
         self.ev_average.restore(payload.get("ev_average"), now)
         self.driving_history = DemandHistory.from_payload(payload.get("driving_history"), now)
@@ -2462,8 +2472,7 @@ class ActiveEvController:
 
     async def _async_save(self, now: datetime | None = None) -> None:
         state = self.reconciliation
-        await self._store.async_save(
-            {
+        payload = {
                 "grid_average": self.grid_average.to_payload(),
                 "ev_average": self.ev_average.to_payload(),
                 "driving_history": self.driving_history.to_payload(),
@@ -2537,5 +2546,8 @@ class ActiveEvController:
                     "recovery_current_a": self.smart_recovery.recovery_current_a,
                 },
             }
+        saved_at = now or dt_util.now()
+        await self._repository.async_save(
+            EvPersistenceState.from_payload(payload, saved_at)
         )
-        self.last_saved_at = now or dt_util.now()
+        self.last_saved_at = saved_at

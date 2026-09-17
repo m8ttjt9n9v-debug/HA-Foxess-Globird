@@ -45,6 +45,13 @@ The sixth seam moves the manual-diagnostic restoration obligation into a typed
 state codec and repository while preserving its valid/missing/malformed safety
 status and bounded cleanup lifecycle.
 
+The seventh seam completes the final Store family with a typed composite EV
+state. It preserves independent driving evidence and the established coupled
+fallback for EV control obligations.
+
+The exit audit adds a static persistence-boundary contract. It prevents future
+production code from bypassing the typed repositories with direct Store I/O.
+
 Work-item evidence:
 
 - [daily-import typed repository](work-item-daily-import-repository.md)
@@ -53,6 +60,8 @@ Work-item evidence:
 - [house-learning typed repository](work-item-learning-repository.md)
 - [inverter-session typed repositories](work-item-inverter-session-repositories.md)
 - [manual-diagnostic typed repository](work-item-manual-test-repository.md)
+- [composite EV typed repository](work-item-ev-repository.md)
+- [Phase 5 exit audit](phase-5-exit-audit.md)
 
 ## Exit gate
 
@@ -62,5 +71,4 @@ are documented and tested; all thirteen frozen Store contracts remain intact.
 
 ## Status
 
-In progress. Every state family except the composite EV controller Store is
-behind a typed repository boundary.
+**Status: complete.** See the [Phase 5 exit audit](phase-5-exit-audit.md).
