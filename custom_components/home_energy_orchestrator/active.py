@@ -22,6 +22,10 @@ from .const import (
 )
 from .coordinator import EnergyCoordinator
 from .foxess_adapter import FoxessEntityMap, FoxessServiceAdapter
+from .foxess_observation_adapter import (
+    FoxessFeedbackSnapshot,
+    capture_foxess_feedback,
+)
 from .normalise import power_to_kw
 from .persistence import TypedValueStoreRepository
 from .planner.charge_session import ChargeSessionState, advance_charge_session
@@ -159,45 +163,50 @@ class ActiveFoxessController:
         if not runtime.electrical.verified:
             self.last_reason = "sign_conventions_unverified"
             return
-        mapping = (
-            runtime.inverter.work_mode_entity,
-            runtime.inverter.force_charge_power_entity,
-            runtime.inverter.force_discharge_power_entity,
-        )
         if not runtime.inverter.actuator_mapping_complete:
             self.last_reason = "incomplete_foxess_mapping"
             _LOGGER.warning("Automatic control held: FoxESS mapping is incomplete")
             return
+        assert runtime.inverter.work_mode_entity is not None
+        assert runtime.inverter.force_charge_power_entity is not None
+        assert runtime.inverter.force_discharge_power_entity is not None
+        entities = FoxessEntityMap(
+            runtime.inverter.work_mode_entity,
+            runtime.inverter.force_charge_power_entity,
+            runtime.inverter.force_discharge_power_entity,
+        )
         if self.coordinator.snapshot is None or self.coordinator.data is None:
             self.last_reason = "telemetry_unavailable"
             return
-        mode = self._state(str(mapping[0]))
-        charge_power = self._power_state(str(mapping[1]))
-        discharge_power = self._power_state(str(mapping[2]))
+        feedback = capture_foxess_feedback(self.hass, entities)
         now = dt_util.now()
-        if mode is None or charge_power is None or discharge_power is None:
+        if feedback.observation is None:
             await self._async_mark_sessions_source_unavailable(now)
             self.last_reason = "foxess_feedback_unavailable"
             return
-        observation = FoxessObservation(mode, charge_power, discharge_power)
+        observation = feedback.observation
         if await self._async_hold_unverified_ownership(observation):
             return
         # Finish a latched policy before considering another direction. With
         # ordinary non-overlapping windows this also guarantees that Self Use
         # feedback is confirmed before the next session may start.
         if self.charge_session.phase != "idle":
-            if await self._async_reconcile_charge(observation, mapping, now):
+            if await self._async_reconcile_charge(
+                observation, entities, feedback, now
+            ):
                 return
         if self.export_session.phase != "idle":
-            if await self._async_reconcile_export(observation, mapping, now):
+            if await self._async_reconcile_export(
+                observation, entities, feedback, now
+            ):
                 return
         if self._enabled_control_windows_overlap():
             self.last_reason = "configured_control_windows_overlap"
             self.last_actions = ()
             return
-        if await self._async_reconcile_charge(observation, mapping, now):
+        if await self._async_reconcile_charge(observation, entities, feedback, now):
             return
-        if await self._async_reconcile_export(observation, mapping, now):
+        if await self._async_reconcile_export(observation, entities, feedback, now):
             return
         self.last_reason = "no_automatic_foxess_policy_active"
         self.last_actions = ()
@@ -205,7 +214,8 @@ class ActiveFoxessController:
     async def _async_reconcile_charge(
         self,
         observation: FoxessObservation,
-        mapping: tuple[object, object, object],
+        entities: FoxessEntityMap,
+        feedback: FoxessFeedbackSnapshot,
         now: datetime,
     ) -> bool:
         """Run the default-off fixed-power free-window charge extension."""
@@ -218,10 +228,8 @@ class ActiveFoxessController:
             self.coordinator.runtime_config.inverter.charge_limit_kw,
             0.0,
         )
-        charge_max = min(configured_max, self._entity_power_max(str(mapping[1])))
-        source_available = (
-            self._charge_source_available(str(mapping[0])) and charge_max > 0
-        )
+        charge_max = min(configured_max, feedback.charge_power_max_kw)
+        source_available = feedback.charge_source_available and charge_max > 0
         self.charge_power_target_kw = (
             self.charge_session.requested_power_kw
             if source_available
@@ -297,7 +305,7 @@ class ActiveFoxessController:
             if self._adapter is None:
                 self._adapter = FoxessServiceAdapter(
                     self.hass,
-                    FoxessEntityMap(str(mapping[0]), str(mapping[1]), str(mapping[2])),
+                    entities,
                     allow_writes=True,
                 )
             plan = self._force_mode_command_delays(transition.plan)
@@ -311,7 +319,8 @@ class ActiveFoxessController:
     async def _async_reconcile_export(
         self,
         observation: FoxessObservation,
-        mapping: tuple[object, object, object],
+        entities: FoxessEntityMap,
+        feedback: FoxessFeedbackSnapshot,
         now: datetime,
     ) -> bool:
         """Run the ported pilot-site ZEROHERO session, when it owns this tick."""
@@ -327,13 +336,13 @@ class ActiveFoxessController:
         )
         start_at, finish_at = self._export_bounds(now)
         within_session_window = start_at <= now < finish_at
-        source_available = self._export_source_available(str(mapping[0]))
+        source_available = feedback.export_source_available
         discharge_max = min(
             max(
                 self.coordinator.runtime_config.inverter.discharge_limit_kw,
                 0.0,
             ),
-            self._entity_power_max(str(mapping[2])),
+            feedback.discharge_power_max_kw,
         )
         # Energy and time limits govern how long the session runs.  Requesting
         # the maximum available inverter discharge preserves headroom for
@@ -415,7 +424,7 @@ class ActiveFoxessController:
             if self._adapter is None:
                 self._adapter = FoxessServiceAdapter(
                     self.hass,
-                    FoxessEntityMap(str(mapping[0]), str(mapping[1]), str(mapping[2])),
+                    entities,
                     allow_writes=True,
                 )
             plan = self._force_mode_command_delays(transition.plan)
