@@ -88,7 +88,12 @@ from .planner.accounting import (
     AccountingProjectionInputs,
     TariffConfiguration,
     ZeroHeroWindowEvidence,
+    ZeroImportDurationTracker,
     project_daily_accounting,
+    window_active,
+    window_credit_state,
+    window_elapsed_hours,
+    window_hours_remaining,
 )
 from .planner.daily_meter import (
     DailyImportAccumulator,
@@ -170,7 +175,7 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
         self.demand_sampler = self._create_demand_sampler()
         self.heater_history = DemandHistory([])
         self.heater_sampler = self._create_heater_sampler()
-        self._zero_import_since: datetime | None = None
+        self._zero_import_tracker = ZeroImportDurationTracker()
         self.daily_import = DailyImportAccumulator()
         self.daily_export = DailyImportAccumulator()
         self.standard_rate_export = WindowImportAccumulator(
@@ -464,18 +469,7 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
         """Return remaining hours in today's configured free-charge window."""
         start = self._configured_time(CONF_FREE_CHARGE_START, DEFAULT_FREE_CHARGE_START)
         end = self._configured_time(CONF_FREE_CHARGE_END, DEFAULT_FREE_CHARGE_END)
-        current = now.timetz().replace(tzinfo=None)
-        if start < end:
-            if not start <= current < end:
-                return 0.0
-            finish = datetime.combine(now.date(), end, tzinfo=now.tzinfo)
-        else:
-            if current >= end and current < start:
-                return 0.0
-            finish = datetime.combine(now.date(), end, tzinfo=now.tzinfo)
-            if current >= start:
-                finish += timedelta(days=1)
-        return max(0.0, (finish - now).total_seconds() / 3600)
+        return window_hours_remaining(now, start, end)
 
     @callback
     def _async_source_changed(self, event: Event) -> None:
@@ -554,62 +548,34 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
 
     def _bonus_window_active(self, now: datetime) -> bool:
         """Evaluate the configured local-time bonus window, including overnight windows."""
-        start = self.runtime_config.windows.bonus_start
-        end = self.runtime_config.windows.bonus_end
-        if start is None or end is None:
-            return False
-        current = now.timetz().replace(tzinfo=None)
-        if start == end:
-            return False
-        return (start <= current < end) if start < end else (current >= start or current < end)
+        return window_active(
+            now,
+            self.runtime_config.windows.bonus_start,
+            self.runtime_config.windows.bonus_end,
+        )
 
     def _bonus_window_elapsed_hours(self, now: datetime) -> float:
         """Return elapsed local time in the active ZEROHERO window."""
-        if not self._bonus_window_active(now):
-            return 0.0
         start = self._configured_time(CONF_BONUS_WINDOW_START, DEFAULT_BONUS_WINDOW_START)
         end = self._configured_time(CONF_BONUS_WINDOW_END, DEFAULT_BONUS_WINDOW_END)
-        start_at = datetime.combine(now.date(), start, tzinfo=now.tzinfo)
-        if end <= start and now.timetz().replace(tzinfo=None) < end:
-            start_at -= timedelta(days=1)
-        return max(0.0, (now - start_at).total_seconds() / 3600)
+        return window_elapsed_hours(now, start, end)
 
     def _zerohero_credit_window_state(self, now: datetime) -> tuple[bool, int]:
         """Return completion and clock-hour count for today's credit window."""
         start = self._configured_time(CONF_BONUS_WINDOW_START, DEFAULT_BONUS_WINDOW_START)
         end = self._configured_time(CONF_BONUS_WINDOW_END, DEFAULT_BONUS_WINDOW_END)
-        if start == end:
-            return False, 0
-        current = now.timetz().replace(tzinfo=None)
-        start_at = datetime.combine(now.date(), start, tzinfo=now.tzinfo)
-        end_at = datetime.combine(now.date(), end, tzinfo=now.tzinfo)
-        if end <= start:
-            if current < end:
-                start_at -= timedelta(days=1)
-            else:
-                end_at += timedelta(days=1)
-            if end <= current < start:
-                start_at -= timedelta(days=1)
-                end_at -= timedelta(days=1)
-        cursor = start_at.replace(minute=0, second=0, microsecond=0)
-        expected_hours = 0
-        while cursor < end_at:
-            expected_hours += 1
-            cursor += timedelta(hours=1)
-        return now >= end_at, expected_hours
+        return window_credit_state(now, start, end)
 
     def _zero_import_duration_minutes(self, grid_import_kw: float | None, now: datetime) -> float:
         """Track only continuous qualified zero-import time for the bonus guard."""
         threshold = self._configured_nonnegative(
             CONF_ZERO_IMPORT_THRESHOLD_KW, DEFAULT_ZERO_IMPORT_THRESHOLD_KW
         )
-        if grid_import_kw is None or grid_import_kw > threshold:
-            self._zero_import_since = None
-            return 0.0
-        if self._zero_import_since is None:
-            self._zero_import_since = now
-            return 0.0
-        return max(0.0, (now - self._zero_import_since).total_seconds() / 60)
+        return self._zero_import_tracker.observe(
+            grid_import_kw,
+            observed_at=now,
+            threshold_kw=threshold,
+        )
 
     def _apply_tariff_guard(self, ledger: EnergyLedger) -> EnergyLedger:
         """Add read-only tariff evidence using external or internal daily import."""

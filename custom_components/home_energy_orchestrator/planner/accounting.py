@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
+from datetime import datetime, time, timedelta
 
 from ..models import EnergyLedger
 from .tariff import (
@@ -64,6 +65,89 @@ class AccountingProjectionInputs:
     meters: AccountingMeterSnapshot
     tariff: TariffConfiguration | None
     zerohero: ZeroHeroWindowEvidence | None
+
+
+@dataclass(slots=True)
+class ZeroImportDurationTracker:
+    """Track continuous qualified zero-import time across accounting cycles."""
+
+    since: datetime | None = None
+
+    def observe(
+        self,
+        grid_import_kw: float | None,
+        *,
+        observed_at: datetime,
+        threshold_kw: float,
+    ) -> float:
+        if grid_import_kw is None or grid_import_kw > threshold_kw:
+            self.since = None
+            return 0.0
+        if self.since is None:
+            self.since = observed_at
+            return 0.0
+        return max(0.0, (observed_at - self.since).total_seconds() / 60)
+
+
+def window_active(now: datetime, start: time | None, end: time | None) -> bool:
+    """Evaluate a configured local-time window, including midnight spans."""
+    if start is None or end is None or start == end:
+        return False
+    current = now.timetz().replace(tzinfo=None)
+    return (start <= current < end) if start < end else (
+        current >= start or current < end
+    )
+
+
+def window_elapsed_hours(now: datetime, start: time, end: time) -> float:
+    """Return elapsed local time only while the configured window is active."""
+    if not window_active(now, start, end):
+        return 0.0
+    start_at = datetime.combine(now.date(), start, tzinfo=now.tzinfo)
+    if end <= start and now.timetz().replace(tzinfo=None) < end:
+        start_at -= timedelta(days=1)
+    return max(0.0, (now - start_at).total_seconds() / 3600)
+
+
+def window_credit_state(
+    now: datetime, start: time, end: time
+) -> tuple[bool, int]:
+    """Return window completion and expected local clock-hour count."""
+    if start == end:
+        return False, 0
+    current = now.timetz().replace(tzinfo=None)
+    start_at = datetime.combine(now.date(), start, tzinfo=now.tzinfo)
+    end_at = datetime.combine(now.date(), end, tzinfo=now.tzinfo)
+    if end <= start:
+        if current < end:
+            start_at -= timedelta(days=1)
+        else:
+            end_at += timedelta(days=1)
+        if end <= current < start:
+            start_at -= timedelta(days=1)
+            end_at -= timedelta(days=1)
+    cursor = start_at.replace(minute=0, second=0, microsecond=0)
+    expected_hours = 0
+    while cursor < end_at:
+        expected_hours += 1
+        cursor += timedelta(hours=1)
+    return now >= end_at, expected_hours
+
+
+def window_hours_remaining(now: datetime, start: time, end: time) -> float:
+    """Return remaining hours while inside a local-time window."""
+    current = now.timetz().replace(tzinfo=None)
+    if start < end:
+        if not start <= current < end:
+            return 0.0
+        finish = datetime.combine(now.date(), end, tzinfo=now.tzinfo)
+    else:
+        if end <= current < start:
+            return 0.0
+        finish = datetime.combine(now.date(), end, tzinfo=now.tzinfo)
+        if current >= start:
+            finish += timedelta(days=1)
+    return max(0.0, (finish - now).total_seconds() / 3600)
 
 
 def project_daily_accounting(inputs: AccountingProjectionInputs) -> EnergyLedger:

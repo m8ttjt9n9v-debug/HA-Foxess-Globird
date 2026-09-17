@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime, time, timedelta
+
 import pytest
 
 from custom_components.home_energy_orchestrator.models import EnergyLedger
@@ -8,8 +10,36 @@ from custom_components.home_energy_orchestrator.planner.accounting import (
     AccountingProjectionInputs,
     TariffConfiguration,
     ZeroHeroWindowEvidence,
+    ZeroImportDurationTracker,
     project_daily_accounting,
+    window_active,
+    window_credit_state,
+    window_elapsed_hours,
+    window_hours_remaining,
 )
+
+
+def test_window_evidence_helpers_cover_overnight_boundaries() -> None:
+    now = datetime(2026, 9, 17, 1, 0, tzinfo=UTC)
+
+    assert window_active(now, time(23), time(2))
+    assert window_elapsed_hours(now, time(23), time(2)) == pytest.approx(2.0)
+    assert window_credit_state(now, time(23), time(2)) == (False, 3)
+    assert window_hours_remaining(now, time(23), time(2)) == pytest.approx(1.0)
+
+
+def test_zero_import_tracker_resets_after_threshold_breach() -> None:
+    tracker = ZeroImportDurationTracker()
+    first = datetime(2026, 9, 17, 18, tzinfo=UTC)
+
+    assert tracker.observe(0.0, observed_at=first, threshold_kw=0.03) == 0.0
+    assert tracker.observe(
+        0.01, observed_at=first + timedelta(minutes=6), threshold_kw=0.03
+    ) == pytest.approx(6.0)
+    assert tracker.observe(
+        0.04, observed_at=first + timedelta(minutes=7), threshold_kw=0.03
+    ) == 0.0
+    assert tracker.since is None
 
 
 def _ledger() -> EnergyLedger:
