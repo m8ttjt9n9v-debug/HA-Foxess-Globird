@@ -28,10 +28,15 @@ export, free-window import, peak-window import, ZEROHERO hourly import and
 ZEROHERO export now use the same mechanics while retaining their original Store
 objects and independent checkpoint rules.
 
+The third seam adds the value-returning repository variant and migrates
+forecast calibration. Its existing decoder, daily rollover and write-coalescing
+signature remain authoritative.
+
 Work-item evidence:
 
 - [daily-import typed repository](work-item-daily-import-repository.md)
 - [tariff-meter typed repositories](work-item-tariff-meter-repositories.md)
+- [forecast-feedback typed repository](work-item-forecast-repository.md)
 
 ## Exit gate
 
@@ -41,6 +46,6 @@ are documented and tested; all thirteen frozen Store contracts remain intact.
 
 ## Status
 
-In progress. The tariff-meter family is behind the repository boundary;
-forecast, learning, inverter sessions, EV sessions and manual diagnostics
+In progress. Tariff meters and forecast feedback are behind repository
+boundaries; learning, inverter sessions, EV sessions and manual diagnostics
 remain on their existing direct persistence paths.

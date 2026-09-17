@@ -2,15 +2,21 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import cast
 from zoneinfo import ZoneInfo
 
 from homeassistant.helpers.storage import Store
 
-from custom_components.home_energy_orchestrator.persistence import TypedStoreRepository
+from custom_components.home_energy_orchestrator.persistence import (
+    TypedStoreRepository,
+    TypedValueStoreRepository,
+)
 from custom_components.home_energy_orchestrator.planner.daily_meter import (
     DailyImportAccumulator,
+)
+from custom_components.home_energy_orchestrator.planner.forecast import (
+    ForecastFeedbackState,
 )
 
 TZ = ZoneInfo("Australia/Sydney")
@@ -73,3 +79,39 @@ async def test_repository_saves_exact_existing_payload() -> None:
     await repo.async_save(state)
 
     assert store.payload == state.to_payload()
+
+
+def forecast_repository(
+    payload: object = None,
+) -> tuple[TypedValueStoreRepository[ForecastFeedbackState], FakeStore]:
+    store = FakeStore(payload)
+    repository = TypedValueStoreRepository(
+        cast(Store[dict[str, object]], store),
+        decode=lambda value: ForecastFeedbackState.restore(
+            value,
+            today=date(2026, 9, 17),
+        ),
+        encode=ForecastFeedbackState.to_payload,
+    )
+    return repository, store
+
+
+async def test_value_repository_restores_and_saves_existing_forecast_payload() -> None:
+    state = ForecastFeedbackState.restore(None, today=date(2026, 9, 17))
+    state.observe_export(planned_total_kwh=20.0, realised_kwh=10.0)
+    repo, store = forecast_repository(state.to_payload())
+
+    restored = await repo.async_load()
+    await repo.async_save(restored)
+
+    assert restored.to_payload() == state.to_payload()
+    assert store.payload == state.to_payload()
+
+
+async def test_value_repository_invalid_outer_payload_uses_forecast_fallback() -> None:
+    repo, _store = forecast_repository(["not", "a", "mapping"])
+
+    restored = await repo.async_load()
+
+    assert restored.current.local_date == date(2026, 9, 17)
+    assert restored.export_realisation_fraction == 0.75

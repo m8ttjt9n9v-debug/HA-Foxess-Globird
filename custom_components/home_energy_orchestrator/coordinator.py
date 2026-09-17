@@ -85,7 +85,7 @@ from .const import (
 )
 from .models import EnergyLedger, SiteSnapshot
 from .normalise import current_to_a, energy_to_kwh, percent, power_to_kw
-from .persistence import TypedStoreRepository
+from .persistence import TypedStoreRepository, TypedValueStoreRepository
 from .planner.daily_meter import (
     DailyImportAccumulator,
     HourlyWindowImportAccumulator,
@@ -219,6 +219,15 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
         self._forecast_store: Store[dict[str, object]] = Store(
             hass, 1, f"{DOMAIN}.{entry_id}.forecast_feedback", private=True
         )
+        self._forecast_repository = TypedValueStoreRepository(
+            self._forecast_store,
+            decode=lambda payload: ForecastFeedbackState.restore(
+                payload,
+                today=dt_util.now().date(),
+                default_fraction=DEFAULT_FORECAST_EXPORT_REALISATION,
+            ),
+            encode=ForecastFeedbackState.to_payload,
+        )
         self.forecast_feedback = ForecastFeedbackState.restore(
             None,
             today=dt_util.now().date(),
@@ -316,11 +325,7 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
 
     async def async_load_forecast_feedback(self) -> None:
         """Load forecast-only calibration and comparison history."""
-        self.forecast_feedback = ForecastFeedbackState.restore(
-            await self._forecast_store.async_load(),
-            today=dt_util.now().date(),
-            default_fraction=DEFAULT_FORECAST_EXPORT_REALISATION,
-        )
+        self.forecast_feedback = await self._forecast_repository.async_load()
         if self.forecast_feedback.roll_to(dt_util.now().date()):
             await self._async_save_forecast_feedback(force=True)
 
@@ -1003,7 +1008,7 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
         )
         if not force and signature == self._forecast_last_saved_signature:
             return
-        await self._forecast_store.async_save(self.forecast_feedback.to_payload())
+        await self._forecast_repository.async_save(self.forecast_feedback)
         self._forecast_last_saved_signature = signature
 
     def _power(self, entity_id: str | None) -> float | None:

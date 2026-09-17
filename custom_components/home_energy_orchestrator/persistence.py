@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Literal, Protocol
@@ -44,3 +45,26 @@ class TypedStoreRepository[StateT: RestorableState]:
     async def async_save(self, state: StateT) -> None:
         """Save the domain model's existing payload without an extra wrapper."""
         await self.store.async_save(state.to_payload())
+
+
+@dataclass(slots=True)
+class TypedValueStoreRepository[StateT]:
+    """Persist state whose domain decoder returns a replacement value."""
+
+    store: Store[dict[str, object]]
+    decode: Callable[[dict[str, object] | None], StateT]
+    encode: Callable[[StateT], dict[str, object]]
+
+    async def async_load(self) -> StateT:
+        """Decode stored state or return the decoder's safe fallback."""
+        payload = await self.store.async_load()
+        if payload is not None and not isinstance(payload, dict):
+            return self.decode(None)
+        try:
+            return self.decode(payload)
+        except (KeyError, OverflowError, TypeError, ValueError):
+            return self.decode(None)
+
+    async def async_save(self, state: StateT) -> None:
+        """Save the domain encoder's existing payload without an extra wrapper."""
+        await self.store.async_save(self.encode(state))
