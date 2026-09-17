@@ -737,3 +737,67 @@ async def test_import_anchor_stays_zero_when_export_continues_after_reload(
     assert harness.service_calls == ()
     await harness.unload(entry)
     harness.close()
+
+
+@pytest.mark.freeze_time("2026-09-17 02:30:00+00:00")
+async def test_export_anchor_stays_zero_when_import_continues_after_reload(
+    hass, monkeypatch
+) -> None:
+    """Export → import checkpoint prevents phantom export after reload."""
+    harness = LifecycleHarness(hass)
+    await harness.set_state(
+        "sensor.test_battery_soc", "60", {"unit_of_measurement": "%"}
+    )
+    await harness.set_state(
+        "sensor.test_house_load", "0.8", {"unit_of_measurement": "kW"}
+    )
+    await harness.set_state(
+        "sensor.test_grid_power", "-5", {"unit_of_measurement": "kW"}
+    )
+    now = [datetime(2026, 9, 17, 2, 30, tzinfo=UTC)]
+    monkeypatch.setattr(
+        "custom_components.home_energy_orchestrator.coordinator.dt_util.now",
+        lambda: now[0],
+    )
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Export anchor reload",
+        version=6,
+        data=ENTRY_DATA,
+    )
+    entry.add_to_hass(hass)
+    await harness.setup(entry)
+
+    now[0] = datetime(2026, 9, 17, 2, 30, 30, tzinfo=UTC)
+    await harness.set_state(
+        "sensor.test_grid_power", "-5", {"unit_of_measurement": "kW"}
+    )
+    now[0] = datetime(2026, 9, 17, 2, 31, tzinfo=UTC)
+    await harness.set_state(
+        "sensor.test_grid_power", "1", {"unit_of_measurement": "kW"}
+    )
+
+    before = hass.states.get("sensor.home_energy_daily_export")
+    assert before is not None
+    before_export_kwh = float(before.state)
+    assert before_export_kwh > 0
+    store_key = f"home_energy_orchestrator.{entry.entry_id}.daily_export"
+    persisted = await harness.load_store(store_key)
+    assert persisted is not None
+    assert persisted["last_import_kw"] == 0.0
+
+    await harness.reload(entry)
+    now[0] = datetime(2026, 9, 17, 2, 31, 30, tzinfo=UTC)
+    await harness.set_state(
+        "sensor.test_grid_power", "1", {"unit_of_measurement": "kW"}
+    )
+
+    after = hass.states.get("sensor.home_energy_daily_export")
+    assert after is not None
+    assert float(after.state) == before_export_kwh
+    persisted = await harness.load_store(store_key)
+    assert persisted is not None
+    assert persisted["last_import_kw"] == 0.0
+    assert harness.service_calls == ()
+    await harness.unload(entry)
+    harness.close()
