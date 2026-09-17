@@ -6,7 +6,7 @@ from dataclasses import dataclass, replace
 
 from .ev_candidates import EvStageCandidate, build_ev_stage_candidate
 from .ev_daily_backfill import DailyBackfillCycleState
-from .ev_outside_window import PreFreeSessionState
+from .ev_outside_window import PreFreeSessionState, SolarSpillDecision
 
 
 @dataclass(frozen=True, slots=True)
@@ -26,6 +26,52 @@ class BatteryFloorAbortTransition:
     candidates: tuple[EvStageCandidate, ...]
     continue_reconciliation: bool
     last_reason: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class DisconnectedEvCleanupTransition:
+    """Controller state cleared when the EV is no longer eligible at home."""
+
+    daily_state: DailyBackfillCycleState
+    pre_free_state: PreFreeSessionState
+    pre_free_phase: str
+    charge_to_full_started_at: None
+    clear_charge_to_full_config: bool
+    outside_control_active: bool
+    outside_target_active: bool
+    solar_spill: SolarSpillDecision
+
+
+def cleanup_disconnected_ev(
+    daily_state: DailyBackfillCycleState,
+    *,
+    charge_to_full_started: bool,
+    solar_spill_enabled: bool,
+) -> DisconnectedEvCleanupTransition:
+    """Clear retained outside-window ownership without issuing an actuator command."""
+    return DisconnectedEvCleanupTransition(
+        daily_state=replace(
+            daily_state,
+            active=False,
+            session_target_kwh=0.0,
+            session_start_delivered_kwh=0.0,
+            frozen_start=None,
+            stop_pending=False,
+            stop_attempts=0,
+            last_stop_at=None,
+        ),
+        pre_free_state=PreFreeSessionState(),
+        pre_free_phase="not_eligible",
+        charge_to_full_started_at=None,
+        clear_charge_to_full_config=charge_to_full_started,
+        outside_control_active=False,
+        outside_target_active=False,
+        solar_spill=SolarSpillDecision(
+            0.0,
+            0.0,
+            "vehicle_not_eligible" if solar_spill_enabled else "disabled",
+        ),
+    )
 
 
 def abort_outside_charge_at_battery_floor(

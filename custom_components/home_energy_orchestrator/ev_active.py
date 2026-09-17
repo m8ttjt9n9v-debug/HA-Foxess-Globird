@@ -179,7 +179,10 @@ from .planner.ev_learning import (
     plan_learned_general_charge_limit,
     snapshot_daily_driving_energy,
 )
-from .planner.ev_outside_state import abort_outside_charge_at_battery_floor
+from .planner.ev_outside_state import (
+    abort_outside_charge_at_battery_floor,
+    cleanup_disconnected_ev,
+)
 from .planner.ev_outside_window import (
     PreFreeCurrentInputs,
     PreFreePlan,
@@ -433,29 +436,20 @@ class ActiveEvController:
                 home_control_active=self._home_control_active(),
             )
             if not connected:
-                self.solar_spill = SolarSpillDecision(
-                    0.0,
-                    0.0,
-                    (
-                        "vehicle_not_eligible"
-                        if policy.solar_spill_enabled
-                        else "disabled"
-                    ),
+                cleanup = cleanup_disconnected_ev(
+                    self._daily_backfill_cycle_state(),
+                    charge_to_full_started=self.charge_to_full_started_at is not None,
+                    solar_spill_enabled=policy.solar_spill_enabled,
                 )
-                if self.charge_to_full_started_at is not None:
+                if cleanup.clear_charge_to_full_config:
                     await self._async_clear_charge_to_full()
-                    self.charge_to_full_started_at = None
-                self.daily_backfill_active = False
-                self.daily_backfill_session_target_kwh = 0.0
-                self.daily_backfill_session_start_delivered_kwh = 0.0
-                self.daily_backfill_frozen_start = None
-                self.daily_backfill_stop_pending = False
-                self.daily_backfill_stop_attempts = 0
-                self.daily_backfill_last_stop_at = None
-                self.pre_free_session = PreFreeSessionState()
-                self.pre_free_phase = "not_eligible"
-                self.outside_control_active = False
-                self.outside_target_active = False
+                self.charge_to_full_started_at = cleanup.charge_to_full_started_at
+                self._apply_daily_backfill_cycle_state(cleanup.daily_state)
+                self.pre_free_session = cleanup.pre_free_state
+                self.pre_free_phase = cleanup.pre_free_phase
+                self.outside_control_active = cleanup.outside_control_active
+                self.outside_target_active = cleanup.outside_target_active
+                self.solar_spill = cleanup.solar_spill
                 if self.eligibility_route.route == "disconnected_smart_socket":
                     await self._async_reconcile_disconnected_smart_socket(
                         now,
