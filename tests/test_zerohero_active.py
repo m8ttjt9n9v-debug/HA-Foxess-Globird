@@ -544,6 +544,69 @@ async def test_automatic_export_cap_is_independent_of_boosted_tariff_cap(
     ]
 
 
+@pytest.mark.parametrize(
+    (
+        "exported_kwh",
+        "protected_house_kwh",
+        "expected_remaining",
+        "expected_protected_ev",
+    ),
+    [
+        ("invalid", 4.0, 7.0, 3.0),
+        (0.0, "invalid", 20.0, 0.0),
+    ],
+)
+async def test_malformed_export_inputs_preserve_partial_publication_order(
+    hass,
+    monkeypatch,
+    exported_kwh: object,
+    protected_house_kwh: object,
+    expected_remaining: float,
+    expected_protected_ev: float,
+) -> None:
+    calls = []
+    hass.bus.async_listen(EVENT_CALL_SERVICE, calls.append)
+    hass.states.async_set(
+        "select.foxess_mode",
+        "Self Use",
+        {"options": ["Self Use", "Force Discharge", "Force Charge"]},
+    )
+    hass.states.async_set(
+        "number.foxess_charge", "0", {"unit_of_measurement": "kW", "max": 15}
+    )
+    hass.states.async_set(
+        "number.foxess_discharge", "0", {"unit_of_measurement": "kW", "max": 15}
+    )
+    monkeypatch.setattr(
+        "custom_components.home_energy_orchestrator.active.dt_util.now",
+        lambda: datetime(2026, 9, 5, 19, 45, tzinfo=UTC),
+    )
+    coordinator = _coordinator(
+        **{
+            CONF_AUTOMATIC_CONTROL_ENABLED: True,
+            CONF_AUTOMATIC_EXPORT_ENABLED: True,
+            CONF_REHEARSAL_MODE: False,
+            CONF_INVERTER_DISCHARGE_LIMIT_KW: 15.0,
+            CONF_AUTOMATIC_EXPORT_LIMIT_KWH: 20.0,
+        }
+    )
+    coordinator.zerohero_export.imported_kwh = exported_kwh
+    coordinator.learning_remaining_kwh = protected_house_kwh
+    coordinator.data.available_after_reserve_kwh = 30.0
+    controller = _loaded_controller(hass, coordinator)
+    controller.automatic_export_remaining_kwh = 7.0
+    controller.export_protected_ev_kwh = 3.0
+
+    await controller.async_reconcile()
+
+    assert controller.automatic_export_remaining_kwh == expected_remaining
+    assert controller.export_protected_ev_kwh == expected_protected_ev
+    assert controller.export_plan is None
+    assert controller.export_planned_start is None
+    assert controller.export_session.phase == "idle"
+    assert calls == []
+
+
 async def test_ev_before_export_prevents_new_session_below_target(hass, monkeypatch):
     calls = []
     hass.bus.async_listen(EVENT_CALL_SERVICE, calls.append)

@@ -27,12 +27,12 @@ class FoxessExportPolicyContext:
     exported_kwh: object | None
     automatic_limit_kwh: float
     protected_house_kwh: object | None
-    protected_ev_kwh: object | None
+    protected_ev_kwh: float | None
     available_after_reserve_kwh: object | None
     discharge_efficiency_percent: float
     session: ExportSessionState
     previous_automatic_remaining_kwh: float | None = None
-    previous_protected_ev_kwh: object | None = None
+    previous_protected_ev_kwh: float | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -46,7 +46,7 @@ class FoxessExportPolicyResult:
     discharge_max_kw: float
     requested_power_kw: float
     automatic_remaining_kwh: float | None
-    protected_ev_kwh: object | None
+    protected_ev_kwh: float | None
     export_plan: ExportPlan | None
     planned_start: datetime | None
     eligible: bool

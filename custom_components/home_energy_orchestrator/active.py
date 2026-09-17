@@ -32,7 +32,7 @@ from .planner.ev_before_export import (
     EvBeforeExportDecision,
     decide_ev_before_export,
 )
-from .planner.export import ExportPlan, calculate_export_plan, calculate_export_start
+from .planner.export import ExportPlan
 from .planner.export_session import ExportSessionState, advance_export_session
 from .planner.foxess import (
     FoxessCommand,
@@ -42,6 +42,10 @@ from .planner.foxess import (
 from .planner.foxess_charge_policy import (
     FoxessChargePolicyContext,
     evaluate_foxess_charge_policy,
+)
+from .planner.foxess_export_policy import (
+    FoxessExportPolicyContext,
+    evaluate_foxess_export_policy,
 )
 from .planner.foxess_gate import FoxessGateContext, evaluate_foxess_gate
 
@@ -324,6 +328,11 @@ class ActiveFoxessController:
         # export limit; that limit must not reduce this battery-side request.
         requested = discharge_max
         eligible = False
+        should_advance: bool | None = None
+        session_window_active = (
+            self.export_effective_enabled and within_session_window
+        )
+        finish_requested = not self.export_effective_enabled or now >= finish_at
         self.export_plan = None
         self.export_planned_start = None
         exported = getattr(
@@ -345,36 +354,62 @@ class ActiveFoxessController:
                 protected_ev += ev_controller.daily_backfill_protection_kwh(now)
             self.export_protected_ev_kwh = protected_ev
             available = self.coordinator.data.available_after_reserve_kwh
-            if (
-                available is not None
-                and protected_house is not None
-                and protected_ev is not None
-                and self.automatic_export_remaining_kwh is not None
-                and discharge_max > 0
-            ):
-                efficiency = runtime.export.discharge_efficiency_percent / 100
-                window_hours = (finish_at - start_at).total_seconds() / 3600
-                self.export_plan = calculate_export_plan(
-                    max(float(available), 0.0) * efficiency,
-                    protected_house,
-                    protected_ev,
-                    self.automatic_export_remaining_kwh,
-                    requested,
-                    window_hours,
+            policy = evaluate_foxess_export_policy(
+                FoxessExportPolicyContext(
+                    requested_enabled=enabled,
+                    before_export_enabled=(
+                        runtime.ev_preferences.before_export_enabled
+                    ),
+                    ev_soc_percent=getattr(self.coordinator.snapshot, "ev_soc", None),
+                    before_export_target_percent=(
+                        runtime.ev_preferences.before_export_soc_target
+                    ),
+                    now=now,
+                    start_at=start_at,
+                    finish_at=finish_at,
+                    source_capability_available=source_available,
+                    configured_max_kw=(
+                        self.coordinator.runtime_config.inverter.discharge_limit_kw
+                    ),
+                    observed_max_kw=feedback.discharge_power_max_kw,
+                    exported_kwh=exported,
+                    automatic_limit_kwh=runtime.export.automatic_limit_kwh,
+                    protected_house_kwh=protected_house,
+                    protected_ev_kwh=protected_ev,
+                    available_after_reserve_kwh=available,
+                    discharge_efficiency_percent=(
+                        runtime.export.discharge_efficiency_percent
+                    ),
+                    session=self.export_session,
+                    previous_automatic_remaining_kwh=(
+                        self.automatic_export_remaining_kwh
+                    ),
+                    previous_protected_ev_kwh=self.export_protected_ev_kwh,
                 )
-                self.export_planned_start = calculate_export_start(
-                    start_at, finish_at, self.export_plan.planned_duration_h
-                )
-                eligible = (
-                    self.export_planned_start is not None
-                    and now >= self.export_planned_start
-                    and within_session_window
-                )
+            )
+            self.ev_before_export_decision = policy.before_export_decision
+            self.export_effective_enabled = policy.effective_enabled
+            within_session_window = policy.within_session_window
+            source_available = policy.source_available
+            discharge_max = policy.discharge_max_kw
+            requested = policy.requested_power_kw
+            self.automatic_export_remaining_kwh = policy.automatic_remaining_kwh
+            self.export_protected_ev_kwh = policy.protected_ev_kwh
+            self.export_plan = policy.export_plan
+            self.export_planned_start = policy.planned_start
+            eligible = policy.eligible
+            should_advance = policy.should_advance
+            session_window_active = policy.session_window_active
+            finish_requested = policy.finish_requested
         except (TypeError, ValueError):
             self.export_plan = None
 
-        latched = self.export_session.phase != "idle"
-        if not latched and not (self.export_effective_enabled and eligible):
+        if should_advance is None:
+            latched = self.export_session.phase != "idle"
+            should_advance = latched or (
+                self.export_effective_enabled and eligible
+            )
+        if not should_advance:
             return False
         previous_state = self.export_session
         transition = advance_export_session(
@@ -382,11 +417,11 @@ class ActiveFoxessController:
             observation,
             now=now,
             source_available=source_available,
-            window_active=self.export_effective_enabled and within_session_window,
+            window_active=session_window_active,
             eligible=eligible,
             requested_discharge_power_kw=requested,
             discharge_power_max_kw=discharge_max,
-            finish_requested=not self.export_effective_enabled or now >= finish_at,
+            finish_requested=finish_requested,
         )
         self.export_session = transition.state
         if self.export_session != previous_state:
