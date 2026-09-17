@@ -90,6 +90,11 @@ source availability into a read-only adapter result. The active controller
 must no longer call `hass.states` directly. Manual diagnostics consume the same
 observation boundary without sharing policy or ownership state.
 
+Implemented as separately revertible OM-702A, OM-702B and OM-702C seams: the
+boundary, automatic-controller wiring and legacy-compatible diagnostic wiring.
+The remaining direct active-controller state read is deliberately assigned to
+the EV observation seam rather than mixed into inverter scope.
+
 ### 7.3 — inverter gate and policy evaluation
 
 Build one immutable evaluation context from runtime configuration, telemetry,

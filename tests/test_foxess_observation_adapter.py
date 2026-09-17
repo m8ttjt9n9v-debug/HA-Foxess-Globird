@@ -37,6 +37,8 @@ def test_capture_returns_one_normalized_immutable_snapshot(hass) -> None:
     result = capture_foxess_feedback(hass, ENTITIES)
 
     assert result.observation == FoxessObservation("Self Use", 2.5, 3.5)
+    assert result.manual_observation == FoxessObservation("Self Use", 2.5, 3.5)
+    assert result.reported_mode == "Self Use"
     assert result.mode == "Self Use"
     assert result.charge_power_kw == 2.5
     assert result.discharge_power_kw == 3.5
@@ -44,6 +46,7 @@ def test_capture_returns_one_normalized_immutable_snapshot(hass) -> None:
     assert result.discharge_power_max_kw == 15.0
     assert result.charge_source_available is True
     assert result.export_source_available is True
+    assert result.mapped_entities_available is True
 
 
 def test_capture_keeps_independent_source_capability_and_feedback_validity(hass) -> None:
@@ -66,6 +69,7 @@ def test_capture_keeps_independent_source_capability_and_feedback_validity(hass)
     result = capture_foxess_feedback(hass, ENTITIES)
 
     assert result.observation is None
+    assert result.manual_observation is None
     assert result.mode == "Self Use"
     assert result.charge_power_kw is None
     assert result.discharge_power_kw == 0.0
@@ -73,6 +77,7 @@ def test_capture_keeps_independent_source_capability_and_feedback_validity(hass)
     assert result.discharge_power_max_kw == 8.0
     assert result.charge_source_available is True
     assert result.export_source_available is False
+    assert result.mapped_entities_available is True
 
 
 def test_capture_fails_closed_for_missing_or_unavailable_entities(hass) -> None:
@@ -90,12 +95,38 @@ def test_capture_fails_closed_for_missing_or_unavailable_entities(hass) -> None:
     result = capture_foxess_feedback(hass, ENTITIES)
 
     assert result.observation is None
+    assert result.manual_observation is None
+    assert result.reported_mode == "unavailable"
     assert result.mode is None
     assert result.charge_power_kw is None
     assert result.discharge_power_kw is None
     assert result.mode_options == ()
     assert result.charge_source_available is False
     assert result.export_source_available is False
+    assert result.mapped_entities_available is False
+
+
+def test_manual_feedback_preserves_raw_unavailable_mode(hass) -> None:
+    """Diagnostic reads retain their legacy raw-mode behavior."""
+    hass.states.async_set(ENTITIES.work_mode_entity, "unavailable")
+    hass.states.async_set(
+        ENTITIES.force_charge_power_entity,
+        "0",
+        {"unit_of_measurement": "kW"},
+    )
+    hass.states.async_set(
+        ENTITIES.force_discharge_power_entity,
+        "0",
+        {"unit_of_measurement": "kW"},
+    )
+
+    result = capture_foxess_feedback(hass, ENTITIES)
+
+    assert result.observation is None
+    assert result.manual_observation == FoxessObservation("unavailable", 0.0, 0.0)
+    assert result.reported_mode == "unavailable"
+    assert result.mode is None
+    assert result.mapped_entities_available is True
 
 
 def test_snapshot_freezes_legacy_controller_read_results(hass) -> None:
@@ -117,6 +148,9 @@ def test_snapshot_freezes_legacy_controller_read_results(hass) -> None:
     result = capture_foxess_feedback(hass, ENTITIES)
 
     assert result.observation == FoxessObservation("Force Discharge", 1.25, 4.25)
+    assert result.manual_observation == FoxessObservation(
+        "Force Discharge", 1.25, 4.25
+    )
     assert result.mode == "Force Discharge"
     assert result.charge_power_kw == 1.25
     assert result.discharge_power_kw == 4.25

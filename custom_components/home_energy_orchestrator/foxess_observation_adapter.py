@@ -18,12 +18,30 @@ class FoxessFeedbackSnapshot:
     """One coherent read of mapped inverter mode and force-power feedback."""
 
     observation: FoxessObservation | None
+    reported_mode: str | None
     mode: str | None
     charge_power_kw: float | None
     discharge_power_kw: float | None
     mode_options: tuple[str, ...]
     charge_power_max_kw: float
     discharge_power_max_kw: float
+    mapped_entities_available: bool
+
+    @property
+    def manual_observation(self) -> FoxessObservation | None:
+        """Return legacy diagnostic feedback without automatic-mode filtering."""
+        if (
+            not self.mapped_entities_available
+            or self.reported_mode is None
+            or self.charge_power_kw is None
+            or self.discharge_power_kw is None
+        ):
+            return None
+        return FoxessObservation(
+            self.reported_mode,
+            self.charge_power_kw,
+            self.discharge_power_kw,
+        )
 
     @property
     def charge_source_available(self) -> bool:
@@ -56,12 +74,16 @@ def capture_foxess_feedback(
     )
     return FoxessFeedbackSnapshot(
         observation=observation,
+        reported_mode=mode_state.state if mode_state is not None else None,
         mode=mode,
         charge_power_kw=charge_power_kw,
         discharge_power_kw=discharge_power_kw,
         mode_options=_mode_options(mode_state),
         charge_power_max_kw=_power_max_kw(charge_state),
         discharge_power_max_kw=_power_max_kw(discharge_state),
+        mapped_entities_available=all(
+            state is not None for state in (mode_state, charge_state, discharge_state)
+        ),
     )
 
 

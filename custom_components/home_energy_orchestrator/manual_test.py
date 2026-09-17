@@ -33,7 +33,7 @@ from .const import (
 )
 from .coordinator import EnergyCoordinator
 from .foxess_adapter import FoxessEntityMap, FoxessServiceAdapter
-from .normalise import power_to_kw
+from .foxess_observation_adapter import capture_foxess_feedback
 from .persistence import TypedValueStoreRepository
 from .planner.foxess import (
     ControlDecision,
@@ -509,21 +509,15 @@ class ManualTestController:
         mode_id = inverter.work_mode_entity
         charge_id = inverter.force_charge_power_entity
         discharge_id = inverter.force_discharge_power_entity
-        mode_state = self.hass.states.get(str(mode_id))
-        charge_state = self.hass.states.get(str(charge_id))
-        discharge_state = self.hass.states.get(str(discharge_id))
-        if not mode_state or not charge_state or not discharge_state:
+        feedback = capture_foxess_feedback(
+            self.hass,
+            FoxessEntityMap(str(mode_id), str(charge_id), str(discharge_id)),
+        )
+        if not feedback.mapped_entities_available:
             raise ManualTestError("FoxESS actuator feedback is unavailable")
-        try:
-            charge = power_to_kw(
-                float(charge_state.state), charge_state.attributes.get("unit_of_measurement")
-            )
-            discharge = power_to_kw(
-                float(discharge_state.state), discharge_state.attributes.get("unit_of_measurement")
-            )
-        except (TypeError, ValueError):
-            raise ManualTestError("FoxESS power feedback is unavailable") from None
-        return FoxessObservation(mode_state.state, charge, discharge)
+        if feedback.manual_observation is None:
+            raise ManualTestError("FoxESS power feedback is unavailable")
+        return feedback.manual_observation
 
     def _limit(self, key: str) -> float:
         inverter = self.coordinator.runtime_config.inverter

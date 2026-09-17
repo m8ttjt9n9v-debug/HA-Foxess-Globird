@@ -41,6 +41,9 @@ from custom_components.home_energy_orchestrator.manual_test import (
 from custom_components.home_energy_orchestrator.planner.charge_session import (
     ChargeSessionState,
 )
+from custom_components.home_energy_orchestrator.planner.foxess import (
+    FoxessObservation,
+)
 from custom_components.home_energy_orchestrator.planner.manual_test import (
     ManualTestPersistenceState,
     estimate_charge,
@@ -200,6 +203,46 @@ def _coordinator(**config):
         ),
         async_update_listeners=lambda: None,
     )
+
+
+def test_observation_distinguishes_missing_actuator_feedback(hass) -> None:
+    controller = ManualTestController(hass, _coordinator())
+    hass.states.async_set("select.foxess_mode", "Self Use")
+    hass.states.async_set(
+        "number.foxess_charge", "0", {"unit_of_measurement": "kW"}
+    )
+
+    with pytest.raises(
+        ManualTestError, match="FoxESS actuator feedback is unavailable"
+    ):
+        controller._observation()
+
+
+def test_observation_distinguishes_invalid_power_feedback(hass) -> None:
+    controller = ManualTestController(hass, _coordinator())
+    hass.states.async_set("select.foxess_mode", "Self Use")
+    hass.states.async_set(
+        "number.foxess_charge", "invalid", {"unit_of_measurement": "kW"}
+    )
+    hass.states.async_set(
+        "number.foxess_discharge", "0", {"unit_of_measurement": "kW"}
+    )
+
+    with pytest.raises(ManualTestError, match="FoxESS power feedback is unavailable"):
+        controller._observation()
+
+
+def test_observation_preserves_raw_unavailable_mode(hass) -> None:
+    controller = ManualTestController(hass, _coordinator())
+    hass.states.async_set("select.foxess_mode", "unavailable")
+    hass.states.async_set(
+        "number.foxess_charge", "0", {"unit_of_measurement": "kW"}
+    )
+    hass.states.async_set(
+        "number.foxess_discharge", "1.5", {"unit_of_measurement": "kW"}
+    )
+
+    assert controller._observation() == FoxessObservation("unavailable", 0.0, 1.5)
 
 
 async def test_controller_requires_rehearsal_off(hass) -> None:
