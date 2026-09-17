@@ -179,6 +179,7 @@ from .planner.ev_learning import (
     plan_learned_general_charge_limit,
     snapshot_daily_driving_energy,
 )
+from .planner.ev_outside_state import abort_outside_charge_at_battery_floor
 from .planner.ev_outside_window import (
     PreFreeCurrentInputs,
     PreFreePlan,
@@ -1502,43 +1503,25 @@ class ActiveEvController:
             and snapshot.battery_soc
             <= self._float(CONF_BATTERY_FLOOR, DEFAULT_BATTERY_FLOOR)
         ):
-            self.daily_backfill_active = False
-            self.daily_backfill_session_target_kwh = 0.0
-            self.daily_backfill_session_start_delivered_kwh = 0.0
-            self.daily_backfill_frozen_start = None
-            self.pre_free_session = PreFreeSessionState()
-            self.pre_free_phase = "battery_floor_reached"
-            self.target_current_a = 0.0
-            self.target_limit_percent = observation.charge_limit_percent
-            self.decision_phase = "battery_floor_reached"
-            self.allowance_phase = "outside_free_window"
-            self.outside_target_active = False
-            self.outside_stop_requested = observation.charge_switch_on
-            self.outside_control_active = observation.charge_switch_on
-            self.outside_stage_candidates = (
-                build_ev_stage_candidate(
-                    "battery_floor",
-                    eligible=observation.charge_switch_on,
-                    reason="battery_floor_reached",
-                    target_current_a=0.0,
-                    target_limit_percent=observation.charge_limit_percent,
-                    command_intent=("stop_charging",)
-                    if observation.charge_switch_on
-                    else (),
-                    persistence_transition=(
-                        "daily_backfill_stop_pending"
-                        if observation.charge_switch_on
-                        else "none"
-                    ),
-                ),
+            abort = abort_outside_charge_at_battery_floor(
+                self._daily_backfill_cycle_state(),
+                charge_switch_on=observation.charge_switch_on,
+                charge_limit_percent=observation.charge_limit_percent,
             )
-            if observation.charge_switch_on:
-                self.daily_backfill_stop_pending = True
-                self.daily_backfill_stop_attempts = 0
-                self.daily_backfill_last_stop_at = None
-                return True
-            self.last_reason = "battery_floor_reached"
-            return False
+            self._apply_daily_backfill_cycle_state(abort.daily_state)
+            self.pre_free_session = abort.pre_free_state
+            self.pre_free_phase = abort.pre_free_phase
+            self.target_current_a = abort.target_current_a
+            self.target_limit_percent = abort.target_limit_percent
+            self.decision_phase = abort.decision_phase
+            self.allowance_phase = abort.allowance_phase
+            self.outside_target_active = abort.outside_target_active
+            self.outside_stop_requested = abort.outside_stop_requested
+            self.outside_control_active = abort.outside_control_active
+            self.outside_stage_candidates = abort.candidates
+            if abort.last_reason is not None:
+                self.last_reason = abort.last_reason
+            return abort.continue_reconciliation
 
         self.daily_backfill_plan = None
         daily_current_a = 0.0
