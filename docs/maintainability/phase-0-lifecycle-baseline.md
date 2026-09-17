@@ -42,6 +42,10 @@ churn and every current unique ID remains stable.
 Current machine-readable identity snapshot:
 [v0.12.26 entity contract](entity-contract-v0.12.26.json).
 
+The corresponding ordered setup/reconfigure surface is frozen in the
+[v0.12.26 configuration contract](config-contract-v0.12.26.json). It records
+page membership and ordering separately from future semantic `FieldSpec` work.
+
 ### OM-004 — Lifecycle harness core
 
 Create reusable test infrastructure for:
