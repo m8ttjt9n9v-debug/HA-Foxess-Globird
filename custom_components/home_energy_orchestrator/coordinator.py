@@ -85,6 +85,7 @@ from .const import (
 )
 from .models import EnergyLedger, SiteSnapshot
 from .normalise import current_to_a, energy_to_kwh, percent, power_to_kw
+from .persistence import TypedStoreRepository
 from .planner.daily_meter import (
     DailyImportAccumulator,
     HourlyWindowImportAccumulator,
@@ -174,6 +175,7 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
         self._daily_import_store: Store[dict[str, object]] = Store(
             hass, 1, f"{DOMAIN}.{entry_id}.daily_import", private=True
         )
+        self._daily_import_repository = TypedStoreRepository(self._daily_import_store)
         self._daily_import_last_saved: float | None = None
         self._daily_export_store: Store[dict[str, object]] = Store(
             hass, 1, f"{DOMAIN}.{entry_id}.daily_export", private=True
@@ -289,7 +291,7 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
 
     async def async_load_daily_import(self) -> None:
         """Load the persisted same-day tariff accumulators."""
-        self.daily_import.restore(await self._daily_import_store.async_load(), dt_util.now())
+        await self._daily_import_repository.async_restore(self.daily_import, dt_util.now())
         now = dt_util.now()
         self.daily_export.restore(await self._daily_export_store.async_load(), now)
         self.standard_rate_export.restore(
@@ -1221,7 +1223,7 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
                 or self.daily_import.imported_kwh - self._daily_import_last_saved >= 0.05
                 or self.daily_import.checkpoint_required
             ):
-                await self._daily_import_store.async_save(self.daily_import.to_payload())
+                await self._daily_import_repository.async_save(self.daily_import)
                 self._daily_import_last_saved = self.daily_import.imported_kwh
         if self.daily_export.observe(export_kw, now):
             if (

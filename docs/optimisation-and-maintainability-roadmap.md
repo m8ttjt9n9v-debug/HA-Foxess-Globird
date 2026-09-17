@@ -232,6 +232,9 @@ Estimated effort: 6–8 engineer-days.
 safely; restart at every phase retains unfinished ownership and recovery work;
 rollback boundaries are documented and tested.
 
+Current work package and completion evidence:
+[Phase 5 versioned persistence repositories](maintainability/phase-5-versioned-persistence.md).
+
 ### Phase 6 — accounting and coordinator extraction
 
 Estimated effort: 8–12 engineer-days.
