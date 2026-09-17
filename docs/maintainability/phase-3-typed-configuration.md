@@ -35,6 +35,10 @@ selectors, validation, migration behavior and the multi-page draft workflow.
   compatibility mutations rather than policy reads. Telemetry freshness,
   legacy battery sign fallback and split battery mappings are now typed as
   well, reducing runtime raw access to nine and coordinator raw access to five.
+  Daily-import accounting, retailer scorecard mappings and the ZEROHERO active
+  window are now typed, reducing direct AST-visible runtime raw access to four
+  and coordinator raw access to zero. The four remaining raw accesses are
+  explicit charge-to-full compatibility mutations.
 
 ## Work packages
 

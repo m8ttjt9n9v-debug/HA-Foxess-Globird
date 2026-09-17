@@ -20,8 +20,11 @@ from .const import (
     CONF_BATTERY_DISCHARGE_POWER,
     CONF_BATTERY_POWER_DIRECTION,
     CONF_BATTERY_SOC,
+    CONF_BONUS_WINDOW_END,
+    CONF_BONUS_WINDOW_START,
     CONF_CONFIGURE_EV,
     CONF_CONFIGURE_SOLAR,
+    CONF_DAILY_IMPORT_ENTITY,
     CONF_EV_ACTUAL_CURRENT,
     CONF_EV_ALLOWANCE_GUARD_ENABLED,
     CONF_EV_AT_HOME,
@@ -58,6 +61,8 @@ from .const import (
     CONF_FREE_CHARGE_END,
     CONF_FREE_CHARGE_SCHEDULE_CONFIRMED,
     CONF_FREE_CHARGE_START,
+    CONF_GLOBIRD_LATEST_DAILY_COST,
+    CONF_GLOBIRD_ZEROHERO_STATUS,
     CONF_GRID_POWER_DIRECTION,
     CONF_HEATER_POWER,
     CONF_HOUSE_AWAY_CONFIRMATION_HOURS,
@@ -81,6 +86,8 @@ from .const import (
     DEFAULT_AUTOMATIC_CONTROL_ENABLED,
     DEFAULT_AUTOMATIC_EXPORT_ENABLED,
     DEFAULT_BATTERY_CHARGE_POSITIVE,
+    DEFAULT_BONUS_WINDOW_END,
+    DEFAULT_BONUS_WINDOW_START,
     DEFAULT_EV_ALLOWANCE_GUARD_ENABLED,
     DEFAULT_EV_AUTOMATIC_CONTROL_ENABLED,
     DEFAULT_EV_BEFORE_EXPORT_ENABLED,
@@ -136,9 +143,11 @@ def _optional_number(
         return None
 
 
-def _optional_time(data: Mapping[str, object], key: str) -> time | None:
+def _optional_time(
+    data: Mapping[str, object], key: str, default: str | None = None
+) -> time | None:
     if key not in data:
-        return None
+        return time.fromisoformat(default) if default is not None else None
     value = data[key]
     if isinstance(value, time):
         return value
@@ -256,6 +265,17 @@ class WindowSettings:
 
     free_charge_start: time | None
     free_charge_end: time | None
+    bonus_start: time | None
+    bonus_end: time | None
+
+
+@dataclass(frozen=True, slots=True)
+class AccountingSettings:
+    """Optional meter and retailer entities used by read-only accounting."""
+
+    daily_import_entity: str | None
+    retailer_daily_cost_entity: str | None
+    retailer_zerohero_status_entity: str | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -339,6 +359,7 @@ class RuntimeConfiguration:
     ev_policy: EvPolicySettings
     house: HouseSettings
     windows: WindowSettings
+    accounting: AccountingSettings
     site: SiteSettings
     battery: BatterySettings
     telemetry: TelemetrySettings
@@ -391,6 +412,9 @@ class RuntimeConfiguration:
         battery_capacity_entity = data.get(CONF_BATTERY_CAPACITY_ENTITY)
         battery_charge_power_entity = data.get(CONF_BATTERY_CHARGE_POWER)
         battery_discharge_power_entity = data.get(CONF_BATTERY_DISCHARGE_POWER)
+        daily_import_entity = data.get(CONF_DAILY_IMPORT_ENTITY)
+        retailer_daily_cost_entity = data.get(CONF_GLOBIRD_LATEST_DAILY_COST)
+        retailer_zerohero_status_entity = data.get(CONF_GLOBIRD_ZEROHERO_STATUS)
         site_grid_current_entity = data.get(CONF_SITE_GRID_CURRENT)
         heater_power_entity = data.get(CONF_HEATER_POWER)
         ev_phase_count = _optional_number(
@@ -647,6 +671,31 @@ class RuntimeConfiguration:
             windows=WindowSettings(
                 free_charge_start=_optional_time(data, CONF_FREE_CHARGE_START),
                 free_charge_end=_optional_time(data, CONF_FREE_CHARGE_END),
+                bonus_start=_optional_time(
+                    data,
+                    CONF_BONUS_WINDOW_START,
+                    DEFAULT_BONUS_WINDOW_START,
+                ),
+                bonus_end=_optional_time(
+                    data,
+                    CONF_BONUS_WINDOW_END,
+                    DEFAULT_BONUS_WINDOW_END,
+                ),
+            ),
+            accounting=AccountingSettings(
+                daily_import_entity=(
+                    str(daily_import_entity) if daily_import_entity else None
+                ),
+                retailer_daily_cost_entity=(
+                    str(retailer_daily_cost_entity)
+                    if retailer_daily_cost_entity
+                    else None
+                ),
+                retailer_zerohero_status_entity=(
+                    str(retailer_zerohero_status_entity)
+                    if retailer_zerohero_status_entity
+                    else None
+                ),
             ),
             site=SiteSettings(
                 solar_configured=data.get(CONF_CONFIGURE_SOLAR) is not False,

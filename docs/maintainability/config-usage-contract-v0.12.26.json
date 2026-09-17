@@ -1,5 +1,5 @@
 {
-  "access_count": 440,
+  "access_count": 438,
   "accesses": [
     {
       "access": "subscript_store",
@@ -3833,6 +3833,16 @@
     },
     {
       "access": "get",
+      "constant": "CONF_DAILY_IMPORT_ENTITY",
+      "key": "daily_import_entity",
+      "kind": "raw_mapping",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "RuntimeConfiguration.from_mapping",
+      "source": "custom_components/home_energy_orchestrator/configuration.py"
+    },
+    {
+      "access": "get",
       "constant": "CONF_EV_ACTUAL_CURRENT",
       "key": "ev_actual_current_entity",
       "kind": "raw_mapping",
@@ -4123,6 +4133,26 @@
     },
     {
       "access": "get",
+      "constant": "CONF_GLOBIRD_LATEST_DAILY_COST",
+      "key": "globird_latest_daily_cost_entity",
+      "kind": "raw_mapping",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "RuntimeConfiguration.from_mapping",
+      "source": "custom_components/home_energy_orchestrator/configuration.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_GLOBIRD_ZEROHERO_STATUS",
+      "key": "globird_zerohero_status_entity",
+      "kind": "raw_mapping",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "RuntimeConfiguration.from_mapping",
+      "source": "custom_components/home_energy_orchestrator/configuration.py"
+    },
+    {
+      "access": "get",
       "constant": "CONF_GRID_POWER_DIRECTION",
       "key": "grid_power_positive_direction",
       "kind": "raw_mapping",
@@ -4220,56 +4250,6 @@
       "receiver": "data",
       "scope": "RuntimeConfiguration.from_mapping",
       "source": "custom_components/home_energy_orchestrator/configuration.py"
-    },
-    {
-      "access": "get",
-      "constant": "CONF_DAILY_IMPORT_ENTITY",
-      "key": "daily_import_entity",
-      "kind": "raw_mapping",
-      "layer": "runtime",
-      "receiver": "self.config",
-      "scope": "EnergyCoordinator._apply_tariff_guard",
-      "source": "custom_components/home_energy_orchestrator/coordinator.py"
-    },
-    {
-      "access": "get",
-      "constant": "CONF_BONUS_WINDOW_END",
-      "key": "bonus_window_end",
-      "kind": "raw_mapping",
-      "layer": "runtime",
-      "receiver": "self.config",
-      "scope": "EnergyCoordinator._bonus_window_active",
-      "source": "custom_components/home_energy_orchestrator/coordinator.py"
-    },
-    {
-      "access": "get",
-      "constant": "CONF_BONUS_WINDOW_START",
-      "key": "bonus_window_start",
-      "kind": "raw_mapping",
-      "layer": "runtime",
-      "receiver": "self.config",
-      "scope": "EnergyCoordinator._bonus_window_active",
-      "source": "custom_components/home_energy_orchestrator/coordinator.py"
-    },
-    {
-      "access": "get",
-      "constant": "CONF_GLOBIRD_LATEST_DAILY_COST",
-      "key": "globird_latest_daily_cost_entity",
-      "kind": "raw_mapping",
-      "layer": "runtime",
-      "receiver": "self.config",
-      "scope": "EnergyCoordinator._match_retailer_scorecard",
-      "source": "custom_components/home_energy_orchestrator/coordinator.py"
-    },
-    {
-      "access": "get",
-      "constant": "CONF_GLOBIRD_ZEROHERO_STATUS",
-      "key": "globird_zerohero_status_entity",
-      "kind": "raw_mapping",
-      "layer": "runtime",
-      "receiver": "self.config",
-      "scope": "EnergyCoordinator._match_retailer_scorecard",
-      "source": "custom_components/home_energy_orchestrator/coordinator.py"
     },
     {
       "access": "pop",
@@ -4404,17 +4384,16 @@
   ],
   "accesses_by_kind": {
     "managed_mutation": 9,
-    "raw_mapping": 431
+    "raw_mapping": 429
   },
   "accesses_by_layer": {
-    "boundary": 422,
-    "runtime": 18
+    "boundary": 425,
+    "runtime": 13
   },
   "accesses_by_source": {
     "custom_components/home_energy_orchestrator/__init__.py": 24,
     "custom_components/home_energy_orchestrator/config_flow.py": 347,
-    "custom_components/home_energy_orchestrator/configuration.py": 51,
-    "custom_components/home_energy_orchestrator/coordinator.py": 5,
+    "custom_components/home_energy_orchestrator/configuration.py": 54,
     "custom_components/home_energy_orchestrator/ev_active.py": 3,
     "custom_components/home_energy_orchestrator/number.py": 1,
     "custom_components/home_energy_orchestrator/select.py": 1,
@@ -4422,8 +4401,8 @@
   },
   "key_count": 129,
   "raw_accesses_by_layer": {
-    "boundary": 422,
-    "runtime": 9
+    "boundary": 425,
+    "runtime": 4
   },
   "release_baseline": "0.12.26",
   "schema_version": 2

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import dataclasses
-from datetime import time
+from datetime import datetime, time
 from types import SimpleNamespace
 
 import pytest
@@ -21,8 +21,11 @@ from custom_components.home_energy_orchestrator.const import (
     CONF_BATTERY_DISCHARGE_POWER,
     CONF_BATTERY_POWER_DIRECTION,
     CONF_BATTERY_SOC,
+    CONF_BONUS_WINDOW_END,
+    CONF_BONUS_WINDOW_START,
     CONF_CONFIGURE_EV,
     CONF_CONFIGURE_SOLAR,
+    CONF_DAILY_IMPORT_ENTITY,
     CONF_EV_ACTUAL_CURRENT,
     CONF_EV_ALLOWANCE_GUARD_ENABLED,
     CONF_EV_AT_HOME,
@@ -57,6 +60,8 @@ from custom_components.home_energy_orchestrator.const import (
     CONF_FREE_CHARGE_END,
     CONF_FREE_CHARGE_SCHEDULE_CONFIRMED,
     CONF_FREE_CHARGE_START,
+    CONF_GLOBIRD_LATEST_DAILY_COST,
+    CONF_GLOBIRD_ZEROHERO_STATUS,
     CONF_GRID_POWER_DIRECTION,
     CONF_HEATER_POWER,
     CONF_HOUSE_AWAY_CONFIRMATION_HOURS,
@@ -72,6 +77,8 @@ from custom_components.home_energy_orchestrator.const import (
     CONF_SITE_PHASE_COUNT,
     CONF_TELEMETRY_MAX_AGE_SECONDS,
     CONF_ZERO_IMPORT_THRESHOLD_KW,
+    DEFAULT_BONUS_WINDOW_END,
+    DEFAULT_BONUS_WINDOW_START,
     DEFAULT_EV_ALLOWANCE_GUARD_ENABLED,
     DEFAULT_EV_BEFORE_EXPORT_SOC_TARGET,
     DEFAULT_EV_CHARGE_PATH,
@@ -209,6 +216,11 @@ def test_runtime_configuration_uses_established_defaults() -> None:
     assert parsed.house.heater_power_entity is None
     assert parsed.windows.free_charge_start is None
     assert parsed.windows.free_charge_end is None
+    assert parsed.windows.bonus_start == time.fromisoformat(DEFAULT_BONUS_WINDOW_START)
+    assert parsed.windows.bonus_end == time.fromisoformat(DEFAULT_BONUS_WINDOW_END)
+    assert parsed.accounting.daily_import_entity is None
+    assert parsed.accounting.retailer_daily_cost_entity is None
+    assert parsed.accounting.retailer_zerohero_status_entity is None
     assert parsed.site.solar_configured is True
     assert parsed.site.phase_count == DEFAULT_SITE_PHASE_COUNT
     assert parsed.site.grid_current_entity is None
@@ -771,6 +783,99 @@ def test_telemetry_snapshot_preserves_freshness_and_battery_compatibility(
         parsed.telemetry.max_age_seconds,
         parsed.electrical.battery_power_positive_direction,
     ) == expected
+
+
+@pytest.mark.parametrize(
+    ("data", "expected"),
+    [
+        (
+            {},
+            (
+                None,
+                None,
+                None,
+                time.fromisoformat(DEFAULT_BONUS_WINDOW_START),
+                time.fromisoformat(DEFAULT_BONUS_WINDOW_END),
+            ),
+        ),
+        (
+            {
+                CONF_DAILY_IMPORT_ENTITY: "sensor.daily_import",
+                CONF_GLOBIRD_LATEST_DAILY_COST: "sensor.latest_cost",
+                CONF_GLOBIRD_ZEROHERO_STATUS: "sensor.zerohero_status",
+                CONF_BONUS_WINDOW_START: time(22),
+                CONF_BONUS_WINDOW_END: "02:00:00",
+            },
+            (
+                "sensor.daily_import",
+                "sensor.latest_cost",
+                "sensor.zerohero_status",
+                time(22),
+                time(2),
+            ),
+        ),
+        (
+            {
+                CONF_DAILY_IMPORT_ENTITY: 123,
+                CONF_GLOBIRD_LATEST_DAILY_COST: False,
+                CONF_GLOBIRD_ZEROHERO_STATUS: 456,
+                CONF_BONUS_WINDOW_START: "invalid",
+                CONF_BONUS_WINDOW_END: None,
+            },
+            ("123", None, "456", None, None),
+        ),
+    ],
+)
+def test_accounting_snapshot_preserves_mappings_and_bonus_window_inputs(
+    data: dict[str, object],
+    expected: tuple[str | None, str | None, str | None, time | None, time | None],
+) -> None:
+    """Characterize optional mappings plus missing/invalid bonus time behavior."""
+    parsed = RuntimeConfiguration.from_mapping(data)
+    assert (
+        parsed.accounting.daily_import_entity,
+        parsed.accounting.retailer_daily_cost_entity,
+        parsed.accounting.retailer_zerohero_status_entity,
+        parsed.windows.bonus_start,
+        parsed.windows.bonus_end,
+    ) == expected
+
+
+@pytest.mark.parametrize(
+    ("data", "now", "expected"),
+    [
+        (
+            {CONF_BONUS_WINDOW_START: "22:00:00", CONF_BONUS_WINDOW_END: "02:00:00"},
+            datetime(2026, 9, 17, 23),
+            True,
+        ),
+        (
+            {CONF_BONUS_WINDOW_START: "22:00:00", CONF_BONUS_WINDOW_END: "02:00:00"},
+            datetime(2026, 9, 18, 2),
+            False,
+        ),
+        (
+            {CONF_BONUS_WINDOW_START: "invalid", CONF_BONUS_WINDOW_END: "02:00:00"},
+            datetime(2026, 9, 17, 23),
+            False,
+        ),
+        (
+            {CONF_BONUS_WINDOW_START: "18:00:00", CONF_BONUS_WINDOW_END: "18:00:00"},
+            datetime(2026, 9, 17, 18),
+            False,
+        ),
+    ],
+)
+def test_typed_bonus_window_preserves_active_window_edges(
+    hass,
+    data: dict[str, object],
+    now: datetime,
+    expected: bool,
+) -> None:
+    """Preserve overnight, end-exclusive, invalid and equal-time behavior."""
+    coordinator = EnergyCoordinator(hass, data, "bonus-window-test")
+    assert coordinator._bonus_window_active(now) is expected
+    coordinator.shutdown()
 
 
 @pytest.mark.parametrize(

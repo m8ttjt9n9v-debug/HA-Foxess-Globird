@@ -492,18 +492,9 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
 
     def _bonus_window_active(self, now: datetime) -> bool:
         """Evaluate the configured local-time bonus window, including overnight windows."""
-        try:
-            start_value = self.config.get(CONF_BONUS_WINDOW_START, DEFAULT_BONUS_WINDOW_START)
-            end_value = self.config.get(CONF_BONUS_WINDOW_END, DEFAULT_BONUS_WINDOW_END)
-            start = (
-                start_value
-                if isinstance(start_value, time)
-                else time.fromisoformat(str(start_value))
-            )
-            end = (
-                end_value if isinstance(end_value, time) else time.fromisoformat(str(end_value))
-            )
-        except (TypeError, ValueError):
+        start = self.runtime_config.windows.bonus_start
+        end = self.runtime_config.windows.bonus_end
+        if start is None or end is None:
             return False
         current = now.timetz().replace(tzinfo=None)
         if start == end:
@@ -560,7 +551,9 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
 
     def _apply_tariff_guard(self, ledger: EnergyLedger) -> EnergyLedger:
         """Add read-only tariff evidence using external or internal daily import."""
-        configured_daily_import = self._energy(self.config.get(CONF_DAILY_IMPORT_ENTITY))
+        configured_daily_import = self._energy(
+            self.runtime_config.accounting.daily_import_entity
+        )
         daily_import = (
             configured_daily_import
             if configured_daily_import is not None
@@ -863,8 +856,9 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
 
     def _match_retailer_scorecard(self) -> bool:
         """Match only complete, same-date GloBird results to retained forecasts."""
-        cost_entity = self.config.get(CONF_GLOBIRD_LATEST_DAILY_COST)
-        status_entity = self.config.get(CONF_GLOBIRD_ZEROHERO_STATUS)
+        accounting = self.runtime_config.accounting
+        cost_entity = accounting.retailer_daily_cost_entity
+        status_entity = accounting.retailer_zerohero_status_entity
         self.forecast_scorecard_date = None
         if not cost_entity and not status_entity:
             self.forecast_scorecard_status = "not_configured"
