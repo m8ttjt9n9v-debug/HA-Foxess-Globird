@@ -11,12 +11,6 @@ from typing import Any
 from scripts.entity_contract import build_entity_contract
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
-SENSOR_SOURCE = (
-    REPOSITORY_ROOT
-    / "custom_components"
-    / "home_energy_orchestrator"
-    / "sensor.py"
-)
 READ_MODEL_SOURCE = (
     REPOSITORY_ROOT
     / "custom_components"
@@ -91,20 +85,18 @@ def _record(entity_key: str, attributes: frozenset[str]) -> dict[str, Any]:
 
 def build_entity_attribute_contract() -> dict[str, Any]:
     """Return the deterministic custom public-attribute contract."""
-    tree = ast.parse(SENSOR_SOURCE.read_text(encoding="utf-8"))
     read_model_tree = ast.parse(READ_MODEL_SOURCE.read_text(encoding="utf-8"))
     fleet_groups = _dict_return_keys(
         _method(read_model_tree, "SiteReadModel", "fleet_attributes")
     )
     if len(fleet_groups) != 1:
         raise ValueError("Fleet Summary must have one literal attribute mapping")
-    groups = _dict_return_keys(
-        _method(tree, "EnergySensor", "extra_state_attributes")
-    )
     read_model_groups = _dict_return_keys(
         _method(read_model_tree, "CostReadModel", "sensor_attributes")
     ) + _dict_return_keys(
         _method(read_model_tree, "TelemetrySampleReadModel", "entity_attributes")
+    ) + _dict_return_keys(
+        _method(read_model_tree, "OperationalReadModel", "zerohero_import_attributes")
     ) + _dict_return_keys(
         _method(read_model_tree, "CostReadModel", "export_revenue_attributes")
     ) + _dict_return_keys(
@@ -118,7 +110,7 @@ def build_entity_attribute_contract() -> dict[str, Any]:
     )
 
     telemetry = _group_by_sentinel(read_model_groups, "positive_direction")
-    zerohero_import = _group_by_sentinel(groups, "hourly_import_kwh")
+    zerohero_import = _group_by_sentinel(read_model_groups, "hourly_import_kwh")
     export_revenue = _group_by_sentinel(
         read_model_groups,
         "standard_export_revenue",

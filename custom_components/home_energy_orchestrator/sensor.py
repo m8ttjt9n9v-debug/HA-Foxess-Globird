@@ -86,22 +86,7 @@ class EnergySensor(CoordinatorEntity[EnergyCoordinator], SensorEntity):
         ):
             return attributes
         if self.entity_description.key == "zerohero_import_window":
-            accumulator = self.coordinator.zerohero_import
-            return {
-                "hourly_import_kwh": {
-                    bucket: round(value, 6)
-                    for bucket, value in accumulator.hourly_import_kwh.items()
-                },
-                "accumulator_date": (
-                    None if accumulator.local_date is None else accumulator.local_date.isoformat()
-                ),
-                "last_sample": (
-                    None if accumulator.last_at is None else accumulator.last_at.isoformat()
-                ),
-                "threshold_kwh_per_hour": (
-                    self.coordinator.runtime_config.tariff.zero_import_threshold_kwh_per_hour
-                ),
-            }
+            return read_model.operational.zerohero_import_attributes()
         if self.entity_description.key == "estimated_export_revenue":
             return read_model.cost.export_revenue_attributes()
         if self.entity_description.key == "estimated_net_cost":

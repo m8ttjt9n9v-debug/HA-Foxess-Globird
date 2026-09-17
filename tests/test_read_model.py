@@ -204,6 +204,7 @@ def _coordinator() -> SimpleNamespace:
         ),
         zerohero_import=SimpleNamespace(
             last_at=datetime(2026, 9, 17, 10, 0, tzinfo=UTC),
+            local_date=date(2026, 9, 17),
             hourly_import_kwh={"16": 0.1, "17": 0.2},
         ),
         zerohero_export=SimpleNamespace(imported_kwh=0.12345),
@@ -516,6 +517,17 @@ def test_missing_telemetry_preserves_empty_attribute_and_diagnostic_payloads() -
 
     assert telemetry.entity_attributes("grid_power") is None
     assert telemetry.diagnostics() == {}
+
+
+def test_zerohero_import_attributes_preserve_accumulator_formatting() -> None:
+    operational = build_site_read_model(_coordinator()).operational
+
+    assert operational.zerohero_import_attributes() == {
+        "hourly_import_kwh": {"16": 0.1, "17": 0.2},
+        "accumulator_date": "2026-09-17",
+        "last_sample": "2026-09-17T10:00:00+00:00",
+        "threshold_kwh_per_hour": 0.03,
+    }
 
 
 def test_ev_control_attributes_preserve_existing_public_values() -> None:

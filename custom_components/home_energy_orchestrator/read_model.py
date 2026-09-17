@@ -178,6 +178,10 @@ class OperationalReadModel:
     free_charge_allowed_kwh: float | None
     bonus_zero_import_allowed: bool
     zerohero_import_window_kwh: float | None
+    zerohero_hourly_import_kwh: tuple[tuple[str, float], ...]
+    zerohero_accumulator_date: date | None
+    zerohero_last_sample: datetime | None
+    zerohero_threshold_kwh_per_hour: float
     zerohero_export_window_kwh: float
     ledger_status: str
     tariff_status: str
@@ -202,6 +206,26 @@ class OperationalReadModel:
             "zerohero_import_window": self.zerohero_import_window_kwh,
             "tariff_status": self.tariff_status,
             "zerohero_export_window": self.zerohero_export_window_kwh,
+        }
+
+    def zerohero_import_attributes(self) -> dict[str, object]:
+        """Project the existing ZEROHERO import accumulator attributes."""
+        return {
+            "hourly_import_kwh": {
+                bucket: round(value, 6)
+                for bucket, value in self.zerohero_hourly_import_kwh
+            },
+            "accumulator_date": (
+                None
+                if self.zerohero_accumulator_date is None
+                else self.zerohero_accumulator_date.isoformat()
+            ),
+            "last_sample": (
+                None
+                if self.zerohero_last_sample is None
+                else self.zerohero_last_sample.isoformat()
+            ),
+            "threshold_kwh_per_hour": self.zerohero_threshold_kwh_per_hour,
         }
 
 
@@ -1249,6 +1273,14 @@ def build_site_read_model(
             None
             if zerohero_import.last_at is None
             else round(sum(zerohero_import.hourly_import_kwh.values()), 3)
+        ),
+        zerohero_hourly_import_kwh=tuple(
+            zerohero_import.hourly_import_kwh.items()
+        ),
+        zerohero_accumulator_date=zerohero_import.local_date,
+        zerohero_last_sample=zerohero_import.last_at,
+        zerohero_threshold_kwh_per_hour=(
+            coordinator.runtime_config.tariff.zero_import_threshold_kwh_per_hour
         ),
         zerohero_export_window_kwh=round(
             coordinator.zerohero_export.imported_kwh,

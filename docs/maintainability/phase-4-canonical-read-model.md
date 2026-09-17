@@ -68,6 +68,11 @@ The eleventh seam introduces typed telemetry source/sample models shared by
 telemetry entity attributes and redacted support diagnostics, retaining the
 empty diagnostic payload when normalized telemetry is absent.
 
+The twelfth seam moves ZEROHERO accumulator attributes into the operational
+read model. All public sensor state and attribute mappings are now owned by
+the canonical model; the attribute-contract generator no longer parses
+`sensor.py`.
+
 Work-item evidence:
 
 - [core SiteReadModel projection](work-item-core-read-model.md)
@@ -81,6 +86,7 @@ Work-item evidence:
 - [complete native-state read model](work-item-native-state-read-model.md)
 - [authoritative export-revenue components](work-item-export-revenue-read-model.md)
 - [canonical telemetry presentation](work-item-telemetry-read-model.md)
+- [ZEROHERO accumulator presentation](work-item-zerohero-accumulator-read-model.md)
 
 ## Work packages
 
