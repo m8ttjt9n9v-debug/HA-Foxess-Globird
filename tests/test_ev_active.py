@@ -723,6 +723,15 @@ async def test_ev_runtime_only_applies_general_limit_outside_free_window(
     await hass.async_block_till_done()
 
     assert controller.last_reason == "outside_window_general_limit_awaiting_feedback"
+    assert controller.general_limit_candidate is not None
+    assert controller.general_limit_candidate.eligible is True
+    assert controller.general_limit_candidate.reason == controller.last_reason
+    assert controller.general_limit_candidate.target_current_a is None
+    assert (
+        controller.general_limit_candidate.target_limit_percent
+        == controller.target_limit_percent
+    )
+    assert controller.general_limit_candidate.command_intent == ()
     assert controller.last_actions == ()
     assert len(calls) == 1
     assert calls[0].data["service_data"]["entity_id"] == "number.car_limit"
@@ -753,6 +762,10 @@ async def test_cloud_owner_blocks_opted_in_outside_window_stages(
     await hass.async_block_till_done()
 
     assert controller.last_reason == "general_limit"
+    assert controller.general_limit_candidate is not None
+    assert controller.general_limit_candidate.eligible is True
+    assert controller.general_limit_candidate.reason == controller.last_reason
+    assert controller.general_limit_candidate.command_intent == ("set_charge_limit",)
     assert controller.last_actions == ("set_charge_limit",)
     assert len(calls) == 1
 

@@ -242,6 +242,7 @@ class ActiveEvController:
         self.target_current_a: float | None = None
         self.target_limit_percent: float | None = None
         self.free_window_candidate: EvStageCandidate | None = None
+        self.general_limit_candidate: EvStageCandidate | None = None
         self.requested_current_a: float | None = None
         self.applied_limit_percent: float | None = None
         self.charge_switch_on: bool | None = None
@@ -337,6 +338,7 @@ class ActiveEvController:
             )
             self.last_actions = ()
             self.free_window_candidate = None
+            self.general_limit_candidate = None
             grid_current, grid_valid = self._grid_current_a()
             ev_current, ev_valid = self._actual_ev_current_a()
             self.actual_current_a = ev_current if ev_valid else None
@@ -699,17 +701,19 @@ class ActiveEvController:
     ) -> None:
         """Apply the canonical connected general limit without owning current."""
         if vehicle_soc is None:
-            self.last_reason = "ev_soc_unavailable"
+            self._reject_general_limit_candidate("ev_soc_unavailable")
             return
         learned = self._learned_general_limit(observation, vehicle_soc=vehicle_soc)
         if learned is None:
-            self.last_reason = "ev_learned_limit_unavailable"
+            self._reject_general_limit_candidate("ev_learned_limit_unavailable")
             return
         minimum = observation.limit_minimum_percent
         maximum = observation.limit_maximum_percent
         step = observation.limit_step_percent
         if minimum is None or maximum is None or step is None:
-            self.last_reason = "ev_charge_limit_metadata_unavailable"
+            self._reject_general_limit_candidate(
+                "ev_charge_limit_metadata_unavailable"
+            )
             return
         policy = maximum if self._charge_to_full_requested() else learned.limit_percent
         target = plan_charge_limit_target(
@@ -735,18 +739,46 @@ class ActiveEvController:
         if abs(target - observation.charge_limit_percent) < step:
             self._general_limit_write_fingerprint = None
             self.last_reason = "outside_window_general_limit_confirmed"
+            self.general_limit_candidate = EvStageCandidate(
+                stage="general_limit",
+                eligible=True,
+                reason=self.last_reason,
+                target_limit_percent=target,
+            )
             return
         fingerprint = (target, observation.charge_limit_percent)
         if fingerprint == self._general_limit_write_fingerprint:
             self.last_reason = "outside_window_general_limit_awaiting_feedback"
+            self.general_limit_candidate = EvStageCandidate(
+                stage="general_limit",
+                eligible=True,
+                reason=self.last_reason,
+                target_limit_percent=target,
+            )
             return
         plan = EvCommandPlan((EvCommand("set_charge_limit", target),), "general_limit")
+        self.general_limit_candidate = EvStageCandidate(
+            stage="general_limit",
+            eligible=True,
+            reason=plan.reason,
+            target_limit_percent=target,
+            command_intent=("set_charge_limit",),
+        )
         if gate == "safety_locked":
             self.last_actions = ("would_set_charge_limit",)
             self.last_reason = "rehearsal_general_limit"
             return
         self._general_limit_write_fingerprint = fingerprint
         await self._async_execute_ev_plan(plan, now)
+
+    def _reject_general_limit_candidate(self, reason: str) -> None:
+        """Record a shadow general-limit rejection without changing control."""
+        self.last_reason = reason
+        self.general_limit_candidate = EvStageCandidate(
+            stage="general_limit",
+            eligible=False,
+            reason=reason,
+        )
 
     async def _async_reconcile_disconnected_smart_socket(
         self,
