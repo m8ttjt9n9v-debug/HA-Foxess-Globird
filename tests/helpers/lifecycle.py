@@ -10,6 +10,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 from copy import deepcopy
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
@@ -87,9 +88,19 @@ class LifecycleHarness:
         entity_id: str,
         state: str | float | int,
         attributes: dict[str, Any] | None = None,
+        *,
+        observed_at: datetime | None = None,
     ) -> None:
         """Publish one input state and drain state-change listeners."""
-        self.hass.states.async_set(entity_id, str(state), attributes or {})
+        if observed_at is None:
+            self.hass.states.async_set(entity_id, str(state), attributes or {})
+        else:
+            self.hass.states.async_set(
+                entity_id,
+                str(state),
+                attributes or {},
+                timestamp=observed_at.timestamp(),
+            )
         await self.hass.async_block_till_done()
 
     async def set_unavailable(self, entity_id: str) -> None:

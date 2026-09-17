@@ -61,6 +61,47 @@ def _register_foxess_services(harness: LifecycleHarness, monkeypatch) -> None:
     harness.hass.services.async_register("select", "select_option", noop)
 
 
+def _register_ev_services(harness: LifecycleHarness, monkeypatch) -> None:
+    async def noop(_call) -> None:
+        return None
+
+    original_async_call = ServiceRegistry.async_call
+
+    async def record_call(
+        registry,
+        domain,
+        service,
+        service_data=None,
+        blocking=False,
+        context=None,
+        target=None,
+        return_response=False,
+    ):
+        if (domain, service) in {
+            ("number", "set_value"),
+            ("switch", "turn_on"),
+            ("switch", "turn_off"),
+        }:
+            payload = dict(service_data or {})
+            payload.update(target or {})
+            harness.record_service_call(domain, service, payload)
+        return await original_async_call(
+            registry,
+            domain,
+            service,
+            service_data,
+            blocking,
+            context,
+            target,
+            return_response,
+        )
+
+    monkeypatch.setattr(ServiceRegistry, "async_call", record_call)
+    harness.hass.services.async_register("number", "set_value", noop)
+    harness.hass.services.async_register("switch", "turn_on", noop)
+    harness.hass.services.async_register("switch", "turn_off", noop)
+
+
 async def _seed_foxess_states(harness: LifecycleHarness, battery_soc: float) -> None:
     await harness.set_state(
         "sensor.test_battery_soc", battery_soc, {"unit_of_measurement": "%"}
@@ -242,6 +283,137 @@ async def test_battery_telemetry_recovers_after_delay_outage_and_reload(hass) ->
     assert len(battery.attributes["sources"]) == 2
     assert harness.service_calls == ()
     await harness.unload(entry)
+    harness.close()
+
+
+@pytest.mark.freeze_time("2026-09-17 12:30:00+00:00")
+async def test_ev_allowance_target_does_not_cycle_with_inclusive_house_load(
+    hass, monkeypatch
+) -> None:
+    """Alternating EV feedback must not make an inclusive meter flap 1 ↔ 16 A."""
+    harness = LifecycleHarness(hass)
+    _register_ev_services(harness, monkeypatch)
+    await _seed_foxess_states(harness, 100)
+    await harness.set_state("sensor.test_house_load", "12", {"unit_of_measurement": "kW"})
+    await harness.set_state("sensor.test_site_current", "38", {"unit_of_measurement": "A"})
+    await harness.set_state("sensor.test_ev_soc", "40", {"unit_of_measurement": "%"})
+    await harness.set_state("device_tracker.test_ev", "home")
+    await harness.set_state("binary_sensor.test_ev_cable", "on")
+    await harness.set_state("sensor.test_ev_charging", "charging")
+    await harness.set_state("sensor.test_ev_actual_current", "16", {"unit_of_measurement": "A"})
+    await harness.set_state("sensor.test_ev_energy", "5", {"unit_of_measurement": "kWh"})
+    await harness.set_state(
+        "number.test_ev_current",
+        "16",
+        {"min": 1, "max": 16, "step": 1, "unit_of_measurement": "A"},
+    )
+    await harness.set_state(
+        "number.test_ev_limit", "90", {"min": 50, "max": 100, "step": 1}
+    )
+    await harness.set_state("switch.test_ev_charge", "on")
+    now = [datetime(2026, 9, 17, 12, 30, tzinfo=UTC)]
+    monkeypatch.setattr(
+        "custom_components.home_energy_orchestrator.ev_active.dt_util.now",
+        lambda: now[0],
+    )
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="EV inclusive-meter anti-cycling",
+        version=6,
+        data=_active_entry_data(
+            automatic_control_enabled=False,
+            foxess_control_owner="foxcloud_scheduler",
+            ev_automatic_control_enabled=True,
+            ev_control_commissioned=True,
+            ev_soc_entity="sensor.test_ev_soc",
+            ev_at_home_entity="device_tracker.test_ev",
+            ev_cable_connected_entity="binary_sensor.test_ev_cable",
+            ev_charging_state_entity="sensor.test_ev_charging",
+            ev_actual_current_entity="sensor.test_ev_actual_current",
+            ev_stored_energy_entity="sensor.test_ev_energy",
+            ev_current_limit_entity="number.test_ev_current",
+            ev_charge_limit_entity="number.test_ev_limit",
+            ev_charge_switch_entity="switch.test_ev_charge",
+            ev_location_mode="auto",
+            ev_free_window_priority="ev",
+            ev_free_window_charge_limit_percent=90.0,
+            ev_free_window_minimum_current_a=1.0,
+            ev_free_window_settle_minutes=0.0,
+            ev_allowance_guard_enabled=True,
+            ev_allowance_safety_margin_kwh=0.0,
+            ev_protected_baseline_a=0.0,
+            ev_max_current=16.0,
+            ev_voltage=230.0,
+            ev_phase_count=3,
+            house_load_includes_ev=True,
+            site_phase_count=3,
+            site_grid_current_entity="sensor.test_site_current",
+            service_import_limit_a=80.0,
+            site_grid_headroom_current_a=1.0,
+            daily_free_allowance_kwh=50.0,
+            free_charge_window_start="12:00:00",
+            free_charge_window_end="15:00:00",
+        ),
+    )
+    entry.add_to_hass(hass)
+    await harness.save_store(
+        f"home_energy_orchestrator.{entry.entry_id}.free_window_import",
+        {
+            "date": now[0].date().isoformat(),
+            "imported_kwh": 25.0,
+            "last_at": now[0].isoformat(),
+            "last_import_kw": 10.0,
+        },
+    )
+
+    await harness.setup(entry)
+
+    controller = entry.runtime_data.ev_controller
+    assert controller.target_current_a == 16
+    harness.clear_service_calls()
+    for index, actual_current in enumerate((1, 16, 1, 16), start=1):
+        now[0] = datetime(2026, 9, 17, 12, 30, tzinfo=UTC) + timedelta(
+            minutes=3 * index,
+            seconds=index,
+        )
+        high = actual_current == 16
+        await harness.set_state(
+            "sensor.test_ev_actual_current",
+            str(actual_current),
+            {"unit_of_measurement": "A"},
+            observed_at=now[0],
+        )
+        await harness.set_state(
+            "sensor.test_house_load",
+            "12" if high else "1.65",
+            {"unit_of_measurement": "kW"},
+            observed_at=now[0],
+        )
+        await harness.set_state(
+            "sensor.test_site_current",
+            "38" if high else "5",
+            {"unit_of_measurement": "A"},
+            observed_at=now[0],
+        )
+        await controller.async_reconcile(now[0])
+        entry.runtime_data.async_update_listeners()
+        await hass.async_block_till_done()
+
+        target = hass.states.get("sensor.home_energy_ev_current_target")
+        requested = hass.states.get("sensor.home_energy_ev_requested_current")
+        actual = hass.states.get("sensor.home_energy_ev_actual_current")
+        assert target is not None and target.state == "16.0"
+        assert requested is not None and requested.state == "16.0"
+        assert actual is not None and actual.state == f"{float(actual_current):.1f}"
+        assert controller.allowance_house_load_kw == pytest.approx(0.96, abs=0.001)
+
+    assert harness.service_calls == ()
+    assert controller.target_current_a == 16
+    assert controller.reconciliation.phase == "confirmed"
+    await harness.unload(entry)
+    hass.services.async_remove("number", "set_value")
+    hass.services.async_remove("switch", "turn_on")
+    hass.services.async_remove("switch", "turn_off")
     harness.close()
 
 
