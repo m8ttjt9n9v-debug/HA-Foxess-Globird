@@ -58,6 +58,14 @@ def load_semantic_contract() -> dict[str, Any]:
     return json.loads(SEMANTICS_PATH.read_text(encoding="utf-8"))
 
 
+def entities_awaiting_review(contract: dict[str, Any] | None = None) -> list[str]:
+    """Derive, rather than persist, the remaining identity-contract keys."""
+    contract = load_semantic_contract() if contract is None else contract
+    reviewed = {record["key"] for record in contract.get("entities", [])}
+    identities = {item["key"] for item in build_entity_contract()["entities"]}
+    return sorted(identities - reviewed)
+
+
 def validate_semantic_contract(contract: dict[str, Any] | None = None) -> None:
     """Reject incomplete, stale or structurally ambiguous semantic records."""
     contract = load_semantic_contract() if contract is None else contract
@@ -141,9 +149,6 @@ def validate_semantic_contract(contract: dict[str, Any] | None = None) -> None:
         raise ValueError("reviewed_entity_count does not match the worksheet")
     if contract.get("total_entity_count") != identity["entity_count"]:
         raise ValueError("total_entity_count does not match the identity contract")
-    expected_missing = sorted(set(identities) - seen)
-    if contract.get("entities_awaiting_review") != expected_missing:
-        raise ValueError("entities_awaiting_review is stale")
 
 
 def main() -> int:

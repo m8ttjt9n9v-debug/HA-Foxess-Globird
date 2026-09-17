@@ -28,3 +28,7 @@ def test_config_field_contract_covers_every_wizard_field_once() -> None:
     assert len(actual) == len(set(actual))
     assert all(item["setup_label"] for item in contract["fields"])
     assert all(item["reconfigure_label"] for item in contract["fields"])
+    assert all(
+        item["setup_label"] == item["reconfigure_label"]
+        for item in contract["fields"]
+    )
