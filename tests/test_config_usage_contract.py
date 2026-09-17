@@ -45,6 +45,7 @@ def test_dynamic_runtime_config_reads_are_inventory_visible() -> None:
     assert contract["dynamic_access_count"] == len(dynamic)
     assert dynamic
     assert {item["receiver"] for item in dynamic} <= {
+        "config",
         "self.config",
         "self.coordinator.config",
     }

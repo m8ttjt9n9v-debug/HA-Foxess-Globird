@@ -57,8 +57,8 @@ selectors, validation, migration behavior and the multi-page draft workflow.
   runtime meaning, while ten domain-invalid page scenarios prove the complete
   multi-page draft survives correction and final commit. The completion audit
   also identified dynamic-key raw configuration helpers that the v2 AST usage
-  inventory did not count. Contract schema v3 now exposes 11 raw runtime
-  mapping operations (ten variable-key and one literal legacy fallback), in
+  inventory did not count. Contract schema v3 now exposes 12 raw runtime
+  mapping operations (eleven variable-key and one literal legacy fallback), in
   addition to 11 managed mutation calls. Phase 3 therefore remains open until
   those raw runtime reads are migrated and the central mutation implementation
   is explicitly classified as the boundary it provides.

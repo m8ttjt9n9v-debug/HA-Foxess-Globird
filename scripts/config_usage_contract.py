@@ -40,6 +40,15 @@ class _UsageVisitor(ast.NodeVisitor):
         self.scope: list[str] = []
         self.records: list[dict[str, Any]] = []
 
+    def _is_runtime_config_receiver(self, receiver_text: str) -> bool:
+        if receiver_text in _RUNTIME_CONFIG_RECEIVERS:
+            return True
+        return (
+            receiver_text == "config"
+            and self.source.name == "coordinator.py"
+            and ".".join(self.scope) == "EnergyCoordinator.__init__"
+        )
+
     def _record(
         self,
         constant_node: ast.expr,
@@ -55,11 +64,11 @@ class _UsageVisitor(ast.NodeVisitor):
         elif (
             isinstance(constant_node, ast.Constant)
             and isinstance(constant_node.value, str)
-            and receiver_text in _RUNTIME_CONFIG_RECEIVERS
+            and self._is_runtime_config_receiver(receiver_text)
         ):
             key = constant_node.value
             constant = self.constants_by_value.get(key)
-        elif receiver_text not in _RUNTIME_CONFIG_RECEIVERS:
+        elif not self._is_runtime_config_receiver(receiver_text):
             return
         relative = self.source.relative_to(REPOSITORY_ROOT).as_posix()
         kind = (
