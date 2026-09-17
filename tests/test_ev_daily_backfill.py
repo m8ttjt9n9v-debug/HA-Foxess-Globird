@@ -3,10 +3,12 @@ from datetime import UTC, datetime, timedelta
 import pytest
 
 from custom_components.home_energy_orchestrator.planner.ev_daily_backfill import (
+    DailyBackfillCycleState,
     DailyBackfillEnergyState,
     DailyBackfillInputs,
     calculate_daily_backfill_plan,
     integrate_daily_backfill_energy,
+    roll_daily_backfill_cycle,
 )
 
 
@@ -196,3 +198,49 @@ def test_daily_backfill_energy_clears_samples_when_policy_is_inactive():
         maximum_sample_age_seconds=90.0,
     )
     assert transition == DailyBackfillEnergyState(1.0, None, None)
+
+
+def test_daily_backfill_cycle_rollover_resets_active_cycle_and_latches_stop():
+    old_ready = datetime(2026, 9, 10, 8, tzinfo=UTC)
+    new_ready = datetime(2026, 9, 11, 8, tzinfo=UTC)
+    state = DailyBackfillCycleState(
+        ready_at=old_ready,
+        energy=DailyBackfillEnergyState(2.0, old_ready, 10.0),
+        active=True,
+        session_target_kwh=4.0,
+        session_start_delivered_kwh=1.0,
+        frozen_start=old_ready - timedelta(hours=1),
+        stop_pending=False,
+        stop_attempts=2,
+        last_stop_at=old_ready - timedelta(seconds=30),
+    )
+
+    transition = roll_daily_backfill_cycle(state, new_ready)
+
+    assert transition == DailyBackfillCycleState(
+        ready_at=new_ready,
+        stop_pending=True,
+    )
+
+
+def test_daily_backfill_cycle_rollover_preserves_existing_inactive_stop_obligation():
+    old_ready = datetime(2026, 9, 10, 8, tzinfo=UTC)
+    new_ready = datetime(2026, 9, 11, 8, tzinfo=UTC)
+    last_stop = old_ready - timedelta(seconds=30)
+    state = DailyBackfillCycleState(
+        ready_at=old_ready,
+        active=False,
+        stop_pending=True,
+        stop_attempts=2,
+        last_stop_at=last_stop,
+    )
+
+    transition = roll_daily_backfill_cycle(state, new_ready)
+
+    assert transition == DailyBackfillCycleState(
+        ready_at=new_ready,
+        stop_pending=True,
+        stop_attempts=2,
+        last_stop_at=last_stop,
+    )
+    assert roll_daily_backfill_cycle(transition, new_ready) is transition

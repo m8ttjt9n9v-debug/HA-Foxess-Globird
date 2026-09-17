@@ -158,11 +158,13 @@ from .planner.ev_candidates import (
     select_outside_stage_candidate,
 )
 from .planner.ev_daily_backfill import (
+    DailyBackfillCycleState,
     DailyBackfillEnergyState,
     DailyBackfillInputs,
     DailyBackfillPlan,
     calculate_daily_backfill_plan,
     integrate_daily_backfill_energy,
+    roll_daily_backfill_cycle,
 )
 from .planner.ev_learning import (
     DrivingSnapshotState,
@@ -1955,20 +1957,41 @@ class ActiveEvController:
         return ready_at, planning_start, next_free
 
     def _roll_daily_backfill_cycle(self, ready_at: datetime) -> None:
-        if self.daily_backfill_cycle_ready_at == ready_at:
-            return
-        if self.daily_backfill_active:
-            self.daily_backfill_stop_pending = True
-            self.daily_backfill_stop_attempts = 0
-            self.daily_backfill_last_stop_at = None
-        self.daily_backfill_cycle_ready_at = ready_at
-        self.daily_backfill_delivered_kwh = 0.0
-        self.daily_backfill_active = False
-        self.daily_backfill_session_target_kwh = 0.0
-        self.daily_backfill_session_start_delivered_kwh = 0.0
-        self.daily_backfill_frozen_start = None
-        self.daily_backfill_last_sample_at = None
-        self.daily_backfill_last_actual_current_a = None
+        transition = roll_daily_backfill_cycle(
+            DailyBackfillCycleState(
+                ready_at=self.daily_backfill_cycle_ready_at,
+                energy=DailyBackfillEnergyState(
+                    self.daily_backfill_delivered_kwh,
+                    self.daily_backfill_last_sample_at,
+                    self.daily_backfill_last_actual_current_a,
+                ),
+                active=self.daily_backfill_active,
+                session_target_kwh=self.daily_backfill_session_target_kwh,
+                session_start_delivered_kwh=(
+                    self.daily_backfill_session_start_delivered_kwh
+                ),
+                frozen_start=self.daily_backfill_frozen_start,
+                stop_pending=self.daily_backfill_stop_pending,
+                stop_attempts=self.daily_backfill_stop_attempts,
+                last_stop_at=self.daily_backfill_last_stop_at,
+            ),
+            ready_at,
+        )
+        self.daily_backfill_cycle_ready_at = transition.ready_at
+        self.daily_backfill_delivered_kwh = transition.energy.delivered_kwh
+        self.daily_backfill_last_sample_at = transition.energy.last_sample_at
+        self.daily_backfill_last_actual_current_a = (
+            transition.energy.last_actual_current_a
+        )
+        self.daily_backfill_active = transition.active
+        self.daily_backfill_session_target_kwh = transition.session_target_kwh
+        self.daily_backfill_session_start_delivered_kwh = (
+            transition.session_start_delivered_kwh
+        )
+        self.daily_backfill_frozen_start = transition.frozen_start
+        self.daily_backfill_stop_pending = transition.stop_pending
+        self.daily_backfill_stop_attempts = transition.stop_attempts
+        self.daily_backfill_last_stop_at = transition.last_stop_at
 
     def _update_daily_backfill_energy(self, now: datetime, actual_current_a: float | None) -> None:
         """Integrate confirmed wall current only while this policy owns charging."""

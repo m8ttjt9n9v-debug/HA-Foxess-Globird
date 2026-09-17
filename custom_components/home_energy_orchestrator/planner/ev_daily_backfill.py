@@ -58,6 +58,41 @@ class DailyBackfillEnergyState:
     last_actual_current_a: float | None = None
 
 
+@dataclass(frozen=True, slots=True)
+class DailyBackfillCycleState:
+    """Ready-cycle state needed by the rollover transition."""
+
+    ready_at: datetime | None = None
+    energy: DailyBackfillEnergyState = DailyBackfillEnergyState()
+    active: bool = False
+    session_target_kwh: float = 0.0
+    session_start_delivered_kwh: float = 0.0
+    frozen_start: datetime | None = None
+    stop_pending: bool = False
+    stop_attempts: int = 0
+    last_stop_at: datetime | None = None
+
+
+def roll_daily_backfill_cycle(
+    state: DailyBackfillCycleState,
+    ready_at: datetime,
+) -> DailyBackfillCycleState:
+    """Reset cycle-scoped energy and retain any pre-existing stop obligation."""
+    if state.ready_at == ready_at:
+        return state
+    return DailyBackfillCycleState(
+        ready_at=ready_at,
+        energy=DailyBackfillEnergyState(),
+        active=False,
+        session_target_kwh=0.0,
+        session_start_delivered_kwh=0.0,
+        frozen_start=None,
+        stop_pending=True if state.active else state.stop_pending,
+        stop_attempts=0 if state.active else state.stop_attempts,
+        last_stop_at=None if state.active else state.last_stop_at,
+    )
+
+
 def integrate_daily_backfill_energy(
     state: DailyBackfillEnergyState,
     *,
