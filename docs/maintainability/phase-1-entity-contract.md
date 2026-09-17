@@ -47,9 +47,9 @@ blast radius.
    change.
 
 The semantic worksheet is deliberately completed in reviewed domain slices.
-The first four slices define 71 core electrical, energy-accounting, forecast,
-scorecard, house-learning, operator-control, battery-controller, export-planning
-and diagnostic-test entities plus shared attribute profiles. Records remain
+Five domain slices now define 104 core electrical, accounting, learning,
+operator-control, controller, diagnostic and individual EV entities plus shared
+attribute profiles. Records remain
 `engineering_draft`
 until the complete proposed vocabulary is presented to the project owner in
 one batch; no piecemeal approval interrupts the inventory work.
@@ -88,7 +88,7 @@ new contract without changing runtime data, registry state or hardware mode.
 - [x] Existing entity identity characterised
 - [x] Custom public attributes characterised
 - [x] Existing wizard field mechanics characterised
-- [ ] Semantic worksheet complete (71 of 107 entities drafted)
+- [ ] Semantic worksheet complete (104 of 107 entities drafted)
 - [ ] Project-owner terminology review complete
 - [ ] Compatibility checks passed for any proposed naming release
 - [ ] Independent review complete
