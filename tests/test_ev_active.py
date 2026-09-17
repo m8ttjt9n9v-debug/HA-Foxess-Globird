@@ -122,6 +122,7 @@ def _coordinator(config):
             export_session=ExportSessionState(),
         ),
         _configured_time=lambda key, default: time.fromisoformat(str(config.get(key, default))),
+        update_config_value=lambda key, value: config.__setitem__(key, value),
         async_update_listeners=lambda: None,
     )
 

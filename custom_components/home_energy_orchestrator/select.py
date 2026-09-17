@@ -60,7 +60,7 @@ class HouseOccupancyModeSelect(CoordinatorEntity[EnergyCoordinator], SelectEntit
             raise ValueError(f"Unsupported occupancy mode: {option}")
         config = {**self._entry.data, CONF_HOUSE_OCCUPANCY_MODE: mode}
         self.hass.config_entries.async_update_entry(self._entry, data=config)
-        self.coordinator.config[CONF_HOUSE_OCCUPANCY_MODE] = mode
+        self.coordinator.update_config_value(CONF_HOUSE_OCCUPANCY_MODE, mode)
         await self.coordinator.async_request_refresh()
         self.async_write_ha_state()
         self.coordinator.async_update_listeners()

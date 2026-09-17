@@ -19,7 +19,7 @@ BASELINE_PATH = (
     / "maintainability"
     / "config-usage-contract-v0.12.26.json"
 )
-_MAPPING_METHODS = {"get", "pop", "setdefault"}
+_CONFIG_ACCESS_METHODS = {"get", "pop", "setdefault", "update_config_value"}
 _BOUNDARY_FILES = {"__init__.py", "config_flow.py"}
 
 
@@ -74,7 +74,7 @@ class _UsageVisitor(ast.NodeVisitor):
     def visit_Call(self, node: ast.Call) -> None:  # noqa: N802
         if (
             isinstance(node.func, ast.Attribute)
-            and node.func.attr in _MAPPING_METHODS
+            and node.func.attr in _CONFIG_ACCESS_METHODS
             and node.args
         ):
             self._record(node.args[0], node.func.value, node.func.attr)

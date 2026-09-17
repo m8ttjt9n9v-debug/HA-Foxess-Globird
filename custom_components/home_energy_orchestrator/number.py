@@ -76,7 +76,7 @@ class EvBeforeExportTargetNumber(CoordinatorEntity[EnergyCoordinator], NumberEnt
         target = min(max(float(value), 0.0), 100.0)
         config = {**self._entry.data, CONF_EV_BEFORE_EXPORT_SOC_TARGET: target}
         self.hass.config_entries.async_update_entry(self._entry, data=config)
-        self.coordinator.config[CONF_EV_BEFORE_EXPORT_SOC_TARGET] = target
+        self.coordinator.update_config_value(CONF_EV_BEFORE_EXPORT_SOC_TARGET, target)
         self.async_write_ha_state()
         controller = self.coordinator.active_controller
         if controller is not None:

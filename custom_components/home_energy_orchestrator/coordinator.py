@@ -248,6 +248,7 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
         self.optimistic_forecast: OptimisticCostForecast | None = None
         self.forecast_scorecard_status = "not_configured"
         self.forecast_scorecard_date: date | None = None
+
         self._forecast_last_saved_signature: tuple[object, ...] | None = None
         self._demand_sampler_last_saved_at: datetime | None = None
         self._unsub_source_updates: CALLBACK_TYPE | None = async_track_state_change_event(
@@ -276,6 +277,10 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
             ),
             self._async_source_changed,
         )
+
+    def update_config_value(self, key: str, value: object) -> None:
+        """Update the live config mirror through one future typed-config boundary."""
+        self.config[key] = value
 
     async def async_load_demand_history(self) -> None:
         """Load and validate the rolling learner history from HA storage."""

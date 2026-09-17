@@ -27,3 +27,22 @@ def test_config_usage_only_references_declared_keys() -> None:
     assert contract["access_count"] > 0
     assert contract["accesses_by_layer"]["runtime"] > 0
     assert {item["key"] for item in contract["accesses"]} <= declared
+
+
+def test_runtime_config_writes_use_the_coordinator_boundary() -> None:
+    """Constant-key runtime mutations must not bypass typed-config preparation."""
+    runtime = [
+        item
+        for item in build_config_usage_contract()["accesses"]
+        if item["layer"] == "runtime"
+    ]
+    assert not [
+        item
+        for item in runtime
+        if item["access"] == "subscript_store"
+        and item["receiver"].endswith("coordinator.config")
+    ]
+    mutations = [
+        item for item in runtime if item["access"] == "update_config_value"
+    ]
+    assert len(mutations) == 9

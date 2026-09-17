@@ -2261,7 +2261,7 @@ class ActiveEvController:
         config[CONF_EV_CHARGE_TO_FULL_ENABLED] = False
         self.hass.config_entries.async_update_entry(entry, data=config)
         self.coordinator.config.pop(CONF_EV_CHARGE_TO_FULL, None)
-        self.coordinator.config[CONF_EV_CHARGE_TO_FULL_ENABLED] = False
+        self.coordinator.update_config_value(CONF_EV_CHARGE_TO_FULL_ENABLED, False)
 
     def _float(self, key: str, default: float) -> float:
         try:

@@ -92,7 +92,7 @@ class SafetyLockSwitch(CoordinatorEntity[EnergyCoordinator], SwitchEntity):
     async def _set_locked(self, locked: bool) -> None:
         config = {**self._entry.data, CONF_REHEARSAL_MODE: locked}
         self.hass.config_entries.async_update_entry(self._entry, data=config)
-        self.coordinator.config[CONF_REHEARSAL_MODE] = locked
+        self.coordinator.update_config_value(CONF_REHEARSAL_MODE, locked)
         self.async_write_ha_state()
         self.coordinator.async_update_listeners()
 
@@ -128,7 +128,7 @@ class AutomaticExportSwitch(CoordinatorEntity[EnergyCoordinator], SwitchEntity):
     async def _set_enabled(self, enabled: bool) -> None:
         config = {**self._entry.data, CONF_AUTOMATIC_EXPORT_ENABLED: enabled}
         self.hass.config_entries.async_update_entry(self._entry, data=config)
-        self.coordinator.config[CONF_AUTOMATIC_EXPORT_ENABLED] = enabled
+        self.coordinator.update_config_value(CONF_AUTOMATIC_EXPORT_ENABLED, enabled)
         self.async_write_ha_state()
         controller = self.coordinator.active_controller
         if controller is not None:
@@ -176,7 +176,7 @@ class AutomaticChargeSwitch(CoordinatorEntity[EnergyCoordinator], SwitchEntity):
     async def _set_enabled(self, enabled: bool) -> None:
         config = {**self._entry.data, CONF_AUTOMATIC_CHARGE_ENABLED: enabled}
         self.hass.config_entries.async_update_entry(self._entry, data=config)
-        self.coordinator.config[CONF_AUTOMATIC_CHARGE_ENABLED] = enabled
+        self.coordinator.update_config_value(CONF_AUTOMATIC_CHARGE_ENABLED, enabled)
         self.async_write_ha_state()
         controller = self.coordinator.active_controller
         if controller is not None:
@@ -220,7 +220,7 @@ class AutomaticEvControlSwitch(CoordinatorEntity[EnergyCoordinator], SwitchEntit
             CONF_EV_AUTOMATIC_CONTROL_ENABLED: enabled,
         }
         self.hass.config_entries.async_update_entry(self._entry, data=config)
-        self.coordinator.config[CONF_EV_AUTOMATIC_CONTROL_ENABLED] = enabled
+        self.coordinator.update_config_value(CONF_EV_AUTOMATIC_CONTROL_ENABLED, enabled)
         self.async_write_ha_state()
         controller = self.coordinator.ev_controller
         if controller is not None:
@@ -264,7 +264,7 @@ class EvBeforeExportSwitch(CoordinatorEntity[EnergyCoordinator], SwitchEntity):
     async def _set_enabled(self, enabled: bool) -> None:
         config = {**self._entry.data, CONF_EV_BEFORE_EXPORT_ENABLED: enabled}
         self.hass.config_entries.async_update_entry(self._entry, data=config)
-        self.coordinator.config[CONF_EV_BEFORE_EXPORT_ENABLED] = enabled
+        self.coordinator.update_config_value(CONF_EV_BEFORE_EXPORT_ENABLED, enabled)
         self.async_write_ha_state()
         controller = self.coordinator.active_controller
         if controller is not None:
@@ -322,7 +322,7 @@ class EvChargeToFullSwitch(CoordinatorEntity[EnergyCoordinator], SwitchEntity):
         config[CONF_EV_CHARGE_TO_FULL_ENABLED] = enabled
         self.hass.config_entries.async_update_entry(self._entry, data=config)
         self.coordinator.config.pop(CONF_EV_CHARGE_TO_FULL, None)
-        self.coordinator.config[CONF_EV_CHARGE_TO_FULL_ENABLED] = enabled
+        self.coordinator.update_config_value(CONF_EV_CHARGE_TO_FULL_ENABLED, enabled)
         self.async_write_ha_state()
         controller = self.coordinator.ev_controller
         if controller is not None:
