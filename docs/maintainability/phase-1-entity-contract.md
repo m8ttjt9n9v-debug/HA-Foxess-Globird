@@ -44,6 +44,12 @@ blast radius.
 4. A terminology review table for project-owner approval before display names
    change.
 
+The semantic worksheet is deliberately completed in reviewed domain slices.
+Its first slice defines nine core electrical/SoC entities and one shared
+normalized-telemetry attribute profile. Records remain `engineering_draft`
+until the complete proposed vocabulary is presented to the project owner in
+one batch; no piecemeal approval interrupts the inventory work.
+
 ## Compatibility
 
 The attribute baseline is generated from literal mappings in `sensor.py` and
@@ -76,7 +82,7 @@ new contract without changing runtime data, registry state or hardware mode.
 
 - [x] Existing entity identity characterised
 - [x] Custom public attributes characterised
-- [ ] Semantic worksheet complete
+- [ ] Semantic worksheet complete (9 of 107 entities drafted)
 - [ ] Project-owner terminology review complete
 - [ ] Compatibility checks passed for any proposed naming release
 - [ ] Independent review complete

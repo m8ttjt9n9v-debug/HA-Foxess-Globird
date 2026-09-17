@@ -1,0 +1,162 @@
+{
+  "schema_version": 1,
+  "release_baseline": "0.12.26",
+  "attribute_profiles": {
+    "normalized_telemetry_v1": {
+      "attributes": {
+        "fresh": "Whether all required source observations satisfy the configured age and timestamp-coherence rules.",
+        "positive_direction": "The canonical direction represented by a positive state value.",
+        "reason": "The stable machine-readable explanation for the selected source or current unavailability.",
+        "sources": "The contributing entity IDs, raw values, raw units and observation timestamps.",
+        "valid": "Whether the normalized sample passed source, unit, sign and topology validation."
+      }
+    }
+  },
+  "reviewed_entity_count": 9,
+  "total_entity_count": 107,
+  "entities": [
+    {
+      "key": "battery_power",
+      "definition": "Canonical instantaneous house-battery power; positive values mean charging and negative values mean discharging.",
+      "producer": "EnergyCoordinator.telemetry.battery_power.value via EnergySensor.native_value",
+      "role": "canonical_measurement",
+      "unit_and_sign": "kW; charge positive, discharge negative",
+      "time_basis": "Current normalized observation for the coordinator update cycle",
+      "availability": "Unavailable unless the configured signed source or coherent charge/discharge fallback produces a valid sample.",
+      "state_vocabulary": "Finite numeric value or unavailable",
+      "audience": "primary",
+      "equivalents": {"foxess": "Configured battery power or charge/discharge telemetry", "globird": null, "tessie": null},
+      "consumers": ["Battery dashboard", "solar-spill EV policy", "diagnostics", "Fleet Summary"],
+      "decision": "retain",
+      "review_status": "engineering_draft",
+      "attribute_profile": "normalized_telemetry_v1"
+    },
+    {
+      "key": "battery_soc",
+      "definition": "Current house-battery state of charge used by HEO planning and safety policy.",
+      "producer": "EnergyCoordinator.snapshot.battery_soc via EnergySensor.native_value",
+      "role": "canonical_measurement",
+      "unit_and_sign": "% from 0 to 100",
+      "time_basis": "Current coordinator snapshot",
+      "availability": "Unavailable when the configured battery SoC source is absent or invalid.",
+      "state_vocabulary": "Finite percentage or unavailable",
+      "audience": "primary",
+      "equivalents": {"foxess": "Configured battery SoC entity", "globird": null, "tessie": null},
+      "consumers": ["Battery dashboard", "charge policy", "export policy", "EV protection", "Fleet Summary"],
+      "decision": "retain",
+      "review_status": "engineering_draft"
+    },
+    {
+      "key": "ev_soc",
+      "definition": "Current vehicle state of charge copied into HEO's canonical site snapshot.",
+      "producer": "EnergyCoordinator.snapshot.ev_soc via EnergySensor.native_value",
+      "role": "canonical_measurement",
+      "unit_and_sign": "% from 0 to 100",
+      "time_basis": "Current coordinator snapshot",
+      "availability": "Unavailable when EV support is not configured or the mapped vehicle SoC is absent or invalid.",
+      "state_vocabulary": "Finite percentage or unavailable",
+      "audience": "primary",
+      "equivalents": {"foxess": null, "globird": null, "tessie": "Mapped vehicle state-of-charge entity"},
+      "consumers": ["EV dashboard", "EV charge policy", "EV learning", "EV-before-export policy"],
+      "decision": "retain",
+      "review_status": "engineering_draft"
+    },
+    {
+      "key": "grid_export",
+      "definition": "Instantaneous grid-export magnitude calculated from canonical signed grid power; zero while importing.",
+      "producer": "EnergyLedger.grid_export_kw via EnergySensor.native_value",
+      "role": "calculation",
+      "unit_and_sign": "kW; non-negative export magnitude",
+      "time_basis": "Current coordinator update cycle",
+      "availability": "Unavailable when canonical grid power cannot be calculated.",
+      "state_vocabulary": "Finite non-negative numeric value or unavailable",
+      "audience": "primary",
+      "equivalents": {"foxess": "Derived from the configured signed grid-power telemetry", "globird": null, "tessie": null},
+      "consumers": ["Power dashboard", "accounting evidence", "diagnostics"],
+      "decision": "retain",
+      "review_status": "engineering_draft"
+    },
+    {
+      "key": "grid_import",
+      "definition": "Instantaneous grid-import magnitude calculated from canonical signed grid power; zero while exporting.",
+      "producer": "EnergyLedger.grid_import_kw via EnergySensor.native_value",
+      "role": "calculation",
+      "unit_and_sign": "kW; non-negative import magnitude",
+      "time_basis": "Current coordinator update cycle",
+      "availability": "Unavailable when canonical grid power cannot be calculated.",
+      "state_vocabulary": "Finite non-negative numeric value or unavailable",
+      "audience": "primary",
+      "equivalents": {"foxess": "Derived from the configured signed grid-power telemetry", "globird": null, "tessie": null},
+      "consumers": ["Power dashboard", "accounting evidence", "diagnostics"],
+      "decision": "retain",
+      "review_status": "engineering_draft"
+    },
+    {
+      "key": "grid_power",
+      "definition": "Canonical instantaneous site exchange with the grid; positive values mean import and negative values mean export.",
+      "producer": "EnergyCoordinator.telemetry.grid_power.value via EnergySensor.native_value",
+      "role": "canonical_measurement",
+      "unit_and_sign": "kW; import positive, export negative",
+      "time_basis": "Current normalized observation for the coordinator update cycle",
+      "availability": "Unavailable unless the configured source has a valid unit, sign convention and sufficiently fresh observation.",
+      "state_vocabulary": "Finite numeric value or unavailable",
+      "audience": "primary",
+      "equivalents": {"foxess": "Configured grid-power entity", "globird": null, "tessie": null},
+      "consumers": ["Power dashboard", "daily meters", "tariff accounting", "charge/export control", "EV control", "Fleet Summary"],
+      "decision": "retain",
+      "review_status": "engineering_draft",
+      "attribute_profile": "normalized_telemetry_v1"
+    },
+    {
+      "key": "house_load",
+      "definition": "Canonical instantaneous whole-house consumption used by HEO after configured normalization.",
+      "producer": "EnergyCoordinator.snapshot.house_load_kw via EnergySensor.native_value",
+      "role": "canonical_measurement",
+      "unit_and_sign": "kW; consumption positive",
+      "time_basis": "Current coordinator snapshot",
+      "availability": "Unavailable when the configured or derived house-load observation is invalid.",
+      "state_vocabulary": "Finite non-negative numeric value or unavailable",
+      "audience": "primary",
+      "equivalents": {"foxess": "Configured or derived house-load telemetry", "globird": null, "tessie": null},
+      "consumers": ["Power dashboard", "house learning", "export protection", "EV allowance", "Fleet Summary"],
+      "decision": "retain",
+      "review_status": "engineering_draft",
+      "attribute_profile": "normalized_telemetry_v1"
+    },
+    {
+      "key": "site_grid_current",
+      "definition": "Canonical current on the most-loaded site phase used to enforce service-import headroom.",
+      "producer": "EnergyCoordinator.telemetry.site_grid_current.value via EnergySensor.native_value",
+      "role": "canonical_measurement",
+      "unit_and_sign": "A; import positive, export negative",
+      "time_basis": "Current normalized observation for the coordinator update cycle",
+      "availability": "On multiphase sites unavailable without valid mapped phase-current evidence; on single-phase sites may be derived from coherent grid power and voltage.",
+      "state_vocabulary": "Finite numeric value or unavailable",
+      "audience": "advanced",
+      "equivalents": {"foxess": "Mapped most-loaded phase current or single-phase derived current", "globird": null, "tessie": null},
+      "consumers": ["EV service-limit protection", "EV diagnostics"],
+      "decision": "retain",
+      "review_status": "engineering_draft",
+      "attribute_profile": "normalized_telemetry_v1"
+    },
+    {
+      "key": "solar_power",
+      "definition": "Canonical instantaneous solar-generation magnitude after configured normalization.",
+      "producer": "EnergyCoordinator.telemetry.solar_power.value via EnergySensor.native_value",
+      "role": "canonical_measurement",
+      "unit_and_sign": "kW; generation positive",
+      "time_basis": "Current normalized observation for the coordinator update cycle",
+      "availability": "Zero with configured-absent evidence at a no-solar site; otherwise unavailable when the configured source is invalid.",
+      "state_vocabulary": "Finite non-negative numeric value or unavailable",
+      "audience": "primary",
+      "equivalents": {"foxess": "Configured PV-generation telemetry", "globird": null, "tessie": null},
+      "consumers": ["Power dashboard", "solar-spill reconstruction", "Fleet Summary"],
+      "decision": "retain",
+      "review_status": "engineering_draft",
+      "attribute_profile": "normalized_telemetry_v1"
+    }
+  ],
+  "entities_awaiting_review": [
+    "automatic_charge", "automatic_ev_control", "automatic_export", "available_energy", "battery_energy", "battery_potential_capacity", "bonus_zero_import_allowed", "daily_export", "daily_import", "daily_supply_charge", "estimated_energy_cost", "estimated_export_revenue", "estimated_import_energy_cost", "estimated_net_cost", "ev_actual_current", "ev_actual_current_average", "ev_applied_charge_limit", "ev_before_export", "ev_before_export_soc_target", "ev_before_export_status", "ev_charge_limit_target", "ev_charge_to_full", "ev_control_status", "ev_current_target", "ev_daily_backfill_current_target", "ev_daily_backfill_delivered", "ev_daily_backfill_planned_energy", "ev_daily_backfill_planned_start", "ev_daily_backfill_remaining", "ev_daily_backfill_shortfall", "ev_daily_backfill_status", "ev_daily_driving_energy", "ev_driving_learning_samples", "ev_driving_learning_status", "ev_driving_p85", "ev_free_window_soc_gain", "ev_grid_current_average", "ev_learned_charge_limit", "ev_max_power", "ev_pre_free_current_target", "ev_pre_free_planned_energy", "ev_pre_free_planned_start", "ev_pre_free_status", "ev_reconciliation_attempts", "ev_requested_current", "ev_smart_socket_recovery_status", "ev_solar_spill_current_target", "ev_solar_spill_status", "ev_solar_spill_surplus", "ev_usable_capacity", "fleet_summary", "forecast_error_yesterday", "forecast_export_realisation", "forecast_scorecard_status", "forecast_yesterday_cost", "free_charge_allowed", "free_charge_completion", "free_charge_power_target", "free_energy_remaining", "free_window_import", "globird_yesterday_actual_cost", "heater_learning_samples", "house_occupancy_mode", "house_occupancy_state", "learned_base_house_energy", "learned_heater_energy", "learned_house_energy", "learning_samples", "learning_status", "measured_net_cost", "offpeak_export", "remaining_house_energy", "safety_lock", "sign_conventions_verified", "standard_export_window", "status", "tariff_status", "test_charge_estimated_cost", "test_charge_import_rate", "test_charge_power", "test_discharge_estimated_earning", "test_discharge_export_rate", "test_discharge_power", "test_duration", "test_force_charge", "test_force_discharge", "test_remaining_minutes", "test_status", "test_stop", "zerohero_credit", "zerohero_credit_status", "zerohero_export_status", "zerohero_export_window", "zerohero_import_window", "zerohero_planned_duration", "zerohero_planned_export_energy", "zerohero_planned_start", "zerohero_sellable_energy"
+  ]
+}
