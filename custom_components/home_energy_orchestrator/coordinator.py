@@ -86,6 +86,13 @@ from .const import (
 from .models import EnergyLedger, SiteSnapshot
 from .normalise import current_to_a, energy_to_kwh, percent, power_to_kw
 from .persistence import TypedStoreRepository, TypedValueStoreRepository
+from .planner.accounting import (
+    AccountingMeterSnapshot,
+    AccountingProjectionInputs,
+    TariffConfiguration,
+    ZeroHeroWindowEvidence,
+    project_daily_accounting,
+)
 from .planner.daily_meter import (
     DailyImportAccumulator,
     HourlyWindowImportAccumulator,
@@ -113,11 +120,6 @@ from .planner.learning import (
     select_house_cycle_budget,
 )
 from .planner.ledger import calculate_ledger
-from .planner.tariff import (
-    calculate_daily_financials,
-    calculate_tariff_guard,
-    calculate_zerohero_credit,
-)
 from .telemetry import (
     NormalizedSample,
     NormalizedTelemetry,
@@ -627,144 +629,95 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
         boosted_export = (
             self.zerohero_export.imported_kwh if self.zerohero_export.last_at else None
         )
-        export_accounting_available = (
-            daily_export is not None
-            and standard_export is not None
-            and boosted_export is not None
-        )
-        if daily_import is None or free_import is None:
-            return replace(
-                ledger,
-                tariff_reason="daily_import_meter_unavailable",
-                daily_import_kwh=daily_import,
-                daily_import_source=daily_source if daily_import is not None else "unavailable",
-                free_window_import_kwh=free_import,
-                daily_export_kwh=daily_export,
-                standard_window_export_kwh=standard_export,
-                boosted_window_export_kwh=boosted_export,
-            )
-        try:
-            allowance = self._configured_nonnegative(
-                CONF_DAILY_FREE_ALLOWANCE_KWH, DEFAULT_DAILY_FREE_ALLOWANCE_KWH
-            )
-            confirmation = self._configured_nonnegative(
-                CONF_ZERO_IMPORT_CONFIRM_MINUTES, DEFAULT_ZERO_IMPORT_CONFIRM_MINUTES
-            )
-            now = dt_util.now()
-            decision = calculate_tariff_guard(
-                daily_free_allowance_kwh=allowance,
-                imported_today_kwh=free_import,
-                requested_free_charge_kwh=max(allowance - free_import, 0.0),
-                bonus_window_active=self._bonus_window_active(now),
-                grid_import_kw=ledger.grid_import_kw,
-                grid_telemetry_valid=ledger.grid_import_kw is not None,
-                zero_import_minutes=self._zero_import_duration_minutes(
-                    ledger.grid_import_kw, now
-                ),
-                zero_import_threshold_kw=self._configured_nonnegative(
-                    CONF_ZERO_IMPORT_THRESHOLD_KW, DEFAULT_ZERO_IMPORT_THRESHOLD_KW
-                ),
-                minimum_zero_import_minutes=confirmation,
-                zerohero_hourly_import_kwh=tuple(self.zerohero_import.hourly_import_kwh.values()),
-                zerohero_window_elapsed_hours=self._bonus_window_elapsed_hours(now),
-            )
-            window_complete, expected_hours = self._zerohero_credit_window_state(now)
-            credit = calculate_zerohero_credit(
-                hourly_import_kwh=tuple(self.zerohero_import.hourly_import_kwh.values()),
-                expected_hour_count=expected_hours,
-                threshold_kwh_per_hour=self._configured_nonnegative(
-                    CONF_ZERO_IMPORT_THRESHOLD_KW, DEFAULT_ZERO_IMPORT_THRESHOLD_KW
-                ),
-                configured_credit=self._configured_nonnegative(
-                    CONF_ZEROHERO_DAILY_CREDIT, DEFAULT_ZEROHERO_DAILY_CREDIT
-                ),
-                window_complete=window_complete,
-            )
-            financials = calculate_daily_financials(
-                total_import_kwh=daily_import,
-                free_window_import_kwh=free_import,
-                peak_import_kwh=self.peak_import.imported_kwh,
-                free_allowance_kwh=allowance,
-                peak_rate=self._configured_nonnegative(CONF_PEAK_RATE, DEFAULT_PEAK_RATE),
-                offpeak_rate=self._configured_nonnegative(CONF_OFFPEAK_RATE, DEFAULT_OFFPEAK_RATE),
-                offpeak_balance_rate=self._configured_nonnegative(
-                    CONF_OFFPEAK_BALANCE_RATE, DEFAULT_OFFPEAK_BALANCE_RATE
-                ),
-                shoulder_rate=self._configured_nonnegative(
-                    CONF_SHOULDER_RATE, DEFAULT_SHOULDER_RATE
-                ),
-                daily_charge=self._configured_nonnegative(
-                    CONF_DAILY_CHARGE, DEFAULT_DAILY_CHARGE
-                ),
-                total_export_kwh=daily_export if daily_export is not None else 0.0,
-                standard_window_export_kwh=(
-                    standard_export if standard_export is not None else 0.0
-                ),
-                boosted_window_export_kwh=(
-                    boosted_export if boosted_export is not None else 0.0
-                ),
-                boosted_export_allowance_kwh=self._configured_nonnegative(
-                    CONF_EXPORT_ALLOWANCE_KWH, DEFAULT_EXPORT_ALLOWANCE_KWH
-                ),
-                export_rate=self._configured_nonnegative(
-                    CONF_EXPORT_RATE, DEFAULT_EXPORT_RATE
-                ),
-                offpeak_export_rate=self._configured_nonnegative(
-                    CONF_OFFPEAK_EXPORT_RATE, DEFAULT_OFFPEAK_EXPORT_RATE
-                ),
-                boosted_export_rate=self._configured_nonnegative(
-                    CONF_SUPER_EXPORT_RATE, DEFAULT_SUPER_EXPORT_RATE
-                ),
-                zerohero_credit=credit.credit,
-            )
-        except (TypeError, ValueError):
-            return replace(ledger, tariff_reason="tariff_configuration_invalid")
-        return replace(
-            ledger,
-            free_energy_remaining_kwh=decision.free_energy_remaining_kwh,
-            free_charge_allowed_kwh=decision.free_charge_energy_kwh,
-            bonus_zero_import_allowed=decision.bonus_zero_import_allowed,
-            tariff_reason=decision.reason,
+        meters = AccountingMeterSnapshot(
             daily_import_kwh=daily_import,
             daily_import_source=daily_source,
             free_window_import_kwh=free_import,
+            peak_import_kwh=self.peak_import.imported_kwh,
             daily_export_kwh=daily_export,
             standard_window_export_kwh=standard_export,
             boosted_window_export_kwh=boosted_export,
-            standard_rate_export_kwh=(
-                financials.standard_export_kwh if export_accounting_available else None
-            ),
-            offpeak_rate_export_kwh=(
-                financials.offpeak_export_kwh if export_accounting_available else None
-            ),
-            boosted_rate_export_kwh=(
-                financials.boosted_export_kwh if export_accounting_available else None
-            ),
-            estimated_energy_cost=financials.gross_cost,
-            estimated_import_energy_cost=financials.import_energy_cost,
-            daily_supply_charge=financials.supply_charge,
-            standard_export_revenue=(
-                financials.standard_export_revenue
-                if export_accounting_available
-                else None
-            ),
-            offpeak_export_revenue=(
-                financials.offpeak_export_revenue
-                if export_accounting_available
-                else None
-            ),
-            boosted_bonus_revenue=(
-                financials.boosted_bonus_revenue
-                if export_accounting_available
-                else None
-            ),
-            estimated_export_revenue=(
-                financials.export_revenue if export_accounting_available else None
-            ),
-            zerohero_credit=credit.credit,
-            zerohero_credit_status=credit.status,
-            estimated_net_cost=financials.net_cost if export_accounting_available else None,
         )
+        if daily_import is None or free_import is None:
+            return project_daily_accounting(
+                AccountingProjectionInputs(
+                    ledger=ledger,
+                    meters=meters,
+                    tariff=None,
+                    zerohero=None,
+                )
+            )
+        try:
+            now = dt_util.now()
+            window_complete, expected_hours = self._zerohero_credit_window_state(now)
+            return project_daily_accounting(
+                AccountingProjectionInputs(
+                    ledger=ledger,
+                    meters=meters,
+                    tariff=TariffConfiguration(
+                        daily_free_allowance_kwh=self._configured_nonnegative(
+                            CONF_DAILY_FREE_ALLOWANCE_KWH,
+                            DEFAULT_DAILY_FREE_ALLOWANCE_KWH,
+                        ),
+                        zero_import_threshold_kw=self._configured_nonnegative(
+                            CONF_ZERO_IMPORT_THRESHOLD_KW,
+                            DEFAULT_ZERO_IMPORT_THRESHOLD_KW,
+                        ),
+                        minimum_zero_import_minutes=self._configured_nonnegative(
+                            CONF_ZERO_IMPORT_CONFIRM_MINUTES,
+                            DEFAULT_ZERO_IMPORT_CONFIRM_MINUTES,
+                        ),
+                        zerohero_daily_credit=self._configured_nonnegative(
+                            CONF_ZEROHERO_DAILY_CREDIT,
+                            DEFAULT_ZEROHERO_DAILY_CREDIT,
+                        ),
+                        peak_rate=self._configured_nonnegative(
+                            CONF_PEAK_RATE, DEFAULT_PEAK_RATE
+                        ),
+                        offpeak_rate=self._configured_nonnegative(
+                            CONF_OFFPEAK_RATE, DEFAULT_OFFPEAK_RATE
+                        ),
+                        offpeak_balance_rate=self._configured_nonnegative(
+                            CONF_OFFPEAK_BALANCE_RATE,
+                            DEFAULT_OFFPEAK_BALANCE_RATE,
+                        ),
+                        shoulder_rate=self._configured_nonnegative(
+                            CONF_SHOULDER_RATE, DEFAULT_SHOULDER_RATE
+                        ),
+                        daily_charge=self._configured_nonnegative(
+                            CONF_DAILY_CHARGE, DEFAULT_DAILY_CHARGE
+                        ),
+                        boosted_export_allowance_kwh=self._configured_nonnegative(
+                            CONF_EXPORT_ALLOWANCE_KWH,
+                            DEFAULT_EXPORT_ALLOWANCE_KWH,
+                        ),
+                        export_rate=self._configured_nonnegative(
+                            CONF_EXPORT_RATE, DEFAULT_EXPORT_RATE
+                        ),
+                        offpeak_export_rate=self._configured_nonnegative(
+                            CONF_OFFPEAK_EXPORT_RATE,
+                            DEFAULT_OFFPEAK_EXPORT_RATE,
+                        ),
+                        boosted_export_rate=self._configured_nonnegative(
+                            CONF_SUPER_EXPORT_RATE, DEFAULT_SUPER_EXPORT_RATE
+                        ),
+                    ),
+                    zerohero=ZeroHeroWindowEvidence(
+                        active=self._bonus_window_active(now),
+                        zero_import_minutes=self._zero_import_duration_minutes(
+                            ledger.grid_import_kw, now
+                        ),
+                        hourly_import_kwh=tuple(
+                            self.zerohero_import.hourly_import_kwh.values()
+                        ),
+                        elapsed_hours=self._bonus_window_elapsed_hours(now),
+                        complete=window_complete,
+                        expected_hour_count=expected_hours,
+                    ),
+                )
+            )
+        except (TypeError, ValueError):
+            return replace(ledger, tariff_reason="tariff_configuration_invalid")
 
     async def async_update_forecast(self, now: datetime | None = None) -> None:
         """Update the read-only optimistic forecast and retailer scorecard."""
