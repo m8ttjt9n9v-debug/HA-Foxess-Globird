@@ -273,6 +273,9 @@ Estimated effort: 15–22 engineer-days. This is the highest-risk phase.
 lifecycle fixture; service order, delays, retries, restoration and reason states
 are unchanged; controllers directly access neither `hass.states` nor storage.
 
+Current work package and extraction order:
+[Phase 7 controller decomposition](maintainability/phase-7-controller-decomposition.md).
+
 ### Phase 8 — serialized reconciliation and operational rollout
 
 Estimated effort: 5–8 engineer-days plus elapsed soak time.
