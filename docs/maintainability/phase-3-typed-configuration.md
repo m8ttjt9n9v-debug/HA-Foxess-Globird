@@ -45,8 +45,11 @@ selectors, validation, migration behavior and the multi-page draft workflow.
   managed mutations. Every frozen v0.12.26 wizard field now has one generated,
   immutable `FieldSpec` covering serialized key, semantic type, default,
   selector, page/order, applicability, redaction and translation key. Exact
-  parity with the 124-field UI contract is enforced before the catalogue is
-  allowed to drive schema construction.
+  parity with the 124-field UI contract is enforced. Configuration page
+  composition now comes from the catalogue's immutable page projection, so the
+  former duplicate 124-key page map has been removed without changing page or
+  field order. Existing validators and defaults remain authoritative pending a
+  separately bounded catalogue-driven schema seam.
 
 ## Work packages
 

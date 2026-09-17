@@ -6,6 +6,7 @@ import json
 
 from custom_components.home_energy_orchestrator.field_catalogue import (
     CATALOGUE_BASELINE,
+    FIELD_KEYS_BY_PAGE,
     FIELD_SPECS,
     FIELD_SPECS_BY_KEY,
 )
@@ -26,7 +27,9 @@ def test_field_catalogue_exactly_covers_the_frozen_ui_contract() -> None:
         field["key"] for field in fields
     )
     assert len(FIELD_SPECS_BY_KEY) == len(FIELD_SPECS)
+    expected_pages: dict[str, list[str]] = {}
     for spec, field in zip(FIELD_SPECS, fields, strict=True):
+        expected_pages.setdefault(field["page"], []).append(field["key"])
         assert spec.page == field["page"]
         assert spec.order == field["order"]
         assert spec.required is field["required"]
@@ -39,6 +42,9 @@ def test_field_catalogue_exactly_covers_the_frozen_ui_contract() -> None:
             else json.loads(spec.selector_config_json)
         ) == field["input_config"]
         assert spec.translation_key == spec.key
+    assert dict(FIELD_KEYS_BY_PAGE) == {
+        page: tuple(keys) for page, keys in expected_pages.items()
+    }
 
 
 def test_field_catalogue_capability_and_redaction_rules_are_complete() -> None:

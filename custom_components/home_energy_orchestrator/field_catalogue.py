@@ -160,3 +160,15 @@ FIELD_SPECS: tuple[FieldSpec, ...] = (
 FIELD_SPECS_BY_KEY = MappingProxyType(
     {spec.key: spec for spec in FIELD_SPECS}
 )
+
+
+def _build_page_keys() -> MappingProxyType:
+    pages: dict[str, list[str]] = {}
+    for spec in FIELD_SPECS:
+        pages.setdefault(spec.page, []).append(spec.key)
+    return MappingProxyType(
+        {page: tuple(keys) for page, keys in pages.items()}
+    )
+
+
+FIELD_KEYS_BY_PAGE = _build_page_keys()

@@ -121,6 +121,18 @@ def rendered_catalogue() -> str:
             "FIELD_SPECS_BY_KEY = MappingProxyType(\n",
             "    {spec.key: spec for spec in FIELD_SPECS}\n",
             ")\n",
+            "\n",
+            "\n",
+            "def _build_page_keys() -> MappingProxyType:\n",
+            "    pages: dict[str, list[str]] = {}\n",
+            "    for spec in FIELD_SPECS:\n",
+            "        pages.setdefault(spec.page, []).append(spec.key)\n",
+            "    return MappingProxyType(\n",
+            "        {page: tuple(keys) for page, keys in pages.items()}\n",
+            "    )\n",
+            "\n",
+            "\n",
+            "FIELD_KEYS_BY_PAGE = _build_page_keys()\n",
         ]
     )
     return "".join(lines)
