@@ -9,6 +9,7 @@ from custom_components.home_energy_orchestrator.planner.ev import (
     AllowanceCeilingInputs,
     ChargeLimitInputs,
     DirectEvseObservation,
+    DirectEvseReconciliation,
     DirectEvseReconciliationState,
     EvCommand,
     EvCommandPlan,
@@ -21,6 +22,7 @@ from custom_components.home_energy_orchestrator.planner.ev import (
     direct_evse_response_matches,
     estimate_other_free_window_import_kwh,
     estimate_vehicle_energy_to_target_kwh,
+    finalize_direct_evse_reconciliation,
     house_load_excluding_ev_kw,
     plan_charge_limit_target,
     plan_direct_evse_commands,
@@ -862,6 +864,55 @@ def test_matching_feedback_confirms_without_rearming_same_target():
     assert result.plan.reason == "feedback_confirmed"
     assert result.state.phase == "confirmed"
     assert result.state.attempts == 2
+
+
+def test_direct_runtime_releases_outside_ownership_only_after_confirmed_idle():
+    confirmed = DirectEvseReconciliation(
+        DirectEvseReconciliationState(0, 80, 1, None, "confirmed"),
+        EvCommandPlan((), "feedback_confirmed"),
+    )
+    released = finalize_direct_evse_reconciliation(
+        confirmed,
+        in_free_window=False,
+        outside_enabled=False,
+        outside_control_active=True,
+        outside_target_active=False,
+    )
+    assert released.reconciliation is confirmed
+    assert released.outside_control_active is False
+    assert released.save_reconciliation is True
+    assert released.save_ownership_release is True
+
+    for changes in (
+        {"in_free_window": True},
+        {"outside_enabled": True},
+        {"outside_target_active": True},
+        {"outside_control_active": False},
+    ):
+        inputs = {
+            "in_free_window": False,
+            "outside_enabled": False,
+            "outside_control_active": True,
+            "outside_target_active": False,
+        }
+        inputs.update(changes)
+        retained = finalize_direct_evse_reconciliation(confirmed, **inputs)
+        assert retained.outside_control_active == inputs["outside_control_active"]
+        assert retained.save_reconciliation is True
+        assert retained.save_ownership_release is False
+
+    commanding = finalize_direct_evse_reconciliation(
+        DirectEvseReconciliation(
+            confirmed.state,
+            EvCommandPlan((EvCommand("set_charge_current", 1),), "direct_path_ready"),
+        ),
+        in_free_window=False,
+        outside_enabled=False,
+        outside_control_active=True,
+        outside_target_active=False,
+    )
+    assert commanding.outside_control_active is True
+    assert commanding.save_ownership_release is False
 
 
 def test_competing_writer_cannot_rearm_by_briefly_accepting_same_target():

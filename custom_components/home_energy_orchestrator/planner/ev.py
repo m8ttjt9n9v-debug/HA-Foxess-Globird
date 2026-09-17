@@ -100,6 +100,40 @@ class DirectEvseReconciliation:
 
 
 @dataclass(frozen=True, slots=True)
+class DirectEvseRuntimeDecision:
+    """Post-reconciliation ownership and retained persistence obligations."""
+
+    reconciliation: DirectEvseReconciliation
+    outside_control_active: bool
+    save_reconciliation: bool = True
+    save_ownership_release: bool = False
+
+
+def finalize_direct_evse_reconciliation(
+    reconciliation: DirectEvseReconciliation,
+    *,
+    in_free_window: bool,
+    outside_enabled: bool,
+    outside_control_active: bool,
+    outside_target_active: bool,
+) -> DirectEvseRuntimeDecision:
+    """Decide whether confirmed idle feedback releases outside ownership."""
+    release = (
+        not reconciliation.plan.commands
+        and not in_free_window
+        and not outside_enabled
+        and outside_control_active
+        and not outside_target_active
+        and reconciliation.state.phase == "confirmed"
+    )
+    return DirectEvseRuntimeDecision(
+        reconciliation=reconciliation,
+        outside_control_active=False if release else outside_control_active,
+        save_ownership_release=release,
+    )
+
+
+@dataclass(frozen=True, slots=True)
 class DirectEvseObservation:
     """Live Tessie actuator state and writable metadata."""
 

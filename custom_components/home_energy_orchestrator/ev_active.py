@@ -137,6 +137,7 @@ from .planner.ev import (
     apply_daily_allowance_ceiling,
     estimate_other_free_window_import_kwh,
     estimate_vehicle_energy_to_target_kwh,
+    finalize_direct_evse_reconciliation,
     house_load_excluding_ev_kw,
     plan_charge_limit_target,
     plan_direct_evse_commands,
@@ -672,27 +673,29 @@ class ActiveEvController:
                     else f"rehearsal_{rehearsal_plan.reason}"
                 )
                 return
-            transition = reconcile_direct_evse(
-                self.reconciliation,
-                observation,
-                target_current_a=self.target_current_a,
-                target_limit_percent=self.target_limit_percent,
-                physical_ceiling_a=self._float(CONF_EV_MAX_CURRENT, 0.0),
-                now=now,
+            runtime = finalize_direct_evse_reconciliation(
+                reconcile_direct_evse(
+                    self.reconciliation,
+                    observation,
+                    target_current_a=self.target_current_a,
+                    target_limit_percent=self.target_limit_percent,
+                    physical_ceiling_a=self._float(CONF_EV_MAX_CURRENT, 0.0),
+                    now=now,
+                ),
+                in_free_window=in_window,
+                outside_enabled=outside_enabled,
+                outside_control_active=self.outside_control_active,
+                outside_target_active=self.outside_target_active,
             )
+            transition = runtime.reconciliation
             self.reconciliation = transition.state
             self.last_reason = transition.plan.reason
-            await self._async_save(now)
+            if runtime.save_reconciliation:
+                await self._async_save(now)
 
             if not transition.plan.commands:
-                if (
-                    not in_window
-                    and not outside_enabled
-                    and self.outside_control_active
-                    and not self.outside_target_active
-                    and transition.state.phase == "confirmed"
-                ):
-                    self.outside_control_active = False
+                self.outside_control_active = runtime.outside_control_active
+                if runtime.save_ownership_release:
                     await self._async_save(now)
                 return
             try:
