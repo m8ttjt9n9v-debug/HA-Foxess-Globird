@@ -18,6 +18,7 @@ from .const import (
     CONF_BATTERY_CHARGE_POSITIVE,
     CONF_BATTERY_CHARGE_POWER,
     CONF_BATTERY_DISCHARGE_POWER,
+    CONF_BATTERY_POWER,
     CONF_BATTERY_POWER_DIRECTION,
     CONF_BATTERY_SOC,
     CONF_BONUS_WINDOW_END,
@@ -63,11 +64,14 @@ from .const import (
     CONF_FREE_CHARGE_START,
     CONF_GLOBIRD_LATEST_DAILY_COST,
     CONF_GLOBIRD_ZEROHERO_STATUS,
+    CONF_GRID_IMPORT_POSITIVE,
+    CONF_GRID_POWER,
     CONF_GRID_POWER_DIRECTION,
     CONF_HEATER_POWER,
     CONF_HOUSE_AWAY_CONFIRMATION_HOURS,
     CONF_HOUSE_AWAY_FALLBACK,
     CONF_HOUSE_LEARNING_FALLBACK,
+    CONF_HOUSE_LOAD,
     CONF_HOUSE_LOAD_INCLUDES_EV,
     CONF_HOUSE_OCCUPANCY_MODE,
     CONF_INVERTER_CHARGE_LIMIT_KW,
@@ -78,6 +82,7 @@ from .const import (
     CONF_SITE_GRID_CURRENT,
     CONF_SITE_GRID_CURRENT_DIRECTION,
     CONF_SITE_PHASE_COUNT,
+    CONF_SOLAR_POWER,
     CONF_SOLAR_POWER_DIRECTION,
     CONF_SUPER_EXPORT_RATE,
     CONF_TELEMETRY_MAX_AGE_SECONDS,
@@ -123,6 +128,8 @@ from .const import (
     DEFAULT_SUPER_EXPORT_RATE,
     DEFAULT_TELEMETRY_MAX_AGE_SECONDS,
     DEFAULT_ZERO_IMPORT_THRESHOLD_KW,
+    GRID_POSITIVE_EXPORT,
+    GRID_POSITIVE_IMPORT,
     HOUSE_OCCUPANCY_MODES,
 )
 
@@ -155,6 +162,10 @@ def _optional_time(
         return time.fromisoformat(str(value))
     except (TypeError, ValueError):
         return None
+
+
+def _entity_id(value: object) -> str | None:
+    return value if isinstance(value, str) and value else None
 
 
 @dataclass(frozen=True, slots=True)
@@ -305,6 +316,16 @@ class TelemetrySettings:
 
 
 @dataclass(frozen=True, slots=True)
+class PowerSourceSettings:
+    """Canonical power-source entity mappings used by telemetry acquisition."""
+
+    grid_entity: str | None
+    battery_entity: str | None
+    solar_entity: str | None
+    house_load_entity: str | None
+
+
+@dataclass(frozen=True, slots=True)
 class ElectricalSettings:
     """Commissioned canonical sign directions and explicit verification."""
 
@@ -313,6 +334,30 @@ class ElectricalSettings:
     battery_power_positive_direction: str
     solar_generation_direction: str
     site_grid_current_positive_direction: str
+    legacy_grid_import_positive: bool
+
+    @property
+    def effective_grid_power_direction(self) -> str:
+        """Apply the historical boolean fallback only when the new value is absent."""
+        if self.grid_power_positive_direction:
+            return str(self.grid_power_positive_direction)
+        return (
+            GRID_POSITIVE_IMPORT
+            if self.legacy_grid_import_positive
+            else GRID_POSITIVE_EXPORT
+        )
+
+    @property
+    def effective_solar_generation_direction(self) -> str:
+        if self.solar_generation_direction:
+            return str(self.solar_generation_direction)
+        return DEFAULT_SOLAR_POWER_DIRECTION
+
+    @property
+    def effective_site_grid_current_direction(self) -> str:
+        if self.site_grid_current_positive_direction:
+            return str(self.site_grid_current_positive_direction)
+        return DEFAULT_SITE_GRID_CURRENT_DIRECTION
 
 
 @dataclass(frozen=True, slots=True)
@@ -363,6 +408,7 @@ class RuntimeConfiguration:
     site: SiteSettings
     battery: BatterySettings
     telemetry: TelemetrySettings
+    power_sources: PowerSourceSettings
     electrical: ElectricalSettings
     tariff: TariffSettings
     inverter: InverterSettings
@@ -412,6 +458,10 @@ class RuntimeConfiguration:
         battery_capacity_entity = data.get(CONF_BATTERY_CAPACITY_ENTITY)
         battery_charge_power_entity = data.get(CONF_BATTERY_CHARGE_POWER)
         battery_discharge_power_entity = data.get(CONF_BATTERY_DISCHARGE_POWER)
+        battery_power_entity = data.get(CONF_BATTERY_POWER)
+        grid_power_entity = data.get(CONF_GRID_POWER)
+        solar_power_entity = data.get(CONF_SOLAR_POWER)
+        house_load_entity = data.get(CONF_HOUSE_LOAD)
         daily_import_entity = data.get(CONF_DAILY_IMPORT_ENTITY)
         retailer_daily_cost_entity = data.get(CONF_GLOBIRD_LATEST_DAILY_COST)
         retailer_zerohero_status_entity = data.get(CONF_GLOBIRD_ZEROHERO_STATUS)
@@ -729,6 +779,12 @@ class RuntimeConfiguration:
             telemetry=TelemetrySettings(
                 max_age_seconds=max_telemetry_age,
             ),
+            power_sources=PowerSourceSettings(
+                grid_entity=_entity_id(grid_power_entity),
+                battery_entity=_entity_id(battery_power_entity),
+                solar_entity=_entity_id(solar_power_entity),
+                house_load_entity=_entity_id(house_load_entity),
+            ),
             electrical=ElectricalSettings(
                 verified=bool(
                     data.get(
@@ -761,6 +817,9 @@ class RuntimeConfiguration:
                         CONF_SITE_GRID_CURRENT_DIRECTION,
                         DEFAULT_SITE_GRID_CURRENT_DIRECTION,
                     ),
+                ),
+                legacy_grid_import_positive=bool(
+                    data.get(CONF_GRID_IMPORT_POSITIVE, True)
                 ),
             ),
             tariff=TariffSettings(

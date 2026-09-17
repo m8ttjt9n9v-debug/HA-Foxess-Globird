@@ -19,6 +19,7 @@ from custom_components.home_energy_orchestrator.const import (
     CONF_BATTERY_CHARGE_POSITIVE,
     CONF_BATTERY_CHARGE_POWER,
     CONF_BATTERY_DISCHARGE_POWER,
+    CONF_BATTERY_POWER,
     CONF_BATTERY_POWER_DIRECTION,
     CONF_BATTERY_SOC,
     CONF_BONUS_WINDOW_END,
@@ -62,11 +63,14 @@ from custom_components.home_energy_orchestrator.const import (
     CONF_FREE_CHARGE_START,
     CONF_GLOBIRD_LATEST_DAILY_COST,
     CONF_GLOBIRD_ZEROHERO_STATUS,
+    CONF_GRID_IMPORT_POSITIVE,
+    CONF_GRID_POWER,
     CONF_GRID_POWER_DIRECTION,
     CONF_HEATER_POWER,
     CONF_HOUSE_AWAY_CONFIRMATION_HOURS,
     CONF_HOUSE_AWAY_FALLBACK,
     CONF_HOUSE_LEARNING_FALLBACK,
+    CONF_HOUSE_LOAD,
     CONF_HOUSE_LOAD_INCLUDES_EV,
     CONF_HOUSE_OCCUPANCY_MODE,
     CONF_INVERTER_CHARGE_LIMIT_KW,
@@ -74,7 +78,10 @@ from custom_components.home_energy_orchestrator.const import (
     CONF_REHEARSAL_MODE,
     CONF_SIGN_CONVENTIONS_VERIFIED,
     CONF_SITE_GRID_CURRENT,
+    CONF_SITE_GRID_CURRENT_DIRECTION,
     CONF_SITE_PHASE_COUNT,
+    CONF_SOLAR_POWER,
+    CONF_SOLAR_POWER_DIRECTION,
     CONF_TELEMETRY_MAX_AGE_SECONDS,
     CONF_ZERO_IMPORT_THRESHOLD_KW,
     DEFAULT_BONUS_WINDOW_END,
@@ -103,9 +110,13 @@ from custom_components.home_energy_orchestrator.const import (
     DEFAULT_INVERTER_DISCHARGE_LIMIT_KW,
     DEFAULT_REHEARSAL_MODE,
     DEFAULT_SIGN_CONVENTIONS_VERIFIED,
+    DEFAULT_SITE_GRID_CURRENT_DIRECTION,
     DEFAULT_SITE_PHASE_COUNT,
+    DEFAULT_SOLAR_POWER_DIRECTION,
     DEFAULT_TELEMETRY_MAX_AGE_SECONDS,
     DEFAULT_ZERO_IMPORT_THRESHOLD_KW,
+    GRID_POSITIVE_EXPORT,
+    GRID_POSITIVE_IMPORT,
 )
 from custom_components.home_energy_orchestrator.coordinator import EnergyCoordinator
 
@@ -783,6 +794,70 @@ def test_telemetry_snapshot_preserves_freshness_and_battery_compatibility(
         parsed.telemetry.max_age_seconds,
         parsed.electrical.battery_power_positive_direction,
     ) == expected
+
+
+@pytest.mark.parametrize(
+    ("data", "expected_sources", "expected_directions"),
+    [
+        (
+            {},
+            (None, None, None, None),
+            (
+                GRID_POSITIVE_IMPORT,
+                DEFAULT_SOLAR_POWER_DIRECTION,
+                DEFAULT_SITE_GRID_CURRENT_DIRECTION,
+            ),
+        ),
+        (
+            {
+                CONF_GRID_POWER: "sensor.grid",
+                CONF_BATTERY_POWER: "sensor.battery",
+                CONF_SOLAR_POWER: "sensor.solar",
+                CONF_HOUSE_LOAD: "sensor.house",
+                CONF_GRID_POWER_DIRECTION: GRID_POSITIVE_EXPORT,
+                CONF_SOLAR_POWER_DIRECTION: "generation_negative",
+                CONF_SITE_GRID_CURRENT_DIRECTION: GRID_POSITIVE_EXPORT,
+            },
+            ("sensor.grid", "sensor.battery", "sensor.solar", "sensor.house"),
+            (GRID_POSITIVE_EXPORT, "generation_negative", GRID_POSITIVE_EXPORT),
+        ),
+        (
+            {
+                CONF_GRID_POWER: 123,
+                CONF_BATTERY_POWER: "",
+                CONF_SOLAR_POWER: None,
+                CONF_HOUSE_LOAD: False,
+                CONF_GRID_POWER_DIRECTION: None,
+                CONF_GRID_IMPORT_POSITIVE: False,
+                CONF_SOLAR_POWER_DIRECTION: None,
+                CONF_SITE_GRID_CURRENT_DIRECTION: None,
+            },
+            (None, None, None, None),
+            (
+                GRID_POSITIVE_EXPORT,
+                DEFAULT_SOLAR_POWER_DIRECTION,
+                DEFAULT_SITE_GRID_CURRENT_DIRECTION,
+            ),
+        ),
+    ],
+)
+def test_power_source_snapshot_preserves_mapping_and_direction_fallbacks(
+    data: dict[str, object],
+    expected_sources: tuple[str | None, str | None, str | None, str | None],
+    expected_directions: tuple[str, str, str],
+) -> None:
+    parsed = RuntimeConfiguration.from_mapping(data)
+    assert (
+        parsed.power_sources.grid_entity,
+        parsed.power_sources.battery_entity,
+        parsed.power_sources.solar_entity,
+        parsed.power_sources.house_load_entity,
+    ) == expected_sources
+    assert (
+        parsed.electrical.effective_grid_power_direction,
+        parsed.electrical.effective_solar_generation_direction,
+        parsed.electrical.effective_site_grid_current_direction,
+    ) == expected_directions
 
 
 @pytest.mark.parametrize(

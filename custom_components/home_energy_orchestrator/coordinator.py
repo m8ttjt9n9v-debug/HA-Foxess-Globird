@@ -18,23 +18,14 @@ from .configuration import RuntimeConfiguration
 from .const import (
     BATTERY_POSITIVE_CHARGE,
     CONF_BATTERY_CAPACITY,
-    CONF_BATTERY_CAPACITY_ENTITY,
-    CONF_BATTERY_CHARGE_POWER,
-    CONF_BATTERY_DISCHARGE_POWER,
     CONF_BATTERY_FLOOR,
-    CONF_BATTERY_POWER,
-    CONF_BATTERY_SOC,
     CONF_BONUS_WINDOW_END,
     CONF_BONUS_WINDOW_START,
     CONF_DAILY_CHARGE,
     CONF_DAILY_FREE_ALLOWANCE_KWH,
-    CONF_DAILY_IMPORT_ENTITY,
-    CONF_EV_ACTUAL_CURRENT,
-    CONF_EV_CHARGING_STATE,
     CONF_EV_MAX_CURRENT,
     CONF_EV_MIN_CURRENT,
     CONF_EV_PHASE_COUNT,
-    CONF_EV_SOC,
     CONF_EV_VOLTAGE,
     CONF_EXPORT_ALLOWANCE_KWH,
     CONF_EXPORT_LIMIT_KW,
@@ -43,12 +34,6 @@ from .const import (
     CONF_EXPORT_RATE_WINDOW_START,
     CONF_FREE_CHARGE_END,
     CONF_FREE_CHARGE_START,
-    CONF_GLOBIRD_LATEST_DAILY_COST,
-    CONF_GLOBIRD_ZEROHERO_STATUS,
-    CONF_GRID_POWER,
-    CONF_GRID_POWER_DIRECTION,
-    CONF_HEATER_POWER,
-    CONF_HOUSE_LOAD,
     CONF_INVERTER_CHARGE_LIMIT_KW,
     CONF_INVERTER_DISCHARGE_LIMIT_KW,
     CONF_OFFPEAK_BALANCE_RATE,
@@ -60,11 +45,7 @@ from .const import (
     CONF_RESERVE,
     CONF_SERVICE_IMPORT_LIMIT_A,
     CONF_SHOULDER_RATE,
-    CONF_SITE_GRID_CURRENT,
-    CONF_SITE_GRID_CURRENT_DIRECTION,
     CONF_SITE_PHASE_COUNT,
-    CONF_SOLAR_POWER,
-    CONF_SOLAR_POWER_DIRECTION,
     CONF_SUPER_EXPORT_RATE,
     CONF_ZERO_IMPORT_CONFIRM_MINUTES,
     CONF_ZERO_IMPORT_THRESHOLD_KW,
@@ -93,14 +74,11 @@ from .const import (
     DEFAULT_PEAK_WINDOW_START,
     DEFAULT_SERVICE_IMPORT_LIMIT_A,
     DEFAULT_SHOULDER_RATE,
-    DEFAULT_SITE_GRID_CURRENT_DIRECTION,
-    DEFAULT_SOLAR_POWER_DIRECTION,
     DEFAULT_SUPER_EXPORT_RATE,
     DEFAULT_ZERO_IMPORT_CONFIRM_MINUTES,
     DEFAULT_ZERO_IMPORT_THRESHOLD_KW,
     DEFAULT_ZEROHERO_DAILY_CREDIT,
     DOMAIN,
-    GRID_POSITIVE_EXPORT,
     GRID_POSITIVE_IMPORT,
     REASON_INVALID_CONFIGURATION,
     SOLAR_GENERATION_POSITIVE,
@@ -242,25 +220,25 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
             hass,
             tuple(
                 entity_id
-                for key in (
-                    CONF_BATTERY_SOC,
-                    CONF_BATTERY_CAPACITY_ENTITY,
-                    CONF_BATTERY_POWER,
-                    CONF_BATTERY_CHARGE_POWER,
-                    CONF_BATTERY_DISCHARGE_POWER,
-                    CONF_GRID_POWER,
-                    CONF_DAILY_IMPORT_ENTITY,
-                    CONF_GLOBIRD_LATEST_DAILY_COST,
-                    CONF_GLOBIRD_ZEROHERO_STATUS,
-                    CONF_HOUSE_LOAD,
-                    CONF_HEATER_POWER,
-                    CONF_SOLAR_POWER,
-                    CONF_SITE_GRID_CURRENT,
-                    CONF_EV_SOC,
-                    CONF_EV_CHARGING_STATE,
-                    CONF_EV_ACTUAL_CURRENT,
+                for entity_id in (
+                    self.runtime_config.battery.soc_entity,
+                    self.runtime_config.battery.capacity_entity,
+                    self.runtime_config.power_sources.battery_entity,
+                    self.runtime_config.battery.charge_power_entity,
+                    self.runtime_config.battery.discharge_power_entity,
+                    self.runtime_config.power_sources.grid_entity,
+                    self.runtime_config.accounting.daily_import_entity,
+                    self.runtime_config.accounting.retailer_daily_cost_entity,
+                    self.runtime_config.accounting.retailer_zerohero_status_entity,
+                    self.runtime_config.power_sources.house_load_entity,
+                    self.runtime_config.house.heater_power_entity,
+                    self.runtime_config.power_sources.solar_entity,
+                    self.runtime_config.site.grid_current_entity,
+                    self.runtime_config.ev_telemetry.soc_entity,
+                    self.runtime_config.ev_telemetry.charging_state_entity,
+                    self.runtime_config.ev_telemetry.actual_current_entity,
                 )
-                if (entity_id := config.get(key))
+                if entity_id
             ),
             self._async_source_changed,
         )
@@ -1006,19 +984,15 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
     def _max_telemetry_age(self) -> float:
         return self.runtime_config.telemetry.max_age_seconds
 
-    def _direction(self, key: str, default: str) -> str:
-        value = self.config.get(key, default)
-        return str(value) if value else default
-
     def _power_sample(
         self,
-        entity_key: str,
+        entity_id: str | None,
         *,
         now: datetime,
         direction: str,
         positive_direction: str,
     ) -> NormalizedSample:
-        source = self._source(self.config.get(entity_key))
+        source = self._source(entity_id)
         if source is None:
             return unavailable_sample(
                 unit="kW",
@@ -1035,16 +1009,11 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
 
     def _normalized_telemetry(self, now: datetime) -> NormalizedTelemetry:
         """Build the single canonical signed telemetry surface."""
-        grid_direction = self._direction(
-            CONF_GRID_POWER_DIRECTION,
-            (
-                GRID_POSITIVE_IMPORT
-                if bool(self.config.get("grid_import_positive", True))
-                else GRID_POSITIVE_EXPORT
-            ),
+        grid_direction = (
+            self.runtime_config.electrical.effective_grid_power_direction
         )
         grid = self._power_sample(
-            CONF_GRID_POWER,
+            self.runtime_config.power_sources.grid_entity,
             now=now,
             direction=grid_direction,
             positive_direction=GRID_POSITIVE_IMPORT,
@@ -1054,7 +1023,7 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
             self.runtime_config.electrical.battery_power_positive_direction
         )
         signed_battery = self._power_sample(
-            CONF_BATTERY_POWER,
+            self.runtime_config.power_sources.battery_entity,
             now=now,
             direction=battery_direction,
             positive_direction=BATTERY_POSITIVE_CHARGE,
@@ -1101,11 +1070,11 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
         # behavior. Only an explicit choice means deliberate absence.
         solar_configured = self.runtime_config.site.solar_configured
         if solar_configured:
-            solar_direction = self._direction(
-                CONF_SOLAR_POWER_DIRECTION, DEFAULT_SOLAR_POWER_DIRECTION
+            solar_direction = (
+                self.runtime_config.electrical.effective_solar_generation_direction
             )
             solar = self._power_sample(
-                CONF_SOLAR_POWER,
+                self.runtime_config.power_sources.solar_entity,
                 now=now,
                 direction=solar_direction,
                 positive_direction=SOLAR_GENERATION_POSITIVE,
@@ -1121,7 +1090,7 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
                 reason="configured_absent",
             )
         house = self._power_sample(
-            CONF_HOUSE_LOAD,
+            self.runtime_config.power_sources.house_load_entity,
             now=now,
             direction="positive_consumption",
             positive_direction="positive_consumption",
@@ -1130,9 +1099,8 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
         current_source = self._source(self.runtime_config.site.grid_current_entity)
         current = None
         if current_source is not None:
-            current_direction = self._direction(
-                CONF_SITE_GRID_CURRENT_DIRECTION,
-                DEFAULT_SITE_GRID_CURRENT_DIRECTION,
+            current_direction = (
+                self.runtime_config.electrical.effective_site_grid_current_direction
             )
             current = normalize_current_sample(
                 current_source,
