@@ -39,6 +39,7 @@ from .planner.foxess import (
     FoxessCommandPlan,
     FoxessObservation,
 )
+from .planner.foxess_gate import FoxessGateContext, evaluate_foxess_gate
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -139,32 +140,30 @@ class ActiveFoxessController:
     async def async_reconcile(self) -> None:
         """Evaluate and, only after every gate passes, execute one plan."""
         manual_test = getattr(self.coordinator, "manual_test", None)
-        if manual_test is not None and manual_test.is_active:
-            self.last_reason = "manual_test_active"
-            self.last_actions = ()
-            return
         runtime = self.coordinator.runtime_config
-        owner = runtime.automation.control_owner
-        if owner == FOXESS_CONTROL_OWNER_CLOUD:
-            self.last_reason = "foxcloud_scheduler_owns_inverter"
-            self.last_actions = ()
-            return
-        if owner != FOXESS_CONTROL_OWNER_MODBUS:
-            self.last_reason = "foxess_observer_owner"
-            self.last_actions = ()
-            return
-        if not runtime.automation.master_enabled:
-            self.last_reason = "automatic_control_disabled"
-            return
-        if runtime.automation.safety_lock:
-            self.last_reason = "rehearsal_mode"
-            return
-        if not runtime.electrical.verified:
-            self.last_reason = "sign_conventions_unverified"
-            return
-        if not runtime.inverter.actuator_mapping_complete:
-            self.last_reason = "incomplete_foxess_mapping"
-            _LOGGER.warning("Automatic control held: FoxESS mapping is incomplete")
+        gate = evaluate_foxess_gate(
+            FoxessGateContext(
+                manual_test_active=bool(
+                    manual_test is not None and manual_test.is_active
+                ),
+                control_owner=runtime.automation.control_owner,
+                master_enabled=runtime.automation.master_enabled,
+                safety_lock=runtime.automation.safety_lock,
+                electrical_verified=runtime.electrical.verified,
+                actuator_mapping_complete=runtime.inverter.actuator_mapping_complete,
+                telemetry_available=(
+                    self.coordinator.snapshot is not None
+                    and self.coordinator.data is not None
+                ),
+            )
+        )
+        if gate.blocked:
+            assert gate.reason is not None
+            self.last_reason = gate.reason
+            if gate.clear_actions:
+                self.last_actions = ()
+            if gate.warn_incomplete_mapping:
+                _LOGGER.warning("Automatic control held: FoxESS mapping is incomplete")
             return
         assert runtime.inverter.work_mode_entity is not None
         assert runtime.inverter.force_charge_power_entity is not None
@@ -174,9 +173,8 @@ class ActiveFoxessController:
             runtime.inverter.force_charge_power_entity,
             runtime.inverter.force_discharge_power_entity,
         )
-        if self.coordinator.snapshot is None or self.coordinator.data is None:
-            self.last_reason = "telemetry_unavailable"
-            return
+        assert self.coordinator.snapshot is not None
+        assert self.coordinator.data is not None
         feedback = capture_foxess_feedback(self.hass, entities)
         now = dt_util.now()
         if feedback.observation is None:
