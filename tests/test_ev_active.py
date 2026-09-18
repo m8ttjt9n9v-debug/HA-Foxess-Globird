@@ -725,6 +725,44 @@ async def test_opted_in_outside_policy_restores_baseline_after_reconnect(
     assert len(current_calls) == 1
 
 
+async def test_zero_baseline_stops_vehicle_auto_start_after_evening_plugin(
+    hass: HomeAssistant,
+) -> None:
+    """Plug-in must not retain Tessie's previous current outside HEO policy."""
+    _set_ev_states(hass)
+    hass.states.async_set(
+        "number.car_current",
+        "16",
+        {"min": 1, "max": 16, "step": 1, "unit_of_measurement": "A"},
+    )
+    hass.states.async_set("sensor.car_actual_current", "16", {"unit_of_measurement": "A"})
+    hass.states.async_set("sensor.car_charging", "charging")
+    hass.states.async_set("switch.car_charge", "on")
+    stopped = []
+
+    async def stop(call):
+        stopped.append(call.data["entity_id"])
+
+    hass.services.async_register("switch", "turn_off", stop)
+    coordinator = _coordinator(
+        _controller_config(
+            ev_daily_backfill_energy_kwh=0,
+            ev_protected_baseline_a=0,
+        )
+    )
+    coordinator.snapshot = replace(coordinator.snapshot, battery_soc=93)
+    controller = ActiveEvController(hass, coordinator)
+
+    # HEO did not start this session and already held a zero target.
+    controller.target_current_a = 0
+    await controller.async_reconcile(datetime(2026, 9, 7, 18, 30, tzinfo=UTC))
+
+    assert controller.target_current_a == 0
+    assert controller.outside_stop_requested is True
+    assert controller.last_actions == ("stop_charging",)
+    assert stopped == ["switch.car_charge"]
+
+
 async def test_pre_free_runtime_latches_latest_start_and_uses_export_budget(
     hass: HomeAssistant,
 ) -> None:

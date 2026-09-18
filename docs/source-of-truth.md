@@ -271,6 +271,12 @@ export while preserving the user's saved export request. It neither starts EV
 charging nor selects an energy source. Invalid or unavailable EV SoC withholds
 export only while the opt-in is enabled.
 
+Direct Tessie control treats the configured connected-EV baseline as site
+policy. An otherwise unauthorised plug-in auto-start cannot retain the
+vehicle's previous charging current. A zero baseline creates a bounded stop
+obligation; authorised free-window, solar, backfill and explicit Charge to Full
+authority remain unchanged.
+
 Dashboard plan entities describe actions HEO is currently permitted to take,
 not merely an internal economic candidate. When EV-before-export or another
 effective gate withholds export, planned start, energy and duration are absent

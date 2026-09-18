@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.12.27 — stop unauthorised EV plug-in charging
+
+- Enforce the configured outside-window EV baseline when a direct
+  Tessie-controlled vehicle starts itself after being plugged in. With a zero
+  baseline and no authorised charging stage, HEO now creates an immediate
+  bounded stop obligation even though it did not start the session.
+
 ## 0.12.26 — restore GloBird scorecard mappings on upgrade
 
 - Migrate existing entries to the complete, unambiguous GloBird Latest Daily

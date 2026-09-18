@@ -457,8 +457,19 @@ class ActiveEvController:
                     self.daily_backfill_last_stop_at = None
                 self.charge_to_full_started_at = None
 
+            configured_baseline_a = self._float(
+                CONF_EV_PROTECTED_BASELINE_A,
+                DEFAULT_EV_PROTECTED_BASELINE_A,
+            )
+            unexpected_direct_charge = bool(
+                not smart_path
+                and configured_baseline_a <= 0
+                and observation.charge_switch_on
+            )
             outside_enabled = bool(
-                self._daily_backfill_enabled()
+                configured_baseline_a > 0
+                or unexpected_direct_charge
+                or self._daily_backfill_enabled()
                 or self._charge_to_full_requested()
                 or self.daily_backfill_stop_pending
                 or (
@@ -1623,11 +1634,11 @@ class ActiveEvController:
         elif (
             baseline < current_minimum
             and observation.charge_switch_on
-            and self.target_current_a is not None
-            and self.target_current_a >= current_minimum
         ):
-            # Stop a free-window command that HEO was controlling when no safe
-            # outside-window policy takes ownership after the boundary.
+            # Automatic EV control owns the configured site baseline, not only
+            # sessions HEO happened to start. A vehicle can resume its retained
+            # current when plugged in; with a zero baseline and no authorised
+            # outside-window stage, stop that external start immediately.
             self.daily_backfill_stop_pending = True
             self.daily_backfill_stop_attempts = 0
             self.daily_backfill_last_stop_at = None
