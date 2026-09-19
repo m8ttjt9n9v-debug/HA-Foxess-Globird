@@ -193,6 +193,7 @@ from .planner.ev_outside_window import (
     plan_solar_spill_current,
     select_outside_window_current,
 )
+from .planner.ev_power_constraints import inverter_backed_current_ceiling
 from .planner.learning import DemandHistory
 from .planner.timed_average import TimedAverageWindow
 
@@ -568,7 +569,8 @@ class ActiveEvController:
                 and not decision_interval_elapsed
             )
             should_decide = not in_window or (
-                self.target_current_a is None
+                self.pre_free_session.active
+                or self.target_current_a is None
                 or self.last_decision_at is None
                 or decision_interval_elapsed
                 or (fingerprint_changed and not defer_soc_redecision)
@@ -1375,6 +1377,10 @@ class ActiveEvController:
             ceiling,
             current_step=current_step,
         )
+        outside_inverter_ceiling = self._outside_inverter_ceiling_a(
+            ceiling,
+            current_step=current_step,
+        )
         configured_baseline = max(
             self._float(CONF_EV_PROTECTED_BASELINE_A, DEFAULT_EV_PROTECTED_BASELINE_A),
             0.0,
@@ -1383,6 +1389,10 @@ class ActiveEvController:
             0.0
             if configured_baseline <= 0
             else min(max(configured_baseline, current_minimum, current_step), ceiling)
+        )
+        pre_free_ceiling = max(
+            min(service_ceiling, outside_inverter_ceiling),
+            baseline,
         )
         vehicle_soc = self._entity_number(CONF_EV_SOC)
         if vehicle_soc is None:
@@ -1534,7 +1544,7 @@ class ActiveEvController:
                         ),
                         vehicle_wall_room_kwh=vehicle_room,
                         baseline_a=baseline,
-                        current_ceiling_a=ceiling,
+                        current_ceiling_a=pre_free_ceiling,
                         voltage_v=self._float(CONF_EV_VOLTAGE, DEFAULT_EV_VOLTAGE),
                         phase_count=int(self._float(CONF_EV_PHASE_COUNT, DEFAULT_EV_PHASE_COUNT)),
                         free_window_start=free_start,
@@ -1582,7 +1592,7 @@ class ActiveEvController:
                     phase_count=int(self._float(CONF_EV_PHASE_COUNT, DEFAULT_EV_PHASE_COUNT)),
                     current_step_a=current_step,
                     baseline_a=baseline,
-                    current_ceiling_a=ceiling,
+                    current_ceiling_a=pre_free_ceiling,
                     vehicle_soc_percent=vehicle_soc,
                     vehicle_soft_limit_percent=soft_limit,
                 )
@@ -1802,6 +1812,28 @@ class ActiveEvController:
         )
         stepped = int(available / current_step) * current_step
         return round(min(physical_ceiling_a, stepped), 3)
+
+    def _outside_inverter_ceiling_a(
+        self,
+        physical_ceiling_a: float,
+        *,
+        current_step: float,
+    ) -> float:
+        """Apply the configured battery-backed EV power cap per phase."""
+        return inverter_backed_current_ceiling(
+            inverter_output_limit_kw=self._float(
+                CONF_INVERTER_DISCHARGE_LIMIT_KW,
+                DEFAULT_INVERTER_DISCHARGE_LIMIT_KW,
+            ),
+            outside_inverter_percent=self._float(
+                CONF_EV_OUTSIDE_INVERTER_PERCENT,
+                DEFAULT_EV_OUTSIDE_INVERTER_PERCENT,
+            ),
+            voltage_v=self._float(CONF_EV_VOLTAGE, DEFAULT_EV_VOLTAGE),
+            phase_count=int(self._float(CONF_EV_PHASE_COUNT, DEFAULT_EV_PHASE_COUNT)),
+            current_step_a=current_step,
+            charger_maximum_a=physical_ceiling_a,
+        )
 
     def _daily_ready_cycle(self, now: datetime) -> tuple[datetime, datetime, datetime]:
         ready_time = self.coordinator._configured_time(  # noqa: SLF001

@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.12.28 — synchronize EV control at ZEROCHARGE entry
+
+- Recalculate EV current immediately when an active pre-free session crosses
+  into the ZEROCHARGE window. This prevents its battery-backed current target
+  being carried into the free window until an unrelated fingerprint change or
+  the three-minute decision interval, and applies the configured FoxESS
+  settlement policy at the boundary.
+- Apply the configured maximum outside-window EV power percentage to pre-free
+  charging as well as daily backfill. The percentage is calculated from the
+  commissioned inverter output and converted to a per-phase stepped current;
+  30% of a 15 kW inverter is therefore capped at 6 A on 230 V three-phase.
+- Route both pre-free and daily-backfill charging through one shared,
+  independently tested inverter-power constraint so the two policies cannot
+  drift into different interpretations of the same configured safety limit.
+
 ## 0.12.27 — stop unauthorised EV plug-in charging
 
 - Enforce the configured outside-window EV baseline when a direct

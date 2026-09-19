@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from math import floor, isfinite
+from math import isfinite
+
+from .ev_power_constraints import inverter_backed_current_ceiling
 
 
 @dataclass(frozen=True, slots=True)
@@ -82,10 +84,14 @@ def calculate_daily_backfill_plan(inputs: DailyBackfillInputs) -> DailyBackfillP
         inputs.vehicle_wall_room_kwh,
     )
 
-    raw_power_kw = inputs.inverter_output_limit_kw * inputs.outside_inverter_percent / 100
-    raw_current_a = raw_power_kw * 1000 / (inputs.voltage_v * inputs.phase_count)
-    stepped_current_a = floor(raw_current_a / inputs.current_step_a) * inputs.current_step_a
-    current_a = min(stepped_current_a, inputs.charger_maximum_a)
+    current_a = inverter_backed_current_ceiling(
+        inverter_output_limit_kw=inputs.inverter_output_limit_kw,
+        outside_inverter_percent=inputs.outside_inverter_percent,
+        voltage_v=inputs.voltage_v,
+        phase_count=inputs.phase_count,
+        current_step_a=inputs.current_step_a,
+        charger_maximum_a=inputs.charger_maximum_a,
+    )
     if current_a < inputs.charger_minimum_a:
         current_a = 0.0
     power_kw = current_a * inputs.voltage_v * inputs.phase_count / 1000

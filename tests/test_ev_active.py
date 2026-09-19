@@ -778,6 +778,8 @@ async def test_pre_free_runtime_latches_latest_start_and_uses_export_budget(
             foxess_control_owner="local_modbus",
             ev_pre_free_backfill_enabled=True,
             ev_protected_baseline_a=1,
+            ev_outside_inverter_percent=100,
+            inverter_discharge_limit_kw=3.68,
             force_discharge_finish="09:00:00",
         )
     )
@@ -798,6 +800,99 @@ async def test_pre_free_runtime_latches_latest_start_and_uses_export_budget(
     assert controller.pre_free_plan.planned_start == controller.pre_free_session.frozen_start
     assert controller.target_current_a == 16
     assert controller.decision_phase == "pre_free_or_solar_spill"
+
+
+async def test_three_phase_pre_free_current_obeys_outside_inverter_power_cap(
+    hass: HomeAssistant,
+) -> None:
+    """Thirty percent of a 15 kW inverter is 6 A at 230 V three-phase."""
+    _set_ev_states(hass)
+
+    async def accept(_call):
+        return None
+
+    hass.services.async_register("number", "set_value", accept)
+    hass.services.async_register("switch", "turn_on", accept)
+    coordinator = _coordinator(
+        _controller_config(
+            foxess_control_owner="local_modbus",
+            ev_pre_free_backfill_enabled=True,
+            ev_protected_baseline_a=0,
+            ev_outside_inverter_percent=30,
+            inverter_discharge_limit_kw=15,
+            ev_phase_count=3,
+            force_discharge_finish="09:00:00",
+        )
+    )
+    coordinator.active_controller = SimpleNamespace(
+        export_plan=ExportPlan(1.4, 1.4, 1.4 / 4.14, "ready"),
+        export_session=ExportSessionState(),
+    )
+    controller = ActiveEvController(hass, coordinator)
+
+    await controller.async_reconcile(datetime(2026, 9, 7, 11, 50, tzinfo=UTC))
+
+    assert controller.pre_free_session.active is True
+    assert controller.pre_free_plan is not None
+    assert controller.pre_free_plan.maximum_additional_power_kw == 4.14
+    assert controller.pre_free_current_a == 6
+    assert controller.target_current_a == 6
+
+
+async def test_free_window_entry_immediately_redecides_active_pre_free_current(
+    hass: HomeAssistant,
+) -> None:
+    """Do not carry a battery-backed pre-free target into ZEROCHARGE."""
+    _set_ev_states(hass)
+    hass.states.async_set("sensor.car_charging", "charging")
+    hass.states.async_set("sensor.car_actual_current", "16", {"unit_of_measurement": "A"})
+    hass.states.async_set(
+        "number.car_current",
+        "16",
+        {"min": 1, "max": 16, "step": 1, "unit_of_measurement": "A"},
+    )
+    hass.states.async_set("number.car_limit", "100", {"min": 50, "max": 100, "step": 1})
+    hass.states.async_set("switch.car_charge", "on")
+    coordinator = _coordinator(
+        _controller_config(
+            foxess_control_owner="local_modbus",
+            ev_pre_free_backfill_enabled=True,
+            ev_free_window_priority="house_battery",
+            ev_free_window_settle_minutes=5,
+            ev_free_window_minimum_current_a=1,
+            ev_free_window_charge_limit_percent=100,
+            rehearsal_mode=True,
+        )
+    )
+    controller = ActiveEvController(hass, coordinator)
+    now = datetime(2026, 9, 7, 12, 1, tzinfo=UTC)
+    controller.pre_free_session = PreFreeSessionState(
+        True,
+        datetime(2026, 9, 7, 11, 53, 30, tzinfo=UTC),
+    )
+    controller.outside_control_active = True
+    controller.outside_target_active = True
+    controller.target_current_a = 16
+    controller.target_limit_percent = 100
+    controller.last_decision_at = now - timedelta(seconds=5)
+    controller._decision_fingerprint = (  # noqa: SLF001
+        40,
+        False,
+        "house_battery",
+        1,
+        16,
+        1,
+        50,
+        100,
+        1,
+    )
+
+    await controller.async_reconcile(now)
+
+    assert controller.pre_free_session == PreFreeSessionState()
+    assert controller.target_current_a == 1
+    assert controller.decision_phase == "settling_foxess"
+    assert controller.last_actions == ("would_set_charge_current",)
 
 
 async def test_daily_ready_backfill_runs_with_foxcloud_owner_and_never_writes_foxess(

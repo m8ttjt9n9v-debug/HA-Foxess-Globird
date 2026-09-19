@@ -277,6 +277,16 @@ vehicle's previous charging current. A zero baseline creates a bounded stop
 obligation; authorised free-window, solar, backfill and explicit Charge to Full
 authority remain unchanged.
 
+Crossing into ZEROCHARGE while pre-free charging is active forces an immediate
+EV decision. HEO clears outside ownership and applies the configured free-window
+settlement policy at that boundary; the previous battery-backed current target
+must not persist until the ordinary decision interval.
+
+The configured outside-window inverter percentage limits both daily backfill
+and pre-free battery-backed EV charging. It is a percentage of commissioned
+inverter output, not a percentage of the EVSE current setting. Conversion uses
+configured EV voltage and phase count and rounds down to a supported step.
+
 Dashboard plan entities describe actions HEO is currently permitted to take,
 not merely an internal economic candidate. When EV-before-export or another
 effective gate withholds export, planned start, energy and duration are absent
