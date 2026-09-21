@@ -142,7 +142,12 @@ following remain deliberately open:
 
 1. clean-instance install/upgrade and an operational rollback exercise for the
    eventual release candidate; the codec-level one-version downgrade already
-   passes locally;
+   passes locally. A local-only `0.12.29rc2` clean observer now has restart,
+   config-entry reload, diagnostics-redaction and recoverable `rc2 → rc1 →
+   rc2` evidence with all 107 entities retained. It deliberately does not
+   claim restoration of non-empty controller Stores: the clean observer has no
+   actuator session, and that evidence remains in the deterministic lifecycle
+   corpus until an applicable pilot cycle is observed;
 2. pilot soak across complete relevant ZEROCHARGE, ZEROHERO, export and EV
    operating cycles;
 3. one remote-topology soak, then remaining-site rollout; and

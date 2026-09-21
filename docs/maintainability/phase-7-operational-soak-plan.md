@@ -92,7 +92,7 @@ Copy the table for the completed rollout record.
 
 | Gate/site role | Candidate version | Start/end | Required cycles observed | Reload/restart result | Commands/restoration result | Accounting/learning result | Decision |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| Clean staging | | | | | | | Pending |
+| Clean staging | `0.12.29rc2` (local only) | 2026-09-21 | Synthetic observer configuration; no production inputs, EV, actuator mapping or credentials | Core restart, config-entry reload, and recoverable `rc2 → rc1 → rc2` rehearsal retained 107 HEO entities and locked observer settings | Diagnostic actions were refused before adapter access; the expected refusal is now shown as a readable Home Assistant service error | Diagnostics redaction passed. The fresh observer has no non-empty controller Stores; their restoration remains covered by the 974-case deterministic corpus, not this clean-instance observation | **Partial — do not progress to Gate 2 without owner approval** |
 | Pilot | | | | | | | Pending |
 | Remote topology | | | | | | | Pending |
 | Remaining site | | | | | | | Pending |
