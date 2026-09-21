@@ -12,6 +12,7 @@ from .const import (
     SERVICE_TEST_FORCE_DISCHARGE,
     SERVICE_TEST_STOP,
 )
+from .manual_test import ManualTestError
 
 TEST_SCHEMA = vol.Schema(
     {
@@ -29,7 +30,8 @@ def register_services(hass: HomeAssistant) -> None:
 
     async def start_charge(call: ServiceCall) -> None:
         controller = _controller(hass, call.data.get("entry_id"))
-        await controller.async_start(
+        await _async_start(
+            controller,
             "charge",
             call.data.get("power_kw", controller.charge_power_kw),
             call.data.get("duration_minutes", controller.duration_minutes),
@@ -37,7 +39,8 @@ def register_services(hass: HomeAssistant) -> None:
 
     async def start_discharge(call: ServiceCall) -> None:
         controller = _controller(hass, call.data.get("entry_id"))
-        await controller.async_start(
+        await _async_start(
+            controller,
             "discharge",
             call.data.get("power_kw", controller.discharge_power_kw),
             call.data.get("duration_minutes", controller.duration_minutes),
@@ -61,6 +64,16 @@ def unregister_services(hass: HomeAssistant) -> None:
     """Remove service endpoints after the final configured entry unloads."""
     for service in (SERVICE_TEST_FORCE_CHARGE, SERVICE_TEST_FORCE_DISCHARGE, SERVICE_TEST_STOP):
         hass.services.async_remove(DOMAIN, service)
+
+
+async def _async_start(
+    controller, kind: str, power_kw: float, duration_minutes: float
+) -> None:
+    """Present an expected diagnostic rejection as a readable HA service error."""
+    try:
+        await controller.async_start(kind, power_kw, duration_minutes)
+    except ManualTestError as err:
+        raise HomeAssistantError(str(err)) from err
 
 
 def _controller(hass: HomeAssistant, entry_id: str | None = None):
