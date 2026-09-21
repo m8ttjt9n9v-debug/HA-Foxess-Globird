@@ -2,9 +2,34 @@
 
 from custom_components.home_energy_orchestrator.planner.ev_before_export import (
     calculate_protected_keepalive_energy_kwh,
+    compose_protected_ev_energy_kwh,
     decide_ev_before_export,
     protected_keepalive_requires_evidence,
 )
+
+
+def test_protected_ev_energy_composes_keepalive_and_daily_backfill() -> None:
+    assert (
+        compose_protected_ev_energy_kwh(
+            keepalive_kwh=3.45,
+            daily_backfill_kwh=3.5,
+        )
+        == 6.95
+    )
+    assert (
+        compose_protected_ev_energy_kwh(
+            keepalive_kwh=3.45,
+            daily_backfill_kwh=None,
+        )
+        == 3.45
+    )
+    assert (
+        compose_protected_ev_energy_kwh(
+            keepalive_kwh=None,
+            daily_backfill_kwh=3.5,
+        )
+        is None
+    )
 
 
 def test_disabled_policy_never_changes_export_even_without_ev_telemetry():

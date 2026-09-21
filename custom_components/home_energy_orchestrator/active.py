@@ -37,6 +37,7 @@ from .planner.control_windows import (
 from .planner.ev_before_export import (
     EvBeforeExportDecision,
     calculate_protected_keepalive_energy_kwh,
+    compose_protected_ev_energy_kwh,
     protected_keepalive_requires_evidence,
 )
 from .planner.export import ExportPlan
@@ -366,8 +367,15 @@ class ActiveFoxessController:
                 self._hours_until_next_free(now)
             )
             ev_controller = getattr(self.coordinator, "ev_controller", None)
-            if protected_ev is not None and ev_controller is not None:
-                protected_ev += ev_controller.daily_backfill_protection_kwh(now)
+            daily_backfill = (
+                ev_controller.daily_backfill_protection_kwh(now)
+                if protected_ev is not None and ev_controller is not None
+                else None
+            )
+            protected_ev = compose_protected_ev_energy_kwh(
+                keepalive_kwh=protected_ev,
+                daily_backfill_kwh=daily_backfill,
+            )
             self.export_protected_ev_kwh = protected_ev
             available = self.coordinator.data.available_after_reserve_kwh
             policy = evaluate_foxess_export_policy(

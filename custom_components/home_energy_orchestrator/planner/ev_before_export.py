@@ -61,6 +61,17 @@ def calculate_protected_keepalive_energy_kwh(
     )
 
 
+def compose_protected_ev_energy_kwh(
+    *,
+    keepalive_kwh: float | None,
+    daily_backfill_kwh: float | None,
+) -> float | None:
+    """Add cycle-scoped EV protection without weakening missing evidence."""
+    if keepalive_kwh is None:
+        return None
+    return keepalive_kwh + (daily_backfill_kwh or 0.0)
+
+
 def decide_ev_before_export(
     *,
     enabled: bool,
