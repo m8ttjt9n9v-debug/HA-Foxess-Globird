@@ -164,6 +164,7 @@ from .planner.ev import (
 from .planner.ev_candidates import (
     EvConnectionDecision,
     EvCycleRoute,
+    EvPolicyAvailabilityEvidence,
     EvStageCandidate,
     EvStageSelection,
     OutsideStageCandidateInputs,
@@ -172,6 +173,7 @@ from .planner.ev_candidates import (
     ev_home_presence_required,
     evaluate_ev_connection_evidence,
     evaluate_ev_home_control,
+    evaluate_ev_policy_availability,
     reject_ev_stage_candidate,
     select_ev_eligibility_route,
     select_ev_policy_route,
@@ -518,26 +520,25 @@ class ActiveEvController:
                 CONF_EV_PROTECTED_BASELINE_A,
                 DEFAULT_EV_PROTECTED_BASELINE_A,
             )
-            unexpected_direct_charge = bool(
-                not smart_path
-                and configured_baseline_a <= 0
-                and observation.charge_switch_on
-            )
-            outside_enabled = bool(
-                configured_baseline_a > 0
-                or unexpected_direct_charge
-                or self._daily_backfill_enabled()
-                or self._charge_to_full_requested()
-                or self.daily_backfill_stop_pending
-                or (
-                    self.coordinator.runtime_config.automation.control_owner
-                    == FOXESS_CONTROL_OWNER_MODBUS
-                    and (policy.solar_spill_enabled or policy.pre_free_enabled)
+            availability = evaluate_ev_policy_availability(
+                EvPolicyAvailabilityEvidence(
+                    smart_path=smart_path,
+                    configured_baseline_a=configured_baseline_a,
+                    charge_switch_on=observation.charge_switch_on,
+                    daily_backfill_enabled=self._daily_backfill_enabled(),
+                    charge_to_full_requested=self._charge_to_full_requested(),
+                    daily_stop_pending=self.daily_backfill_stop_pending,
+                    modbus_outside_stages_authorized=(
+                        self.coordinator.runtime_config.automation.control_owner
+                        == FOXESS_CONTROL_OWNER_MODBUS
+                    ),
+                    solar_spill_enabled=policy.solar_spill_enabled,
+                    pre_free_enabled=policy.pre_free_enabled,
                 )
             )
             self.policy_route = select_ev_policy_route(
                 in_free_window=in_window,
-                outside_enabled=outside_enabled,
+                outside_enabled=availability.outside_enabled,
                 outside_control_active=self.outside_control_active,
             )
             if self.policy_route.route == "general_limit":
@@ -690,7 +691,7 @@ class ActiveEvController:
                     now=now,
                 ),
                 in_free_window=in_window,
-                outside_enabled=outside_enabled,
+                outside_enabled=availability.outside_enabled,
                 outside_control_active=self.outside_control_active,
                 outside_target_active=self.outside_target_active,
             )

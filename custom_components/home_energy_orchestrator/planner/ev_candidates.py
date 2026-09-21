@@ -43,6 +43,52 @@ class EvConnectionDecision:
     reason: str
 
 
+@dataclass(frozen=True, slots=True)
+class EvPolicyAvailabilityEvidence:
+    """Primitive intent and ownership evidence for outside-stage routing."""
+
+    smart_path: bool
+    configured_baseline_a: float
+    charge_switch_on: bool
+    daily_backfill_enabled: bool
+    charge_to_full_requested: bool
+    daily_stop_pending: bool
+    modbus_outside_stages_authorized: bool
+    solar_spill_enabled: bool
+    pre_free_enabled: bool
+
+
+@dataclass(frozen=True, slots=True)
+class EvPolicyAvailability:
+    """Whether retained-current cleanup or an outside policy owns this cycle."""
+
+    unexpected_direct_charge: bool
+    outside_enabled: bool
+
+
+def evaluate_ev_policy_availability(
+    evidence: EvPolicyAvailabilityEvidence,
+) -> EvPolicyAvailability:
+    """Compose the retained outside-policy and direct auto-start authority."""
+    unexpected_direct_charge = (
+        not evidence.smart_path
+        and evidence.configured_baseline_a <= 0
+        and evidence.charge_switch_on
+    )
+    outside_enabled = (
+        evidence.configured_baseline_a > 0
+        or unexpected_direct_charge
+        or evidence.daily_backfill_enabled
+        or evidence.charge_to_full_requested
+        or evidence.daily_stop_pending
+        or (
+            evidence.modbus_outside_stages_authorized
+            and (evidence.solar_spill_enabled or evidence.pre_free_enabled)
+        )
+    )
+    return EvPolicyAvailability(unexpected_direct_charge, outside_enabled)
+
+
 def ev_home_presence_required(*, location_mode: str) -> bool:
     """Return whether the selected location mode requires tracker evidence."""
     return location_mode == "auto"

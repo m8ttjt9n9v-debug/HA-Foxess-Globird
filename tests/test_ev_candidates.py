@@ -1,11 +1,12 @@
 """Characterization for immutable EV stage candidates."""
 
-from dataclasses import FrozenInstanceError
+from dataclasses import FrozenInstanceError, replace
 
 import pytest
 
 from custom_components.home_energy_orchestrator.planner.ev_candidates import (
     EvConnectionDecision,
+    EvPolicyAvailabilityEvidence,
     EvStageCandidate,
     OutsideStageCandidateInputs,
     build_ev_stage_candidate,
@@ -13,11 +14,66 @@ from custom_components.home_energy_orchestrator.planner.ev_candidates import (
     ev_home_presence_required,
     evaluate_ev_connection_evidence,
     evaluate_ev_home_control,
+    evaluate_ev_policy_availability,
     reject_ev_stage_candidate,
     select_ev_eligibility_route,
     select_ev_policy_route,
     select_outside_stage_candidate,
 )
+
+POLICY_AVAILABILITY = EvPolicyAvailabilityEvidence(
+    smart_path=False,
+    configured_baseline_a=0,
+    charge_switch_on=False,
+    daily_backfill_enabled=False,
+    charge_to_full_requested=False,
+    daily_stop_pending=False,
+    modbus_outside_stages_authorized=False,
+    solar_spill_enabled=False,
+    pre_free_enabled=False,
+)
+
+
+@pytest.mark.parametrize(
+    ("changes", "unexpected", "outside_enabled"),
+    (
+        ({}, False, False),
+        ({"configured_baseline_a": 1}, False, True),
+        ({"charge_switch_on": True}, True, True),
+        ({"charge_switch_on": True, "smart_path": True}, False, False),
+        ({"daily_backfill_enabled": True}, False, True),
+        ({"charge_to_full_requested": True}, False, True),
+        ({"daily_stop_pending": True}, False, True),
+        (
+            {
+                "modbus_outside_stages_authorized": True,
+                "solar_spill_enabled": True,
+            },
+            False,
+            True,
+        ),
+        (
+            {
+                "modbus_outside_stages_authorized": True,
+                "pre_free_enabled": True,
+            },
+            False,
+            True,
+        ),
+        ({"solar_spill_enabled": True}, False, False),
+    ),
+)
+def test_policy_availability_preserves_every_outside_authority(
+    changes,
+    unexpected,
+    outside_enabled,
+) -> None:
+    result = evaluate_ev_policy_availability(
+        replace(POLICY_AVAILABILITY, **changes)
+    )
+
+    assert result.unexpected_direct_charge is unexpected
+    assert result.outside_enabled is outside_enabled
 
 
 def test_ev_home_control_retains_explicit_location_mode_semantics():
