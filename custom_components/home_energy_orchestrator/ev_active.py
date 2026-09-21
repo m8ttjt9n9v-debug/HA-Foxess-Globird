@@ -208,6 +208,7 @@ from .planner.ev_outside_state import (
     reconcile_outside_ownership,
 )
 from .planner.ev_outside_window import (
+    OutsideChargeLimitEvidence,
     OutsideCurrentEnvelopeEvidence,
     PreFreeCurrentInputs,
     PreFreePlan,
@@ -217,6 +218,7 @@ from .planner.ev_outside_window import (
     SolarSpillInputs,
     SolarSpillTelemetryEvidence,
     advance_pre_free_session,
+    evaluate_outside_charge_limit,
     evaluate_outside_current_envelope,
     evaluate_pre_free_plan,
     evaluate_solar_spill_telemetry,
@@ -1662,29 +1664,28 @@ class ActiveEvController:
             observation,
             vehicle_soc=vehicle_soc,
         )
-        policy_limit = (
-            limit_max
-            if charge_to_full
-            else soft_limit
-            if self.outside_target_active or learned_limit is None
-            else learned_limit.limit_percent
-        )
-        self.target_current_a = selected.current_a
-        self.target_limit_percent = plan_charge_limit_target(
-            ChargeLimitInputs(
-                connected=True,
-                policy_limit_percent=policy_limit,
+        limit = evaluate_outside_charge_limit(
+            OutsideChargeLimitEvidence(
+                charge_to_full=charge_to_full,
+                outside_target_active=self.outside_target_active,
+                soft_limit_percent=soft_limit,
+                learned_limit_percent=(
+                    learned_limit.limit_percent if learned_limit is not None else None
+                ),
                 current_limit_percent=observation.charge_limit_percent,
                 vehicle_soc_percent=vehicle_soc,
-                protected_baseline_required=baseline > 0,
+                protected_baseline_a=baseline,
                 direct_limit_headroom_percent=self._float(
-                    CONF_EV_DIRECT_LIMIT_HEADROOM, DEFAULT_EV_DIRECT_LIMIT_HEADROOM
+                    CONF_EV_DIRECT_LIMIT_HEADROOM,
+                    DEFAULT_EV_DIRECT_LIMIT_HEADROOM,
                 ),
                 minimum_percent=limit_min,
                 maximum_percent=limit_max,
                 step_percent=limit_step,
             )
         )
+        self.target_current_a = selected.current_a
+        self.target_limit_percent = limit.target_limit_percent
         self.decision_phase = selected.phase
         self.allowance_phase = "outside_free_window"
         return True

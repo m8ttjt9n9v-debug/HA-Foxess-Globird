@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 import pytest
 
 from custom_components.home_energy_orchestrator.planner.ev_outside_window import (
+    OutsideChargeLimitEvidence,
     OutsideCurrentEnvelopeEvidence,
     PreFreeCurrentInputs,
     PreFreePlanInputs,
@@ -15,6 +16,7 @@ from custom_components.home_energy_orchestrator.planner.ev_outside_window import
     SolarSpillTelemetryEvidence,
     advance_pre_free_session,
     calculate_pre_free_plan,
+    evaluate_outside_charge_limit,
     evaluate_outside_current_envelope,
     evaluate_pre_free_plan,
     evaluate_solar_spill_telemetry,
@@ -68,6 +70,49 @@ OUTSIDE_ENVELOPE = OutsideCurrentEnvelopeEvidence(
     inverter_ceiling_a=6,
     configured_baseline_a=1,
 )
+
+OUTSIDE_LIMIT = OutsideChargeLimitEvidence(
+    charge_to_full=False,
+    outside_target_active=True,
+    soft_limit_percent=80,
+    learned_limit_percent=76,
+    current_limit_percent=90,
+    vehicle_soc_percent=60,
+    protected_baseline_a=0,
+    direct_limit_headroom_percent=2,
+    minimum_percent=50,
+    maximum_percent=100,
+    step_percent=1,
+)
+
+
+@pytest.mark.parametrize(
+    ("changes", "policy_limit", "target_limit"),
+    [
+        ({"charge_to_full": True}, 100, 100),
+        ({}, 80, 80),
+        ({"outside_target_active": False}, 76, 76),
+        (
+            {"outside_target_active": False, "learned_limit_percent": None},
+            80,
+            80,
+        ),
+        (
+            {"vehicle_soc_percent": 89, "protected_baseline_a": 1},
+            80,
+            91,
+        ),
+    ],
+)
+def test_outside_charge_limit_preserves_policy_order_and_anti_pause_guard(
+    changes,
+    policy_limit,
+    target_limit,
+):
+    evaluation = evaluate_outside_charge_limit(replace(OUTSIDE_LIMIT, **changes))
+
+    assert evaluation.policy_limit_percent == policy_limit
+    assert evaluation.target_limit_percent == target_limit
 
 
 @pytest.mark.parametrize(

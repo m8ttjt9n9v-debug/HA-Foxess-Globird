@@ -10,7 +10,12 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from math import floor, isfinite
 
-from .ev import EvCurrentDecision, estimate_vehicle_energy_to_target_kwh
+from .ev import (
+    ChargeLimitInputs,
+    EvCurrentDecision,
+    estimate_vehicle_energy_to_target_kwh,
+    plan_charge_limit_target,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -212,6 +217,58 @@ class OutsideCurrentEnvelope:
     protected_baseline_a: float
     pre_free_ceiling_a: float
     service_supports_charging: bool
+
+
+@dataclass(frozen=True, slots=True)
+class OutsideChargeLimitEvidence:
+    """Primitive policy and actuator evidence for the outside limit target."""
+
+    charge_to_full: bool
+    outside_target_active: bool
+    soft_limit_percent: float
+    learned_limit_percent: float | None
+    current_limit_percent: float
+    vehicle_soc_percent: float
+    protected_baseline_a: float
+    direct_limit_headroom_percent: float
+    minimum_percent: float
+    maximum_percent: float
+    step_percent: float
+
+
+@dataclass(frozen=True, slots=True)
+class OutsideChargeLimitEvaluation:
+    """Selected policy limit and resulting anti-pause actuator target."""
+
+    policy_limit_percent: float
+    target_limit_percent: float
+
+
+def evaluate_outside_charge_limit(
+    evidence: OutsideChargeLimitEvidence,
+) -> OutsideChargeLimitEvaluation:
+    """Select the retained outside limit source and apply the common guard."""
+    policy_limit = (
+        evidence.maximum_percent
+        if evidence.charge_to_full
+        else evidence.soft_limit_percent
+        if evidence.outside_target_active or evidence.learned_limit_percent is None
+        else evidence.learned_limit_percent
+    )
+    target = plan_charge_limit_target(
+        ChargeLimitInputs(
+            connected=True,
+            policy_limit_percent=policy_limit,
+            current_limit_percent=evidence.current_limit_percent,
+            vehicle_soc_percent=evidence.vehicle_soc_percent,
+            protected_baseline_required=evidence.protected_baseline_a > 0,
+            direct_limit_headroom_percent=evidence.direct_limit_headroom_percent,
+            minimum_percent=evidence.minimum_percent,
+            maximum_percent=evidence.maximum_percent,
+            step_percent=evidence.step_percent,
+        )
+    )
+    return OutsideChargeLimitEvaluation(policy_limit, target)
 
 
 def evaluate_outside_current_envelope(
