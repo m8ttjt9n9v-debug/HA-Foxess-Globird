@@ -38,8 +38,8 @@ issued or persisted as an HEO-owned session.
 
 ## Deliverables
 
-- A fixed-seed generator and a 100-event synthetic Home Assistant replay in
-  the lifecycle harness.
+- A fixed-seed generator and a 100-event, 30-second-increment synthetic Home
+  Assistant replay in the lifecycle harness.
 - An assertion of an empty ordered FoxESS service-call trace after every event
   and reload boundary.
 - Scorecard and incident-catalogue evidence updates.
@@ -55,9 +55,9 @@ Recorder statistic or downgrade path.
 
 ## Test plan
 
-- Seed canonical mapped telemetry, then replay 100 deterministic changes drawn
-  from battery SoC, grid and house power, unavailable telemetry, external work
-  mode/force-power feedback and config-entry reloads.
+- Seed canonical mapped telemetry, then replay 100 deterministic 30-second
+  changes drawn from battery SoC, grid and house power, unavailable telemetry,
+  external work mode/force-power feedback and config-entry reloads.
 - Record the seed and event ordinal in every failure assertion.
 - Run the existing lifecycle harness, focused Safety Lock tests, full suite and
   Ruff.

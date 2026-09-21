@@ -61,8 +61,8 @@ volume or subjective polish.
 Hard-gate status at this checkpoint:
 
 - **Pass — current Safety Lock generated corpus:** named system fixtures plus
-  the fixed-seed 100-event Home Assistant replay prove zero FoxESS writes
-  across mixed telemetry, external-feedback and reload transitions. Any
+  the fixed-seed 100-event, 30-second Home Assistant replay prove zero FoxESS
+  writes across mixed telemetry, external-feedback and reload transitions. Any
   discovered counterexample must become a named deterministic fixture.
 - **Pass — restart/reload equivalence:** ordinary-day and incident lifecycle
   traces retain equivalent plans, ownership and obligations.

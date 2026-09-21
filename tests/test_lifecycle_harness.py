@@ -1200,6 +1200,13 @@ async def test_fixed_seed_safety_lock_replay_never_writes_foxess(hass, monkeypat
     """Safety Lock survives 100 mixed telemetry and reload transitions."""
     harness = LifecycleHarness(hass)
     _register_foxess_services(harness, monkeypatch)
+    now = [datetime(2026, 9, 17, 2, 30, tzinfo=UTC)]
+    monkeypatch.setattr(
+        "custom_components.home_energy_orchestrator.active.dt_util.now", lambda: now[0]
+    )
+    monkeypatch.setattr(
+        "custom_components.home_energy_orchestrator.coordinator.dt_util.now", lambda: now[0]
+    )
     await _seed_foxess_states(harness, 50)
     entry = MockConfigEntry(
         domain=DOMAIN,
@@ -1234,9 +1241,13 @@ async def test_fixed_seed_safety_lock_replay_never_writes_foxess(hass, monkeypat
     }
 
     for ordinal, event in enumerate(events, start=1):
+        now[0] += timedelta(seconds=30)
         if event == "battery_fresh":
             await harness.set_state(
-                "sensor.test_battery_soc", 50, {"unit_of_measurement": "%"}
+                "sensor.test_battery_soc",
+                50,
+                {"unit_of_measurement": "%"},
+                observed_at=now[0],
             )
         elif event == "battery_stale":
             await harness.set_state(
@@ -1249,13 +1260,19 @@ async def test_fixed_seed_safety_lock_replay_never_writes_foxess(hass, monkeypat
             await harness.set_unavailable("sensor.test_battery_soc")
         elif event == "grid_fresh":
             await harness.set_state(
-                "sensor.test_grid_power", -5, {"unit_of_measurement": "kW"}
+                "sensor.test_grid_power",
+                -5,
+                {"unit_of_measurement": "kW"},
+                observed_at=now[0],
             )
         elif event == "grid_unavailable":
             await harness.set_unavailable("sensor.test_grid_power")
         elif event == "house_fresh":
             await harness.set_state(
-                "sensor.test_house_load", 8, {"unit_of_measurement": "kW"}
+                "sensor.test_house_load",
+                8,
+                {"unit_of_measurement": "kW"},
+                observed_at=now[0],
             )
         elif event == "house_unavailable":
             await harness.set_unavailable("sensor.test_house_load")
@@ -1264,15 +1281,22 @@ async def test_fixed_seed_safety_lock_replay_never_writes_foxess(hass, monkeypat
                 "select.test_work_mode",
                 "Force Discharge",
                 {"options": ["Self Use", "Force Discharge", "Force Charge"]},
+                observed_at=now[0],
             )
         elif event == "mode_unavailable":
             await harness.set_unavailable("select.test_work_mode")
         elif event == "force_power_external":
             await harness.set_state(
-                "number.test_force_charge", 10, {"unit_of_measurement": "kW"}
+                "number.test_force_charge",
+                10,
+                {"unit_of_measurement": "kW"},
+                observed_at=now[0],
             )
             await harness.set_state(
-                "number.test_force_discharge", 0, {"unit_of_measurement": "kW"}
+                "number.test_force_discharge",
+                0,
+                {"unit_of_measurement": "kW"},
+                observed_at=now[0],
             )
         elif event == "force_power_unavailable":
             await harness.set_unavailable("number.test_force_charge")
