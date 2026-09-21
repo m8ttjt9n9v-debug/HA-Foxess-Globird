@@ -1,18 +1,50 @@
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 
 from custom_components.home_energy_orchestrator.planner.ev_daily_backfill import (
     DailyBackfillCycleState,
 )
 from custom_components.home_energy_orchestrator.planner.ev_outside_state import (
+    OutsideBatteryReserveEvidence,
     abort_outside_charge_at_battery_reserve,
     advance_charge_to_full,
     cleanup_disconnected_ev,
     cleanup_outside_ownership_for_free_window,
+    outside_battery_reserve_reached,
     reconcile_outside_ownership,
 )
 from custom_components.home_energy_orchestrator.planner.ev_outside_window import (
     PreFreeSessionState,
 )
+
+BATTERY_RESERVE = OutsideBatteryReserveEvidence(
+    charge_to_full=False,
+    battery_soc_percent=20,
+    reserve_percent=20,
+)
+
+
+def test_outside_battery_reserve_uses_inclusive_boundary():
+    assert outside_battery_reserve_reached(BATTERY_RESERVE) is True
+    assert (
+        outside_battery_reserve_reached(
+            replace(BATTERY_RESERVE, battery_soc_percent=20.001)
+        )
+        is False
+    )
+
+
+def test_outside_battery_reserve_requires_soc_and_yields_to_paid_override():
+    assert (
+        outside_battery_reserve_reached(
+            replace(BATTERY_RESERVE, battery_soc_percent=None)
+        )
+        is False
+    )
+    assert (
+        outside_battery_reserve_reached(replace(BATTERY_RESERVE, charge_to_full=True))
+        is False
+    )
 
 
 def test_battery_floor_abort_clears_sessions_and_creates_stop_obligation():

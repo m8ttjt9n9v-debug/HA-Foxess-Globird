@@ -201,10 +201,12 @@ from .planner.ev_learning import (
     snapshot_daily_driving_energy,
 )
 from .planner.ev_outside_state import (
+    OutsideBatteryReserveEvidence,
     abort_outside_charge_at_battery_reserve,
     advance_charge_to_full,
     cleanup_disconnected_ev,
     cleanup_outside_ownership_for_free_window,
+    outside_battery_reserve_reached,
     reconcile_outside_ownership,
 )
 from .planner.ev_outside_window import (
@@ -1455,14 +1457,16 @@ class ActiveEvController:
         # outside-window policy otherwise yields immediately at the configured
         # battery floor, even if stale session state or actuator feedback says
         # charging is still active.
-        if (
-            not charge_to_full
-            and snapshot is not None
-            and snapshot.battery_soc is not None
-            and snapshot.battery_soc
-            <= self._float(
-                CONF_EV_OUTSIDE_BATTERY_RESERVE_PERCENT,
-                DEFAULT_EV_OUTSIDE_BATTERY_RESERVE_PERCENT,
+        if outside_battery_reserve_reached(
+            OutsideBatteryReserveEvidence(
+                charge_to_full=charge_to_full,
+                battery_soc_percent=(
+                    None if snapshot is None else snapshot.battery_soc
+                ),
+                reserve_percent=self._float(
+                    CONF_EV_OUTSIDE_BATTERY_RESERVE_PERCENT,
+                    DEFAULT_EV_OUTSIDE_BATTERY_RESERVE_PERCENT,
+                ),
             )
         ):
             abort = abort_outside_charge_at_battery_reserve(

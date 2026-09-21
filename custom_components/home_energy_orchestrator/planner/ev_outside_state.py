@@ -72,6 +72,26 @@ class OutsideOwnershipTransition:
     outside_stop_requested: bool
 
 
+@dataclass(frozen=True, slots=True)
+class OutsideBatteryReserveEvidence:
+    """Primitive evidence for the automatic outside-charge reserve gate."""
+
+    charge_to_full: bool
+    battery_soc_percent: float | None
+    reserve_percent: float
+
+
+def outside_battery_reserve_reached(
+    evidence: OutsideBatteryReserveEvidence,
+) -> bool:
+    """Retain the paid-override exception and inclusive reserve boundary."""
+    return (
+        not evidence.charge_to_full
+        and evidence.battery_soc_percent is not None
+        and evidence.battery_soc_percent <= evidence.reserve_percent
+    )
+
+
 def reconcile_outside_ownership(
     daily_state: DailyBackfillCycleState,
     *,
