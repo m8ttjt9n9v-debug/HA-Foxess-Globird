@@ -38,7 +38,7 @@ The Phase 7 controller and lifecycle gate contains 294 collected cases:
 | `test_phase6_recorded_day.py` | 1 | 24-hour accounting, learning, persistence and no-command replay |
 | controller and persistence boundary contracts | 2 | platform and raw-storage isolation |
 
-The 47 expanded lifecycle cases contain 68 ordered service-call trace
+The 48 expanded lifecycle cases contain 68 ordered service-call trace
 checkpoints and 41 persisted-store readback checkpoints. Twenty-two explicit
 stored-state seeds exercise restart reconstruction, malformed evidence and
 in-flight obligations. These are source-counted checkpoints, not an estimate

@@ -76,7 +76,7 @@ command exists to restore.
 - Full suite and repository-wide Ruff pass.
 
 On 2026-09-21, the deterministic 100-event replay passed with no captured
-FoxESS command. The complete 975-case suite passed in runner-safe batches, as
+FoxESS command. The complete 977-case suite passed in runner-safe batches, as
 did repository-wide Ruff. The test is pure harness coverage: it has no live
 site, package, release or hardware side effect. The repository workflows now
 run the suite on pull requests, weekly and before a tagged release is

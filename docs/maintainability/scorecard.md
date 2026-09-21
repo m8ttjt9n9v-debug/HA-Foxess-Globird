@@ -48,7 +48,7 @@ volume or subjective polish.
 
 | Area | Awarded | Evidence and withheld credit |
 |---|---:|---|
-| Lifecycle and incident evidence | 17/20 | The deterministic harness has 47 expanded lifecycle cases and every catalogued incident class now has a system-level fixture. Some rows still request longer or generated transition sequences. |
+| Lifecycle and incident evidence | 17/20 | The deterministic harness has 48 expanded lifecycle cases and every catalogued incident class now has a system-level fixture. Some rows still request longer or generated transition sequences. |
 | Entity and configuration contracts | 13/15 | All 107 entities, public attributes and 125 wizard fields are mechanically frozen and reviewed. Full registry-safe downgrade to the pre-foundation release remains impossible because that old release reclaimed preferred IDs. |
 | Typed configuration | 10/10 | Phase 3 reports zero raw runtime mapping operations; retained accesses are explicit managed mutation boundaries. |
 | Canonical presentation model | 10/10 | The Phase 4 exit audit proves entities, attributes, diagnostics and Fleet project one immutable read model. |
