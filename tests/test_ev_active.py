@@ -902,6 +902,88 @@ async def test_solar_spill_uses_effective_signed_battery_fallback_source(
     assert decision.current_a == 10
 
 
+@pytest.mark.parametrize(
+    ("grid_offset_seconds", "battery_offset_seconds", "expected_phase"),
+    (
+        (0, 0, "solar_spill"),
+        (-91, 0, "telemetry_unavailable"),
+        (0, -31, "telemetry_unavailable"),
+        (1, 0, "telemetry_unavailable"),
+    ),
+)
+async def test_solar_spill_fast_power_age_and_skew_boundaries_are_frozen(
+    hass: HomeAssistant,
+    grid_offset_seconds: int,
+    battery_offset_seconds: int,
+    expected_phase: str,
+) -> None:
+    """Only coherent grid/battery clocks authorize measured spill current."""
+    _set_ev_states(hass)
+    now = datetime(2026, 9, 7, 0, 1, tzinfo=UTC)
+    coordinator = _coordinator(
+        _controller_config(
+            foxess_control_owner="local_modbus",
+            ev_solar_spill_enabled=True,
+            ev_telemetry_max_age_seconds=90,
+            ev_telemetry_max_skew_seconds=30,
+            bonus_window_start="21:00:00",
+            bonus_window_end="22:00:00",
+        )
+    )
+    coordinator.telemetry = replace(
+        coordinator.telemetry,
+        grid_power=NormalizedSample(
+            -2,
+            "kW",
+            (
+                TelemetrySource(
+                    "sensor.site_grid",
+                    -2,
+                    "kW",
+                    now + timedelta(seconds=grid_offset_seconds),
+                ),
+            ),
+            "positive_import",
+            True,
+            True,
+            "ok",
+        ),
+        battery_power=NormalizedSample(
+            0.5,
+            "kW",
+            (
+                TelemetrySource(
+                    "sensor.battery_power",
+                    0.5,
+                    "kW",
+                    now + timedelta(seconds=battery_offset_seconds),
+                ),
+            ),
+            "positive_charge",
+            True,
+            True,
+            "ok",
+        ),
+    )
+    coordinator.snapshot = replace(coordinator.snapshot, battery_soc=100)
+    hass.states.async_set("sensor.site_battery_soc", "100", {"unit_of_measurement": "%"})
+    controller = ActiveEvController(hass, coordinator)
+
+    decision = controller._solar_spill_decision(  # noqa: SLF001
+        now,
+        battery_soc=100,
+        vehicle_soc=50,
+        soft_limit=90,
+        ceiling=16,
+        current_minimum=1,
+        current_step=1,
+    )
+
+    assert decision.phase == expected_phase
+    assert decision.reconstructed_surplus_kw == 2.5
+    assert decision.current_a == (10 if expected_phase == "solar_spill" else 0)
+
+
 async def test_disconnected_vehicle_exposes_solar_spill_ineligibility(
     hass: HomeAssistant,
 ) -> None:
