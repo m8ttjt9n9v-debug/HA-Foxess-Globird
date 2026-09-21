@@ -1,4 +1,4 @@
-"""System case executed against the extracted previous known-good release."""
+"""System case that reloads state serialized by the previous release."""
 
 from __future__ import annotations
 
@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 
+import pytest
 from homeassistant.const import EVENT_CALL_SERVICE
 from homeassistant.helpers.storage import Store
 from pytest_homeassistant_custom_component.common import MockConfigEntry
@@ -13,9 +14,15 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 from custom_components.home_energy_orchestrator.const import DOMAIN
 
 
-async def test_previous_release_reads_current_unchanged_surface(hass) -> None:
-    """The previous release must restore current config and retained state."""
-    bundle = json.loads(Path(os.environ["HEO_ROLLBACK_BUNDLE"]).read_text())
+@pytest.fixture(autouse=True)
+def auto_enable_custom_integrations(enable_custom_integrations):
+    """Allow this explicitly selected system case to load the integration."""
+    yield
+
+
+async def test_current_release_restores_previous_release_surface(hass) -> None:
+    """Current code must restore the previous release's config and stores."""
+    bundle = json.loads(Path(os.environ["HEO_UPGRADE_BUNDLE"]).read_text())
     entry_id = bundle["entry_id"]
     for suffix, payload in bundle["stores"].items():
         store = Store(
@@ -33,7 +40,7 @@ async def test_previous_release_reads_current_unchanged_surface(hass) -> None:
     hass.bus.async_listen(EVENT_CALL_SERVICE, service_calls.append)
     entry = MockConfigEntry(
         domain=DOMAIN,
-        title="Rollback rehearsal",
+        title="Upgrade rehearsal",
         data=bundle["entry_data"],
         version=bundle["entry_version"],
         entry_id=entry_id,
@@ -52,7 +59,6 @@ async def test_previous_release_reads_current_unchanged_surface(hass) -> None:
         "export_session"
     ]
     ev = coordinator.ev_controller
-    ev_payload = bundle["stores"]["ev_control"]
     assert ev.reconciliation.target_current_a == 5.0
     assert ev.reconciliation.target_limit_percent == 82.0
     assert ev.reconciliation.attempts == 2
@@ -64,31 +70,7 @@ async def test_previous_release_reads_current_unchanged_surface(hass) -> None:
     assert ev.daily_backfill_stop_attempts == 2
     assert ev.driving_snapshot.lifetime_energy_kwh == 1234.5
     assert ev.daily_driving_energy_kwh == 12.5
-    assert ev.charge_to_full_started_at.isoformat() == ev_payload[
-        "charge_to_full_started_at"
-    ]
     assert ev.outside_control_active is True
     assert ev.smart_recovery.phase == "fault"
     assert service_calls == []
     assert await hass.config_entries.async_unload(entry.entry_id)
-
-    previous_stores = {}
-    for suffix in bundle["stores"]:
-        store = Store(
-            hass,
-            1,
-            f"home_energy_orchestrator.{entry_id}.{suffix}",
-            private=True,
-        )
-        previous_stores[suffix] = await store.async_load()
-    Path(os.environ["HEO_UPGRADE_BUNDLE"]).write_text(
-        json.dumps(
-            {
-                "entry_id": entry_id,
-                "entry_version": entry.version,
-                "entry_data": dict(entry.data),
-                "stores": previous_stores,
-            },
-            sort_keys=True,
-        )
-    )

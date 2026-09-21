@@ -95,7 +95,8 @@ At this audit checkpoint:
 - 24 frozen compatibility contracts passed;
 - the current codecs produced representative non-idle charge, export and EV
   state that the isolated `v0.12.26` release restored with zero hardware
-  service calls;
+  service calls, then current code restored the state reserialized by that
+  release with the same empty command trace;
 - repository-wide Ruff passed;
 - controller and persistence static boundary scripts passed;
 - the complete Phase 7 patch reverse-applied cleanly to an isolated copy of

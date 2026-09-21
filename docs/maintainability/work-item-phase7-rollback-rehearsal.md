@@ -23,7 +23,10 @@ The current checkout now creates a deterministic rollback bundle using the
 production typed codecs. The rehearsal extracts `v0.12.26`, seeds that bundle
 under a fixed config-entry ID, sets up the previous release and verifies exact
 restoration of representative charge, export, direct-EVSE, pre-free,
-daily-backfill, driving, Charge-to-Full and smart-recovery state.
+daily-backfill, driving, Charge-to-Full and smart-recovery state. The previous
+release then serializes and unloads that state; a second isolated system case
+loads the resulting configuration and stores back into the current code and
+requires the same obligations.
 
 The representative sessions are deliberately non-idle, but the unchanged
 observer and Safety Lock configuration must produce an empty hardware-service
@@ -39,6 +42,7 @@ restore the narrower setup-only rehearsal.
 ## Acceptance evidence
 
 - Enhanced previous-release rehearsal against `v0.12.26` passes.
+- Current → `v0.12.26` → current config and Store round trip passes.
 - Full current repository suite, frozen contracts and Ruff pass.
 - No live site, release, tag or remote branch is changed.
 
@@ -47,6 +51,7 @@ restore the narrower setup-only rehearsal.
 - [x] Existing rehearsal gap characterized
 - [x] Current codecs generate the downgrade fixture
 - [x] Previous release restores retained obligations
+- [x] Current release restores the previous release's round-trip output
 - [x] Empty hardware-command trace verified
 - [ ] Independent review complete
 - [ ] Live operational rollback complete

@@ -38,6 +38,9 @@ from tests.test_setup import ENTRY_DATA
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 CASE_PATH = REPOSITORY_ROOT / "scripts" / "fixtures" / "previous_release_setup_case.py"
+CURRENT_CASE_PATH = (
+    REPOSITORY_ROOT / "scripts" / "fixtures" / "current_release_upgrade_case.py"
+)
 ENTRY_ID = "phase7-rollback-rehearsal"
 
 
@@ -123,9 +126,11 @@ def rehearse(tag: str) -> None:
             json.dumps(_current_rollback_bundle(), sort_keys=True),
             encoding="utf-8",
         )
+        upgrade_bundle_path = checkout / "v0.12.26-upgrade-bundle.json"
         environment = {
             **os.environ,
             "HEO_ROLLBACK_BUNDLE": str(bundle_path),
+            "HEO_UPGRADE_BUNDLE": str(upgrade_bundle_path),
             "PYTHONPATH": os.pathsep.join((str(checkout), str(checkout / "tests"))),
         }
         subprocess.run(
@@ -140,6 +145,27 @@ def rehearse(tag: str) -> None:
             ],
             cwd=checkout,
             env=environment,
+            check=True,
+        )
+        current_environment = {
+            **os.environ,
+            "HEO_UPGRADE_BUNDLE": str(upgrade_bundle_path),
+            "PYTHONPATH": os.pathsep.join(
+                (str(REPOSITORY_ROOT), str(REPOSITORY_ROOT / "tests"))
+            ),
+        }
+        subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "pytest",
+                "-q",
+                "-p",
+                "no:cacheprovider",
+                str(CURRENT_CASE_PATH.relative_to(REPOSITORY_ROOT)),
+            ],
+            cwd=REPOSITORY_ROOT,
+            env=current_environment,
             check=True,
         )
 
