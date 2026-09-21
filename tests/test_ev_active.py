@@ -1307,6 +1307,76 @@ async def test_free_window_entry_immediately_redecides_active_pre_free_current(
     assert controller.last_actions == ("would_set_charge_current",)
 
 
+def test_daily_backfill_facade_composes_efficiency_and_live_vehicle_room(
+    hass: HomeAssistant,
+) -> None:
+    coordinator = _coordinator(
+        _controller_config(
+            discharge_efficiency_percent=50,
+            ev_charge_efficiency_percent=90,
+            ev_daily_backfill_energy_kwh=5,
+            ev_daily_ready_time="08:00:00",
+            ev_outside_inverter_percent=30,
+            inverter_discharge_limit_kw=15,
+            ev_phase_count=3,
+        )
+    )
+    coordinator.data = SimpleNamespace(available_after_reserve_kwh=14)
+    coordinator.learning_remaining_kwh = 3
+    controller = ActiveEvController(hass, coordinator)
+    hass.states.async_set("sensor.car_energy", "5", {"unit_of_measurement": "kWh"})
+
+    plan = controller._calculate_daily_backfill_plan(  # noqa: SLF001
+        datetime(2026, 9, 7, 6, 30, tzinfo=UTC),
+        vehicle_soc=50,
+        vehicle_soft_limit=60,
+        charger_minimum_a=1,
+        current_step_a=1,
+        charger_ceiling_a=16,
+    )
+
+    assert plan is not None
+    assert plan.remaining_allocation_kwh == 5
+    assert plan.protected_house_kwh == 3
+    assert plan.discretionary_energy_kwh == 0
+    assert plan.planned_energy_kwh == 1.111
+    assert plan.allocation_shortfall_kwh == 3.889
+    assert plan.current_ceiling_a == 6
+    assert plan.power_ceiling_kw == 4.14
+    assert plan.phase == "waiting_latest_start"
+
+
+def test_daily_backfill_missing_energy_does_not_roll_ready_cycle(
+    hass: HomeAssistant,
+) -> None:
+    coordinator = _coordinator(
+        _controller_config(
+            ev_daily_backfill_energy_kwh=5,
+            ev_daily_ready_time="08:00:00",
+        )
+    )
+    coordinator.data = SimpleNamespace(available_after_reserve_kwh=14)
+    coordinator.learning_remaining_kwh = 3
+    controller = ActiveEvController(hass, coordinator)
+    original_ready_at = datetime(2026, 9, 6, 8, tzinfo=UTC)
+    controller.daily_backfill_cycle_ready_at = original_ready_at
+    controller.daily_backfill_delivered_kwh = 7
+
+    plan = controller._calculate_daily_backfill_plan(  # noqa: SLF001
+        datetime(2026, 9, 7, 6, 30, tzinfo=UTC),
+        vehicle_soc=50,
+        vehicle_soft_limit=60,
+        charger_minimum_a=1,
+        current_step_a=1,
+        charger_ceiling_a=16,
+    )
+
+    assert plan is None
+    assert controller.last_reason == "daily_backfill_energy_inputs_unavailable"
+    assert controller.daily_backfill_cycle_ready_at == original_ready_at
+    assert controller.daily_backfill_delivered_kwh == 7
+
+
 async def test_daily_ready_backfill_runs_with_foxcloud_owner_and_never_writes_foxess(
     hass: HomeAssistant,
 ) -> None:
