@@ -296,6 +296,10 @@ Estimated effort: 5–8 engineer-days plus elapsed soak time.
 tariff and ready-by boundaries are not missed; restart/reload equivalence and
 Phase 0 command traces remain intact.
 
+The post-soak implementation order, invariants, test evidence and rollback
+boundary are specified in the
+[Phase 8 serialized-reconciliation work package](maintainability/phase-8-serialized-reconciliation.md).
+
 Roll out one seam per release. Validate first on the clean staging instance,
 then the pilot site across a complete ZEROCHARGE/ZEROHERO/export cycle including
 restart and reload, then one remote topology, and finally the remaining sites.
