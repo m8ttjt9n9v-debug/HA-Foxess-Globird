@@ -136,7 +136,7 @@ from .planner.ev import (
     EvCommand,
     EvCommandPlan,
     EvCurrentDecision,
-    FreeWindowCurrentInputs,
+    FreeWindowTargetEvidence,
     SmartSocketObservation,
     SmartSocketRecoveryObservation,
     SmartSocketRecoveryState,
@@ -144,6 +144,7 @@ from .planner.ev import (
     charging_path_ceiling_a,
     estimate_vehicle_energy_to_target_kwh,
     evaluate_allowance_projection,
+    evaluate_free_window_target,
     finalize_direct_evse_reconciliation,
     finalize_smart_socket_recovery,
     outside_service_ceiling_a,
@@ -151,7 +152,6 @@ from .planner.ev import (
     physical_charging_minimum_a,
     plan_charge_limit_target,
     plan_direct_evse_commands,
-    plan_free_window_current,
     plan_smart_socket_commands,
     reconcile_direct_evse,
     reconcile_smart_socket_recovery,
@@ -1233,47 +1233,32 @@ class ActiveEvController:
             return self._reject_free_window_candidate(
                 "ev_physical_ceiling_uncommissioned"
             )
-        baseline = min(
-            max(
-                self._float(CONF_EV_PROTECTED_BASELINE_A, DEFAULT_EV_PROTECTED_BASELINE_A),
-                current_minimum,
-                current_step,
-            ),
-            ceiling,
-        )
-        effective_minimum = min(
-            max(
-                self._float(
-                    CONF_EV_FREE_WINDOW_MINIMUM_CURRENT,
-                    DEFAULT_EV_FREE_WINDOW_MINIMUM_CURRENT,
-                ),
-                current_minimum,
-            ),
-            ceiling,
-        )
         charge_to_full = self._charge_to_full_requested()
-        policy_limit = (
-            100.0
-            if charge_to_full
-            else self._float(
-                CONF_EV_FREE_WINDOW_CHARGE_LIMIT,
-                DEFAULT_EV_FREE_WINDOW_CHARGE_LIMIT,
-            )
-        )
         vehicle_soc = self._mapped_number(
             self.coordinator.runtime_config.ev_telemetry.soc_entity
         )
         if vehicle_soc is None:
             return self._reject_free_window_candidate("ev_soc_unavailable")
-        below_policy = vehicle_soc < policy_limit
-        base = plan_free_window_current(
-            FreeWindowCurrentInputs(
-                in_free_window=True,
-                connected=True,
+        evaluation = evaluate_free_window_target(
+            FreeWindowTargetEvidence(
                 ceiling_a=ceiling,
-                effective_minimum_a=effective_minimum,
-                protected_baseline_a=baseline,
-                requested_a=observation.requested_current_a,
+                physical_minimum_a=current_minimum,
+                current_step_a=current_step,
+                configured_baseline_a=self._float(
+                    CONF_EV_PROTECTED_BASELINE_A,
+                    DEFAULT_EV_PROTECTED_BASELINE_A,
+                ),
+                configured_minimum_a=self._float(
+                    CONF_EV_FREE_WINDOW_MINIMUM_CURRENT,
+                    DEFAULT_EV_FREE_WINDOW_MINIMUM_CURRENT,
+                ),
+                charge_to_full=charge_to_full,
+                configured_policy_limit_percent=self._float(
+                    CONF_EV_FREE_WINDOW_CHARGE_LIMIT,
+                    DEFAULT_EV_FREE_WINDOW_CHARGE_LIMIT,
+                ),
+                vehicle_soc_percent=vehicle_soc,
+                requested_current_a=observation.requested_current_a,
                 service_limit_a=self._float(
                     CONF_SERVICE_IMPORT_LIMIT_A, DEFAULT_SERVICE_IMPORT_LIMIT_A
                 ),
@@ -1281,33 +1266,27 @@ class ActiveEvController:
                     CONF_SITE_GRID_HEADROOM_CURRENT,
                     DEFAULT_SITE_GRID_HEADROOM_CURRENT,
                 ),
-                grid_average_a=grid.value or 0.0,
-                grid_average_valid=(
-                    grid.value is not None
-                    and grid.age_coverage_ratio >= 0.67
-                    and grid.source_value_valid
-                ),
+                grid_average_a=grid.value,
+                grid_average_age_coverage_ratio=grid.age_coverage_ratio,
+                grid_average_source_valid=grid.source_value_valid,
                 actual_ev_current_a=self._actual_ev_current_a()[0],
-                ev_average_a=ev.value or 0.0,
+                ev_average_a=ev.value,
                 ev_average_source_valid=ev.source_value_valid,
                 elapsed_minutes=elapsed_minutes,
                 settle_minutes=self._float(
                     CONF_EV_FREE_WINDOW_SETTLE_MINUTES,
                     DEFAULT_EV_FREE_WINDOW_SETTLE_MINUTES,
                 ),
-                current_step_a=current_step,
-                ev_priority=(
-                    below_policy
-                    and self.coordinator.runtime_config.ev_policy.free_window_priority
+                ev_priority_selected=(
+                    self.coordinator.runtime_config.ev_policy.free_window_priority
                     == "ev"
                 ),
-                charge_to_full=charge_to_full,
             )
         )
-        target_current = base.current_a if below_policy or charge_to_full else baseline
-        self.decision_phase = (
-            base.phase if below_policy or charge_to_full else "policy_limit_reached"
-        )
+        baseline = evaluation.protected_baseline_a
+        policy_limit = evaluation.policy_limit_percent
+        target_current = evaluation.decision.current_a
+        self.decision_phase = evaluation.decision.phase
         self.allowance_phase = "disabled"
         self.allowance_house_load_kw = None
         self.allowance_ev_power_kw = None

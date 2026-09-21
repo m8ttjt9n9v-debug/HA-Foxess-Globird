@@ -505,6 +505,30 @@ def test_missing_free_window_meter_remains_a_planner_baseline_decision(
     assert controller.allowance_ev_power_kw is None
 
 
+async def test_free_window_policy_limit_reached_uses_protected_physical_baseline(
+    hass: HomeAssistant,
+) -> None:
+    _set_ev_states(hass)
+    hass.states.async_set("sensor.car_soc", "90", {"unit_of_measurement": "%"})
+    controller = ActiveEvController(
+        hass,
+        _coordinator(
+            _controller_config(
+                ev_protected_baseline_a=0,
+                ev_free_window_charge_limit_percent=90,
+            )
+        ),
+    )
+
+    await controller.async_reconcile(datetime(2026, 9, 7, 12, 1, tzinfo=UTC))
+
+    assert controller.target_current_a == 1
+    assert controller.decision_phase == "policy_limit_reached"
+    assert controller.free_window_candidate is not None
+    assert controller.free_window_candidate.target_current_a == 1
+    assert controller.free_window_candidate.reason == "policy_limit_reached"
+
+
 async def test_ev_runtime_writes_tessie_but_not_foxess_when_cloud_owns_inverter(
     hass: HomeAssistant,
 ) -> None:

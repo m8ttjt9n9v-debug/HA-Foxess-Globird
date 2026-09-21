@@ -62,6 +62,107 @@ class EvCurrentDecision:
 
 
 @dataclass(frozen=True, slots=True)
+class FreeWindowTargetEvidence:
+    """Primitive policy, telemetry and topology evidence from the HA facade."""
+
+    ceiling_a: float
+    physical_minimum_a: float
+    current_step_a: float
+    configured_baseline_a: float
+    configured_minimum_a: float
+    charge_to_full: bool
+    configured_policy_limit_percent: float
+    vehicle_soc_percent: float
+    requested_current_a: float
+    service_limit_a: float
+    service_headroom_a: float
+    grid_average_a: float | None
+    grid_average_age_coverage_ratio: float
+    grid_average_source_valid: bool
+    actual_ev_current_a: float
+    ev_average_a: float | None
+    ev_average_source_valid: bool
+    elapsed_minutes: float
+    settle_minutes: float
+    ev_priority_selected: bool
+
+
+@dataclass(frozen=True, slots=True)
+class FreeWindowTargetEvaluation:
+    """Canonical pre-allowance current selection and its composed policy."""
+
+    decision: EvCurrentDecision
+    base_decision: EvCurrentDecision
+    protected_baseline_a: float
+    effective_minimum_a: float
+    policy_limit_percent: float
+    below_policy_limit: bool
+
+
+def evaluate_free_window_target(
+    evidence: FreeWindowTargetEvidence,
+) -> FreeWindowTargetEvaluation:
+    """Compose retained clamps, telemetry validity and branch selection."""
+    baseline = min(
+        max(
+            evidence.configured_baseline_a,
+            evidence.physical_minimum_a,
+            evidence.current_step_a,
+        ),
+        evidence.ceiling_a,
+    )
+    effective_minimum = min(
+        max(evidence.configured_minimum_a, evidence.physical_minimum_a),
+        evidence.ceiling_a,
+    )
+    policy_limit = (
+        100.0
+        if evidence.charge_to_full
+        else evidence.configured_policy_limit_percent
+    )
+    below_policy = evidence.vehicle_soc_percent < policy_limit
+    base = plan_free_window_current(
+        FreeWindowCurrentInputs(
+            in_free_window=True,
+            connected=True,
+            ceiling_a=evidence.ceiling_a,
+            effective_minimum_a=effective_minimum,
+            protected_baseline_a=baseline,
+            requested_a=evidence.requested_current_a,
+            service_limit_a=evidence.service_limit_a,
+            service_headroom_a=evidence.service_headroom_a,
+            grid_average_a=evidence.grid_average_a or 0.0,
+            grid_average_valid=(
+                evidence.grid_average_a is not None
+                and evidence.grid_average_age_coverage_ratio >= 0.67
+                and evidence.grid_average_source_valid
+            ),
+            actual_ev_current_a=evidence.actual_ev_current_a,
+            ev_average_a=evidence.ev_average_a or 0.0,
+            ev_average_source_valid=evidence.ev_average_source_valid,
+            elapsed_minutes=evidence.elapsed_minutes,
+            settle_minutes=evidence.settle_minutes,
+            current_step_a=evidence.current_step_a,
+            ev_priority=below_policy and evidence.ev_priority_selected,
+            charge_to_full=evidence.charge_to_full,
+        )
+    )
+    decision = (
+        base
+        if below_policy or evidence.charge_to_full
+        else EvCurrentDecision(baseline, "policy_limit_reached")
+    )
+    return FreeWindowTargetEvaluation(
+        decision=decision,
+        base_decision=base,
+        protected_baseline_a=baseline,
+        effective_minimum_a=effective_minimum,
+        policy_limit_percent=policy_limit,
+        below_policy_limit=below_policy,
+    )
+
+
+@dataclass(frozen=True, slots=True)
 class EvCommand:
     """One ordered, adapter-neutral Tessie command."""
 

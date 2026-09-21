@@ -15,6 +15,7 @@ from custom_components.home_energy_orchestrator.planner.ev import (
     EvCommand,
     EvCommandPlan,
     FreeWindowCurrentInputs,
+    FreeWindowTargetEvidence,
     SmartSocketObservation,
     SmartSocketRecoveryObservation,
     SmartSocketRecoveryState,
@@ -25,6 +26,7 @@ from custom_components.home_energy_orchestrator.planner.ev import (
     estimate_other_free_window_import_kwh,
     estimate_vehicle_energy_to_target_kwh,
     evaluate_allowance_projection,
+    evaluate_free_window_target,
     finalize_direct_evse_reconciliation,
     finalize_smart_socket_recovery,
     house_load_excluding_ev_kw,
@@ -60,6 +62,51 @@ BASE = FreeWindowCurrentInputs(
     current_step_a=1,
     ev_priority=False,
 )
+
+FREE_WINDOW_TARGET = FreeWindowTargetEvidence(
+    ceiling_a=16,
+    physical_minimum_a=1,
+    current_step_a=1,
+    configured_baseline_a=0,
+    configured_minimum_a=1,
+    charge_to_full=False,
+    configured_policy_limit_percent=90,
+    vehicle_soc_percent=90,
+    requested_current_a=6,
+    service_limit_a=63,
+    service_headroom_a=1,
+    grid_average_a=None,
+    grid_average_age_coverage_ratio=0,
+    grid_average_source_valid=False,
+    actual_ev_current_a=0,
+    ev_average_a=None,
+    ev_average_source_valid=False,
+    elapsed_minutes=0,
+    settle_minutes=5,
+    ev_priority_selected=True,
+)
+
+
+def test_free_window_target_composes_policy_limit_and_physical_baseline():
+    evaluation = evaluate_free_window_target(FREE_WINDOW_TARGET)
+
+    assert evaluation.protected_baseline_a == 1
+    assert evaluation.effective_minimum_a == 1
+    assert evaluation.policy_limit_percent == 90
+    assert evaluation.below_policy_limit is False
+    assert evaluation.decision.current_a == 1
+    assert evaluation.decision.phase == "policy_limit_reached"
+
+
+def test_free_window_target_charge_to_full_replaces_policy_limit_and_settle():
+    evaluation = evaluate_free_window_target(
+        replace(FREE_WINDOW_TARGET, charge_to_full=True)
+    )
+
+    assert evaluation.policy_limit_percent == 100
+    assert evaluation.below_policy_limit is True
+    assert evaluation.decision.current_a == 16
+    assert evaluation.decision.phase == "charge_to_full_priority"
 
 
 @pytest.mark.parametrize(
