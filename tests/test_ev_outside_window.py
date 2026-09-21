@@ -10,8 +10,10 @@ from custom_components.home_energy_orchestrator.planner.ev_outside_window import
     PreFreePlanInputs,
     PreFreeSessionState,
     SolarSpillInputs,
+    SolarSpillTelemetryEvidence,
     advance_pre_free_session,
     calculate_pre_free_plan,
+    evaluate_solar_spill_telemetry,
     plan_pre_free_current,
     plan_solar_spill_current,
     select_outside_window_current,
@@ -34,6 +36,95 @@ SOLAR = SolarSpillInputs(
     charger_minimum_a=1,
     current_ceiling_a=15,
 )
+
+NOW = datetime(2026, 9, 21, 12, 0, tzinfo=UTC)
+TELEMETRY = SolarSpillTelemetryEvidence(
+    now=NOW,
+    grid_power_kw=-2.0,
+    grid_reason=None,
+    grid_source_updated_at=(NOW,),
+    battery_power_kw=0.5,
+    battery_reason=None,
+    battery_source_updated_at=(NOW,),
+    actual_ev_current_a=10,
+    actual_ev_current_valid=True,
+    actual_current_entity_present=True,
+    battery_soc_entity_present=True,
+    max_age_seconds=90,
+    max_skew_seconds=30,
+    voltage_v=230,
+    phase_count=1,
+)
+
+
+def test_solar_spill_telemetry_evaluation_preserves_inclusive_boundaries():
+    evidence = replace(
+        TELEMETRY,
+        grid_source_updated_at=(NOW.replace(second=30, minute=58, hour=11),),
+        battery_source_updated_at=(NOW.replace(hour=11, minute=59, second=0),),
+    )
+
+    evaluation = evaluate_solar_spill_telemetry(evidence)
+
+    assert evaluation.telemetry_valid is True
+    assert evaluation.ev_power_kw == 2.3
+    assert evaluation.grid_export_kw == 2.0
+    assert evaluation.battery_charge_kw == 0.5
+
+
+@pytest.mark.parametrize(
+    ("changes", "expected_grid_export", "expected_battery_charge"),
+    [
+        ({"grid_power_kw": None}, 0.0, 0.5),
+        ({"battery_power_kw": None}, 2.0, 0.0),
+        ({"actual_ev_current_valid": False}, 2.0, 0.5),
+        ({"actual_current_entity_present": False}, 2.0, 0.5),
+        ({"battery_soc_entity_present": False}, 2.0, 0.5),
+        ({"grid_source_updated_at": (None,)}, 2.0, 0.5),
+        (
+            {"grid_source_updated_at": (NOW.replace(second=29, minute=58, hour=11),)},
+            2.0,
+            0.5,
+        ),
+        ({"grid_source_updated_at": (NOW.replace(second=1),)}, 2.0, 0.5),
+        (
+            {
+                "grid_source_updated_at": (NOW.replace(second=29, minute=59),),
+                "battery_source_updated_at": (NOW,),
+            },
+            2.0,
+            0.5,
+        ),
+    ],
+)
+def test_solar_spill_telemetry_rejects_each_incoherent_evidence_term(
+    changes,
+    expected_grid_export,
+    expected_battery_charge,
+):
+    evaluation = evaluate_solar_spill_telemetry(replace(TELEMETRY, **changes))
+
+    assert evaluation.telemetry_valid is False
+    assert evaluation.ev_power_kw == 2.3
+    assert evaluation.grid_export_kw == expected_grid_export
+    assert evaluation.battery_charge_kw == expected_battery_charge
+
+
+def test_solar_spill_telemetry_fallback_uses_only_accepted_signed_source_clock():
+    stale = NOW.replace(hour=10)
+    evidence = replace(
+        TELEMETRY,
+        battery_reason="signed_fallback_pair_stale",
+        battery_source_updated_at=(stale, stale, NOW),
+    )
+
+    assert evaluate_solar_spill_telemetry(evidence).telemetry_valid is True
+    assert (
+        evaluate_solar_spill_telemetry(
+            replace(evidence, battery_reason="paired_magnitudes")
+        ).telemetry_valid
+        is False
+    )
 
 
 @pytest.mark.parametrize(

@@ -44,6 +44,37 @@ class SolarSpillDecision:
 
 
 @dataclass(frozen=True, slots=True)
+class SolarSpillTelemetryEvidence:
+    """Primitive fast-telemetry evidence supplied by the HA-facing adapter."""
+
+    now: datetime
+    grid_power_kw: float | None
+    grid_reason: str | None
+    grid_source_updated_at: tuple[datetime | None, ...]
+    battery_power_kw: float | None
+    battery_reason: str | None
+    battery_source_updated_at: tuple[datetime | None, ...]
+    actual_ev_current_a: float
+    actual_ev_current_valid: bool
+    actual_current_entity_present: bool
+    battery_soc_entity_present: bool
+    max_age_seconds: float
+    max_skew_seconds: float
+    voltage_v: float
+    phase_count: int
+
+
+@dataclass(frozen=True, slots=True)
+class SolarSpillTelemetryEvaluation:
+    """Coherence result and retained measured-power reconstruction."""
+
+    telemetry_valid: bool
+    ev_power_kw: float
+    grid_export_kw: float
+    battery_charge_kw: float
+
+
+@dataclass(frozen=True, slots=True)
 class PreFreePlanInputs:
     """Inputs to the pilot site's back-loaded discretionary-energy plan."""
 
@@ -96,6 +127,44 @@ class PreFreeCurrentInputs:
     current_ceiling_a: float
     vehicle_soc_percent: float
     vehicle_soft_limit_percent: float
+
+
+def evaluate_solar_spill_telemetry(
+    evidence: SolarSpillTelemetryEvidence,
+) -> SolarSpillTelemetryEvaluation:
+    """Evaluate retained fast-source coherence and reconstruct spill inputs."""
+    source_timestamps = _effective_source_timestamps(
+        evidence.grid_reason,
+        evidence.grid_source_updated_at,
+    ) + _effective_source_timestamps(
+        evidence.battery_reason,
+        evidence.battery_source_updated_at,
+    )
+    timestamps = tuple(timestamp for timestamp in source_timestamps if timestamp is not None)
+    coherent = (
+        evidence.grid_power_kw is not None
+        and evidence.battery_power_kw is not None
+        and evidence.actual_ev_current_valid
+        and evidence.actual_current_entity_present
+        and evidence.battery_soc_entity_present
+        and all(timestamp is not None for timestamp in source_timestamps)
+        and all(
+            0 <= (evidence.now - timestamp).total_seconds() <= evidence.max_age_seconds
+            for timestamp in timestamps
+        )
+        and (max(timestamps) - min(timestamps)).total_seconds() <= evidence.max_skew_seconds
+    )
+    return SolarSpillTelemetryEvaluation(
+        telemetry_valid=coherent,
+        ev_power_kw=(
+            evidence.actual_ev_current_a
+            * evidence.voltage_v
+            * evidence.phase_count
+            / 1000
+        ),
+        grid_export_kw=max(-(evidence.grid_power_kw or 0.0), 0.0),
+        battery_charge_kw=evidence.battery_power_kw or 0.0,
+    )
 
 
 def plan_solar_spill_current(inputs: SolarSpillInputs) -> SolarSpillDecision:
@@ -334,6 +403,16 @@ def _validate_pre_free_current(inputs: PreFreeCurrentInputs) -> None:
         raise ValueError("pre-free current topology must be positive")
     if inputs.baseline_a > inputs.current_ceiling_a:
         raise ValueError("pre-free baseline cannot exceed current ceiling")
+
+
+def _effective_source_timestamps(
+    reason: str | None,
+    timestamps: tuple[datetime | None, ...],
+) -> tuple[datetime | None, ...]:
+    """Return timestamps which underpin the accepted normalized value."""
+    if reason == "signed_fallback_pair_stale":
+        return timestamps[-1:]
+    return timestamps
 
 
 def _aware(value: datetime, label: str) -> None:

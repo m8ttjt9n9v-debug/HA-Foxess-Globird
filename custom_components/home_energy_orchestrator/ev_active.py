@@ -211,8 +211,10 @@ from .planner.ev_outside_window import (
     PreFreeSessionState,
     SolarSpillDecision,
     SolarSpillInputs,
+    SolarSpillTelemetryEvidence,
     advance_pre_free_session,
     calculate_pre_free_plan,
+    evaluate_solar_spill_telemetry,
     plan_pre_free_current,
     plan_solar_spill_current,
 )
@@ -2110,21 +2112,6 @@ class ActiveEvController:
         battery_soc_entity = self.coordinator.runtime_config.battery.soc_entity
         battery_soc_feedback = self._entity_feedback(battery_soc_entity)
         ev_current, ev_valid = self._actual_ev_current_a()
-        timestamps = [
-            source.updated_at
-            for sample in (grid, battery)
-            if sample is not None
-            # A paired-magnitude sample can deliberately fall back to the
-            # independently mapped signed battery sensor when the inactive
-            # zero magnitude is stale.  Keep all three sources as diagnostic
-            # provenance, but only the signed source underpins that value.
-            for source in (
-                sample.sources[-1:]
-                if sample.reason == "signed_fallback_pair_stale"
-                else sample.sources
-            )
-            if source.updated_at is not None
-        ]
         max_age = self._float(
             CONF_EV_TELEMETRY_MAX_AGE_SECONDS,
             DEFAULT_EV_TELEMETRY_MAX_AGE_SECONDS,
@@ -2133,37 +2120,38 @@ class ActiveEvController:
             CONF_EV_TELEMETRY_MAX_SKEW_SECONDS,
             DEFAULT_EV_TELEMETRY_MAX_SKEW_SECONDS,
         )
-        coherent = (
-            grid is not None
-            and grid.value is not None
-            and battery is not None
-            and battery.value is not None
-            and ev_valid
-            and actual.present
-            and battery_soc_feedback.present
-            and all(
-                source.updated_at is not None
-                for sample in (grid, battery)
-                for source in (
-                    sample.sources[-1:]
-                    if sample.reason == "signed_fallback_pair_stale"
-                    else sample.sources
-                )
-            )
-            # Match the pilot port: stable SoC and state-qualified Tessie
-            # current are eligibility/value inputs, not fast electrical
-            # telemetry clocks. FoxESS and Tessie may retain them unchanged
-            # for far longer than the grid/battery freshness window.
-            and all(0 <= (now - timestamp).total_seconds() <= max_age for timestamp in timestamps)
-            and (max(timestamps) - min(timestamps)).total_seconds() <= max_skew
-        )
-        grid_import = grid.value if grid is not None and grid.value is not None else 0.0
-        battery_charge = battery.value if battery is not None and battery.value is not None else 0.0
         voltage = self._float(CONF_EV_VOLTAGE, DEFAULT_EV_VOLTAGE)
         phases = int(self._float(CONF_EV_PHASE_COUNT, DEFAULT_EV_PHASE_COUNT))
+        evaluation = evaluate_solar_spill_telemetry(
+            SolarSpillTelemetryEvidence(
+                now=now,
+                grid_power_kw=None if grid is None else grid.value,
+                grid_reason=None if grid is None else grid.reason,
+                grid_source_updated_at=(
+                    ()
+                    if grid is None
+                    else tuple(source.updated_at for source in grid.sources)
+                ),
+                battery_power_kw=None if battery is None else battery.value,
+                battery_reason=None if battery is None else battery.reason,
+                battery_source_updated_at=(
+                    ()
+                    if battery is None
+                    else tuple(source.updated_at for source in battery.sources)
+                ),
+                actual_ev_current_a=ev_current,
+                actual_ev_current_valid=ev_valid,
+                actual_current_entity_present=actual.present,
+                battery_soc_entity_present=battery_soc_feedback.present,
+                max_age_seconds=max_age,
+                max_skew_seconds=max_skew,
+                voltage_v=voltage,
+                phase_count=phases,
+            )
+        )
         return plan_solar_spill_current(
             SolarSpillInputs(
-                telemetry_valid=coherent,
+                telemetry_valid=evaluation.telemetry_valid,
                 battery_soc_percent=battery_soc,
                 battery_full_threshold_percent=self._float(
                     CONF_EV_SOLAR_SPILL_BATTERY_SOC,
@@ -2173,9 +2161,9 @@ class ActiveEvController:
                 vehicle_soc_percent=vehicle_soc,
                 vehicle_soft_limit_percent=soft_limit,
                 in_boosted_export_window=self._boosted_window_active(now),
-                ev_power_kw=ev_current * voltage * phases / 1000,
-                grid_export_kw=max(-grid_import, 0.0),
-                battery_charge_kw=battery_charge,
+                ev_power_kw=evaluation.ev_power_kw,
+                grid_export_kw=evaluation.grid_export_kw,
+                battery_charge_kw=evaluation.battery_charge_kw,
                 voltage_v=voltage,
                 phase_count=phases,
                 current_step_a=current_step,

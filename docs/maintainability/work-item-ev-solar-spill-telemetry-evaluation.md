@@ -69,14 +69,25 @@ No stored state, command ownership or hardware restoration is involved.
 
 - Pre-extraction runtime, fallback, age, skew, future and pure current-planner
   characterization: 25 passed.
-- Implementation and complete compatibility gates remain outstanding.
+- Post-extraction focused planner, runtime, fallback, age, skew and lifecycle
+  tests: 44 passed; final focused confirmation: 36 passed.
+- Full repository suite: 878 passed in 36.03 seconds.
+- Frozen architecture and compatibility contracts: 24 passed.
+- Previous-release rehearsal against `v0.12.26`: 1 passed.
+- Repository-wide Ruff check and `git diff --check`: passed.
+- Reverse patch applicability check: passed; rollback requires no data or
+  hardware-state migration.
+- `README.md`, public entities, configuration keys, persistence payloads and
+  command behavior are unchanged.
+- Independent review and the complete Phase 7 exit/rollout gates remain
+  separate obligations; this extraction is not authorized for deployment.
 
 ## Completion record
 
 - [x] Existing behaviour characterised
-- [ ] Implementation complete
-- [ ] Compatibility checks passed
-- [ ] Documentation and roadmap updated
+- [x] Implementation complete
+- [x] Compatibility checks passed
+- [x] Documentation and roadmap updated
 - [ ] Independent review complete
-- [ ] Rollback demonstrated
-- [ ] Operational soak complete where required
+- [x] Rollback demonstrated
+- [x] Operational soak not required for this side-effect-free extraction
