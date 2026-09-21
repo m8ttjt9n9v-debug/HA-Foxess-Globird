@@ -11,12 +11,38 @@ from custom_components.home_energy_orchestrator.planner.ev_daily_backfill import
     DailyBackfillStopState,
     advance_daily_backfill_session,
     calculate_daily_backfill_plan,
+    daily_backfill_protection_remainder_kwh,
     evaluate_daily_backfill_plan,
     integrate_daily_backfill_energy,
     reconcile_daily_backfill_stop,
     record_daily_backfill_stop_attempt,
     roll_daily_backfill_cycle,
 )
+
+
+@pytest.mark.parametrize(
+    ("configured", "delivered", "same_cycle", "expected"),
+    [
+        (5, 1.23456, True, 3.765),
+        (5, 1.23456, False, 5.0),
+        (5, 6, True, 0.0),
+        (0, 1, True, 0.0),
+    ],
+)
+def test_daily_backfill_protection_remainder_is_cycle_scoped(
+    configured,
+    delivered,
+    same_cycle,
+    expected,
+):
+    assert (
+        daily_backfill_protection_remainder_kwh(
+            configured_allocation_kwh=configured,
+            delivered_kwh=delivered,
+            same_ready_cycle=same_cycle,
+        )
+        == expected
+    )
 
 
 def _inputs(**changes):

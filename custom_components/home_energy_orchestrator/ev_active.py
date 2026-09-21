@@ -181,6 +181,7 @@ from .planner.ev_daily_backfill import (
     DailyBackfillPlanningEvidence,
     DailyBackfillStopState,
     advance_daily_backfill_session,
+    daily_backfill_protection_remainder_kwh,
     evaluate_daily_backfill_plan,
     integrate_daily_backfill_energy,
     reconcile_daily_backfill_stop,
@@ -1990,21 +1991,13 @@ class ActiveEvController:
         if not self._daily_backfill_enabled():
             return 0.0
         ready_at, _, _ = self._daily_ready_cycle(now)
-        delivered = (
-            self.daily_backfill_delivered_kwh
-            if self.daily_backfill_cycle_ready_at == ready_at
-            else 0.0
-        )
-        return round(
-            max(
-                self._float(
-                    CONF_EV_DAILY_BACKFILL_ENERGY,
-                    DEFAULT_EV_DAILY_BACKFILL_ENERGY,
-                )
-                - delivered,
-                0.0,
+        return daily_backfill_protection_remainder_kwh(
+            configured_allocation_kwh=self._float(
+                CONF_EV_DAILY_BACKFILL_ENERGY,
+                DEFAULT_EV_DAILY_BACKFILL_ENERGY,
             ),
-            3,
+            delivered_kwh=self.daily_backfill_delivered_kwh,
+            same_ready_cycle=self.daily_backfill_cycle_ready_at == ready_at,
         )
 
     def _learned_general_limit(

@@ -142,6 +142,17 @@ _DAILY_BACKFILL_COMPLETION_PHASES = frozenset(
 )
 
 
+def daily_backfill_protection_remainder_kwh(
+    *,
+    configured_allocation_kwh: float,
+    delivered_kwh: float,
+    same_ready_cycle: bool,
+) -> float:
+    """Return the retained ready-cycle allocation still protected from export."""
+    applicable_delivery = delivered_kwh if same_ready_cycle else 0.0
+    return round(max(configured_allocation_kwh - applicable_delivery, 0.0), 3)
+
+
 def evaluate_daily_backfill_plan(
     evidence: DailyBackfillPlanningEvidence,
 ) -> DailyBackfillPlan:

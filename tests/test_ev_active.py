@@ -1880,6 +1880,42 @@ def test_evening_export_protects_next_mornings_ready_cycle(
     assert controller.daily_backfill_protection_kwh(datetime(2026, 9, 7, 18, tzinfo=UTC)) == 3.5
 
 
+@pytest.mark.parametrize(
+    ("allocation", "cycle_ready_at", "delivered", "expected"),
+    [
+        (5, datetime(2026, 9, 8, 8, tzinfo=UTC), 1.23456, 3.765),
+        (5, datetime(2026, 9, 7, 8, tzinfo=UTC), 1.23456, 5.0),
+        (5, datetime(2026, 9, 8, 8, tzinfo=UTC), 6, 0.0),
+        (0, datetime(2026, 9, 8, 8, tzinfo=UTC), 1, 0.0),
+    ],
+)
+def test_daily_backfill_export_protection_remainder_is_cycle_scoped(
+    hass: HomeAssistant,
+    allocation: float,
+    cycle_ready_at: datetime,
+    delivered: float,
+    expected: float,
+) -> None:
+    controller = ActiveEvController(
+        hass,
+        _coordinator(
+            _controller_config(
+                ev_daily_backfill_energy_kwh=allocation,
+                ev_daily_ready_time="08:00:00",
+            )
+        ),
+    )
+    controller.daily_backfill_cycle_ready_at = cycle_ready_at
+    controller.daily_backfill_delivered_kwh = delivered
+
+    assert (
+        controller.daily_backfill_protection_kwh(
+            datetime(2026, 9, 7, 18, tzinfo=UTC)
+        )
+        == expected
+    )
+
+
 async def test_pre_free_phase_and_cleanup_ownership_survive_restart(
     hass: HomeAssistant,
 ) -> None:
