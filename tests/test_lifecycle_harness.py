@@ -941,6 +941,161 @@ async def test_disconnected_ev_retains_read_only_learning_across_reload(
     harness.close()
 
 
+@pytest.mark.freeze_time("2026-09-15 12:01:00+00:00")
+async def test_house_learning_subtracts_ev_and_heater_once_across_reload(
+    hass, monkeypatch
+) -> None:
+    """Two persisted cycles retain only base house load plus separate heat."""
+    harness = LifecycleHarness(hass)
+    now = [datetime(2026, 9, 15, 12, 1, tzinfo=UTC)]
+    monkeypatch.setattr(
+        "custom_components.home_energy_orchestrator.coordinator.dt_util.now",
+        lambda: now[0],
+    )
+    monkeypatch.setattr(
+        "custom_components.home_energy_orchestrator.coordinator.dt_util.utcnow",
+        lambda: now[0],
+    )
+
+    def publish_inputs(*, base_kw: float, ev_current_a: float, heater_kw: float) -> None:
+        timestamp = now[0].timestamp()
+        house_kw = base_kw + ev_current_a * 230.0 / 1000.0 + heater_kw
+        hass.states.async_set(
+            "sensor.test_battery_soc",
+            "60",
+            {"unit_of_measurement": "%"},
+            timestamp=timestamp,
+        )
+        hass.states.async_set(
+            "sensor.test_grid_power",
+            "0",
+            {"unit_of_measurement": "kW"},
+            timestamp=timestamp,
+        )
+        hass.states.async_set(
+            "sensor.test_house_load",
+            str(house_kw),
+            {"unit_of_measurement": "kW"},
+            timestamp=timestamp,
+        )
+        hass.states.async_set(
+            "sensor.test_heater",
+            str(heater_kw),
+            {"unit_of_measurement": "kW"},
+            timestamp=timestamp,
+        )
+        hass.states.async_set(
+            "sensor.test_ev_charging",
+            "charging",
+            timestamp=timestamp,
+        )
+        hass.states.async_set(
+            "sensor.test_ev_actual_current",
+            str(ev_current_a),
+            {"unit_of_measurement": "A"},
+            timestamp=timestamp,
+        )
+
+    def active_profile() -> tuple[float, float, float]:
+        if now[0] < datetime(2026, 9, 16, 12, 1, tzinfo=UTC):
+            return 0.7, 10.0, 1.0
+        return 1.2, 15.0, 2.0
+
+    async def advance(coordinator) -> None:
+        base_kw, ev_current_a, heater_kw = active_profile()
+        publish_inputs(
+            base_kw=base_kw,
+            ev_current_a=ev_current_a,
+            heater_kw=heater_kw,
+        )
+        coordinator.data = await coordinator._async_update_data()
+
+    publish_inputs(base_kw=0.7, ev_current_a=10.0, heater_kw=1.0)
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Persisted house-learning composition",
+        version=6,
+        data={
+            **ENTRY_DATA,
+            "house_load_includes_ev": True,
+            "heater_power_entity": "sensor.test_heater",
+            "ev_charging_state_entity": "sensor.test_ev_charging",
+            "ev_actual_current_entity": "sensor.test_ev_actual_current",
+            "ev_voltage": 230.0,
+            "ev_phase_count": 1,
+        },
+    )
+    entry.add_to_hass(hass)
+    await harness.setup(entry)
+    coordinator = entry.runtime_data
+    coordinator.shutdown()
+
+    reload_at = datetime(2026, 9, 16, 18, 1, tzinfo=UTC)
+    while now[0] < reload_at:
+        now[0] += timedelta(minutes=5)
+        await advance(coordinator)
+
+    expected_first_base_kwh = 0.7 * (21 + 2 / 60)
+    assert [
+        sample.energy_kwh for sample in coordinator.demand_history.samples
+    ] == pytest.approx([expected_first_base_kwh])
+    assert [
+        sample.energy_kwh for sample in coordinator.heater_history.samples
+    ] == pytest.approx([24.0])
+    stored = await harness.load_store(
+        f"home_energy_orchestrator.{entry.entry_id}.demand_history"
+    )
+    assert stored is not None
+    assert stored["in_progress_cycle"]["last_power_kw"] == pytest.approx(1.2)
+    assert stored["in_progress_cycle"]["cycle_energy_kwh"] == pytest.approx(3.64)
+    assert stored["heater_in_progress_cycle"]["last_power_kw"] == pytest.approx(2.0)
+    assert stored["heater_in_progress_cycle"]["cycle_energy_kwh"] == pytest.approx(
+        12.0
+    )
+
+    now[0] += timedelta(seconds=30)
+    await harness.reload(entry)
+    coordinator = entry.runtime_data
+    coordinator.shutdown()
+    assert [
+        sample.energy_kwh for sample in coordinator.demand_history.samples
+    ] == pytest.approx([expected_first_base_kwh])
+    assert coordinator.demand_sampler is not None
+    restored_cycle = coordinator.demand_sampler.to_payload()
+    assert restored_cycle is not None
+    assert restored_cycle["cycle_energy_kwh"] == pytest.approx(3.65)
+
+    finish = datetime(2026, 9, 17, 12, 1, 30, tzinfo=UTC)
+    while now[0] < finish:
+        now[0] += timedelta(minutes=5)
+        await advance(coordinator)
+
+    expected_second_base_kwh = 1.2 * (21 + 2 / 60)
+    assert [
+        sample.energy_kwh for sample in coordinator.demand_history.samples
+    ] == pytest.approx([expected_first_base_kwh, expected_second_base_kwh])
+    assert [
+        sample.energy_kwh for sample in coordinator.heater_history.samples
+    ] == pytest.approx([24.0, 48.0])
+    coordinator.async_update_listeners()
+    await hass.async_block_till_done()
+    assert hass.states.get("sensor.home_energy_learning_samples").state == "2"
+    assert hass.states.get("sensor.home_energy_heater_learning_samples").state == "2"
+    stored = await harness.load_store(
+        f"home_energy_orchestrator.{entry.entry_id}.demand_history"
+    )
+    assert stored is not None
+    assert [row["energy_kwh"] for row in stored["samples"]] == pytest.approx(
+        [expected_first_base_kwh, expected_second_base_kwh]
+    )
+    assert [
+        row["energy_kwh"] for row in stored["heater_history"]["samples"]
+    ] == pytest.approx([24.0, 48.0])
+
+    await harness.unload(entry)
+    harness.close()
+
+
 @pytest.mark.freeze_time("2026-09-17 02:30:00+00:00")
 async def test_safety_lock_blocks_all_commands_across_reload(hass) -> None:
     """Requested automation cannot write before or after a locked reload."""

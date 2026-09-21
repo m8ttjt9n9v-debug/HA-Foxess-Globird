@@ -72,7 +72,7 @@ ruff check custom_components tests scripts
 git diff --check 4838e51..HEAD
 ```
 
-Expected repository evidence at this candidate is 955 full-suite tests, 24
+Expected repository evidence at this candidate is 956 full-suite tests, 24
 frozen contract tests and two passing release-roundtrip system cases. Test
 counts are descriptive; review the assertions and command traces rather than
 treating the count as proof.
