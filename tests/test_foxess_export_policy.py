@@ -7,8 +7,10 @@ from custom_components.home_energy_orchestrator.planner.export_session import (
     ExportSessionState,
 )
 from custom_components.home_energy_orchestrator.planner.foxess_export_policy import (
+    FoxessExportPolicyBaseContext,
     FoxessExportPolicyContext,
     evaluate_foxess_export_policy,
+    evaluate_foxess_export_policy_base,
 )
 
 START = datetime(2026, 9, 5, 18, 0, tzinfo=UTC)
@@ -37,6 +39,56 @@ def _context(**overrides: object) -> FoxessExportPolicyContext:
         **overrides,
     }
     return FoxessExportPolicyContext(**values)  # type: ignore[arg-type]
+
+
+def _base_context(**overrides: object) -> FoxessExportPolicyBaseContext:
+    full = _context(**overrides)
+    return FoxessExportPolicyBaseContext(
+        requested_enabled=full.requested_enabled,
+        before_export_enabled=full.before_export_enabled,
+        ev_soc_percent=full.ev_soc_percent,
+        before_export_target_percent=full.before_export_target_percent,
+        now=full.now,
+        start_at=full.start_at,
+        finish_at=full.finish_at,
+        source_capability_available=full.source_capability_available,
+        configured_max_kw=full.configured_max_kw,
+        observed_max_kw=full.observed_max_kw,
+        session=full.session,
+    )
+
+
+def test_base_policy_retains_safe_session_inputs_without_energy_plan() -> None:
+    result = evaluate_foxess_export_policy_base(_base_context())
+
+    assert result.before_export_decision.export_allowed is True
+    assert result.effective_enabled is True
+    assert result.within_session_window is True
+    assert result.source_available is True
+    assert result.discharge_max_kw == 15
+    assert result.requested_power_kw == 15
+    assert result.latched is False
+    assert result.should_advance is False
+    assert result.session_window_active is True
+    assert result.finish_requested is False
+
+
+def test_base_policy_advances_latched_session_to_safe_finish() -> None:
+    result = evaluate_foxess_export_policy_base(
+        _base_context(
+            before_export_enabled=True,
+            ev_soc_percent=25,
+            now=FINISH,
+            session=ExportSessionState("active", 10),
+        )
+    )
+
+    assert result.effective_enabled is False
+    assert result.within_session_window is False
+    assert result.latched is True
+    assert result.should_advance is True
+    assert result.session_window_active is False
+    assert result.finish_requested is True
 
 
 def test_ready_export_uses_maximum_and_latest_bounded_start() -> None:

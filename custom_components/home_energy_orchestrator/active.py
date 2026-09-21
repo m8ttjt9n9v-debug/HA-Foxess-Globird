@@ -37,7 +37,6 @@ from .planner.control_windows import (
 from .planner.ev_before_export import (
     EvBeforeExportDecision,
     calculate_protected_keepalive_energy_kwh,
-    decide_ev_before_export,
     protected_keepalive_requires_evidence,
 )
 from .planner.export import ExportPlan
@@ -51,8 +50,10 @@ from .planner.foxess_charge_policy import (
     evaluate_foxess_charge_policy,
 )
 from .planner.foxess_export_policy import (
+    FoxessExportPolicyBaseContext,
     FoxessExportPolicyContext,
     evaluate_foxess_export_policy,
+    evaluate_foxess_export_policy_base,
 )
 from .planner.foxess_gate import FoxessGateContext, evaluate_foxess_gate
 from .planner.foxess_ownership import (
@@ -311,36 +312,38 @@ class ActiveFoxessController:
         """Run the ported pilot-site ZEROHERO session, when it owns this tick."""
         runtime = self.coordinator.runtime_config
         enabled = runtime.automation.battery_export_enabled
-        self.ev_before_export_decision = decide_ev_before_export(
-            enabled=runtime.ev_preferences.before_export_enabled,
-            ev_soc_percent=getattr(self.coordinator.snapshot, "ev_soc", None),
-            target_soc_percent=runtime.ev_preferences.before_export_soc_target,
-        )
-        self.export_effective_enabled = (
-            enabled and self.ev_before_export_decision.export_allowed
-        )
         start_at, finish_at = self._export_bounds(now)
-        within_session_window = start_at <= now < finish_at
-        source_available = feedback.export_source_available
-        discharge_max = min(
-            max(
-                self.coordinator.runtime_config.inverter.discharge_limit_kw,
-                0.0,
-            ),
-            feedback.discharge_power_max_kw,
+        base = evaluate_foxess_export_policy_base(
+            FoxessExportPolicyBaseContext(
+                requested_enabled=enabled,
+                before_export_enabled=runtime.ev_preferences.before_export_enabled,
+                ev_soc_percent=getattr(self.coordinator.snapshot, "ev_soc", None),
+                before_export_target_percent=(
+                    runtime.ev_preferences.before_export_soc_target
+                ),
+                now=now,
+                start_at=start_at,
+                finish_at=finish_at,
+                source_capability_available=feedback.export_source_available,
+                configured_max_kw=runtime.inverter.discharge_limit_kw,
+                observed_max_kw=feedback.discharge_power_max_kw,
+                session=self.export_session,
+            )
         )
+        self.ev_before_export_decision = base.before_export_decision
+        self.export_effective_enabled = base.effective_enabled
+        source_available = base.source_available
+        discharge_max = base.discharge_max_kw
         # Energy and time limits govern how long the session runs.  Requesting
         # the maximum available inverter discharge preserves headroom for
         # simultaneous house load and minimises the risk of a brief grid import
         # invalidating the ZEROHERO credit. The inverter enforces its own grid
         # export limit; that limit must not reduce this battery-side request.
-        requested = discharge_max
+        requested = base.requested_power_kw
         eligible = False
-        should_advance: bool | None = None
-        session_window_active = (
-            self.export_effective_enabled and within_session_window
-        )
-        finish_requested = not self.export_effective_enabled or now >= finish_at
+        should_advance = base.should_advance
+        session_window_active = base.session_window_active
+        finish_requested = base.finish_requested
         self.export_plan = None
         self.export_planned_start = None
         exported = getattr(
@@ -397,7 +400,6 @@ class ActiveFoxessController:
             )
             self.ev_before_export_decision = policy.before_export_decision
             self.export_effective_enabled = policy.effective_enabled
-            within_session_window = policy.within_session_window
             source_available = policy.source_available
             discharge_max = policy.discharge_max_kw
             requested = policy.requested_power_kw
@@ -412,11 +414,6 @@ class ActiveFoxessController:
         except (TypeError, ValueError):
             self.export_plan = None
 
-        if should_advance is None:
-            latched = self.export_session.phase != "idle"
-            should_advance = latched or (
-                self.export_effective_enabled and eligible
-            )
         if not should_advance:
             return False
         previous_state = self.export_session
