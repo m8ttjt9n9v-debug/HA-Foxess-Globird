@@ -198,12 +198,17 @@ Phase 7 is complete only when:
 
 ## Completion record
 
-- [ ] Existing command behavior characterized
-- [ ] Inverter decomposition complete
-- [ ] EV decomposition complete
-- [ ] Shadow comparisons passed
-- [ ] Compatibility checks passed
-- [ ] Documentation and roadmap updated
+- [x] Existing command behavior characterized
+- [x] Inverter decomposition complete
+- [x] EV decomposition complete
+- [x] Shadow comparisons passed
+- [x] Compatibility checks passed
+- [x] Documentation and roadmap updated
 - [ ] Independent review complete
-- [ ] Rollback demonstrated
+- [x] Structural rollback demonstrated
 - [ ] Operational soak complete where required
+
+The deterministic technical evidence and exact corpus are recorded in the
+[Phase 7 technical exit audit](phase-7-exit-audit.md). The unchecked review and
+soak gates mean this phase is not approved for release, deployment or Phase 8
+scheduling work.

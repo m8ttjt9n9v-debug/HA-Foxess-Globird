@@ -275,6 +275,11 @@ are unchanged; controllers directly access neither `hass.states` nor storage.
 
 Current work package and extraction order:
 [Phase 7 controller decomposition](maintainability/phase-7-controller-decomposition.md).
+The deterministic implementation gate was satisfied on 2026-09-21; the
+[Phase 7 technical exit audit](maintainability/phase-7-exit-audit.md) records
+the exact controller/lifecycle corpus, trace checkpoints, boundary checks and
+structural rollback evidence. Independent review and operational soak remain
+open, so this checkpoint is not release or Phase 8 authorization.
 
 ### Phase 8 — serialized reconciliation and operational rollout
 
