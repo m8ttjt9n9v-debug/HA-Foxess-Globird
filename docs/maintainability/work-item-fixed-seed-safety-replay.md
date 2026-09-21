@@ -25,6 +25,8 @@ issued or persisted as an HEO-owned session.
   the mapped FoxESS entities, regardless of event order.
 - The test changes no controller, timer, configuration, entity, persistence or
   service contract.
+- The workflow that runs the evidence must use immutable action revisions, and
+  the release workflow must fetch the rollback tag before exercising it.
 
 ## Non-goals
 
@@ -42,6 +44,8 @@ issued or persisted as an HEO-owned session.
   and reload boundary.
 - Scorecard and incident-catalogue evidence updates.
 - Scheduled and tagged-release workflow enforcement of the same test suite.
+- A repository contract that prevents mutable action references and shallow
+  rollback rehearsals from returning unnoticed.
 
 ## Compatibility
 
