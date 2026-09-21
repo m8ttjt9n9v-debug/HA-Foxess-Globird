@@ -7,6 +7,9 @@ on:
     - cron: "17 3 * * 1"
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   planner:
     runs-on: ubuntu-latest
