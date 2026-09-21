@@ -48,12 +48,12 @@ volume or subjective polish.
 
 | Area | Awarded | Evidence and withheld credit |
 |---|---:|---|
-| Lifecycle and incident evidence | 16/20 | The deterministic harness has 45 expanded lifecycle cases and the incident catalogue links every known class to evidence. Some rows remain focused-only or request fuller system timelines/generated transitions. |
+| Lifecycle and incident evidence | 16/20 | The deterministic harness has 46 expanded lifecycle cases and the incident catalogue links every known class to evidence. Some rows remain focused-only or request fuller system timelines/generated transitions. |
 | Entity and configuration contracts | 13/15 | All 107 entities, public attributes and 124 wizard fields are mechanically frozen and reviewed. Full registry-safe downgrade to the pre-foundation release remains impossible because that old release reclaimed preferred IDs. |
 | Typed configuration | 10/10 | Phase 3 reports zero raw runtime mapping operations; retained accesses are explicit managed mutation boundaries. |
 | Canonical presentation model | 10/10 | The Phase 4 exit audit proves entities, attributes, diagnostics and Fleet project one immutable read model. |
 | Versioned persistence | 9/10 | All 13 Stores use typed repositories with unchanged schemas, corruption handling and restart fixtures. Current → `v0.12.26` → current retained-state round trip passes; live release-candidate rollback remains open. |
-| Controller boundaries | 13/15 | The 292-case Phase 7 corpus and static contracts prove observation, planner, repository and adapter boundaries. Independent fresh-context review and operational soak are not complete. |
+| Controller boundaries | 13/15 | The 293-case Phase 7 corpus and static contracts prove observation, planner, repository and adapter boundaries. Independent fresh-context review and operational soak are not complete. |
 | Scheduling and concurrency | 0/10 | Phase 8 has not started; independent 30-second controller schedules remain intentionally unchanged. |
 | Release, rollback and diagnostics | 7/10 | Frozen contracts, redaction boundaries, previous-release restoration and local round-trip rollback pass. Clean-instance release-candidate validation and staged pilot/remote rollout remain open. |
 | **Total** | **78/100** | Below the 95-point threshold and with open hard gates. |

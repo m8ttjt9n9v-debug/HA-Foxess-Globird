@@ -17,7 +17,7 @@ must not begin until those Phase 7 operational gates are accepted.
 
 ## Exact deterministic corpus
 
-The Phase 7 controller and lifecycle gate contains 292 collected cases:
+The Phase 7 controller and lifecycle gate contains 293 collected cases:
 
 | Corpus | Cases | Contract exercised |
 | --- | ---: | --- |
@@ -25,12 +25,12 @@ The Phase 7 controller and lifecycle gate contains 292 collected cases:
 | `test_ev.py` | 87 | EV policy, feedback reconciliation and command plans |
 | `test_ev_active.py` | 80 | EV facade lifecycle, routing, persistence and adapter execution |
 | `test_zerohero_active.py` | 44 | inverter facade, ownership, charge/export and restoration |
-| `test_lifecycle_harness.py` | 45 | setup, reload, reconfigure, outage, incident and ownership sequences |
+| `test_lifecycle_harness.py` | 46 | setup, reload, reconfigure, outage, incident and ownership sequences |
 | `test_phase6_recorded_day.py` | 1 | 24-hour accounting, learning, persistence and no-command replay |
 | controller and persistence boundary contracts | 2 | platform and raw-storage isolation |
 
-The 45 expanded lifecycle cases contain 66 ordered service-call trace
-checkpoints and 39 persisted-store readback checkpoints. Twenty-one explicit
+The 46 expanded lifecycle cases contain 68 ordered service-call trace
+checkpoints and 39 persisted-store readback checkpoints. Twenty-two explicit
 stored-state seeds exercise restart reconstruction, malformed evidence and
 in-flight obligations. These are source-counted checkpoints, not an estimate
 of branch coverage or a claim that every checkpoint emits a command.
@@ -90,8 +90,8 @@ controller-owned storage and is not silently expanded by this audit.
 
 At this audit checkpoint:
 
-- the 292-case controller/lifecycle corpus passed;
-- the complete repository suite passed with 954 tests;
+- the 293-case controller/lifecycle corpus passed;
+- the complete repository suite passed with 955 tests;
 - 24 frozen compatibility contracts passed;
 - the current codecs produced representative non-idle charge, export and EV
   state that the isolated `v0.12.26` release restored with zero hardware

@@ -459,6 +459,141 @@ async def test_ev_allowance_target_does_not_cycle_with_inclusive_house_load(
     harness.close()
 
 
+@pytest.mark.freeze_time("2026-09-17 12:29:15+00:00")
+async def test_ev_soc_update_holds_allowance_during_ramp_but_not_service_overrun(
+    hass, monkeypatch
+) -> None:
+    """A SoC event holds a settling target without masking an electrical limit."""
+    harness = LifecycleHarness(hass)
+    _register_ev_services(harness, monkeypatch)
+    await _seed_foxess_states(harness, 58)
+    await _seed_ev_states(
+        harness,
+        soc=80,
+        actual_current=3,
+        requested_current=16,
+        stored_energy=45,
+        house_load=2.07,
+        site_current=38,
+    )
+    now = [datetime(2026, 9, 17, 12, 29, 15, tzinfo=UTC)]
+    monkeypatch.setattr(
+        "custom_components.home_energy_orchestrator.ev_active.dt_util.now",
+        lambda: now[0],
+    )
+    monkeypatch.setattr(
+        "custom_components.home_energy_orchestrator.coordinator.dt_util.now",
+        lambda: now[0],
+    )
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="EV current-ramp transition hold",
+        version=6,
+        data=_ev_entry_data(
+            ev_free_window_priority="house_battery",
+            ev_free_window_charge_limit_percent=100.0,
+            ev_allowance_safety_margin_kwh=1.0,
+            rehearsal_mode=True,
+        ),
+    )
+    entry.add_to_hass(hass)
+    await harness.save_store(
+        f"home_energy_orchestrator.{entry.entry_id}.free_window_import",
+        {
+            "date": now[0].date().isoformat(),
+            "imported_kwh": 9.0,
+            "last_at": now[0].isoformat(),
+            "last_import_kw": 10.0,
+        },
+    )
+    await harness.setup(entry)
+
+    controller = entry.runtime_data.ev_controller
+    now[0] += timedelta(minutes=3)
+    await harness.set_state(
+        "sensor.test_ev_actual_current",
+        "3",
+        {"unit_of_measurement": "A"},
+        observed_at=now[0],
+    )
+    await harness.set_state(
+        "sensor.test_house_load",
+        "2.07",
+        {"unit_of_measurement": "kW"},
+        observed_at=now[0],
+    )
+    await harness.set_state(
+        "sensor.test_site_current",
+        "38",
+        {"unit_of_measurement": "A"},
+        observed_at=now[0],
+    )
+    await entry.runtime_data.async_refresh()
+    await controller.async_reconcile(now[0])
+    assert controller.target_current_a == 16, (
+        controller.last_reason,
+        controller.decision_phase,
+        controller.allowance_phase,
+        controller.allowance_house_load_kw,
+    )
+    harness.clear_service_calls()
+    now[0] += timedelta(seconds=58)
+    await harness.set_state(
+        "sensor.test_house_load",
+        "12",
+        {"unit_of_measurement": "kW"},
+        observed_at=now[0],
+    )
+    await harness.set_state(
+        "sensor.test_ev_soc",
+        "81",
+        {"unit_of_measurement": "%"},
+        observed_at=now[0],
+    )
+    await entry.runtime_data.async_refresh()
+    await controller.async_reconcile(now[0])
+    entry.runtime_data.async_update_listeners()
+    await hass.async_block_till_done()
+
+    assert controller.target_current_a == 16
+    assert controller.decision_phase == "ev_current_transition_hold"
+    assert controller.allowance_phase == "transition_hold"
+    target = hass.states.get("sensor.home_energy_ev_current_target")
+    assert target is not None and target.state == "16.0"
+    assert harness.service_calls == ()
+
+    now[0] += timedelta(seconds=1)
+    await harness.set_state(
+        "sensor.test_site_current",
+        "81",
+        {"unit_of_measurement": "A"},
+        observed_at=now[0],
+    )
+    await entry.runtime_data.async_refresh()
+    await controller.async_reconcile(now[0])
+    entry.runtime_data.async_update_listeners()
+    await hass.async_block_till_done()
+
+    assert controller.decision_phase != "ev_current_transition_hold", (
+        entry.runtime_data.telemetry.site_grid_current,
+        hass.states.get("sensor.test_site_current"),
+        controller.last_reason,
+        controller.target_current_a,
+    )
+    assert controller.target_current_a is not None
+    assert controller.target_current_a < 16
+    assert controller.last_actions == (
+        "would_set_charge_limit",
+        "would_set_charge_current",
+    )
+    assert harness.service_calls == ()
+    await harness.unload(entry)
+    hass.services.async_remove("number", "set_value")
+    hass.services.async_remove("switch", "turn_on")
+    hass.services.async_remove("switch", "turn_off")
+    harness.close()
+
+
 @pytest.mark.freeze_time("2026-09-17 06:30:00+00:00")
 async def test_ev_outside_charge_stops_at_house_battery_floor(hass, monkeypatch) -> None:
     """Automatic EV charging yields at the battery floor without paid import."""
