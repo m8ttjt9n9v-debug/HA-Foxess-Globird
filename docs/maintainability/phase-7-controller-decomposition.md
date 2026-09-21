@@ -205,7 +205,7 @@ Phase 7 is complete only when:
 - [x] Compatibility checks passed
 - [x] Documentation and roadmap updated
 - [ ] Independent review complete
-- [x] Structural rollback demonstrated
+- [x] Structural and local one-version rollback demonstrated
 - [ ] Operational soak complete where required
 
 The deterministic technical evidence and exact corpus are recorded in the

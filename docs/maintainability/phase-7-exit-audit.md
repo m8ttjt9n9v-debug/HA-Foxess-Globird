@@ -93,7 +93,9 @@ At this audit checkpoint:
 - the 291-case controller/lifecycle corpus passed;
 - the complete repository suite passed with 953 tests;
 - 24 frozen compatibility contracts passed;
-- the previous-release rehearsal against `v0.12.26` passed;
+- the current codecs produced representative non-idle charge, export and EV
+  state that the isolated `v0.12.26` release restored with zero hardware
+  service calls;
 - repository-wide Ruff passed;
 - controller and persistence static boundary scripts passed;
 - the complete Phase 7 patch reverse-applied cleanly to an isolated copy of
@@ -114,9 +116,10 @@ Every extraction and ownership switch is a separately revertible local commit.
 The binary diff from pre-Phase-7 commit `4838e51` through the current `HEAD`
 reverse-applied cleanly in an isolated exported tree; that reconstructed tree's
 full 685-test suite passed. The `v0.12.26` rehearsal separately proves the
-retained public surface remains readable by the previous release. Operational
-downgrade is not yet approved: it still requires the programme's clean-instance
-rollback exercise after a release candidate exists.
+retained configuration and serialized controller obligations remain readable
+by the previous release. Operational downgrade is not yet approved: it still
+requires the programme's clean-instance rollback exercise after a release
+candidate exists.
 
 Nothing in this audit has been pushed, tagged, released or deployed.
 
@@ -127,8 +130,9 @@ following remain deliberately open:
 
 1. independent fresh-context review of invariants, transitions, restart
    behaviour and ordered command traces;
-2. clean-instance upgrade and one-version rollback rehearsal for the eventual
-   release candidate;
+2. clean-instance install/upgrade and an operational rollback exercise for the
+   eventual release candidate; the codec-level one-version downgrade already
+   passes locally;
 3. pilot soak across complete relevant ZEROCHARGE, ZEROHERO, export and EV
    operating cycles;
 4. one remote-topology soak, then remaining-site rollout; and
