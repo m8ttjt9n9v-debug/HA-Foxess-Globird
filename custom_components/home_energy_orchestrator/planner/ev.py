@@ -11,6 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from math import ceil, floor, isfinite
+from typing import Literal
 
 DIRECT_EVSE_MAX_ATTEMPTS = 3
 DIRECT_EVSE_RETRY_INTERVAL = timedelta(seconds=30)
@@ -1156,6 +1157,33 @@ class ChargeLimitInputs:
     step_percent: float
 
 
+@dataclass(frozen=True, slots=True)
+class GeneralChargeLimitEvidence:
+    """Policy, actuator and retry evidence for limit-only reconciliation."""
+
+    charge_to_full: bool
+    learned_limit_percent: float
+    current_limit_percent: float
+    vehicle_soc_percent: float
+    protected_baseline_required: bool
+    direct_limit_headroom_percent: float
+    minimum_percent: float
+    maximum_percent: float
+    step_percent: float
+    previous_write_fingerprint: tuple[float, float] | None
+
+
+@dataclass(frozen=True, slots=True)
+class GeneralChargeLimitDecision:
+    """One limit-only target, command and deferred fingerprint transition."""
+
+    target_limit_percent: float
+    reason: str
+    command_plan: EvCommandPlan
+    proposed_write_fingerprint: tuple[float, float] | None
+    fingerprint_transition: Literal["clear", "retain", "set_on_execute"]
+
+
 def plan_charge_limit_target(inputs: ChargeLimitInputs) -> float:
     """Preserve policy while protecting a powered connector from pause faults."""
     _validate_charge_limit_inputs(inputs)
@@ -1168,6 +1196,54 @@ def plan_charge_limit_target(inputs: ChargeLimitInputs) -> float:
     stepped_guard = ceil(raw_guard / inputs.step_percent) * inputs.step_percent
     guard = _clip(stepped_guard, inputs.minimum_percent, inputs.maximum_percent)
     return round(max(policy, guard), 3)
+
+
+def evaluate_general_charge_limit(
+    evidence: GeneralChargeLimitEvidence,
+) -> GeneralChargeLimitDecision:
+    """Plan one general-limit write without mutating the facade retry latch."""
+    policy = (
+        evidence.maximum_percent
+        if evidence.charge_to_full
+        else evidence.learned_limit_percent
+    )
+    target = plan_charge_limit_target(
+        ChargeLimitInputs(
+            connected=True,
+            policy_limit_percent=policy,
+            current_limit_percent=evidence.current_limit_percent,
+            vehicle_soc_percent=evidence.vehicle_soc_percent,
+            protected_baseline_required=evidence.protected_baseline_required,
+            direct_limit_headroom_percent=evidence.direct_limit_headroom_percent,
+            minimum_percent=evidence.minimum_percent,
+            maximum_percent=evidence.maximum_percent,
+            step_percent=evidence.step_percent,
+        )
+    )
+    if abs(target - evidence.current_limit_percent) < evidence.step_percent:
+        return GeneralChargeLimitDecision(
+            target,
+            "outside_window_general_limit_confirmed",
+            EvCommandPlan((), "outside_window_general_limit_confirmed"),
+            None,
+            "clear",
+        )
+    fingerprint = (target, evidence.current_limit_percent)
+    if fingerprint == evidence.previous_write_fingerprint:
+        return GeneralChargeLimitDecision(
+            target,
+            "outside_window_general_limit_awaiting_feedback",
+            EvCommandPlan((), "outside_window_general_limit_awaiting_feedback"),
+            fingerprint,
+            "retain",
+        )
+    return GeneralChargeLimitDecision(
+        target,
+        "general_limit",
+        EvCommandPlan((EvCommand("set_charge_limit", target),), "general_limit"),
+        fingerprint,
+        "set_on_execute",
+    )
 
 
 @dataclass(frozen=True, slots=True)

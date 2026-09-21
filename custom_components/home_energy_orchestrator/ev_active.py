@@ -133,10 +133,10 @@ from .planner.ev import (
     ChargeLimitInputs,
     DirectEvseObservation,
     DirectEvseReconciliationState,
-    EvCommand,
     EvCommandPlan,
     EvCurrentDecision,
     FreeWindowTargetEvidence,
+    GeneralChargeLimitEvidence,
     SmartSocketObservation,
     SmartSocketRecoveryObservation,
     SmartSocketRecoveryState,
@@ -144,6 +144,7 @@ from .planner.ev import (
     charging_path_ceiling_a,
     evaluate_allowance_projection,
     evaluate_free_window_target,
+    evaluate_general_charge_limit,
     finalize_direct_evse_reconciliation,
     finalize_smart_socket_recovery,
     outside_service_ceiling_a,
@@ -782,61 +783,51 @@ class ActiveEvController:
                 "ev_charge_limit_metadata_unavailable"
             )
             return
-        policy = maximum if self._charge_to_full_requested() else learned.limit_percent
-        target = plan_charge_limit_target(
-            ChargeLimitInputs(
-                connected=True,
-                policy_limit_percent=policy,
+        decision = evaluate_general_charge_limit(
+            GeneralChargeLimitEvidence(
+                charge_to_full=self._charge_to_full_requested(),
+                learned_limit_percent=learned.limit_percent,
                 current_limit_percent=observation.charge_limit_percent,
                 vehicle_soc_percent=vehicle_soc,
-                protected_baseline_required=self._float(
-                    CONF_EV_PROTECTED_BASELINE_A, DEFAULT_EV_PROTECTED_BASELINE_A
-                )
-                > 0,
+                protected_baseline_required=(
+                    self._float(
+                        CONF_EV_PROTECTED_BASELINE_A,
+                        DEFAULT_EV_PROTECTED_BASELINE_A,
+                    )
+                    > 0
+                ),
                 direct_limit_headroom_percent=self._float(
                     CONF_EV_DIRECT_LIMIT_HEADROOM, DEFAULT_EV_DIRECT_LIMIT_HEADROOM
                 ),
                 minimum_percent=minimum,
                 maximum_percent=maximum,
                 step_percent=step,
+                previous_write_fingerprint=self._general_limit_write_fingerprint,
             )
         )
         self.target_current_a = None
-        self.target_limit_percent = target
-        if abs(target - observation.charge_limit_percent) < step:
-            self._general_limit_write_fingerprint = None
-            self.last_reason = "outside_window_general_limit_confirmed"
-            self.general_limit_candidate = build_ev_stage_candidate(
-                "general_limit",
-                eligible=True,
-                reason=self.last_reason,
-                target_limit_percent=target,
-            )
-            return
-        fingerprint = (target, observation.charge_limit_percent)
-        if fingerprint == self._general_limit_write_fingerprint:
-            self.last_reason = "outside_window_general_limit_awaiting_feedback"
-            self.general_limit_candidate = build_ev_stage_candidate(
-                "general_limit",
-                eligible=True,
-                reason=self.last_reason,
-                target_limit_percent=target,
-            )
-            return
-        plan = EvCommandPlan((EvCommand("set_charge_limit", target),), "general_limit")
+        self.target_limit_percent = decision.target_limit_percent
+        self.last_reason = decision.reason
         self.general_limit_candidate = build_ev_stage_candidate(
             "general_limit",
             eligible=True,
-            reason=plan.reason,
-            target_limit_percent=target,
-            command_intent=("set_charge_limit",),
+            reason=decision.reason,
+            target_limit_percent=decision.target_limit_percent,
+            command_intent=tuple(
+                command.action for command in decision.command_plan.commands
+            ),
         )
+        if decision.fingerprint_transition == "clear":
+            self._general_limit_write_fingerprint = None
+            return
+        if not decision.command_plan.commands:
+            return
         if gate == "safety_locked":
             self.last_actions = ("would_set_charge_limit",)
             self.last_reason = "rehearsal_general_limit"
             return
-        self._general_limit_write_fingerprint = fingerprint
-        await self._async_execute_ev_plan(plan, now)
+        self._general_limit_write_fingerprint = decision.proposed_write_fingerprint
+        await self._async_execute_ev_plan(decision.command_plan, now)
 
     def _reject_general_limit_candidate(self, reason: str) -> None:
         """Record a shadow general-limit rejection without changing control."""

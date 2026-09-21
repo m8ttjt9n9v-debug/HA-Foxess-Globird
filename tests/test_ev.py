@@ -16,6 +16,7 @@ from custom_components.home_energy_orchestrator.planner.ev import (
     EvCommandPlan,
     FreeWindowCurrentInputs,
     FreeWindowTargetEvidence,
+    GeneralChargeLimitEvidence,
     SmartSocketObservation,
     SmartSocketRecoveryObservation,
     SmartSocketRecoveryState,
@@ -27,6 +28,7 @@ from custom_components.home_energy_orchestrator.planner.ev import (
     estimate_vehicle_energy_to_target_kwh,
     evaluate_allowance_projection,
     evaluate_free_window_target,
+    evaluate_general_charge_limit,
     finalize_direct_evse_reconciliation,
     finalize_smart_socket_recovery,
     house_load_excluding_ev_kw,
@@ -206,6 +208,58 @@ def test_charge_limit_retained_away_and_policy_kept_separate_from_guard():
     assert plan_charge_limit_target(base) == 90
     assert plan_charge_limit_target(replace(base, connected=True)) == 91
     assert plan_charge_limit_target(replace(base, connected=True, vehicle_soc_percent=60)) == 80
+
+
+GENERAL_LIMIT = GeneralChargeLimitEvidence(
+    charge_to_full=False,
+    learned_limit_percent=76,
+    current_limit_percent=80,
+    vehicle_soc_percent=60,
+    protected_baseline_required=False,
+    direct_limit_headroom_percent=2,
+    minimum_percent=50,
+    maximum_percent=100,
+    step_percent=1,
+    previous_write_fingerprint=None,
+)
+
+
+def test_general_limit_plans_one_deferred_write():
+    decision = evaluate_general_charge_limit(GENERAL_LIMIT)
+
+    assert decision.target_limit_percent == 76
+    assert decision.reason == "general_limit"
+    assert decision.command_plan.commands == (EvCommand("set_charge_limit", 76),)
+    assert decision.proposed_write_fingerprint == (76, 80)
+    assert decision.fingerprint_transition == "set_on_execute"
+
+
+def test_general_limit_retains_duplicate_write_while_feedback_is_pending():
+    decision = evaluate_general_charge_limit(
+        replace(GENERAL_LIMIT, previous_write_fingerprint=(76, 80))
+    )
+
+    assert decision.reason == "outside_window_general_limit_awaiting_feedback"
+    assert decision.command_plan.commands == ()
+    assert decision.proposed_write_fingerprint == (76, 80)
+    assert decision.fingerprint_transition == "retain"
+
+
+def test_general_limit_confirmation_clears_fingerprint_and_charge_to_full_wins():
+    decision = evaluate_general_charge_limit(
+        replace(
+            GENERAL_LIMIT,
+            charge_to_full=True,
+            current_limit_percent=100,
+            previous_write_fingerprint=(100, 80),
+        )
+    )
+
+    assert decision.target_limit_percent == 100
+    assert decision.reason == "outside_window_general_limit_confirmed"
+    assert decision.command_plan.commands == ()
+    assert decision.proposed_write_fingerprint is None
+    assert decision.fingerprint_transition == "clear"
 
 
 ALLOWANCE = AllowanceCeilingInputs(

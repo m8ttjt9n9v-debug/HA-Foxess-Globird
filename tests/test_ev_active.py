@@ -865,6 +865,30 @@ async def test_ev_runtime_only_applies_general_limit_outside_free_window(
     assert calls[0].data["service_data"]["entity_id"] == "number.car_limit"
 
 
+async def test_general_limit_rehearsal_does_not_latch_write_fingerprint(
+    hass: HomeAssistant,
+) -> None:
+    _set_ev_states(hass)
+    calls = []
+    hass.bus.async_listen(EVENT_CALL_SERVICE, calls.append)
+    controller = ActiveEvController(hass, _coordinator(_controller_config()))
+    observation = controller._observation()  # noqa: SLF001
+
+    await controller._async_reconcile_general_limit_only(  # noqa: SLF001
+        datetime(2026, 9, 7, 0, 1, tzinfo=UTC),
+        observation,
+        vehicle_soc=40,
+        gate="safety_locked",
+    )
+
+    assert controller._general_limit_write_fingerprint is None  # noqa: SLF001
+    assert controller.last_actions == ("would_set_charge_limit",)
+    assert controller.last_reason == "rehearsal_general_limit"
+    assert controller.general_limit_candidate is not None
+    assert controller.general_limit_candidate.command_intent == ("set_charge_limit",)
+    assert calls == []
+
+
 async def test_cloud_owner_blocks_opted_in_outside_window_stages(
     hass: HomeAssistant,
 ) -> None:
