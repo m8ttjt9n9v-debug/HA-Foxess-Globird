@@ -6,9 +6,8 @@ from dataclasses import dataclass, replace
 from datetime import datetime, timedelta
 from math import isfinite
 
-from .ev_power_constraints import inverter_backed_current_ceiling
-
 from .ev import EvCommand, EvCommandPlan
+from .ev_power_constraints import inverter_backed_current_ceiling
 
 
 @dataclass(frozen=True, slots=True)

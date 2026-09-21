@@ -92,7 +92,10 @@ the code rollback itself creates no FoxESS ownership or restoration obligation.
 - Focused v0.12.27/v0.12.28 merge set — 38 passed.
 - Exact-boundary lifecycle replay — 1 passed.
 - Final complete suite — 863 passed in 47.12 seconds.
-- `git diff --check` must remain clean.
+- Frozen architecture and compatibility contracts — 24 passed.
+- Previous-release rehearsal against `v0.12.26` — 1 passed.
+- `git diff --check` — clean.
+- Offline repository Ruff check — passed.
 - CI, independent review and rollout remain separate gates before release.
 
 ## Completion record
