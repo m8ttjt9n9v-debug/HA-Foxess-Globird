@@ -6,6 +6,11 @@ This packet lets an engineer with no implementation context review the Phase 7
 controller decomposition without reconstructing the programme history. It is a
 review aid, not evidence that independent review occurred.
 
+Record the completed review in a copy of the
+[candidate-bound review record template](phase-7-independent-review-record-template.md).
+The template is deliberately separate from this packet so evidence and the
+reviewer's decision are not mixed with implementation-authored instructions.
+
 Review range: pre-Phase-7 commit `4838e51` through implementation candidate
 `4a73017`. Review that exact commit, not a later moving `HEAD`. Documentation-
 only handoff commits after `4a73017` are outside the implementation range.
