@@ -19,6 +19,8 @@ from custom_components.home_energy_orchestrator.planner.ev import (
     FreeWindowTargetEvidence,
     GeneralChargeLimitEvidence,
     SmartSocketObservation,
+    SmartSocketObservationEvidence,
+    SmartSocketRecoveryEvidence,
     SmartSocketRecoveryObservation,
     SmartSocketRecoveryState,
     SmartSocketStageState,
@@ -31,6 +33,8 @@ from custom_components.home_energy_orchestrator.planner.ev import (
     evaluate_ev_decision_cadence,
     evaluate_free_window_target,
     evaluate_general_charge_limit,
+    evaluate_smart_socket_observation,
+    evaluate_smart_socket_recovery_observation,
     finalize_direct_evse_reconciliation,
     finalize_smart_socket_recovery,
     house_load_excluding_ev_kw,
@@ -761,6 +765,108 @@ RECOVERY = SmartSocketRecoveryObservation(
     writable_maximum_a=24,
     charge_switch_on=False,
 )
+
+
+def test_smart_socket_observation_preserves_age_and_availability_boundaries():
+    now = datetime(2026, 9, 7, 8, tzinfo=UTC)
+    evidence = SmartSocketObservationEvidence(
+        now=now,
+        requested_current_a=6,
+        charge_switch_on=False,
+        socket_state="on",
+        socket_last_changed=now - timedelta(seconds=15),
+        current_maximum_a=16,
+        current_step_a=1,
+    )
+
+    assert evaluate_smart_socket_observation(evidence) == SmartSocketObservation(
+        6, False, True, 15, 16, 1
+    )
+    assert evaluate_smart_socket_observation(
+        replace(evidence, socket_last_changed=now + timedelta(seconds=5))
+    ).socket_on_seconds == 0
+    assert evaluate_smart_socket_observation(
+        replace(evidence, socket_state="off")
+    ).socket_on_seconds == 0
+    assert evaluate_smart_socket_observation(
+        replace(evidence, socket_state=None)
+    ) is None
+
+
+def test_smart_recovery_observation_preserves_stable_cloud_evidence_boundary():
+    now = datetime(2026, 9, 7, 8, tzinfo=UTC)
+    stable_at = now - timedelta(seconds=120)
+    evidence = SmartSocketRecoveryEvidence(
+        now=now,
+        stable_seconds=120,
+        charging_state="no_power",
+        charging_last_changed=stable_at,
+        at_home_state="home",
+        at_home_last_changed=stable_at,
+        cable_state="on",
+        cable_last_changed=stable_at,
+        cloud_charge_switch_state="off",
+        cloud_charge_switch_last_changed=stable_at,
+        home_control_active=True,
+        smart_path_selected=True,
+        socket_on=True,
+        target_current_a=10,
+        physical_minimum_a=1,
+        requested_current_a=6,
+        actual_current_a=0,
+        actual_current_valid=True,
+        vehicle_soc_percent=40,
+        charge_limit_percent=80,
+        writable_maximum_a=24,
+        charge_switch_on=False,
+    )
+
+    observation = evaluate_smart_socket_recovery_observation(evidence)
+    assert observation == RECOVERY
+    assert evaluate_smart_socket_recovery_observation(
+        replace(evidence, at_home_last_changed=stable_at + timedelta(seconds=1))
+    ).cloud_evidence_stable is False
+    assert evaluate_smart_socket_recovery_observation(
+        replace(evidence, cable_last_changed=now + timedelta(seconds=1))
+    ).cloud_evidence_stable is False
+
+
+def test_smart_recovery_observation_fails_closed_for_missing_numeric_evidence():
+    now = datetime(2026, 9, 7, 8, tzinfo=UTC)
+    stable_at = now - timedelta(seconds=120)
+    evidence = SmartSocketRecoveryEvidence(
+        now=now,
+        stable_seconds=120,
+        charging_state="no_power",
+        charging_last_changed=None,
+        at_home_state=None,
+        at_home_last_changed=stable_at,
+        cable_state="on",
+        cable_last_changed=stable_at,
+        cloud_charge_switch_state="off",
+        cloud_charge_switch_last_changed=stable_at,
+        home_control_active=True,
+        smart_path_selected=True,
+        socket_on=True,
+        target_current_a=None,
+        physical_minimum_a=1,
+        requested_current_a=6,
+        actual_current_a=0,
+        actual_current_valid=False,
+        vehicle_soc_percent=None,
+        charge_limit_percent=80,
+        writable_maximum_a=None,
+        charge_switch_on=None,
+    )
+
+    observation = evaluate_smart_socket_recovery_observation(evidence)
+    assert observation.charging_state_seconds == 0
+    assert observation.cloud_evidence_stable is False
+    assert observation.charge_allowed is False
+    assert observation.actuator_writable is False
+    assert observation.cable_connected is True
+    assert observation.actual_current_a != observation.actual_current_a
+    assert observation.vehicle_soc_percent != observation.vehicle_soc_percent
 
 
 def _recover(state, observation, now):

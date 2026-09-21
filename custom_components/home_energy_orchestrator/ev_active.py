@@ -138,6 +138,8 @@ from .planner.ev import (
     FreeWindowTargetEvidence,
     GeneralChargeLimitEvidence,
     SmartSocketObservation,
+    SmartSocketObservationEvidence,
+    SmartSocketRecoveryEvidence,
     SmartSocketRecoveryObservation,
     SmartSocketRecoveryState,
     SmartSocketStageState,
@@ -146,6 +148,8 @@ from .planner.ev import (
     evaluate_ev_decision_cadence,
     evaluate_free_window_target,
     evaluate_general_charge_limit,
+    evaluate_smart_socket_observation,
+    evaluate_smart_socket_recovery_observation,
     finalize_direct_evse_reconciliation,
     finalize_smart_socket_recovery,
     outside_service_ceiling_a,
@@ -895,7 +899,6 @@ class ActiveEvController:
             now,
             observation,
             smart,
-            connected_for_planning=connected_for_planning,
             physical_minimum_a=physical_minimum,
         )
         recovery = reconcile_smart_socket_recovery(
@@ -1047,19 +1050,16 @@ class ActiveEvController:
     ) -> SmartSocketObservation | None:
         socket_entity = self.coordinator.runtime_config.ev_actuators.smart_socket_entity
         socket = self._entity_feedback(socket_entity)
-        if socket.available_state not in {"on", "off"} or socket.last_changed is None:
-            return None
-        socket_on = socket.available_state == "on"
-        socket_on_seconds = (
-            max((now - socket.last_changed).total_seconds(), 0.0) if socket_on else 0.0
-        )
-        return SmartSocketObservation(
-            requested_current_a=observation.requested_current_a,
-            charge_switch_on=observation.charge_switch_on,
-            socket_on=socket_on,
-            socket_on_seconds=socket_on_seconds,
-            current_maximum_a=observation.current_maximum_a,
-            current_step_a=observation.current_step_a,
+        return evaluate_smart_socket_observation(
+            SmartSocketObservationEvidence(
+                now=now,
+                socket_state=socket.available_state,
+                socket_last_changed=socket.last_changed,
+                requested_current_a=observation.requested_current_a,
+                charge_switch_on=observation.charge_switch_on,
+                current_maximum_a=observation.current_maximum_a,
+                current_step_a=observation.current_step_a,
+            )
         )
 
     def _smart_recovery_observation(
@@ -1068,16 +1068,10 @@ class ActiveEvController:
         observation: DirectEvseObservation,
         smart: SmartSocketObservation,
         *,
-        connected_for_planning: bool,
         physical_minimum_a: float,
     ) -> SmartSocketRecoveryObservation:
         ev_telemetry = self.coordinator.runtime_config.ev_telemetry
         charging = self._entity_feedback(ev_telemetry.charging_state_entity)
-        charging_value = charging.available_state
-        stable_seconds = self._float(
-            CONF_EV_SMART_RECOVERY_NO_POWER_SECONDS,
-            DEFAULT_EV_SMART_RECOVERY_NO_POWER_SECONDS,
-        )
         connection = self.coordinator.runtime_config.ev_connection
         at_home = self._entity_feedback(connection.at_home_entity)
         cable = self._entity_feedback(connection.cable_connected_entity)
@@ -1085,49 +1079,36 @@ class ActiveEvController:
             self.coordinator.runtime_config.ev_actuators.charge_switch_entity
         )
         charge_switch = self._entity_feedback(charge_switch_entity)
-        evidence = (at_home, cable, charge_switch)
-        evidence_age_stable = all(
-            item.available_state is not None
-            and item.last_changed is not None
-            and 0 <= (now - item.last_changed).total_seconds()
-            and (now - item.last_changed).total_seconds() >= stable_seconds
-            for item in evidence
-        )
-        cloud_stable = bool(
-            evidence_age_stable
-            and at_home.available_state in {"home", "on"}
-            and cable.available_state == "on"
-            and charge_switch.available_state in {"on", "off"}
-        )
         vehicle_soc = self._mapped_number(ev_telemetry.soc_entity)
         actual_current, actual_valid = self._actual_ev_current_a()
-        return SmartSocketRecoveryObservation(
-            charging_state=charging_value,
-            charging_state_seconds=(
-                max((now - charging.last_changed).total_seconds(), 0.0)
-                if charging.last_changed is not None
-                else 0.0
-            ),
-            home_control_active=self._home_control_active(),
-            cloud_evidence_stable=cloud_stable,
-            smart_path_selected=True,
-            socket_on=smart.socket_on,
-            cable_connected=(
-                self._mapped_state(connection.cable_connected_entity) == "on"
-            ),
-            charge_allowed=(self.target_current_a or 0.0) >= physical_minimum_a,
-            actuator_writable=(
-                observation.current_maximum_a is not None
-                and observation.current_maximum_a > 0
-                and observation.charge_switch_on is not None
-            ),
-            target_current_a=self.target_current_a or 0.0,
-            requested_current_a=observation.requested_current_a,
-            actual_current_a=actual_current if actual_valid else float("nan"),
-            vehicle_soc_percent=vehicle_soc if vehicle_soc is not None else float("nan"),
-            charge_limit_percent=observation.charge_limit_percent,
-            writable_maximum_a=observation.current_maximum_a,
-            charge_switch_on=observation.charge_switch_on,
+        return evaluate_smart_socket_recovery_observation(
+            SmartSocketRecoveryEvidence(
+                now=now,
+                stable_seconds=self._float(
+                    CONF_EV_SMART_RECOVERY_NO_POWER_SECONDS,
+                    DEFAULT_EV_SMART_RECOVERY_NO_POWER_SECONDS,
+                ),
+                charging_state=charging.available_state,
+                charging_last_changed=charging.last_changed,
+                at_home_state=at_home.available_state,
+                at_home_last_changed=at_home.last_changed,
+                cable_state=cable.available_state,
+                cable_last_changed=cable.last_changed,
+                cloud_charge_switch_state=charge_switch.available_state,
+                cloud_charge_switch_last_changed=charge_switch.last_changed,
+                home_control_active=self._home_control_active(),
+                smart_path_selected=True,
+                socket_on=smart.socket_on,
+                target_current_a=self.target_current_a,
+                physical_minimum_a=physical_minimum_a,
+                requested_current_a=observation.requested_current_a,
+                actual_current_a=actual_current,
+                actual_current_valid=actual_valid,
+                vehicle_soc_percent=vehicle_soc,
+                charge_limit_percent=observation.charge_limit_percent,
+                writable_maximum_a=observation.current_maximum_a,
+                charge_switch_on=observation.charge_switch_on,
+            )
         )
 
     def _suppress_unconfirmed_smart_stage(

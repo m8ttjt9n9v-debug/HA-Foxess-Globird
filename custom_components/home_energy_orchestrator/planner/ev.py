@@ -496,6 +496,19 @@ class SmartSocketObservation:
 
 
 @dataclass(frozen=True, slots=True)
+class SmartSocketObservationEvidence:
+    """Primitive feedback used to compose the switchable-supply view."""
+
+    now: datetime
+    requested_current_a: float | None
+    charge_switch_on: bool | None
+    socket_state: str | None
+    socket_last_changed: datetime | None
+    current_maximum_a: float | None
+    current_step_a: float | None
+
+
+@dataclass(frozen=True, slots=True)
 class SmartSocketRecoveryObservation:
     """Coherent evidence consumed by the one-shot fault recovery."""
 
@@ -515,6 +528,119 @@ class SmartSocketRecoveryObservation:
     charge_limit_percent: float
     writable_maximum_a: float | None
     charge_switch_on: bool | None
+
+
+@dataclass(frozen=True, slots=True)
+class SmartSocketRecoveryEvidence:
+    """Primitive coherent feedback used to compose recovery observation."""
+
+    now: datetime
+    stable_seconds: float
+    charging_state: str | None
+    charging_last_changed: datetime | None
+    at_home_state: str | None
+    at_home_last_changed: datetime | None
+    cable_state: str | None
+    cable_last_changed: datetime | None
+    cloud_charge_switch_state: str | None
+    cloud_charge_switch_last_changed: datetime | None
+    home_control_active: bool
+    smart_path_selected: bool
+    socket_on: bool | None
+    target_current_a: float | None
+    physical_minimum_a: float
+    requested_current_a: float | None
+    actual_current_a: float
+    actual_current_valid: bool
+    vehicle_soc_percent: float | None
+    charge_limit_percent: float
+    writable_maximum_a: float | None
+    charge_switch_on: bool | None
+
+
+def evaluate_smart_socket_observation(
+    evidence: SmartSocketObservationEvidence,
+) -> SmartSocketObservation | None:
+    """Compose the retained socket age and actuator observation."""
+    if evidence.socket_state not in {"on", "off"} or evidence.socket_last_changed is None:
+        return None
+    socket_on = evidence.socket_state == "on"
+    socket_on_seconds = (
+        max((evidence.now - evidence.socket_last_changed).total_seconds(), 0.0)
+        if socket_on
+        else 0.0
+    )
+    return SmartSocketObservation(
+        requested_current_a=evidence.requested_current_a,
+        charge_switch_on=evidence.charge_switch_on,
+        socket_on=socket_on,
+        socket_on_seconds=socket_on_seconds,
+        current_maximum_a=evidence.current_maximum_a,
+        current_step_a=evidence.current_step_a,
+    )
+
+
+def evaluate_smart_socket_recovery_observation(
+    evidence: SmartSocketRecoveryEvidence,
+) -> SmartSocketRecoveryObservation:
+    """Compose coherent recovery eligibility without platform dependencies."""
+    cloud_feedback = (
+        (evidence.at_home_state, evidence.at_home_last_changed),
+        (evidence.cable_state, evidence.cable_last_changed),
+        (
+            evidence.cloud_charge_switch_state,
+            evidence.cloud_charge_switch_last_changed,
+        ),
+    )
+    evidence_age_stable = all(
+        state is not None
+        and last_changed is not None
+        and 0 <= (evidence.now - last_changed).total_seconds()
+        and (evidence.now - last_changed).total_seconds() >= evidence.stable_seconds
+        for state, last_changed in cloud_feedback
+    )
+    cloud_stable = bool(
+        evidence_age_stable
+        and evidence.at_home_state in {"home", "on"}
+        and evidence.cable_state == "on"
+        and evidence.cloud_charge_switch_state in {"on", "off"}
+    )
+    target_current = evidence.target_current_a or 0.0
+    return SmartSocketRecoveryObservation(
+        charging_state=evidence.charging_state,
+        charging_state_seconds=(
+            max(
+                (evidence.now - evidence.charging_last_changed).total_seconds(),
+                0.0,
+            )
+            if evidence.charging_last_changed is not None
+            else 0.0
+        ),
+        home_control_active=evidence.home_control_active,
+        cloud_evidence_stable=cloud_stable,
+        smart_path_selected=evidence.smart_path_selected,
+        socket_on=evidence.socket_on,
+        cable_connected=evidence.cable_state == "on",
+        charge_allowed=target_current >= evidence.physical_minimum_a,
+        actuator_writable=(
+            evidence.writable_maximum_a is not None
+            and evidence.writable_maximum_a > 0
+            and evidence.charge_switch_on is not None
+        ),
+        target_current_a=target_current,
+        requested_current_a=evidence.requested_current_a,
+        actual_current_a=(
+            evidence.actual_current_a if evidence.actual_current_valid else float("nan")
+        ),
+        vehicle_soc_percent=(
+            evidence.vehicle_soc_percent
+            if evidence.vehicle_soc_percent is not None
+            else float("nan")
+        ),
+        charge_limit_percent=evidence.charge_limit_percent,
+        writable_maximum_a=evidence.writable_maximum_a,
+        charge_switch_on=evidence.charge_switch_on,
+    )
 
 
 @dataclass(frozen=True, slots=True)
