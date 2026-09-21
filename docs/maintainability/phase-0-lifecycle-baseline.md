@@ -141,3 +141,9 @@ actuator feedback alone never proves ownership, unknown ownership never writes,
 and Self Use is the checkpoint boundary. A previous-valid-snapshot envelope
 remains optional persistence hardening and must pass the rollback gate before
 implementation.
+
+The fixed-seed Safety Lock replay runs as part of the ordinary test suite. The
+repository workflow executes that suite on pull requests, weekly scheduled
+checks and before publishing a tagged release. This is deterministic
+hardening, not a replacement for retained named incident fixtures or the
+operational soak gates.

@@ -41,6 +41,7 @@ issued or persisted as an HEO-owned session.
 - An assertion of an empty ordered FoxESS service-call trace after every event
   and reload boundary.
 - Scorecard and incident-catalogue evidence updates.
+- Scheduled and tagged-release workflow enforcement of the same test suite.
 
 ## Compatibility
 
@@ -56,6 +57,8 @@ Recorder statistic or downgrade path.
 - Record the seed and event ordinal in every failure assertion.
 - Run the existing lifecycle harness, focused Safety Lock tests, full suite and
   Ruff.
+- Ensure the generated replay runs on pull requests, weekly scheduled checks
+  and before a release asset is published.
 
 ## Rollback
 
@@ -71,7 +74,9 @@ command exists to restore.
 On 2026-09-21, the deterministic 100-event replay passed with no captured
 FoxESS command. The complete 975-case suite passed in runner-safe batches, as
 did repository-wide Ruff. The test is pure harness coverage: it has no live
-site, package, release or hardware side effect.
+site, package, release or hardware side effect. The repository workflows now
+run the suite on pull requests, weekly and before a tagged release is
+published; these workflow changes remain local until a later authorized push.
 
 ## Completion record
 
