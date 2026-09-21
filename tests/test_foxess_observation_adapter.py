@@ -1,5 +1,7 @@
 """Tests for the side-effect-free FoxESS observation boundary."""
 
+import pytest
+
 from custom_components.home_energy_orchestrator.foxess_adapter import (
     FoxessEntityMap,
 )
@@ -104,6 +106,34 @@ def test_capture_fails_closed_for_missing_or_unavailable_entities(hass) -> None:
     assert result.charge_source_available is False
     assert result.export_source_available is False
     assert result.mapped_entities_available is False
+
+
+@pytest.mark.parametrize("invalid_power", ["-1", "nan", "inf", "-inf"])
+def test_capture_fails_closed_for_invalid_numeric_power_feedback(
+    hass, invalid_power: str
+) -> None:
+    hass.states.async_set(
+        ENTITIES.work_mode_entity,
+        "Self Use",
+        {"options": ["Self Use", "Force Charge", "Force Discharge"]},
+    )
+    hass.states.async_set(
+        ENTITIES.force_charge_power_entity,
+        invalid_power,
+        {"unit_of_measurement": "kW"},
+    )
+    hass.states.async_set(
+        ENTITIES.force_discharge_power_entity,
+        "0",
+        {"unit_of_measurement": "kW"},
+    )
+
+    result = capture_foxess_feedback(hass, ENTITIES)
+
+    assert result.observation is None
+    assert result.manual_observation is None
+    assert result.charge_power_kw is None
+    assert result.discharge_power_kw == 0.0
 
 
 def test_manual_feedback_preserves_raw_unavailable_mode(hass) -> None:

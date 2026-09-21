@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from math import isfinite
 
 from homeassistant.core import HomeAssistant, State
 
@@ -106,21 +107,23 @@ def _power_state_kw(state: State | None) -> float | None:
     if state is None or state.state in INVALID_STATES:
         return None
     try:
-        return power_to_kw(
+        value = power_to_kw(
             float(state.state),
             state.attributes.get("unit_of_measurement"),
         )
     except (TypeError, ValueError):
         return None
+    return value if isfinite(value) and value >= 0 else None
 
 
 def _power_max_kw(state: State | None) -> float:
     if state is None:
         return 0.0
     try:
-        return power_to_kw(
+        value = power_to_kw(
             float(state.attributes.get("max", 0.0)),
             state.attributes.get("unit_of_measurement"),
         )
     except (TypeError, ValueError):
         return 0.0
+    return value if isfinite(value) and value >= 0 else 0.0

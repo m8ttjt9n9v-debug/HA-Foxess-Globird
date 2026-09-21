@@ -297,7 +297,13 @@ class ActiveFoxessController:
                     allow_writes=True,
                 )
             plan = apply_force_mode_command_delays(transition.plan)
-            executed = await self._adapter.async_execute(plan)
+            try:
+                executed = await self._adapter.async_execute(plan)
+            except Exception:
+                executed = self._adapter.last_executed
+                self.last_actions = executed
+                self.writes_performed += len(executed)
+                raise
             self.last_actions = executed
             self.writes_performed += len(executed)
             if executed:
@@ -454,7 +460,13 @@ class ActiveFoxessController:
                     allow_writes=True,
                 )
             plan = apply_force_mode_command_delays(transition.plan)
-            executed = await self._adapter.async_execute(plan)
+            try:
+                executed = await self._adapter.async_execute(plan)
+            except Exception:
+                executed = self._adapter.last_executed
+                self.last_actions = executed
+                self.writes_performed += len(executed)
+                raise
             self.last_actions = executed
             self.writes_performed += len(executed)
             if executed:

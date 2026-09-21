@@ -109,7 +109,27 @@ def test_negative_and_nonfinite_energy_is_unavailable_without_rewriting_number(h
     hass.states.async_set("sensor.nan", "nan", {"unit_of_measurement": "A"})
     nonfinite = capture_ev_entity_feedback(hass, "sensor.nan")
     assert nonfinite.number is None
-    assert nonfinite.current_a is not None and isnan(nonfinite.current_a)
+    assert nonfinite.current_a is None
+
+
+@pytest.mark.parametrize("reported", ["nan", "inf", "-inf"])
+def test_nonfinite_actual_current_is_invalid_while_charging(hass, reported: str) -> None:
+    hass.states.async_set("sensor.car_charging", "charging")
+    hass.states.async_set(
+        "sensor.car_actual_current",
+        reported,
+        {"unit_of_measurement": "A"},
+    )
+
+    result = capture_ev_feedback(
+        hass,
+        EvObservationEntityMap(
+            charging_state_entity="sensor.car_charging",
+            actual_current_entity="sensor.car_actual_current",
+        ),
+    )
+
+    assert result.actual_current_result == (0.0, False)
 
 
 def test_snapshot_is_immutable(hass) -> None:

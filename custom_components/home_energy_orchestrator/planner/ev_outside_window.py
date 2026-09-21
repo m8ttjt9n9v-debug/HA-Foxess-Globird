@@ -305,13 +305,15 @@ def evaluate_solar_spill_telemetry(
     evidence: SolarSpillTelemetryEvidence,
 ) -> SolarSpillTelemetryEvaluation:
     """Evaluate retained fast-source coherence and reconstruct spill inputs."""
-    source_timestamps = _effective_source_timestamps(
+    grid_timestamps = _effective_source_timestamps(
         evidence.grid_reason,
         evidence.grid_source_updated_at,
-    ) + _effective_source_timestamps(
+    )
+    battery_timestamps = _effective_source_timestamps(
         evidence.battery_reason,
         evidence.battery_source_updated_at,
     )
+    source_timestamps = grid_timestamps + battery_timestamps
     timestamps = tuple(timestamp for timestamp in source_timestamps if timestamp is not None)
     coherent = (
         evidence.grid_power_kw is not None
@@ -319,7 +321,10 @@ def evaluate_solar_spill_telemetry(
         and evidence.actual_ev_current_valid
         and evidence.actual_current_entity_present
         and evidence.battery_soc_entity_present
+        and bool(grid_timestamps)
+        and bool(battery_timestamps)
         and all(timestamp is not None for timestamp in source_timestamps)
+        and bool(timestamps)
         and all(
             0 <= (evidence.now - timestamp).total_seconds() <= evidence.max_age_seconds
             for timestamp in timestamps

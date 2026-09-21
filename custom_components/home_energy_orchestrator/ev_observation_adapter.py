@@ -249,12 +249,13 @@ def _current_a(state: State | None) -> float | None:
     if state is None:
         return None
     try:
-        return current_to_a(
+        value = current_to_a(
             float(state.state),
             state.attributes.get("unit_of_measurement"),
         )
     except (TypeError, ValueError):
         return None
+    return value if isfinite(value) else None
 
 
 def _energy_kwh(state: State | None) -> float | None:

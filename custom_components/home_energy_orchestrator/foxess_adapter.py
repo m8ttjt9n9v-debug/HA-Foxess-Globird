@@ -46,6 +46,7 @@ class FoxessServiceAdapter:
         self.entities = entities
         self.allow_writes = allow_writes
         self._lock = asyncio.Lock()
+        self.last_executed: tuple[str, ...] = ()
 
     async def async_execute(self, plan: FoxessCommandPlan) -> tuple[str, ...]:
         """Execute commands in order, or fail before the first write."""
@@ -54,10 +55,12 @@ class FoxessServiceAdapter:
         if not self.allow_writes:
             raise FoxessWriteBlocked("FoxESS writes are disabled until commissioning")
         async with self._lock:
+            self.last_executed = ()
             executed: list[str] = []
             for command in plan.commands:
                 await self._async_execute_command(command)
                 executed.append(command.action)
+                self.last_executed = tuple(executed)
             return tuple(executed)
 
     async def _async_execute_command(self, command: FoxessCommand) -> None:

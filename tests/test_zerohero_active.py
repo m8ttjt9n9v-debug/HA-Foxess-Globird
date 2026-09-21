@@ -878,6 +878,59 @@ async def test_local_modbus_free_charge_starts_at_noon_boundary(hass, monkeypatc
     } == {("number", "set_value"), ("select", "select_option")}
 
 
+async def test_charge_controller_retains_partial_trace_when_mode_write_fails(
+    hass, monkeypatch
+):
+    async def accept_number(_call):
+        return None
+
+    async def reject_select(_call):
+        raise RuntimeError("mode write failed")
+
+    async def no_wait(_seconds):
+        return None
+
+    hass.services.async_register("number", "set_value", accept_number)
+    hass.services.async_register("select", "select_option", reject_select)
+    hass.states.async_set(
+        "select.foxess_mode",
+        "Self Use",
+        {"options": ["Self Use", "Force Discharge", "Force Charge"]},
+    )
+    hass.states.async_set(
+        "number.foxess_charge", "0", {"unit_of_measurement": "kW", "max": 15}
+    )
+    hass.states.async_set(
+        "number.foxess_discharge", "0", {"unit_of_measurement": "kW", "max": 15}
+    )
+    monkeypatch.setattr(
+        "custom_components.home_energy_orchestrator.active.dt_util.now",
+        lambda: datetime(2026, 9, 10, 12, 1, tzinfo=UTC),
+    )
+    monkeypatch.setattr(
+        "custom_components.home_energy_orchestrator.foxess_adapter.asyncio.sleep", no_wait
+    )
+    coordinator = _coordinator(
+        **{
+            CONF_AUTOMATIC_CONTROL_ENABLED: True,
+            CONF_AUTOMATIC_CHARGE_ENABLED: True,
+            CONF_REHEARSAL_MODE: False,
+            CONF_FREE_CHARGE_START: "12:01:00",
+            CONF_FREE_CHARGE_END: "14:59:00",
+            CONF_BATTERY_FREE_WINDOW_TARGET: 100.0,
+            CONF_INVERTER_CHARGE_LIMIT_KW: 15.0,
+        }
+    )
+    coordinator.snapshot.battery_soc = 20.0
+    controller = _loaded_controller(hass, coordinator)
+
+    with pytest.raises(RuntimeError, match="mode write failed"):
+        await controller.async_reconcile()
+
+    assert controller.last_actions == ("set_charge_power",)
+    assert controller.writes_performed == 1
+
+
 async def test_local_modbus_charge_cannot_misread_noon_as_midnight(hass, monkeypatch):
     calls = []
     hass.bus.async_listen(EVENT_CALL_SERVICE, calls.append)
@@ -1402,3 +1455,43 @@ async def test_latched_charge_marks_recovering_when_feedback_is_unavailable(hass
 
     assert controller.charge_session.phase == "recovering"
     assert controller.last_reason == "foxess_feedback_unavailable"
+
+
+@pytest.mark.parametrize("invalid_power", ["-1", "nan", "inf", "-inf"])
+async def test_latched_charge_fails_closed_for_invalid_numeric_feedback(
+    hass, invalid_power: str
+):
+    calls = []
+    hass.bus.async_listen(EVENT_CALL_SERVICE, calls.append)
+    hass.states.async_set(
+        "select.foxess_mode",
+        "Force Charge",
+        {"options": ["Self Use", "Force Discharge", "Force Charge"]},
+    )
+    hass.states.async_set(
+        "number.foxess_charge",
+        invalid_power,
+        {"unit_of_measurement": "kW", "max": 10},
+    )
+    hass.states.async_set(
+        "number.foxess_discharge", "0", {"unit_of_measurement": "kW", "max": 10}
+    )
+    controller = _loaded_controller(
+        hass,
+        _coordinator(
+            **{
+                CONF_AUTOMATIC_CONTROL_ENABLED: True,
+                CONF_AUTOMATIC_CHARGE_ENABLED: True,
+                CONF_REHEARSAL_MODE: False,
+            }
+        ),
+    )
+    controller.charge_session = ChargeSessionState("active", 10.0, 0)
+
+    await controller.async_reconcile()
+
+    assert controller.charge_session.phase == "recovering"
+    assert controller.last_reason == "foxess_feedback_unavailable"
+    assert controller.last_actions == ()
+    assert controller.writes_performed == 0
+    assert calls == []

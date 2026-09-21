@@ -74,3 +74,29 @@ async def test_adapter_executes_an_explicit_ordered_plan(hass: HomeAssistant) ->
         "entity_id": "select.work_mode",
         "option": "Force Charge",
     }
+
+
+async def test_adapter_retains_partial_trace_when_a_later_service_fails(
+    hass: HomeAssistant,
+) -> None:
+    async def accept_number(call) -> None:
+        return None
+
+    async def reject_select(call) -> None:
+        raise RuntimeError("service failed")
+
+    hass.services.async_register("number", "set_value", accept_number)
+    hass.services.async_register("select", "select_option", reject_select)
+    adapter = FoxessServiceAdapter(hass, ENTITIES, allow_writes=True)
+    plan = FoxessCommandPlan(
+        (
+            FoxessCommand("set_charge_power", 10),
+            FoxessCommand("select_mode", "Force Charge"),
+        ),
+        "test",
+    )
+
+    with pytest.raises(RuntimeError, match="service failed"):
+        await adapter.async_execute(plan)
+
+    assert adapter.last_executed == ("set_charge_power",)

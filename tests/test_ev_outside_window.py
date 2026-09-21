@@ -204,7 +204,6 @@ def test_solar_spill_telemetry_fallback_uses_only_accepted_signed_source_clock()
         battery_reason="signed_fallback_pair_stale",
         battery_source_updated_at=(stale, stale, NOW),
     )
-
     assert evaluate_solar_spill_telemetry(evidence).telemetry_valid is True
     assert (
         evaluate_solar_spill_telemetry(
@@ -212,6 +211,23 @@ def test_solar_spill_telemetry_fallback_uses_only_accepted_signed_source_clock()
         ).telemetry_valid
         is False
     )
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {"grid_source_updated_at": ()},
+        {"battery_source_updated_at": ()},
+        {"grid_source_updated_at": (), "battery_source_updated_at": ()},
+    ],
+)
+def test_solar_spill_telemetry_fails_closed_for_empty_provenance(changes):
+    evaluation = evaluate_solar_spill_telemetry(replace(TELEMETRY, **changes))
+
+    assert evaluation.telemetry_valid is False
+    assert evaluation.ev_power_kw == 2.3
+    assert evaluation.grid_export_kw == 2.0
+    assert evaluation.battery_charge_kw == 0.5
 
 
 @pytest.mark.parametrize(
