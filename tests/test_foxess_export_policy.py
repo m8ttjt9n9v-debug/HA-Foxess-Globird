@@ -9,12 +9,35 @@ from custom_components.home_energy_orchestrator.planner.export_session import (
 from custom_components.home_energy_orchestrator.planner.foxess_export_policy import (
     FoxessExportPolicyBaseContext,
     FoxessExportPolicyContext,
+    evaluate_automatic_export_remaining,
     evaluate_foxess_export_policy,
     evaluate_foxess_export_policy_base,
 )
 
 START = datetime(2026, 9, 5, 18, 0, tzinfo=UTC)
 FINISH = datetime(2026, 9, 5, 21, 0, tzinfo=UTC)
+
+
+def test_automatic_export_remaining_retains_partial_publication_contract() -> None:
+    healthy = evaluate_automatic_export_remaining(
+        exported_kwh=5,
+        automatic_limit_kwh=20,
+        previous_remaining_kwh=7,
+    )
+    missing = evaluate_automatic_export_remaining(
+        exported_kwh=None,
+        automatic_limit_kwh=20,
+        previous_remaining_kwh=7,
+    )
+    malformed = evaluate_automatic_export_remaining(
+        exported_kwh="invalid",
+        automatic_limit_kwh=20,
+        previous_remaining_kwh=7,
+    )
+
+    assert (healthy.remaining_kwh, healthy.valid) == (15, True)
+    assert (missing.remaining_kwh, missing.valid) == (None, True)
+    assert (malformed.remaining_kwh, malformed.valid) == (7, False)
 
 
 def _context(**overrides: object) -> FoxessExportPolicyContext:

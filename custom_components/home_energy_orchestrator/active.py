@@ -52,6 +52,7 @@ from .planner.foxess_charge_policy import (
 from .planner.foxess_export_policy import (
     FoxessExportPolicyBaseContext,
     FoxessExportPolicyContext,
+    evaluate_automatic_export_remaining,
     evaluate_foxess_export_policy,
     evaluate_foxess_export_policy_base,
 )
@@ -350,10 +351,14 @@ class ActiveFoxessController:
             getattr(self.coordinator, "zerohero_export", None), "imported_kwh", None
         )
         try:
-            allowance = runtime.export.automatic_limit_kwh
-            self.automatic_export_remaining_kwh = (
-                max(allowance - float(exported), 0.0) if exported is not None else None
+            remaining = evaluate_automatic_export_remaining(
+                exported_kwh=exported,
+                automatic_limit_kwh=runtime.export.automatic_limit_kwh,
+                previous_remaining_kwh=self.automatic_export_remaining_kwh,
             )
+            self.automatic_export_remaining_kwh = remaining.remaining_kwh
+            if not remaining.valid:
+                raise ValueError
             protected_house = getattr(
                 self.coordinator, "learning_remaining_kwh", None
             )

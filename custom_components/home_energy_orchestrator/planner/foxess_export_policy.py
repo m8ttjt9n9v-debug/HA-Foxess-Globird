@@ -89,6 +89,30 @@ class FoxessExportPolicyResult:
     finish_requested: bool
 
 
+@dataclass(frozen=True, slots=True)
+class AutomaticExportRemainingEvaluation:
+    """Parsed cap remainder plus whether later evidence may be evaluated."""
+
+    remaining_kwh: float | None
+    valid: bool
+
+
+def evaluate_automatic_export_remaining(
+    *,
+    exported_kwh: object | None,
+    automatic_limit_kwh: float,
+    previous_remaining_kwh: float | None,
+) -> AutomaticExportRemainingEvaluation:
+    """Calculate the retained non-negative remainder without losing fallback."""
+    if exported_kwh is None:
+        return AutomaticExportRemainingEvaluation(None, True)
+    try:
+        remaining = max(automatic_limit_kwh - float(exported_kwh), 0.0)
+    except (TypeError, ValueError):
+        return AutomaticExportRemainingEvaluation(previous_remaining_kwh, False)
+    return AutomaticExportRemainingEvaluation(remaining, True)
+
+
 def evaluate_foxess_export_policy_base(
     context: FoxessExportPolicyBaseContext,
 ) -> FoxessExportPolicyBaseResult:
@@ -146,14 +170,14 @@ def evaluate_foxess_export_policy(
     planned_start: datetime | None = None
     eligible = False
     try:
-        automatic_remaining_kwh = (
-            max(
-                context.automatic_limit_kwh - float(context.exported_kwh),
-                0.0,
-            )
-            if context.exported_kwh is not None
-            else None
+        remaining = evaluate_automatic_export_remaining(
+            exported_kwh=context.exported_kwh,
+            automatic_limit_kwh=context.automatic_limit_kwh,
+            previous_remaining_kwh=context.previous_automatic_remaining_kwh,
         )
+        automatic_remaining_kwh = remaining.remaining_kwh
+        if not remaining.valid:
+            raise ValueError
         protected_ev_kwh = context.protected_ev_kwh
         if (
             context.available_after_reserve_kwh is not None
