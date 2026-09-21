@@ -14,6 +14,7 @@ from custom_components.home_energy_orchestrator.planner.ev import (
     DirectEvseReconciliationState,
     EvCommand,
     EvCommandPlan,
+    EvDecisionCadenceEvidence,
     FreeWindowCurrentInputs,
     FreeWindowTargetEvidence,
     GeneralChargeLimitEvidence,
@@ -27,6 +28,7 @@ from custom_components.home_energy_orchestrator.planner.ev import (
     estimate_other_free_window_import_kwh,
     estimate_vehicle_energy_to_target_kwh,
     evaluate_allowance_projection,
+    evaluate_ev_decision_cadence,
     evaluate_free_window_target,
     evaluate_general_charge_limit,
     finalize_direct_evse_reconciliation,
@@ -87,6 +89,66 @@ FREE_WINDOW_TARGET = FreeWindowTargetEvidence(
     settle_minutes=5,
     ev_priority_selected=True,
 )
+
+CADENCE_NOW = datetime(2026, 9, 7, 12, 29, 15, tzinfo=UTC)
+CADENCE = EvDecisionCadenceEvidence(
+    now=CADENCE_NOW,
+    last_decision_at=CADENCE_NOW - timedelta(seconds=58),
+    previous_fingerprint=(80, False, "ev", 1, 16, 1, 50, 100, 1),
+    vehicle_soc_percent=81,
+    charge_to_full_requested=False,
+    free_window_priority="ev",
+    current_minimum_a=1,
+    current_maximum_a=16,
+    current_step_a=1,
+    limit_minimum_percent=50,
+    limit_maximum_percent=100,
+    limit_step_percent=1,
+    configured_policy_limit_percent=100,
+    in_free_window=True,
+    pre_free_active=False,
+    current_target_available=True,
+    allowance_guard_enabled=True,
+    house_load_includes_ev=True,
+    actual_ev_current_valid=True,
+    requested_current_a=16,
+    actual_ev_current_a=3,
+    grid_current_valid=True,
+    grid_current_a=38,
+    service_limit_a=80,
+)
+
+
+def test_ev_decision_cadence_holds_only_soc_change_during_current_convergence():
+    evaluation = evaluate_ev_decision_cadence(CADENCE)
+
+    assert evaluation.only_vehicle_soc_changed is True
+    assert evaluation.soc_remains_below_policy is True
+    assert evaluation.current_transition_pending is True
+    assert evaluation.service_overrun is False
+    assert evaluation.defer_soc_redecision is True
+    assert evaluation.should_decide is False
+
+
+@pytest.mark.parametrize(
+    ("changes", "expected_defer"),
+    (
+        ({"grid_current_a": 81}, False),
+        ({"vehicle_soc_percent": 100}, False),
+        ({"allowance_guard_enabled": False}, False),
+        ({"last_decision_at": CADENCE_NOW - timedelta(minutes=3)}, False),
+        ({"pre_free_active": True}, True),
+        ({"in_free_window": False}, False),
+    ),
+)
+def test_ev_decision_cadence_never_hides_safety_policy_or_time_boundaries(
+    changes,
+    expected_defer,
+):
+    evaluation = evaluate_ev_decision_cadence(replace(CADENCE, **changes))
+
+    assert evaluation.defer_soc_redecision is expected_defer
+    assert evaluation.should_decide is True
 
 
 def test_free_window_target_composes_policy_limit_and_physical_baseline():

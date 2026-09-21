@@ -11,7 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from math import ceil, floor, isfinite
-from typing import Literal
+from typing import Literal, cast
 
 DIRECT_EVSE_MAX_ATTEMPTS = 3
 DIRECT_EVSE_RETRY_INTERVAL = timedelta(seconds=30)
@@ -98,6 +98,146 @@ class FreeWindowTargetEvaluation:
     effective_minimum_a: float
     policy_limit_percent: float
     below_policy_limit: bool
+
+
+EvDecisionFingerprint = tuple[
+    float | None,
+    bool,
+    str,
+    float | None,
+    float | None,
+    float | None,
+    float | None,
+    float | None,
+    float | None,
+]
+
+
+@dataclass(frozen=True, slots=True)
+class EvDecisionCadenceEvidence:
+    """Primitive evidence governing one EV target recalculation."""
+
+    now: datetime
+    last_decision_at: datetime | None
+    previous_fingerprint: EvDecisionFingerprint | None
+    vehicle_soc_percent: float | None
+    charge_to_full_requested: bool
+    free_window_priority: str
+    current_minimum_a: float | None
+    current_maximum_a: float | None
+    current_step_a: float | None
+    limit_minimum_percent: float | None
+    limit_maximum_percent: float | None
+    limit_step_percent: float | None
+    configured_policy_limit_percent: float
+    in_free_window: bool
+    pre_free_active: bool
+    current_target_available: bool
+    allowance_guard_enabled: bool
+    house_load_includes_ev: bool
+    actual_ev_current_valid: bool
+    requested_current_a: float
+    actual_ev_current_a: float
+    grid_current_valid: bool
+    grid_current_a: float
+    service_limit_a: float
+    decision_interval: timedelta = timedelta(minutes=3)
+
+
+@dataclass(frozen=True, slots=True)
+class EvDecisionCadenceEvaluation:
+    """Fingerprint and retained transition-hold/recalculation decision."""
+
+    fingerprint: EvDecisionFingerprint
+    decision_interval_elapsed: bool
+    fingerprint_changed: bool
+    only_vehicle_soc_changed: bool
+    soc_remains_below_policy: bool
+    current_transition_pending: bool
+    service_overrun: bool
+    defer_soc_redecision: bool
+    should_decide: bool
+
+
+def evaluate_ev_decision_cadence(
+    evidence: EvDecisionCadenceEvidence,
+) -> EvDecisionCadenceEvaluation:
+    """Preserve the three-minute and converging-current decision boundaries."""
+    fingerprint: EvDecisionFingerprint = (
+        evidence.vehicle_soc_percent,
+        evidence.charge_to_full_requested,
+        evidence.free_window_priority,
+        evidence.current_minimum_a,
+        evidence.current_maximum_a,
+        evidence.current_step_a,
+        evidence.limit_minimum_percent,
+        evidence.limit_maximum_percent,
+        evidence.limit_step_percent,
+    )
+    interval_elapsed = (
+        evidence.last_decision_at is not None
+        and evidence.now - evidence.last_decision_at >= evidence.decision_interval
+    )
+    fingerprint_changed = fingerprint != evidence.previous_fingerprint
+    only_soc_changed = (
+        evidence.previous_fingerprint is not None
+        and fingerprint[0] != evidence.previous_fingerprint[0]
+        and fingerprint[1:] == evidence.previous_fingerprint[1:]
+    )
+    try:
+        previous_vehicle_soc = float(evidence.previous_fingerprint[0])
+    except (TypeError, ValueError):
+        previous_vehicle_soc = None
+    policy_limit = (
+        100.0
+        if evidence.charge_to_full_requested
+        else evidence.configured_policy_limit_percent
+    )
+    current_vehicle_soc = cast(float, evidence.vehicle_soc_percent)
+    soc_remains_below_policy = (
+        previous_vehicle_soc is not None
+        and previous_vehicle_soc < policy_limit
+        and current_vehicle_soc < policy_limit
+    )
+    current_transition_pending = (
+        evidence.in_free_window
+        and evidence.allowance_guard_enabled
+        and evidence.house_load_includes_ev
+        and evidence.actual_ev_current_valid
+        and evidence.current_step_a is not None
+        and abs(evidence.requested_current_a - evidence.actual_ev_current_a)
+        > evidence.current_step_a / 2
+    )
+    service_overrun = (
+        evidence.grid_current_valid
+        and evidence.service_limit_a > 0
+        and evidence.grid_current_a > evidence.service_limit_a
+    )
+    defer_soc_redecision = (
+        only_soc_changed
+        and soc_remains_below_policy
+        and current_transition_pending
+        and not service_overrun
+        and not interval_elapsed
+    )
+    should_decide = not evidence.in_free_window or (
+        evidence.pre_free_active
+        or not evidence.current_target_available
+        or evidence.last_decision_at is None
+        or interval_elapsed
+        or (fingerprint_changed and not defer_soc_redecision)
+    )
+    return EvDecisionCadenceEvaluation(
+        fingerprint=fingerprint,
+        decision_interval_elapsed=interval_elapsed,
+        fingerprint_changed=fingerprint_changed,
+        only_vehicle_soc_changed=only_soc_changed,
+        soc_remains_below_policy=soc_remains_below_policy,
+        current_transition_pending=current_transition_pending,
+        service_overrun=service_overrun,
+        defer_soc_redecision=defer_soc_redecision,
+        should_decide=should_decide,
+    )
 
 
 def evaluate_free_window_target(

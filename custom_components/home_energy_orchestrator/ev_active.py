@@ -135,6 +135,8 @@ from .planner.ev import (
     DirectEvseReconciliationState,
     EvCommandPlan,
     EvCurrentDecision,
+    EvDecisionCadenceEvidence,
+    EvDecisionFingerprint,
     FreeWindowTargetEvidence,
     GeneralChargeLimitEvidence,
     SmartSocketObservation,
@@ -143,6 +145,7 @@ from .planner.ev import (
     SmartSocketStageState,
     charging_path_ceiling_a,
     evaluate_allowance_projection,
+    evaluate_ev_decision_cadence,
     evaluate_free_window_target,
     evaluate_general_charge_limit,
     finalize_direct_evse_reconciliation,
@@ -281,7 +284,7 @@ class ActiveEvController:
         self.outside_target_active = False
         self.outside_stop_requested = False
         self.last_decision_at: datetime | None = None
-        self._decision_fingerprint: tuple[object, ...] | None = None
+        self._decision_fingerprint: EvDecisionFingerprint | None = None
         self._general_limit_write_fingerprint: tuple[float, float] | None = None
         self.last_saved_at: datetime | None = None
         self.target_current_a: float | None = None
@@ -546,76 +549,43 @@ class ActiveEvController:
                 )
                 return
             charge_to_full_requested = self._charge_to_full_requested()
-            decision_fingerprint = (
-                vehicle_soc,
-                charge_to_full_requested,
-                policy.free_window_priority,
-                observation.current_minimum_a,
-                observation.current_maximum_a,
-                observation.current_step_a,
-                observation.limit_minimum_percent,
-                observation.limit_maximum_percent,
-                observation.limit_step_percent,
-            )
-            decision_interval_elapsed = (
-                self.last_decision_at is not None
-                and now - self.last_decision_at >= timedelta(minutes=3)
-            )
-            fingerprint_changed = decision_fingerprint != self._decision_fingerprint
-            only_vehicle_soc_changed = (
-                self._decision_fingerprint is not None
-                and decision_fingerprint[0] != self._decision_fingerprint[0]
-                and decision_fingerprint[1:] == self._decision_fingerprint[1:]
-            )
-            try:
-                previous_vehicle_soc = float(self._decision_fingerprint[0])
-            except (TypeError, ValueError):
-                previous_vehicle_soc = None
-            policy_limit = (
-                100.0
-                if charge_to_full_requested
-                else self._float(
-                    CONF_EV_FREE_WINDOW_CHARGE_LIMIT,
-                    DEFAULT_EV_FREE_WINDOW_CHARGE_LIMIT,
+            cadence = evaluate_ev_decision_cadence(
+                EvDecisionCadenceEvidence(
+                    now=now,
+                    last_decision_at=self.last_decision_at,
+                    previous_fingerprint=self._decision_fingerprint,
+                    vehicle_soc_percent=vehicle_soc,
+                    charge_to_full_requested=charge_to_full_requested,
+                    free_window_priority=policy.free_window_priority,
+                    current_minimum_a=observation.current_minimum_a,
+                    current_maximum_a=observation.current_maximum_a,
+                    current_step_a=observation.current_step_a,
+                    limit_minimum_percent=observation.limit_minimum_percent,
+                    limit_maximum_percent=observation.limit_maximum_percent,
+                    limit_step_percent=observation.limit_step_percent,
+                    configured_policy_limit_percent=self._float(
+                        CONF_EV_FREE_WINDOW_CHARGE_LIMIT,
+                        DEFAULT_EV_FREE_WINDOW_CHARGE_LIMIT,
+                    ),
+                    in_free_window=in_window,
+                    pre_free_active=self.pre_free_session.active,
+                    current_target_available=self.target_current_a is not None,
+                    allowance_guard_enabled=policy.allowance_guard_enabled,
+                    house_load_includes_ev=(
+                        self.coordinator.runtime_config.house.load_includes_ev
+                    ),
+                    actual_ev_current_valid=ev_valid,
+                    requested_current_a=observation.requested_current_a,
+                    actual_ev_current_a=ev_current,
+                    grid_current_valid=grid_valid,
+                    grid_current_a=grid_current,
+                    service_limit_a=self._float(
+                        CONF_SERVICE_IMPORT_LIMIT_A,
+                        DEFAULT_SERVICE_IMPORT_LIMIT_A,
+                    ),
                 )
             )
-            soc_remains_below_policy = (
-                previous_vehicle_soc is not None
-                and previous_vehicle_soc < policy_limit
-                and vehicle_soc < policy_limit
-            )
-            current_transition_pending = (
-                in_window
-                and bool(
-                    policy.allowance_guard_enabled
-                )
-                and bool(
-                    self.coordinator.runtime_config.house.load_includes_ev
-                )
-                and ev_valid
-                and observation.current_step_a is not None
-                and abs(observation.requested_current_a - ev_current)
-                > observation.current_step_a / 2
-            )
-            service_limit = self._float(
-                CONF_SERVICE_IMPORT_LIMIT_A, DEFAULT_SERVICE_IMPORT_LIMIT_A
-            )
-            service_overrun = grid_valid and service_limit > 0 and grid_current > service_limit
-            defer_soc_redecision = (
-                only_vehicle_soc_changed
-                and soc_remains_below_policy
-                and current_transition_pending
-                and not service_overrun
-                and not decision_interval_elapsed
-            )
-            should_decide = not in_window or (
-                self.pre_free_session.active
-                or self.target_current_a is None
-                or self.last_decision_at is None
-                or decision_interval_elapsed
-                or (fingerprint_changed and not defer_soc_redecision)
-            )
-            if defer_soc_redecision:
+            if cadence.defer_soc_redecision:
                 self.decision_phase = "ev_current_transition_hold"
                 self.allowance_phase = "transition_hold"
             window_cleanup = cleanup_outside_ownership_for_free_window(
@@ -627,7 +597,7 @@ class ActiveEvController:
             self.pre_free_session = window_cleanup.pre_free_state
             self.outside_control_active = window_cleanup.outside_control_active
             self.outside_target_active = window_cleanup.outside_target_active
-            if should_decide:
+            if cadence.should_decide:
                 try:
                     calculated = (
                         self._calculate_target(
@@ -645,7 +615,7 @@ class ActiveEvController:
                 if not calculated:
                     return
                 self.last_decision_at = now
-                self._decision_fingerprint = decision_fingerprint
+                self._decision_fingerprint = cadence.fingerprint
 
             if self.target_current_a is None or self.target_limit_percent is None:
                 self.last_reason = "ev_target_unavailable"
