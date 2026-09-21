@@ -145,6 +145,10 @@ following remain deliberately open:
 4. one remote-topology soak, then remaining-site rollout; and
 5. explicit acceptance before Phase 8 changes scheduling.
 
+The staged observations, pass/fail criteria and immediate rollback triggers are
+defined in the
+[Phase 7 operational soak and rollback plan](phase-7-operational-soak-plan.md).
+
 Phase 8 may introduce one serialized, coalescing cycle request per config
 entry only after these gates. It must preserve the Phase 7 command,
 persistence, reason, boundary and incident traces exactly.
