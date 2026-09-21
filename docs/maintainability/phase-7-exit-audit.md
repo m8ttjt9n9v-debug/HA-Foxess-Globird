@@ -10,6 +10,10 @@ lifecycle, observation, repository, adapter-execution and publication duties,
 while immutable planner boundaries own gate, policy, priority, reconciliation
 and persistence decisions.
 
+The immutable implementation candidate for independent review is commit
+`4a73017` (full object ID `4a73017f90bd11813570ffda6b8c465851697f89`).
+Later documentation-only handoff commits do not change that review range.
+
 This audit does **not** authorize a release or deployment. Independent
 fresh-context review and the clean-instance, pilot, remote-topology and
 remaining-site soak sequence are still outstanding. Phase 8 scheduling work
@@ -99,6 +103,8 @@ At this audit checkpoint:
   release with the same empty command trace;
 - repository-wide Ruff passed;
 - controller and persistence static boundary scripts passed;
+- a clean `git archive` export of candidate `4a73017` separately passed the
+  956-test suite, 24 contracts, both static boundaries and Ruff;
 - the complete Phase 7 patch reverse-applied cleanly to an isolated copy of
   `HEAD`, where the resulting pre-Phase-7 tree passed all 685 of its tests; and
 - `README.md` remained unchanged.

@@ -6,7 +6,9 @@ This packet lets an engineer with no implementation context review the Phase 7
 controller decomposition without reconstructing the programme history. It is a
 review aid, not evidence that independent review occurred.
 
-Review range: pre-Phase-7 commit `4838e51` through candidate `HEAD`.
+Review range: pre-Phase-7 commit `4838e51` through implementation candidate
+`4a73017`. Review that exact commit, not a later moving `HEAD`. Documentation-
+only handoff commits after `4a73017` are outside the implementation range.
 
 Authoritative documents, in order:
 
@@ -63,19 +65,29 @@ characterization and approval.
 Run from a clean checkout of the candidate:
 
 ```bash
+git checkout --detach 4a73017
+test "$(git rev-parse HEAD)" = "4a73017f90bd11813570ffda6b8c465851697f89"
+test -z "$(git status --porcelain)"
 pytest -q
 pytest -q tests/test_*contract*.py
 python -m scripts.previous_release_rehearsal --tag v0.12.26
 python scripts/controller_boundary_contract.py --check
 python scripts/persistence_boundary_contract.py --check
 ruff check custom_components tests scripts
-git diff --check 4838e51..HEAD
+git diff --check 4838e51..4a73017
 ```
 
 Expected repository evidence at this candidate is 956 full-suite tests, 24
 frozen contract tests and two passing release-roundtrip system cases. Test
 counts are descriptive; review the assertions and command traces rather than
 treating the count as proof.
+
+The implementation candidate was also exported with `git archive 4a73017`
+into a tree with no working-copy files. That exported tree separately ran
+the 956-test suite, 24 frozen contracts, both static boundary checks and Ruff.
+The retained-state current → `v0.12.26` → current rehearsal passed from the
+clean repository immediately before the candidate commit. This reproducibility
+check prepares the review input; it is not independent review approval.
 
 ## Manual review checklist
 
