@@ -193,3 +193,12 @@ The completed outside-window stages are specified separately in
 [`ev-solar-spill-and-pre-free-policy.md`](ev-solar-spill-and-pre-free-policy.md).
 The separately configured daily allocation extension is specified in
 [`ev-daily-ready-backfill.md`](ev-daily-ready-backfill.md).
+
+When Automatic EV Control is commissioned on the direct Tessie path, the
+configured outside-window baseline is authoritative for a connected vehicle.
+A vehicle may retain its previous current and start itself as soon as it is
+plugged in; this does not create an independent control owner. If no authorised
+free-window, solar-spill, pre-free, daily-backfill, or Charge to Full stage is
+active, HEO enforces the baseline. With a configured 0 A baseline, an observed
+charging switch creates a bounded `stop_charging` obligation immediately,
+including when HEO did not initiate the session.

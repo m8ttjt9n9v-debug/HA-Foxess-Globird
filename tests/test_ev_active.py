@@ -1402,6 +1402,48 @@ async def test_outside_policy_stops_owned_free_window_charge_when_baseline_is_ze
     assert stopped == ["switch.car_charge"]
 
 
+async def test_zero_baseline_stops_vehicle_auto_start_after_evening_plugin(
+    hass: HomeAssistant,
+) -> None:
+    """Plugging in must not retain Tessie's previous 16 A setting."""
+    _set_ev_states(hass)
+    hass.states.async_set("number.car_current", "16", {"min": 1, "max": 16, "step": 1})
+    hass.states.async_set("sensor.car_actual_current", "0", {"unit_of_measurement": "A"})
+    hass.states.async_set("sensor.car_charging", "stopped")
+    hass.states.async_set("switch.car_charge", "off")
+    stopped = []
+
+    async def stop(call):
+        stopped.append(call.data["entity_id"])
+
+    hass.services.async_register("switch", "turn_off", stop)
+    coordinator = _coordinator(
+        _controller_config(
+            ev_daily_backfill_energy_kwh=0,
+            ev_protected_baseline_a=0,
+        )
+    )
+    coordinator.snapshot = replace(coordinator.snapshot, battery_soc=93)
+    coordinator.data = SimpleNamespace(available_after_reserve_kwh=30)
+    coordinator.learning_remaining_kwh = 10
+    coordinator.active_controller.export_plan = ExportPlan(13, 13, 0.87, "ready")
+    controller = ActiveEvController(hass, coordinator)
+
+    # The vehicle starts itself when plugged in; HEO did not own a preceding
+    # charging session and its prior target remains the configured zero.
+    controller.target_current_a = 0
+    hass.states.async_set("sensor.car_charging", "charging")
+    hass.states.async_set("sensor.car_actual_current", "16", {"unit_of_measurement": "A"})
+    hass.states.async_set("switch.car_charge", "on")
+
+    await controller.async_reconcile(datetime(2026, 9, 7, 18, 30, tzinfo=UTC))
+
+    assert controller.target_current_a == 0
+    assert controller.outside_stop_requested is True
+    assert controller.last_actions == ("stop_charging",)
+    assert stopped == ["switch.car_charge"]
+
+
 async def test_ev_battery_reserve_stops_automatic_outside_charge(
     hass: HomeAssistant,
 ) -> None:

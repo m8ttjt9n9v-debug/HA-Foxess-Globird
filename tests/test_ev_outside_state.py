@@ -165,7 +165,6 @@ def test_outside_ownership_preserves_stage_priority_and_stop_latches():
         baseline_a=0,
         configured_baseline_a=0,
         charge_switch_on=False,
-        previous_target_current_a=None,
         outside_control_active=False,
     )
     assert owned.outside_target_active is True
@@ -186,7 +185,6 @@ def test_outside_ownership_preserves_stage_priority_and_stop_latches():
         baseline_a=0,
         configured_baseline_a=0,
         charge_switch_on=False,
-        previous_target_current_a=None,
         outside_control_active=False,
     )
     assert retained_stop.daily_state is pending
@@ -202,7 +200,6 @@ def test_outside_ownership_preserves_stage_priority_and_stop_latches():
         baseline_a=0,
         configured_baseline_a=0,
         charge_switch_on=True,
-        previous_target_current_a=16,
         outside_control_active=False,
     )
     assert carried.daily_state.stop_pending is True
@@ -223,7 +220,6 @@ def test_outside_ownership_retains_baseline_and_prior_control_semantics():
         baseline_a=1,
         configured_baseline_a=1,
         charge_switch_on=False,
-        previous_target_current_a=None,
         outside_control_active=False,
     )
     assert baseline.outside_target_active is False
@@ -239,7 +235,6 @@ def test_outside_ownership_retains_baseline_and_prior_control_semantics():
         baseline_a=0,
         configured_baseline_a=0,
         charge_switch_on=False,
-        previous_target_current_a=None,
         outside_control_active=True,
     )
     assert retained.outside_target_active is False

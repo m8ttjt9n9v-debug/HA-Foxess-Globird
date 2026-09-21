@@ -508,8 +508,19 @@ class ActiveEvController:
             self.charge_to_full_started_at = charge_to_full.started_at
             self._apply_daily_backfill_cycle_state(charge_to_full.daily_state)
 
+            configured_baseline_a = self._float(
+                CONF_EV_PROTECTED_BASELINE_A,
+                DEFAULT_EV_PROTECTED_BASELINE_A,
+            )
+            unexpected_direct_charge = bool(
+                not smart_path
+                and configured_baseline_a <= 0
+                and observation.charge_switch_on
+            )
             outside_enabled = bool(
-                self._daily_backfill_enabled()
+                configured_baseline_a > 0
+                or unexpected_direct_charge
+                or self._daily_backfill_enabled()
                 or self._charge_to_full_requested()
                 or self.daily_backfill_stop_pending
                 or (
@@ -1686,7 +1697,6 @@ class ActiveEvController:
             baseline_a=baseline,
             configured_baseline_a=configured_baseline,
             charge_switch_on=observation.charge_switch_on,
-            previous_target_current_a=self.target_current_a,
             outside_control_active=self.outside_control_active,
         )
         self._apply_daily_backfill_cycle_state(ownership.daily_state)

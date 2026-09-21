@@ -27,6 +27,11 @@
   Automatic EV charging and recovery stop at that reserve instead of draining
   the house battery to its general 10% hard floor. Free-window charging and an
   explicit Charge to Full request retain their existing exceptions.
+- Enforce the configured outside-window baseline when a direct Tessie-controlled
+  vehicle starts itself after being plugged in. A zero baseline now creates an
+  immediate bounded `stop_charging` obligation even when HEO did not start the
+  session; authorised free-window, solar, backfill and Charge to Full stages
+  retain precedence.
 
 ## 0.12.26 — restore GloBird scorecard mappings on upgrade
 

@@ -540,6 +540,102 @@ async def test_ev_outside_charge_stops_at_house_battery_floor(hass, monkeypatch)
     harness.close()
 
 
+@pytest.mark.freeze_time("2026-09-17 08:21:00+00:00")
+async def test_evening_plugin_cannot_resume_retained_current_above_zero_baseline(
+    hass, monkeypatch
+) -> None:
+    """A newly plugged-in EV cannot bypass HEO with its retained current."""
+    harness = LifecycleHarness(hass)
+    _register_ev_services(harness, monkeypatch)
+    await _seed_foxess_states(harness, 93)
+    await _seed_ev_states(
+        harness,
+        soc=48,
+        actual_current=0,
+        requested_current=16,
+        stored_energy=28,
+        house_load=1.2,
+        site_current=0,
+    )
+    await harness.set_state("device_tracker.test_ev", "not_home")
+    await harness.set_state("binary_sensor.test_ev_cable", "off")
+    await harness.set_state("sensor.test_ev_charging", "disconnected")
+    await harness.set_state("switch.test_ev_charge", "off")
+    now = [datetime(2026, 9, 17, 8, 21, tzinfo=UTC)]
+    monkeypatch.setattr(
+        "custom_components.home_energy_orchestrator.ev_active.dt_util.now",
+        lambda: now[0],
+    )
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Unexpected plug-in charge",
+        version=6,
+        data=_ev_entry_data(
+            ev_daily_backfill_energy_kwh=0.0,
+            ev_protected_baseline_a=0.0,
+            ev_outside_battery_reserve_percent=20.0,
+        ),
+    )
+    entry.add_to_hass(hass)
+
+    await harness.setup(entry)
+    assert harness.service_calls == ()
+    harness.clear_service_calls()
+
+    # The vehicle returns with Tessie's retained 16 A setting and starts as
+    # soon as the cable is connected. No HEO stage authorised this session.
+    now[0] = datetime(2026, 9, 17, 8, 30, tzinfo=UTC)
+    await harness.set_state("device_tracker.test_ev", "home", observed_at=now[0])
+    await harness.set_state("binary_sensor.test_ev_cable", "on", observed_at=now[0])
+    await harness.set_state(
+        "sensor.test_site_current",
+        "0",
+        {"unit_of_measurement": "A"},
+        observed_at=now[0],
+    )
+    await harness.set_state(
+        "sensor.test_ev_actual_current",
+        "16",
+        {"unit_of_measurement": "A"},
+        observed_at=now[0],
+    )
+    await harness.set_state("sensor.test_ev_charging", "charging", observed_at=now[0])
+    await harness.set_state("switch.test_ev_charge", "on", observed_at=now[0])
+    await entry.runtime_data.ev_controller.async_reconcile(now[0])
+    entry.runtime_data.async_update_listeners()
+    await hass.async_block_till_done()
+
+    recorded_calls = [
+        (call.domain, call.service, call.service_data)
+        for call in harness.service_calls
+    ]
+    assert recorded_calls == [
+        (
+            "switch",
+            "turn_off",
+            {"entity_id": "switch.test_ev_charge"},
+        )
+    ], {
+        "last_reason": entry.runtime_data.ev_controller.last_reason,
+        "decision_phase": entry.runtime_data.ev_controller.decision_phase,
+        "outside_stop_requested": (
+            entry.runtime_data.ev_controller.outside_stop_requested
+        ),
+        "charge_switch_on": entry.runtime_data.ev_controller.charge_switch_on,
+        "target_current_a": entry.runtime_data.ev_controller.target_current_a,
+        "gate_status": entry.runtime_data.ev_controller.gate_status,
+    }
+    target = hass.states.get("sensor.home_energy_ev_current_target")
+    assert target is not None and target.state == "0.0"
+    assert entry.runtime_data.ev_controller.outside_stop_requested is True
+
+    await harness.unload(entry)
+    hass.services.async_remove("number", "set_value")
+    hass.services.async_remove("switch", "turn_on")
+    hass.services.async_remove("switch", "turn_off")
+    harness.close()
+
+
 @pytest.mark.freeze_time("2026-09-17 12:30:00+00:00")
 async def test_disconnected_ev_retains_read_only_learning_across_reload(
     hass, monkeypatch

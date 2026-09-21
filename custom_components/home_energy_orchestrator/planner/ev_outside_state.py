@@ -82,7 +82,6 @@ def reconcile_outside_ownership(
     baseline_a: float,
     configured_baseline_a: float,
     charge_switch_on: bool,
-    previous_target_current_a: float | None,
     outside_control_active: bool,
 ) -> OutsideOwnershipTransition:
     """Preserve outside ownership and stop obligations after stage selection."""
@@ -108,9 +107,12 @@ def reconcile_outside_ownership(
     elif (
         baseline_a < physical_minimum_a
         and charge_switch_on
-        and previous_target_current_a is not None
-        and previous_target_current_a >= physical_minimum_a
     ):
+        # Automatic EV control owns the configured site baseline, not merely
+        # sessions that HEO happened to start.  A vehicle can resume its last
+        # retained current as soon as it is plugged in; with a zero baseline
+        # and no authorised outside-window stage, that external start must
+        # become a bounded stop obligation immediately.
         next_daily = replace(
             daily_state,
             stop_pending=True,
