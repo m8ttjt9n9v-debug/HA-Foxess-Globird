@@ -209,6 +209,10 @@ class EvPersistenceState:
             },
         }
 
+    def validated_for_storage(self) -> EvPersistenceState:
+        """Apply the established grouped fallbacks before writing a snapshot."""
+        return type(self).from_payload(self.to_payload(), self.restored_at)
+
 
 def _reconciliation(payload: object, now: datetime) -> DirectEvseReconciliationState:
     if not isinstance(payload, dict):

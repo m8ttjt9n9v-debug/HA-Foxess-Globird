@@ -6,7 +6,6 @@ import asyncio
 import logging
 from contextvars import ContextVar
 from datetime import datetime, timedelta
-from math import isfinite
 
 from homeassistant.components import persistent_notification
 from homeassistant.core import CALLBACK_TYPE, HomeAssistant
@@ -127,7 +126,6 @@ from .planner.control_windows import (
 )
 from .planner.ev import (
     DIRECT_EVSE_MAX_ATTEMPTS,
-    DIRECT_EVSE_RECONCILIATION_PHASES,
     DIRECT_EVSE_RETRY_INTERVAL,
     AllowanceProjectionInputs,
     ChargeLimitInputs,
@@ -227,7 +225,10 @@ from .planner.ev_outside_window import (
     plan_pre_free_current,
     plan_solar_spill_current,
 )
-from .planner.ev_persistence import EvPersistenceState
+from .planner.ev_persistence import (
+    DailyBackfillPersistenceState,
+    EvPersistenceState,
+)
 from .planner.ev_power_constraints import inverter_backed_current_ceiling
 from .planner.learning import DemandHistory
 from .planner.timed_average import TimedAverageWindow
@@ -2306,284 +2307,59 @@ class ActiveEvController:
         persisted = await self._repository.async_load()
         if self._repository.last_restore_status != "restored":
             return
-        payload = persisted.to_payload()
         now = persisted.restored_at
-        self.grid_average.restore(payload.get("grid_average"), now)
-        self.ev_average.restore(payload.get("ev_average"), now)
-        self.driving_history = DemandHistory.from_payload(payload.get("driving_history"), now)
-        driving_snapshot = payload.get("driving_snapshot")
-        if isinstance(driving_snapshot, dict):
-            try:
-                snapshot_date_raw = driving_snapshot.get("snapshot_date")
-                snapshot_date = (
-                    datetime.fromisoformat(str(snapshot_date_raw)).date()
-                    if snapshot_date_raw
-                    else None
-                )
-                lifetime_raw = driving_snapshot.get("lifetime_energy_kwh")
-                lifetime = float(lifetime_raw) if lifetime_raw is not None else None
-                if (
-                    snapshot_date is not None
-                    and snapshot_date > now.date()
-                    or lifetime is not None
-                    and (not isfinite(lifetime) or lifetime < 0)
-                ):
-                    raise ValueError
-                self.driving_snapshot = DrivingSnapshotState(snapshot_date, lifetime)
-                daily_raw = payload.get("daily_driving_energy_kwh")
-                daily = float(daily_raw) if daily_raw is not None else None
-                if daily is not None and (not isfinite(daily) or daily < 0):
-                    raise ValueError
-                self.daily_driving_energy_kwh = daily
-            except (TypeError, ValueError):
-                self.driving_snapshot = DrivingSnapshotState()
-                self.daily_driving_energy_kwh = None
-        try:
-            state = payload.get("reconciliation", {})
-            if not isinstance(state, dict):
-                raise ValueError
-            last_raw = state.get("last_command_at")
-            last_at = datetime.fromisoformat(str(last_raw)) if last_raw else None
-            attempts = int(state.get("attempts", 0))
-            target_current = (
-                float(state["target_current_a"])
-                if state.get("target_current_a") is not None
-                else None
-            )
-            target_limit = (
-                float(state["target_limit_percent"])
-                if state.get("target_limit_percent") is not None
-                else None
-            )
-            phase = str(state.get("phase", "idle"))
-            if (
-                attempts < 0
-                or attempts > DIRECT_EVSE_MAX_ATTEMPTS
-                or (last_at is not None and last_at > now)
-                or (
-                    target_current is not None
-                    and (not isfinite(target_current) or target_current < 0)
-                )
-                or (target_limit is not None and (not isfinite(target_limit) or target_limit < 0))
-                or phase not in DIRECT_EVSE_RECONCILIATION_PHASES
-            ):
-                raise ValueError
-            self.reconciliation = DirectEvseReconciliationState(
-                target_current_a=target_current,
-                target_limit_percent=target_limit,
-                attempts=attempts,
-                last_command_at=last_at,
-                phase=phase,
-            )
-            self.target_current_a = self.reconciliation.target_current_a
-            self.target_limit_percent = self.reconciliation.target_limit_percent
-            pre_free = payload.get("pre_free_session", {})
-            if not isinstance(pre_free, dict):
-                raise ValueError
-            frozen_raw = pre_free.get("frozen_start")
-            frozen_start = datetime.fromisoformat(str(frozen_raw)) if frozen_raw else None
-            pre_free_active = bool(pre_free.get("active", False))
-            if frozen_start is not None and (frozen_start.tzinfo is None or frozen_start > now):
-                raise ValueError
-            if pre_free_active != (frozen_start is not None):
-                raise ValueError
-            self.pre_free_session = PreFreeSessionState(
-                active=pre_free_active,
-                frozen_start=frozen_start,
-            )
-            daily = payload.get("daily_backfill", {})
-            if not isinstance(daily, dict):
-                raise ValueError
-            cycle_raw = daily.get("cycle_ready_at")
-            cycle_ready_at = datetime.fromisoformat(str(cycle_raw)) if cycle_raw else None
-            frozen_daily_raw = daily.get("frozen_start")
-            frozen_daily = (
-                datetime.fromisoformat(str(frozen_daily_raw)) if frozen_daily_raw else None
-            )
-            delivered = float(daily.get("delivered_kwh", 0.0))
-            session_target = float(daily.get("session_target_kwh", 0.0))
-            session_start = float(daily.get("session_start_delivered_kwh", 0.0))
-            daily_active = bool(daily.get("active", False))
-            if (
-                any(
-                    not isfinite(value) or value < 0
-                    for value in (delivered, session_target, session_start)
-                )
-                or cycle_ready_at is not None
-                and cycle_ready_at.tzinfo is None
-                or frozen_daily is not None
-                and frozen_daily.tzinfo is None
-                or daily_active != (frozen_daily is not None)
-            ):
-                raise ValueError
-            self.daily_backfill_cycle_ready_at = cycle_ready_at
-            self.daily_backfill_delivered_kwh = delivered
-            self.daily_backfill_active = daily_active
-            self.daily_backfill_session_target_kwh = session_target
-            self.daily_backfill_session_start_delivered_kwh = session_start
-            self.daily_backfill_frozen_start = frozen_daily
-            self.daily_backfill_stop_pending = bool(daily.get("stop_pending", False))
-            self.daily_backfill_stop_attempts = int(daily.get("stop_attempts", 0))
-            stop_at_raw = daily.get("last_stop_at")
-            self.daily_backfill_last_stop_at = (
-                datetime.fromisoformat(str(stop_at_raw)) if stop_at_raw else None
-            )
-            if (
-                not 0 <= self.daily_backfill_stop_attempts <= DIRECT_EVSE_MAX_ATTEMPTS
-                or self.daily_backfill_last_stop_at is not None
-                and (
-                    self.daily_backfill_last_stop_at.tzinfo is None
-                    or self.daily_backfill_last_stop_at > now
-                )
-            ):
-                raise ValueError
-            charge_full_raw = payload.get("charge_to_full_started_at")
-            charge_full_started = (
-                datetime.fromisoformat(str(charge_full_raw)) if charge_full_raw else None
-            )
-            if charge_full_started is not None and (
-                charge_full_started.tzinfo is None or charge_full_started > now
-            ):
-                raise ValueError
-            self.charge_to_full_started_at = charge_full_started
-            self.outside_control_active = bool(payload.get("outside_control_active", False))
-            smart_recovery = payload.get("smart_recovery", {})
-            if not isinstance(smart_recovery, dict):
-                raise ValueError
-            recovery_started_raw = smart_recovery.get("phase_started_at")
-            recovery_started = (
-                datetime.fromisoformat(str(recovery_started_raw)) if recovery_started_raw else None
-            )
-            recovery_current = (
-                float(smart_recovery["recovery_current_a"])
-                if smart_recovery.get("recovery_current_a") is not None
-                else None
-            )
-            recovery_phase = str(smart_recovery.get("phase", "idle"))
-            if (
-                recovery_phase
-                not in {
-                    "idle",
-                    "confirming_current",
-                    "confirming_socket_off",
-                    "power_off_dwell",
-                    "confirming_socket_on",
-                    "post_power_settle",
-                    "awaiting_actuator",
-                    "confirming_charging",
-                    "recovered",
-                    "fault",
-                }
-                or (
-                    recovery_started is not None
-                    and (recovery_started.tzinfo is None or recovery_started > now)
-                )
-                or (
-                    recovery_current is not None
-                    and (not isfinite(recovery_current) or recovery_current < 0)
-                )
-            ):
-                raise ValueError
-            self.smart_recovery = SmartSocketRecoveryState(
-                attempted=bool(smart_recovery.get("attempted", False)),
-                phase=recovery_phase,
-                phase_started_at=recovery_started,
-                recovery_current_a=recovery_current,
-            )
-        except (KeyError, TypeError, ValueError):
-            self.reconciliation = DirectEvseReconciliationState()
-            self.pre_free_session = PreFreeSessionState()
-            self.daily_backfill_cycle_ready_at = None
-            self.daily_backfill_delivered_kwh = 0.0
-            self.daily_backfill_active = False
-            self.daily_backfill_session_target_kwh = 0.0
-            self.daily_backfill_session_start_delivered_kwh = 0.0
-            self.daily_backfill_frozen_start = None
-            self.daily_backfill_stop_pending = False
-            self.daily_backfill_stop_attempts = 0
-            self.daily_backfill_last_stop_at = None
-            self.charge_to_full_started_at = None
-            self.outside_control_active = False
-            self.smart_recovery = SmartSocketRecoveryState()
+        self.grid_average.restore(persisted.grid_average_payload, now)
+        self.ev_average.restore(persisted.ev_average_payload, now)
+        self.driving_history = persisted.driving_history
+        self.driving_snapshot = persisted.driving_snapshot
+        self.daily_driving_energy_kwh = persisted.daily_driving_energy_kwh
+        self.reconciliation = persisted.reconciliation
+        self.target_current_a = persisted.reconciliation.target_current_a
+        self.target_limit_percent = persisted.reconciliation.target_limit_percent
+        self.pre_free_session = persisted.pre_free_session
+        daily = persisted.daily_backfill
+        self.daily_backfill_cycle_ready_at = daily.cycle_ready_at
+        self.daily_backfill_delivered_kwh = daily.delivered_kwh
+        self.daily_backfill_active = daily.active
+        self.daily_backfill_session_target_kwh = daily.session_target_kwh
+        self.daily_backfill_session_start_delivered_kwh = (
+            daily.session_start_delivered_kwh
+        )
+        self.daily_backfill_frozen_start = daily.frozen_start
+        self.daily_backfill_stop_pending = daily.stop_pending
+        self.daily_backfill_stop_attempts = daily.stop_attempts
+        self.daily_backfill_last_stop_at = daily.last_stop_at
+        self.charge_to_full_started_at = persisted.charge_to_full_started_at
+        self.outside_control_active = persisted.outside_control_active
+        self.smart_recovery = persisted.smart_recovery
 
     async def _async_save(self, now: datetime | None = None) -> None:
-        state = self.reconciliation
-        payload = {
-                "grid_average": self.grid_average.to_payload(),
-                "ev_average": self.ev_average.to_payload(),
-                "driving_history": self.driving_history.to_payload(),
-                "driving_snapshot": {
-                    "snapshot_date": (
-                        self.driving_snapshot.snapshot_date.isoformat()
-                        if self.driving_snapshot.snapshot_date is not None
-                        else None
-                    ),
-                    "lifetime_energy_kwh": self.driving_snapshot.lifetime_energy_kwh,
-                },
-                "daily_driving_energy_kwh": self.daily_driving_energy_kwh,
-                "reconciliation": {
-                    "target_current_a": state.target_current_a,
-                    "target_limit_percent": state.target_limit_percent,
-                    "attempts": state.attempts,
-                    "last_command_at": (
-                        state.last_command_at.isoformat()
-                        if state.last_command_at is not None
-                        else None
-                    ),
-                    "phase": state.phase,
-                },
-                "pre_free_session": {
-                    "active": self.pre_free_session.active,
-                    "frozen_start": (
-                        self.pre_free_session.frozen_start.isoformat()
-                        if self.pre_free_session.frozen_start is not None
-                        else None
-                    ),
-                },
-                "daily_backfill": {
-                    "cycle_ready_at": (
-                        self.daily_backfill_cycle_ready_at.isoformat()
-                        if self.daily_backfill_cycle_ready_at is not None
-                        else None
-                    ),
-                    "delivered_kwh": round(self.daily_backfill_delivered_kwh, 6),
-                    "active": self.daily_backfill_active,
-                    "session_target_kwh": self.daily_backfill_session_target_kwh,
-                    "session_start_delivered_kwh": (
-                        self.daily_backfill_session_start_delivered_kwh
-                    ),
-                    "frozen_start": (
-                        self.daily_backfill_frozen_start.isoformat()
-                        if self.daily_backfill_frozen_start is not None
-                        else None
-                    ),
-                    "stop_pending": self.daily_backfill_stop_pending,
-                    "stop_attempts": self.daily_backfill_stop_attempts,
-                    "last_stop_at": (
-                        self.daily_backfill_last_stop_at.isoformat()
-                        if self.daily_backfill_last_stop_at is not None
-                        else None
-                    ),
-                },
-                "charge_to_full_started_at": (
-                    self.charge_to_full_started_at.isoformat()
-                    if self.charge_to_full_started_at is not None
-                    else None
-                ),
-                "outside_control_active": self.outside_control_active,
-                "smart_recovery": {
-                    "attempted": self.smart_recovery.attempted,
-                    "phase": self.smart_recovery.phase,
-                    "phase_started_at": (
-                        self.smart_recovery.phase_started_at.isoformat()
-                        if self.smart_recovery.phase_started_at is not None
-                        else None
-                    ),
-                    "recovery_current_a": self.smart_recovery.recovery_current_a,
-                },
-            }
         saved_at = now or dt_util.now()
-        await self._repository.async_save(
-            EvPersistenceState.from_payload(payload, saved_at)
+        persisted = EvPersistenceState(
+            restored_at=saved_at,
+            grid_average_payload=self.grid_average.to_payload(),
+            ev_average_payload=self.ev_average.to_payload(),
+            driving_history=self.driving_history,
+            driving_snapshot=self.driving_snapshot,
+            daily_driving_energy_kwh=self.daily_driving_energy_kwh,
+            reconciliation=self.reconciliation,
+            pre_free_session=self.pre_free_session,
+            daily_backfill=DailyBackfillPersistenceState(
+                cycle_ready_at=self.daily_backfill_cycle_ready_at,
+                delivered_kwh=self.daily_backfill_delivered_kwh,
+                active=self.daily_backfill_active,
+                session_target_kwh=self.daily_backfill_session_target_kwh,
+                session_start_delivered_kwh=(
+                    self.daily_backfill_session_start_delivered_kwh
+                ),
+                frozen_start=self.daily_backfill_frozen_start,
+                stop_pending=self.daily_backfill_stop_pending,
+                stop_attempts=self.daily_backfill_stop_attempts,
+                last_stop_at=self.daily_backfill_last_stop_at,
+            ),
+            charge_to_full_started_at=self.charge_to_full_started_at,
+            outside_control_active=self.outside_control_active,
+            smart_recovery=self.smart_recovery,
         )
+        await self._repository.async_save(persisted.validated_for_storage())
         self.last_saved_at = saved_at

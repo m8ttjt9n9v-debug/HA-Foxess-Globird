@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 
 from custom_components.home_energy_orchestrator.planner.ev_persistence import (
@@ -87,3 +88,29 @@ def test_ev_persistence_state_retains_driving_evidence_when_control_block_is_bad
     assert state.pre_free_session.active is False
     assert state.daily_backfill.active is False
     assert state.smart_recovery.phase == "idle"
+
+
+def test_ev_persistence_storage_validation_preserves_complete_payload() -> None:
+    payload = complete_payload()
+    state = EvPersistenceState.from_payload(payload, NOW)
+
+    assert state.validated_for_storage().to_payload() == payload
+
+
+def test_ev_persistence_storage_validation_retains_grouped_safe_fallback() -> None:
+    state = EvPersistenceState.from_payload(complete_payload(), NOW)
+    invalid = replace(
+        state,
+        reconciliation=replace(state.reconciliation, attempts=4),
+    )
+
+    validated = invalid.validated_for_storage()
+
+    assert [sample.energy_kwh for sample in validated.driving_history.samples] == [18.5]
+    assert validated.driving_snapshot.lifetime_energy_kwh == 1018.5
+    assert validated.reconciliation.phase == "idle"
+    assert validated.pre_free_session.active is False
+    assert validated.daily_backfill.active is False
+    assert validated.charge_to_full_started_at is None
+    assert validated.outside_control_active is False
+    assert validated.smart_recovery.phase == "idle"
