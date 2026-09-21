@@ -2420,6 +2420,26 @@ async def test_runtime_fails_closed_when_vehicle_soc_is_unavailable(
     assert calls == []
 
 
+def test_learned_general_limit_facade_composes_live_capacity_and_window_gain(
+    hass: HomeAssistant,
+) -> None:
+    _set_ev_states(hass)
+    controller = ActiveEvController(hass, _coordinator(_controller_config()))
+
+    decision = controller._learned_general_limit(  # noqa: SLF001
+        controller._observation(),  # noqa: SLF001
+        vehicle_soc=40,
+    )
+
+    assert decision is not None
+    assert decision.mode == "learning_full_window_fallback"
+    assert decision.sample_count == 0
+    assert decision.p85_daily_energy_kwh is None
+    assert decision.usable_capacity_kwh == 75
+    assert decision.free_window_soc_gain_percent == 13.101
+    assert decision.limit_percent == 76
+
+
 @pytest.mark.parametrize(
     ("sample_count", "expected_mode"),
     ((13, "learning_full_window_fallback"), (14, "learned_p85")),
