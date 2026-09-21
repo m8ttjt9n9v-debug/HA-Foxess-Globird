@@ -7,6 +7,7 @@ import pytest
 
 from custom_components.home_energy_orchestrator.planner.ev import (
     AllowanceCeilingInputs,
+    AllowanceProjectionInputs,
     ChargeLimitInputs,
     DirectEvseObservation,
     DirectEvseReconciliation,
@@ -23,6 +24,7 @@ from custom_components.home_energy_orchestrator.planner.ev import (
     direct_evse_response_matches,
     estimate_other_free_window_import_kwh,
     estimate_vehicle_energy_to_target_kwh,
+    evaluate_allowance_projection,
     finalize_direct_evse_reconciliation,
     finalize_smart_socket_recovery,
     house_load_excluding_ev_kw,
@@ -175,6 +177,94 @@ ALLOWANCE = AllowanceCeilingInputs(
     projected_other_import_kwh=25,
     projected_ev_energy_kwh=5,
 )
+
+ALLOWANCE_PROJECTION = AllowanceProjectionInputs(
+    base_current_a=16,
+    protected_baseline_a=1,
+    minimum_charge_a=1,
+    current_step_a=1,
+    stored_energy_kwh=5,
+    vehicle_soc_percent=50,
+    vehicle_target_soc_percent=60,
+    vehicle_charge_efficiency_percent=90,
+    battery_capacity_kwh=40,
+    battery_soc_percent=100,
+    battery_target_percent=100,
+    battery_charge_efficiency_percent=90,
+    house_load_kw=12,
+    house_load_includes_ev=False,
+    actual_ev_current_a=16,
+    actual_ev_current_valid=True,
+    ev_voltage_v=230,
+    ev_phase_count=3,
+    site_service_limit_a=63,
+    site_phase_count=3,
+    remaining_window_hours=2,
+    allowance_kwh=50,
+    imported_in_window_kwh=25,
+    safety_margin_kwh=0,
+)
+
+
+def test_allowance_projection_preserves_explicit_house_load_topologies():
+    exclusive = evaluate_allowance_projection(ALLOWANCE_PROJECTION)
+    whole_house = evaluate_allowance_projection(
+        replace(ALLOWANCE_PROJECTION, house_load_includes_ev=True)
+    )
+
+    assert exclusive.decision is not None
+    assert exclusive.decision.current_a == 1
+    assert exclusive.decision.phase == "allowance_below_charger_minimum"
+    assert exclusive.house_load_kw == 12
+    assert exclusive.ev_power_kw is None
+    assert whole_house.decision is not None
+    assert whole_house.decision.current_a == 16
+    assert whole_house.decision.phase == "allowance_not_constraining"
+    assert whole_house.house_load_kw == 0.96
+    assert whole_house.ev_power_kw == 11.04
+
+
+def test_allowance_projection_whole_house_fails_closed_without_ev_current():
+    result = evaluate_allowance_projection(
+        replace(
+            ALLOWANCE_PROJECTION,
+            house_load_includes_ev=True,
+            actual_ev_current_valid=False,
+        )
+    )
+
+    assert result.decision is None
+    assert result.house_load_kw is None
+    assert result.ev_power_kw is None
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {"stored_energy_kwh": None},
+        {"vehicle_soc_percent": None},
+        {"battery_soc_percent": None},
+        {"house_load_kw": None},
+    ],
+)
+def test_allowance_projection_requires_all_energy_evidence(changes):
+    result = evaluate_allowance_projection(replace(ALLOWANCE_PROJECTION, **changes))
+
+    assert result.decision is None
+    assert result.house_load_kw is None
+    assert result.ev_power_kw is None
+
+
+def test_allowance_projection_keeps_missing_meter_as_baseline_decision():
+    result = evaluate_allowance_projection(
+        replace(ALLOWANCE_PROJECTION, imported_in_window_kwh=None)
+    )
+
+    assert result.decision is not None
+    assert result.decision.current_a == 1
+    assert result.decision.phase == "allowance_meter_unavailable"
+    assert result.house_load_kw == 12
+    assert result.ev_power_kw is None
 
 
 def test_normal_small_session_is_not_evenly_spread_or_throttled():

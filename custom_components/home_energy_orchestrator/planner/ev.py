@@ -1090,6 +1090,123 @@ class AllowanceCeilingInputs:
     safety_margin_kwh: float = 0.0
 
 
+@dataclass(frozen=True, slots=True)
+class AllowanceProjectionInputs:
+    """Primitive evidence and policy used by the whole-site allowance guard."""
+
+    base_current_a: float
+    protected_baseline_a: float
+    minimum_charge_a: float
+    current_step_a: float
+    stored_energy_kwh: float | None
+    vehicle_soc_percent: float | None
+    vehicle_target_soc_percent: float
+    vehicle_charge_efficiency_percent: float
+    battery_capacity_kwh: float
+    battery_soc_percent: float | None
+    battery_target_percent: float
+    battery_charge_efficiency_percent: float
+    house_load_kw: float | None
+    house_load_includes_ev: bool
+    actual_ev_current_a: float
+    actual_ev_current_valid: bool
+    ev_voltage_v: float
+    ev_phase_count: int
+    site_service_limit_a: float
+    site_phase_count: int
+    remaining_window_hours: float
+    allowance_kwh: float
+    imported_in_window_kwh: float | None
+    safety_margin_kwh: float
+
+
+@dataclass(frozen=True, slots=True)
+class AllowanceProjectionResult:
+    """Allowance decision plus the diagnostics underpinning its projection."""
+
+    decision: EvCurrentDecision | None
+    house_load_kw: float | None
+    ev_power_kw: float | None
+
+
+def evaluate_allowance_projection(
+    inputs: AllowanceProjectionInputs,
+) -> AllowanceProjectionResult:
+    """Compose retained EV, battery and house projections without HA state."""
+    if (
+        inputs.stored_energy_kwh is None
+        or inputs.vehicle_soc_percent is None
+        or inputs.battery_soc_percent is None
+        or inputs.house_load_kw is None
+    ):
+        return AllowanceProjectionResult(None, None, None)
+
+    house_load_kw = inputs.house_load_kw
+    ev_power_kw = None
+    if inputs.house_load_includes_ev:
+        if not inputs.actual_ev_current_valid:
+            return AllowanceProjectionResult(None, None, None)
+        try:
+            house_load_kw = house_load_excluding_ev_kw(
+                house_load_kw=inputs.house_load_kw,
+                actual_ev_current_a=inputs.actual_ev_current_a,
+                ev_voltage_v=inputs.ev_voltage_v,
+                ev_phase_count=inputs.ev_phase_count,
+            )
+        except ValueError:
+            return AllowanceProjectionResult(None, None, None)
+        ev_power_kw = round(
+            inputs.actual_ev_current_a
+            * inputs.ev_voltage_v
+            * inputs.ev_phase_count
+            / 1000,
+            3,
+        )
+
+    try:
+        ev_need = estimate_vehicle_energy_to_target_kwh(
+            stored_energy_kwh=inputs.stored_energy_kwh,
+            current_soc_percent=inputs.vehicle_soc_percent,
+            target_soc_percent=inputs.vehicle_target_soc_percent,
+            charge_efficiency_percent=inputs.vehicle_charge_efficiency_percent,
+        )
+        other = estimate_other_free_window_import_kwh(
+            battery_capacity_kwh=inputs.battery_capacity_kwh,
+            battery_soc_percent=inputs.battery_soc_percent,
+            battery_target_percent=inputs.battery_target_percent,
+            battery_charge_efficiency_percent=(
+                inputs.battery_charge_efficiency_percent
+            ),
+            house_load_kw=house_load_kw,
+            remaining_window_hours=inputs.remaining_window_hours,
+        )
+        decision = apply_daily_allowance_ceiling(
+            AllowanceCeilingInputs(
+                base_current_a=inputs.base_current_a,
+                protected_baseline_a=min(
+                    inputs.protected_baseline_a,
+                    inputs.base_current_a,
+                ),
+                minimum_charge_a=inputs.minimum_charge_a,
+                current_step_a=inputs.current_step_a,
+                voltage_v=inputs.ev_voltage_v,
+                phase_count=inputs.ev_phase_count,
+                site_service_limit_a=inputs.site_service_limit_a,
+                site_voltage_v=inputs.ev_voltage_v,
+                site_phase_count=inputs.site_phase_count,
+                remaining_window_hours=inputs.remaining_window_hours,
+                allowance_kwh=inputs.allowance_kwh,
+                imported_in_window_kwh=inputs.imported_in_window_kwh,
+                projected_other_import_kwh=other,
+                projected_ev_energy_kwh=ev_need,
+                safety_margin_kwh=inputs.safety_margin_kwh,
+            )
+        )
+    except ValueError:
+        decision = None
+    return AllowanceProjectionResult(decision, house_load_kw, ev_power_kw)
+
+
 def apply_daily_allowance_ceiling(inputs: AllowanceCeilingInputs) -> EvCurrentDecision:
     """Cap only sessions projected to exceed the configured whole-site allowance.
 

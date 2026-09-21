@@ -129,7 +129,7 @@ from .planner.ev import (
     DIRECT_EVSE_MAX_ATTEMPTS,
     DIRECT_EVSE_RECONCILIATION_PHASES,
     DIRECT_EVSE_RETRY_INTERVAL,
-    AllowanceCeilingInputs,
+    AllowanceProjectionInputs,
     ChargeLimitInputs,
     DirectEvseObservation,
     DirectEvseReconciliationState,
@@ -141,13 +141,11 @@ from .planner.ev import (
     SmartSocketRecoveryObservation,
     SmartSocketRecoveryState,
     SmartSocketStageState,
-    apply_daily_allowance_ceiling,
     charging_path_ceiling_a,
-    estimate_other_free_window_import_kwh,
     estimate_vehicle_energy_to_target_kwh,
+    evaluate_allowance_projection,
     finalize_direct_evse_reconciliation,
     finalize_smart_socket_recovery,
-    house_load_excluding_ev_kw,
     outside_service_ceiling_a,
     outside_service_feedback_required,
     physical_charging_minimum_a,
@@ -1390,38 +1388,33 @@ class ActiveEvController:
             if self.coordinator.free_window_import.last_at is not None
             else None
         )
-        if (
-            stored is None
-            or vehicle_soc is None
-            or snapshot.battery_soc is None
-            or snapshot.house_load_kw is None
-        ):
-            return None
-        try:
-            allowance_house_load_kw = snapshot.house_load_kw
-            if self.coordinator.runtime_config.house.load_includes_ev:
-                actual_current, actual_current_valid = self._actual_ev_current_a()
-                if not actual_current_valid:
-                    return None
-                voltage = self._float(CONF_EV_VOLTAGE, DEFAULT_EV_VOLTAGE)
-                phases = int(self._float(CONF_EV_PHASE_COUNT, DEFAULT_EV_PHASE_COUNT))
-                allowance_house_load_kw = house_load_excluding_ev_kw(
-                    house_load_kw=snapshot.house_load_kw,
-                    actual_ev_current_a=actual_current,
-                    ev_voltage_v=voltage,
-                    ev_phase_count=phases,
-                )
-                self.allowance_ev_power_kw = round(actual_current * voltage * phases / 1000, 3)
-            self.allowance_house_load_kw = allowance_house_load_kw
-            ev_need = estimate_vehicle_energy_to_target_kwh(
+        load_includes_ev = self.coordinator.runtime_config.house.load_includes_ev
+        projection_evidence_present = (
+            stored is not None
+            and vehicle_soc is not None
+            and snapshot.battery_soc is not None
+            and snapshot.house_load_kw is not None
+        )
+        if load_includes_ev and projection_evidence_present:
+            actual_current, actual_current_valid = self._actual_ev_current_a()
+        else:
+            # Preserve the EV-exclusive fast path without observing an
+            # irrelevant Tessie value.
+            actual_current = 0.0
+            actual_current_valid = False
+        result = evaluate_allowance_projection(
+            AllowanceProjectionInputs(
+                base_current_a=base_current,
+                protected_baseline_a=baseline,
+                minimum_charge_a=minimum,
+                current_step_a=step,
                 stored_energy_kwh=stored,
-                current_soc_percent=vehicle_soc,
-                target_soc_percent=policy_limit,
-                charge_efficiency_percent=self._float(
-                    CONF_EV_CHARGE_EFFICIENCY, DEFAULT_EV_CHARGE_EFFICIENCY
+                vehicle_soc_percent=vehicle_soc,
+                vehicle_target_soc_percent=policy_limit,
+                vehicle_charge_efficiency_percent=self._float(
+                    CONF_EV_CHARGE_EFFICIENCY,
+                    DEFAULT_EV_CHARGE_EFFICIENCY,
                 ),
-            )
-            other = estimate_other_free_window_import_kwh(
                 battery_capacity_kwh=snapshot.battery_capacity_kwh,
                 battery_soc_percent=snapshot.battery_soc,
                 battery_target_percent=self._float(
@@ -1432,40 +1425,36 @@ class ActiveEvController:
                     CONF_BATTERY_CHARGE_EFFICIENCY,
                     DEFAULT_BATTERY_CHARGE_EFFICIENCY,
                 ),
-                house_load_kw=allowance_house_load_kw,
+                house_load_kw=snapshot.house_load_kw,
+                house_load_includes_ev=load_includes_ev,
+                actual_ev_current_a=actual_current,
+                actual_ev_current_valid=actual_current_valid,
+                ev_voltage_v=self._float(CONF_EV_VOLTAGE, DEFAULT_EV_VOLTAGE),
+                ev_phase_count=int(
+                    self._float(CONF_EV_PHASE_COUNT, DEFAULT_EV_PHASE_COUNT)
+                ),
+                site_service_limit_a=self._float(
+                    CONF_SERVICE_IMPORT_LIMIT_A,
+                    DEFAULT_SERVICE_IMPORT_LIMIT_A,
+                ),
+                site_phase_count=int(
+                    self._float(CONF_SITE_PHASE_COUNT, DEFAULT_SITE_PHASE_COUNT)
+                ),
                 remaining_window_hours=remaining_hours,
+                allowance_kwh=self._float(
+                    CONF_DAILY_FREE_ALLOWANCE_KWH,
+                    DEFAULT_DAILY_FREE_ALLOWANCE_KWH,
+                ),
+                imported_in_window_kwh=imported,
+                safety_margin_kwh=self._float(
+                    CONF_EV_ALLOWANCE_SAFETY_MARGIN,
+                    DEFAULT_EV_ALLOWANCE_SAFETY_MARGIN,
+                ),
             )
-            return apply_daily_allowance_ceiling(
-                AllowanceCeilingInputs(
-                    base_current_a=base_current,
-                    protected_baseline_a=min(baseline, base_current),
-                    minimum_charge_a=minimum,
-                    current_step_a=step,
-                    voltage_v=self._float(CONF_EV_VOLTAGE, DEFAULT_EV_VOLTAGE),
-                    phase_count=int(self._float(CONF_EV_PHASE_COUNT, DEFAULT_EV_PHASE_COUNT)),
-                    site_service_limit_a=self._float(
-                        CONF_SERVICE_IMPORT_LIMIT_A, DEFAULT_SERVICE_IMPORT_LIMIT_A
-                    ),
-                    site_voltage_v=self._float(CONF_EV_VOLTAGE, DEFAULT_EV_VOLTAGE),
-                    site_phase_count=int(
-                        self._float(CONF_SITE_PHASE_COUNT, DEFAULT_SITE_PHASE_COUNT)
-                    ),
-                    remaining_window_hours=remaining_hours,
-                    allowance_kwh=self._float(
-                        CONF_DAILY_FREE_ALLOWANCE_KWH,
-                        DEFAULT_DAILY_FREE_ALLOWANCE_KWH,
-                    ),
-                    imported_in_window_kwh=imported,
-                    projected_other_import_kwh=other,
-                    projected_ev_energy_kwh=ev_need,
-                    safety_margin_kwh=self._float(
-                        CONF_EV_ALLOWANCE_SAFETY_MARGIN,
-                        DEFAULT_EV_ALLOWANCE_SAFETY_MARGIN,
-                    ),
-                )
-            )
-        except ValueError:
-            return None
+        )
+        self.allowance_house_load_kw = result.house_load_kw
+        self.allowance_ev_power_kw = result.ev_power_kw
+        return result.decision
 
     def _calculate_outside_target(self, now: datetime, observation: DirectEvseObservation) -> bool:
         """Port solar spill and latest-start backfill without touching FoxESS."""

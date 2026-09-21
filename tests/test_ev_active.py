@@ -422,6 +422,89 @@ def test_pilot_house_load_excluding_ev_is_not_subtracted_again(
     assert controller.allowance_house_load_kw == 12
 
 
+def test_whole_house_allowance_fails_closed_without_valid_actual_ev_current(
+    hass: HomeAssistant,
+) -> None:
+    coordinator = _coordinator(
+        _controller_config(
+            ev_allowance_guard_enabled=True,
+            house_load_includes_ev=True,
+        )
+    )
+    coordinator.free_window_import = SimpleNamespace(
+        last_at=datetime(2026, 9, 7, 12, 30, tzinfo=UTC),
+        imported_kwh=25,
+    )
+    controller = ActiveEvController(hass, coordinator)
+    hass.states.async_set("sensor.car_energy", "5", {"unit_of_measurement": "kWh"})
+    hass.states.async_set("sensor.car_charging", "charging")
+    hass.states.async_set("sensor.car_actual_current", "unavailable")
+    snapshot = replace(coordinator.snapshot, battery_soc=100, house_load_kw=12)
+
+    decision = controller._allowance_target(  # noqa: SLF001
+        16, 1, 1, 1, 60, 50, 2, snapshot
+    )
+
+    assert decision is None
+    assert controller.allowance_house_load_kw is None
+    assert controller.allowance_ev_power_kw is None
+
+
+def test_whole_house_allowance_does_not_read_current_without_energy_evidence(
+    hass: HomeAssistant,
+    monkeypatch,
+) -> None:
+    coordinator = _coordinator(
+        _controller_config(
+            ev_allowance_guard_enabled=True,
+            house_load_includes_ev=True,
+        )
+    )
+    coordinator.free_window_import = SimpleNamespace(
+        last_at=datetime(2026, 9, 7, 12, 30, tzinfo=UTC),
+        imported_kwh=25,
+    )
+    controller = ActiveEvController(hass, coordinator)
+    snapshot = replace(coordinator.snapshot, battery_soc=100, house_load_kw=12)
+
+    def unexpected_current_read():
+        raise AssertionError("actual current must not be read")
+
+    monkeypatch.setattr(controller, "_actual_ev_current_a", unexpected_current_read)
+
+    assert (
+        controller._allowance_target(  # noqa: SLF001
+            16, 1, 1, 1, 60, 50, 2, snapshot
+        )
+        is None
+    )
+
+
+def test_missing_free_window_meter_remains_a_planner_baseline_decision(
+    hass: HomeAssistant,
+) -> None:
+    coordinator = _coordinator(
+        _controller_config(
+            ev_allowance_guard_enabled=True,
+            house_load_includes_ev=False,
+        )
+    )
+    coordinator.free_window_import = SimpleNamespace(last_at=None, imported_kwh=0)
+    controller = ActiveEvController(hass, coordinator)
+    hass.states.async_set("sensor.car_energy", "5", {"unit_of_measurement": "kWh"})
+    snapshot = replace(coordinator.snapshot, battery_soc=100, house_load_kw=12)
+
+    decision = controller._allowance_target(  # noqa: SLF001
+        16, 1, 1, 1, 60, 50, 2, snapshot
+    )
+
+    assert decision is not None
+    assert decision.current_a == 1
+    assert decision.phase == "allowance_meter_unavailable"
+    assert controller.allowance_house_load_kw == 12
+    assert controller.allowance_ev_power_kw is None
+
+
 async def test_ev_runtime_writes_tessie_but_not_foxess_when_cloud_owns_inverter(
     hass: HomeAssistant,
 ) -> None:
