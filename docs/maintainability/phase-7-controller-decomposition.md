@@ -204,11 +204,12 @@ Phase 7 is complete only when:
 - [x] Shadow comparisons passed
 - [x] Compatibility checks passed
 - [x] Documentation and roadmap updated
-- [ ] Independent review complete
+- [x] Independent review complete — accepted in
+  [the correction re-review record](phase-7-correction-re-review-record-67a5ab7.md)
 - [x] Structural and local one-version rollback demonstrated
 - [ ] Operational soak complete where required
 
 The deterministic technical evidence and exact corpus are recorded in the
-[Phase 7 technical exit audit](phase-7-exit-audit.md). The unchecked review and
-soak gates mean this phase is not approved for release, deployment or Phase 8
-scheduling work.
+[Phase 7 technical exit audit](phase-7-exit-audit.md). The unchecked
+operational-soak gate means this phase is not approved for release, deployment
+or Phase 8 scheduling work.

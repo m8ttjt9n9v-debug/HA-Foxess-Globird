@@ -1,7 +1,7 @@
 # Phase 7 operational soak and rollback plan
 
-This plan begins only after independent review accepts implementation candidate
-`4a73017f90bd11813570ffda6b8c465851697f89`. It does not authorize a push,
+This plan begins only after independent review accepts correction candidate
+`67a5ab71744e5ed670b88faf278f86d3d4d5a490`. It does not authorize a push,
 release, deployment, configuration change or live hardware test.
 
 ## Entry requirements
@@ -23,7 +23,7 @@ and rollback rehearsal.
 Pass requires:
 
 - no duplicate or renamed entities and no reclaimed user-owned entity IDs;
-- all 107 contracted entities and 124 wizard fields retain their contract;
+- all 107 contracted entities and 125 wizard fields retain their contract;
 - no service call while Safety Lock/rehearsal mode is active;
 - config and all 13 Store families restore without repair or silent reset;
 - downgrade and subsequent re-upgrade retain unfinished obligations without a

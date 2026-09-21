@@ -41,7 +41,7 @@ Update this assessment only at a phase gate and link the supporting artifacts.
 
 ## Phase 7 technical-gate assessment — 2026-09-21
 
-The current evidence earns **79/100**. This is material progress from the
+The current evidence earns **80/100**. This is material progress from the
 55/100 baseline, but it is deliberately not rounded into a nominal 10/10. The
 remaining points correspond to specific uncompleted evidence rather than code
 volume or subjective polish.
@@ -49,14 +49,14 @@ volume or subjective polish.
 | Area | Awarded | Evidence and withheld credit |
 |---|---:|---|
 | Lifecycle and incident evidence | 17/20 | The deterministic harness has 47 expanded lifecycle cases and every catalogued incident class now has a system-level fixture. Some rows still request longer or generated transition sequences. |
-| Entity and configuration contracts | 13/15 | All 107 entities, public attributes and 124 wizard fields are mechanically frozen and reviewed. Full registry-safe downgrade to the pre-foundation release remains impossible because that old release reclaimed preferred IDs. |
+| Entity and configuration contracts | 13/15 | All 107 entities, public attributes and 125 wizard fields are mechanically frozen and reviewed. Full registry-safe downgrade to the pre-foundation release remains impossible because that old release reclaimed preferred IDs. |
 | Typed configuration | 10/10 | Phase 3 reports zero raw runtime mapping operations; retained accesses are explicit managed mutation boundaries. |
 | Canonical presentation model | 10/10 | The Phase 4 exit audit proves entities, attributes, diagnostics and Fleet project one immutable read model. |
 | Versioned persistence | 9/10 | All 13 Stores use typed repositories with unchanged schemas, corruption handling and restart fixtures. Current → `v0.12.26` → current retained-state round trip passes; live release-candidate rollback remains open. |
-| Controller boundaries | 13/15 | The 294-case Phase 7 corpus and static contracts prove observation, planner, repository and adapter boundaries. Independent fresh-context review and operational soak are not complete. |
+| Controller boundaries | 14/15 | The 294-case Phase 7 corpus and static contracts prove observation, planner, repository and adapter boundaries. Independent fresh-context review is accepted; operational soak remains open. |
 | Scheduling and concurrency | 0/10 | Phase 8 has not started; independent 30-second controller schedules remain intentionally unchanged. |
 | Release, rollback and diagnostics | 7/10 | Frozen contracts, redaction boundaries, previous-release restoration and local round-trip rollback pass. Clean-instance release-candidate validation and staged pilot/remote rollout remain open. |
-| **Total** | **79/100** | Below the 95-point threshold and with open hard gates. |
+| **Total** | **80/100** | Below the 95-point threshold and with open hard gates. |
 
 Hard-gate status at this checkpoint:
 

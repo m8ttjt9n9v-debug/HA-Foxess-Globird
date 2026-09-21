@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.12.29rc1 — Phase 7 staging candidate
+
+- Prepare the independently reviewed controller-decomposition and malformed-
+  feedback boundary corrections for clean-instance operational validation.
+- Preserve the v0.12.28 public release as the rollback package. This
+  pre-release is local staging evidence only; it is not published to HACS or
+  deployed to production sites.
+
 ## Unreleased — maintainability foundation
 
 - Add the optimisation programme, evidence-based scorecard, work-item rules,

@@ -10,14 +10,19 @@ lifecycle, observation, repository, adapter-execution and publication duties,
 while immutable planner boundaries own gate, policy, priority, reconciliation
 and persistence decisions.
 
-The immutable implementation candidate for independent review is commit
-`4a73017` (full object ID `4a73017f90bd11813570ffda6b8c465851697f89`).
-Later documentation-only handoff commits do not change that review range.
+The original immutable implementation candidate for independent review was
+commit `4a73017` (full object ID
+`4a73017f90bd11813570ffda6b8c465851697f89`). Its review found four
+malformed-evidence/diagnostic defects and a review-scope error. Correction
+candidate `67a5ab7` (full object ID
+`67a5ab71744e5ed670b88faf278f86d3d4d5a490`) fixes those defects and was
+accepted by independent re-review. The original rejection and accepted
+re-review are retained as separate records.
 
-This audit does **not** authorize a release or deployment. Independent
-fresh-context review and the clean-instance, pilot, remote-topology and
-remaining-site soak sequence are still outstanding. Phase 8 scheduling work
-must not begin until those Phase 7 operational gates are accepted.
+This audit does **not** authorize a release or deployment. The clean-instance,
+pilot, remote-topology and remaining-site soak sequence remains outstanding.
+Phase 8 scheduling work must not begin until those Phase 7 operational gates
+are accepted.
 
 ## Exact deterministic corpus
 
@@ -135,15 +140,13 @@ Nothing in this audit has been pushed, tagged, released or deployed.
 Deterministic implementation and compatibility evidence are complete. The
 following remain deliberately open:
 
-1. independent fresh-context review of invariants, transitions, restart
-   behaviour and ordered command traces;
-2. clean-instance install/upgrade and an operational rollback exercise for the
+1. clean-instance install/upgrade and an operational rollback exercise for the
    eventual release candidate; the codec-level one-version downgrade already
    passes locally;
-3. pilot soak across complete relevant ZEROCHARGE, ZEROHERO, export and EV
+2. pilot soak across complete relevant ZEROCHARGE, ZEROHERO, export and EV
    operating cycles;
-4. one remote-topology soak, then remaining-site rollout; and
-5. explicit acceptance before Phase 8 changes scheduling.
+3. one remote-topology soak, then remaining-site rollout; and
+4. explicit acceptance before Phase 8 changes scheduling.
 
 The staged observations, pass/fail criteria and immediate rollback triggers are
 defined in the
