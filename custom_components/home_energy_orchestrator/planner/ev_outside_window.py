@@ -129,6 +129,58 @@ class PreFreeCurrentInputs:
     vehicle_soft_limit_percent: float
 
 
+@dataclass(frozen=True, slots=True)
+class OutsideCurrentEnvelopeEvidence:
+    """Primitive current bounds supplied by the Home Assistant facade."""
+
+    physical_ceiling_a: float
+    physical_minimum_a: float
+    current_step_a: float
+    service_ceiling_a: float
+    inverter_ceiling_a: float
+    configured_baseline_a: float
+
+
+@dataclass(frozen=True, slots=True)
+class OutsideCurrentEnvelope:
+    """Canonical baseline and pre-free current bounds."""
+
+    configured_baseline_a: float
+    protected_baseline_a: float
+    pre_free_ceiling_a: float
+    service_supports_charging: bool
+
+
+def evaluate_outside_current_envelope(
+    evidence: OutsideCurrentEnvelopeEvidence,
+) -> OutsideCurrentEnvelope:
+    """Compose the retained outside-window baseline and pre-free ceiling."""
+    configured_baseline = max(evidence.configured_baseline_a, 0.0)
+    protected_baseline = (
+        0.0
+        if configured_baseline <= 0
+        else min(
+            max(
+                configured_baseline,
+                evidence.physical_minimum_a,
+                evidence.current_step_a,
+            ),
+            evidence.physical_ceiling_a,
+        )
+    )
+    return OutsideCurrentEnvelope(
+        configured_baseline_a=configured_baseline,
+        protected_baseline_a=protected_baseline,
+        pre_free_ceiling_a=max(
+            min(evidence.service_ceiling_a, evidence.inverter_ceiling_a),
+            protected_baseline,
+        ),
+        service_supports_charging=(
+            evidence.service_ceiling_a >= evidence.physical_minimum_a
+        ),
+    )
+
+
 def evaluate_solar_spill_telemetry(
     evidence: SolarSpillTelemetryEvidence,
 ) -> SolarSpillTelemetryEvaluation:

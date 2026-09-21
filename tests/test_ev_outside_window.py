@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 import pytest
 
 from custom_components.home_energy_orchestrator.planner.ev_outside_window import (
+    OutsideCurrentEnvelopeEvidence,
     PreFreeCurrentInputs,
     PreFreePlanInputs,
     PreFreeSessionState,
@@ -13,6 +14,7 @@ from custom_components.home_energy_orchestrator.planner.ev_outside_window import
     SolarSpillTelemetryEvidence,
     advance_pre_free_session,
     calculate_pre_free_plan,
+    evaluate_outside_current_envelope,
     evaluate_solar_spill_telemetry,
     plan_pre_free_current,
     plan_solar_spill_current,
@@ -55,6 +57,44 @@ TELEMETRY = SolarSpillTelemetryEvidence(
     voltage_v=230,
     phase_count=1,
 )
+
+OUTSIDE_ENVELOPE = OutsideCurrentEnvelopeEvidence(
+    physical_ceiling_a=16,
+    physical_minimum_a=1,
+    current_step_a=1,
+    service_ceiling_a=12,
+    inverter_ceiling_a=6,
+    configured_baseline_a=1,
+)
+
+
+@pytest.mark.parametrize(
+    ("changes", "configured", "baseline", "pre_free_ceiling", "service_supported"),
+    [
+        ({}, 1, 1, 6, True),
+        ({"configured_baseline_a": -1}, 0, 0, 6, True),
+        ({"configured_baseline_a": 0}, 0, 0, 6, True),
+        ({"configured_baseline_a": 0.5, "current_step_a": 2}, 0.5, 2, 6, True),
+        ({"configured_baseline_a": 20}, 20, 16, 16, True),
+        ({"service_ceiling_a": 0}, 1, 1, 1, False),
+        ({"service_ceiling_a": 0.5}, 1, 1, 1, False),
+    ],
+)
+def test_outside_current_envelope_preserves_retained_clamps(
+    changes,
+    configured,
+    baseline,
+    pre_free_ceiling,
+    service_supported,
+):
+    evaluation = evaluate_outside_current_envelope(
+        replace(OUTSIDE_ENVELOPE, **changes)
+    )
+
+    assert evaluation.configured_baseline_a == configured
+    assert evaluation.protected_baseline_a == baseline
+    assert evaluation.pre_free_ceiling_a == pre_free_ceiling
+    assert evaluation.service_supports_charging is service_supported
 
 
 def test_solar_spill_telemetry_evaluation_preserves_inclusive_boundaries():

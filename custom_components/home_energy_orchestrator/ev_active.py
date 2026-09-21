@@ -203,6 +203,7 @@ from .planner.ev_outside_state import (
     reconcile_outside_ownership,
 )
 from .planner.ev_outside_window import (
+    OutsideCurrentEnvelopeEvidence,
     PreFreeCurrentInputs,
     PreFreePlan,
     PreFreePlanInputs,
@@ -212,6 +213,7 @@ from .planner.ev_outside_window import (
     SolarSpillTelemetryEvidence,
     advance_pre_free_session,
     calculate_pre_free_plan,
+    evaluate_outside_current_envelope,
     evaluate_solar_spill_telemetry,
     plan_pre_free_current,
     plan_solar_spill_current,
@@ -1456,19 +1458,22 @@ class ActiveEvController:
             ceiling,
             current_step=current_step,
         )
-        configured_baseline = max(
-            self._float(CONF_EV_PROTECTED_BASELINE_A, DEFAULT_EV_PROTECTED_BASELINE_A),
-            0.0,
+        envelope = evaluate_outside_current_envelope(
+            OutsideCurrentEnvelopeEvidence(
+                physical_ceiling_a=ceiling,
+                physical_minimum_a=current_minimum,
+                current_step_a=current_step,
+                service_ceiling_a=service_ceiling,
+                inverter_ceiling_a=outside_inverter_ceiling,
+                configured_baseline_a=self._float(
+                    CONF_EV_PROTECTED_BASELINE_A,
+                    DEFAULT_EV_PROTECTED_BASELINE_A,
+                ),
+            )
         )
-        baseline = (
-            0.0
-            if configured_baseline <= 0
-            else min(max(configured_baseline, current_minimum, current_step), ceiling)
-        )
-        pre_free_ceiling = max(
-            min(service_ceiling, outside_inverter_ceiling),
-            baseline,
-        )
+        configured_baseline = envelope.configured_baseline_a
+        baseline = envelope.protected_baseline_a
+        pre_free_ceiling = envelope.pre_free_ceiling_a
         vehicle_soc = self._mapped_number(
             self.coordinator.runtime_config.ev_telemetry.soc_entity
         )
@@ -1478,7 +1483,7 @@ class ActiveEvController:
             CONF_EV_FREE_WINDOW_CHARGE_LIMIT, DEFAULT_EV_FREE_WINDOW_CHARGE_LIMIT
         )
         charge_to_full = self._charge_to_full_requested()
-        if charge_to_full and service_ceiling < current_minimum:
+        if charge_to_full and not envelope.service_supports_charging:
             return self._reject_outside_candidate(
                 "charge_to_full_service_headroom_unavailable"
             )
