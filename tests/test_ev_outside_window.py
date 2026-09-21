@@ -9,12 +9,14 @@ from custom_components.home_energy_orchestrator.planner.ev_outside_window import
     OutsideCurrentEnvelopeEvidence,
     PreFreeCurrentInputs,
     PreFreePlanInputs,
+    PreFreePlanningEvidence,
     PreFreeSessionState,
     SolarSpillInputs,
     SolarSpillTelemetryEvidence,
     advance_pre_free_session,
     calculate_pre_free_plan,
     evaluate_outside_current_envelope,
+    evaluate_pre_free_plan,
     evaluate_solar_spill_telemetry,
     plan_pre_free_current,
     plan_solar_spill_current,
@@ -246,6 +248,56 @@ def test_pre_free_plan_protects_baseline_by_using_only_additional_power():
     )
     assert plan.maximum_additional_power_kw == 0
     assert plan.planned_start is None
+
+
+PRE_FREE_PLANNING = PreFreePlanningEvidence(
+    planned_export_energy_kwh=8,
+    stored_vehicle_energy_kwh=40,
+    vehicle_soc_percent=50,
+    vehicle_target_soc_percent=75,
+    charge_efficiency_percent=90,
+    in_pre_free_window=True,
+    baseline_a=1,
+    current_ceiling_a=11,
+    voltage_v=230,
+    phase_count=1,
+    free_window_start=datetime(2026, 9, 8, 11, 1, tzinfo=UTC),
+)
+
+
+def test_pre_free_planning_composes_vehicle_room_and_export_budget():
+    evaluation = evaluate_pre_free_plan(PRE_FREE_PLANNING)
+
+    assert evaluation.plan is not None
+    assert evaluation.plan.planned_energy_kwh == 8
+    assert evaluation.plan.maximum_additional_power_kw == 2.3
+    assert evaluation.planned_energy_kwh == evaluation.plan.planned_energy_kwh
+    assert evaluation.planned_start == evaluation.plan.planned_start
+
+
+@pytest.mark.parametrize(
+    "changes",
+    (
+        {"planned_export_energy_kwh": None},
+        {"stored_vehicle_energy_kwh": None},
+    ),
+)
+def test_pre_free_planning_withholds_plan_without_required_energy_evidence(changes):
+    evaluation = evaluate_pre_free_plan(replace(PRE_FREE_PLANNING, **changes))
+
+    assert evaluation.plan is None
+    assert evaluation.planned_energy_kwh == 0
+    assert evaluation.planned_start is None
+
+
+def test_pre_free_planning_outside_window_retains_empty_diagnostic_plan():
+    evaluation = evaluate_pre_free_plan(
+        replace(PRE_FREE_PLANNING, in_pre_free_window=False)
+    )
+
+    assert evaluation.plan is not None
+    assert evaluation.planned_energy_kwh == 0
+    assert evaluation.planned_start is None
 
 
 def test_pre_free_latch_freezes_start_and_clears_when_budget_disappears():

@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from math import floor, isfinite
 
-from .ev import EvCurrentDecision
+from .ev import EvCurrentDecision, estimate_vehicle_energy_to_target_kwh
 
 
 @dataclass(frozen=True, slots=True)
@@ -95,6 +95,69 @@ class PreFreePlan:
     maximum_additional_power_kw: float
     planned_duration_minutes: float
     planned_start: datetime | None
+
+
+@dataclass(frozen=True, slots=True)
+class PreFreePlanningEvidence:
+    """Primitive export, vehicle and topology evidence for pre-free planning."""
+
+    planned_export_energy_kwh: float | None
+    stored_vehicle_energy_kwh: float | None
+    vehicle_soc_percent: float
+    vehicle_target_soc_percent: float
+    charge_efficiency_percent: float
+    in_pre_free_window: bool
+    baseline_a: float
+    current_ceiling_a: float
+    voltage_v: float
+    phase_count: int
+    free_window_start: datetime
+
+
+@dataclass(frozen=True, slots=True)
+class PreFreePlanningEvaluation:
+    """Optional plan plus the values consumed by the lifecycle transition."""
+
+    plan: PreFreePlan | None
+    planned_energy_kwh: float
+    planned_start: datetime | None
+
+
+def evaluate_pre_free_plan(
+    evidence: PreFreePlanningEvidence,
+) -> PreFreePlanningEvaluation:
+    """Compose vehicle room and protected export into the retained plan."""
+    if (
+        evidence.planned_export_energy_kwh is None
+        or evidence.stored_vehicle_energy_kwh is None
+    ):
+        return PreFreePlanningEvaluation(None, 0.0, None)
+    vehicle_room = estimate_vehicle_energy_to_target_kwh(
+        stored_energy_kwh=evidence.stored_vehicle_energy_kwh,
+        current_soc_percent=evidence.vehicle_soc_percent,
+        target_soc_percent=evidence.vehicle_target_soc_percent,
+        charge_efficiency_percent=evidence.charge_efficiency_percent,
+    )
+    plan = calculate_pre_free_plan(
+        PreFreePlanInputs(
+            discretionary_ac_kwh=(
+                evidence.planned_export_energy_kwh
+                if evidence.in_pre_free_window
+                else 0.0
+            ),
+            vehicle_wall_room_kwh=vehicle_room,
+            baseline_a=evidence.baseline_a,
+            current_ceiling_a=evidence.current_ceiling_a,
+            voltage_v=evidence.voltage_v,
+            phase_count=evidence.phase_count,
+            free_window_start=evidence.free_window_start,
+        )
+    )
+    return PreFreePlanningEvaluation(
+        plan,
+        plan.planned_energy_kwh,
+        plan.planned_start,
+    )
 
 
 @dataclass(frozen=True, slots=True)

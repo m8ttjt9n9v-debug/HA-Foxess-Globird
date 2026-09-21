@@ -142,7 +142,6 @@ from .planner.ev import (
     SmartSocketRecoveryState,
     SmartSocketStageState,
     charging_path_ceiling_a,
-    estimate_vehicle_energy_to_target_kwh,
     evaluate_allowance_projection,
     evaluate_free_window_target,
     finalize_direct_evse_reconciliation,
@@ -206,14 +205,14 @@ from .planner.ev_outside_window import (
     OutsideCurrentEnvelopeEvidence,
     PreFreeCurrentInputs,
     PreFreePlan,
-    PreFreePlanInputs,
+    PreFreePlanningEvidence,
     PreFreeSessionState,
     SolarSpillDecision,
     SolarSpillInputs,
     SolarSpillTelemetryEvidence,
     advance_pre_free_session,
-    calculate_pre_free_plan,
     evaluate_outside_current_envelope,
+    evaluate_pre_free_plan,
     evaluate_solar_spill_telemetry,
     plan_pre_free_current,
     plan_solar_spill_current,
@@ -1569,34 +1568,33 @@ class ActiveEvController:
             stored_energy = self._mapped_energy(
                 self.coordinator.runtime_config.ev_telemetry.stored_energy_entity
             )
-            if export_plan is not None and stored_energy is not None:
-                vehicle_room = estimate_vehicle_energy_to_target_kwh(
-                    stored_energy_kwh=stored_energy,
-                    current_soc_percent=vehicle_soc,
-                    target_soc_percent=soft_limit,
-                    charge_efficiency_percent=self._float(
-                        CONF_EV_CHARGE_EFFICIENCY, DEFAULT_EV_CHARGE_EFFICIENCY
+            planning = evaluate_pre_free_plan(
+                PreFreePlanningEvidence(
+                    planned_export_energy_kwh=(
+                        export_plan.planned_export_energy_kwh
+                        if export_plan is not None
+                        else None
                     ),
+                    stored_vehicle_energy_kwh=stored_energy,
+                    vehicle_soc_percent=vehicle_soc,
+                    vehicle_target_soc_percent=soft_limit,
+                    charge_efficiency_percent=self._float(
+                        CONF_EV_CHARGE_EFFICIENCY,
+                        DEFAULT_EV_CHARGE_EFFICIENCY,
+                    ),
+                    in_pre_free_window=in_pre_free,
+                    baseline_a=baseline,
+                    current_ceiling_a=pre_free_ceiling,
+                    voltage_v=self._float(CONF_EV_VOLTAGE, DEFAULT_EV_VOLTAGE),
+                    phase_count=int(
+                        self._float(CONF_EV_PHASE_COUNT, DEFAULT_EV_PHASE_COUNT)
+                    ),
+                    free_window_start=free_start,
                 )
-                self.pre_free_plan = calculate_pre_free_plan(
-                    PreFreePlanInputs(
-                        discretionary_ac_kwh=(
-                            export_plan.planned_export_energy_kwh if in_pre_free else 0.0
-                        ),
-                        vehicle_wall_room_kwh=vehicle_room,
-                        baseline_a=baseline,
-                        current_ceiling_a=pre_free_ceiling,
-                        voltage_v=self._float(CONF_EV_VOLTAGE, DEFAULT_EV_VOLTAGE),
-                        phase_count=int(self._float(CONF_EV_PHASE_COUNT, DEFAULT_EV_PHASE_COUNT)),
-                        free_window_start=free_start,
-                    )
-                )
-            planned_energy = (
-                self.pre_free_plan.planned_energy_kwh if self.pre_free_plan is not None else 0.0
             )
-            planned_start = (
-                self.pre_free_plan.planned_start if self.pre_free_plan is not None else None
-            )
+            self.pre_free_plan = planning.plan
+            planned_energy = planning.planned_energy_kwh
+            planned_start = planning.planned_start
             export_active = bool(
                 active_controller is not None and active_controller.export_session.phase != "idle"
             )
