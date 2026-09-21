@@ -6,7 +6,7 @@ from dataclasses import dataclass, replace
 from datetime import datetime, timedelta
 from math import isfinite
 
-from .ev import EvCommand, EvCommandPlan
+from .ev import EvCommand, EvCommandPlan, estimate_vehicle_energy_to_target_kwh
 from .ev_power_constraints import inverter_backed_current_ceiling
 
 
@@ -32,6 +32,34 @@ class DailyBackfillInputs:
     charger_minimum_a: float
     charger_maximum_a: float
     planning_buffer_minutes: float = 0.0
+
+
+@dataclass(frozen=True, slots=True)
+class DailyBackfillPlanningEvidence:
+    """Primitive live energy and configuration supplied by the HA facade."""
+
+    now: datetime
+    ready_at: datetime
+    planning_window_start: datetime
+    next_free_start: datetime
+    available_after_reserve_kwh: float
+    discharge_efficiency_percent: float
+    protected_house_kwh: float
+    sellable_energy_kwh: float
+    protected_ev_allocation_kwh: float
+    delivered_this_cycle_kwh: float
+    stored_vehicle_energy_kwh: float
+    vehicle_soc_percent: float
+    vehicle_target_soc_percent: float
+    vehicle_charge_efficiency_percent: float
+    inverter_output_limit_kw: float
+    outside_inverter_percent: float
+    voltage_v: float
+    phase_count: int
+    current_step_a: float
+    charger_minimum_a: float
+    charger_maximum_a: float
+    planning_buffer_minutes: float
 
 
 @dataclass(frozen=True, slots=True)
@@ -112,6 +140,44 @@ _DAILY_BACKFILL_COMPLETION_PHASES = frozenset(
         "outside_power_ceiling_too_low",
     }
 )
+
+
+def evaluate_daily_backfill_plan(
+    evidence: DailyBackfillPlanningEvidence,
+) -> DailyBackfillPlan:
+    """Compose normalized live energy and invoke the retained daily planner."""
+    vehicle_room = estimate_vehicle_energy_to_target_kwh(
+        stored_energy_kwh=evidence.stored_vehicle_energy_kwh,
+        current_soc_percent=evidence.vehicle_soc_percent,
+        target_soc_percent=evidence.vehicle_target_soc_percent,
+        charge_efficiency_percent=evidence.vehicle_charge_efficiency_percent,
+    )
+    return calculate_daily_backfill_plan(
+        DailyBackfillInputs(
+            now=evidence.now,
+            ready_at=evidence.ready_at,
+            planning_window_start=evidence.planning_window_start,
+            next_free_start=evidence.next_free_start,
+            available_ac_after_reserve_kwh=(
+                max(evidence.available_after_reserve_kwh, 0.0)
+                * evidence.discharge_efficiency_percent
+                / 100
+            ),
+            protected_house_kwh=max(evidence.protected_house_kwh, 0.0),
+            sellable_energy_kwh=max(evidence.sellable_energy_kwh, 0.0),
+            protected_ev_allocation_kwh=evidence.protected_ev_allocation_kwh,
+            delivered_this_cycle_kwh=evidence.delivered_this_cycle_kwh,
+            vehicle_wall_room_kwh=vehicle_room,
+            inverter_output_limit_kw=evidence.inverter_output_limit_kw,
+            outside_inverter_percent=evidence.outside_inverter_percent,
+            voltage_v=evidence.voltage_v,
+            phase_count=evidence.phase_count,
+            current_step_a=evidence.current_step_a,
+            charger_minimum_a=evidence.charger_minimum_a,
+            charger_maximum_a=evidence.charger_maximum_a,
+            planning_buffer_minutes=evidence.planning_buffer_minutes,
+        )
+    )
 
 
 def advance_daily_backfill_session(

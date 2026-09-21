@@ -7,9 +7,11 @@ from custom_components.home_energy_orchestrator.planner.ev_daily_backfill import
     DailyBackfillCycleState,
     DailyBackfillEnergyState,
     DailyBackfillInputs,
+    DailyBackfillPlanningEvidence,
     DailyBackfillStopState,
     advance_daily_backfill_session,
     calculate_daily_backfill_plan,
+    evaluate_daily_backfill_plan,
     integrate_daily_backfill_energy,
     reconcile_daily_backfill_stop,
     record_daily_backfill_stop_attempt,
@@ -40,6 +42,44 @@ def _inputs(**changes):
     }
     values.update(changes)
     return DailyBackfillInputs(**values)
+
+
+def test_daily_backfill_evaluation_composes_efficiency_and_live_vehicle_room():
+    plan = evaluate_daily_backfill_plan(
+        DailyBackfillPlanningEvidence(
+            now=datetime(2026, 9, 7, 6, 30, tzinfo=UTC),
+            ready_at=datetime(2026, 9, 7, 8, 0, tzinfo=UTC),
+            planning_window_start=datetime(2026, 9, 7, 0, 0, tzinfo=UTC),
+            next_free_start=datetime(2026, 9, 7, 12, 1, tzinfo=UTC),
+            available_after_reserve_kwh=14,
+            discharge_efficiency_percent=50,
+            protected_house_kwh=3,
+            sellable_energy_kwh=100,
+            protected_ev_allocation_kwh=5,
+            delivered_this_cycle_kwh=0,
+            stored_vehicle_energy_kwh=5,
+            vehicle_soc_percent=50,
+            vehicle_target_soc_percent=60,
+            vehicle_charge_efficiency_percent=90,
+            inverter_output_limit_kw=15,
+            outside_inverter_percent=30,
+            voltage_v=230,
+            phase_count=3,
+            current_step_a=1,
+            charger_minimum_a=1,
+            charger_maximum_a=16,
+            planning_buffer_minutes=0,
+        )
+    )
+
+    assert plan.remaining_allocation_kwh == 5
+    assert plan.protected_house_kwh == 3
+    assert plan.discretionary_energy_kwh == 0
+    assert plan.planned_energy_kwh == 1.111
+    assert plan.allocation_shortfall_kwh == 3.889
+    assert plan.current_ceiling_a == 6
+    assert plan.power_ceiling_kw == 4.14
+    assert plan.phase == "waiting_latest_start"
 
 
 def test_three_phase_cap_is_floored_to_supported_whole_amp():

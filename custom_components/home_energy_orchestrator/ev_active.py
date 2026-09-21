@@ -177,11 +177,11 @@ from .planner.ev_candidates import (
 from .planner.ev_daily_backfill import (
     DailyBackfillCycleState,
     DailyBackfillEnergyState,
-    DailyBackfillInputs,
     DailyBackfillPlan,
+    DailyBackfillPlanningEvidence,
     DailyBackfillStopState,
     advance_daily_backfill_session,
-    calculate_daily_backfill_plan,
+    evaluate_daily_backfill_plan,
     integrate_daily_backfill_energy,
     reconcile_daily_backfill_stop,
     record_daily_backfill_stop_attempt,
@@ -1782,38 +1782,31 @@ class ActiveEvController:
             return None
         ready_at, planning_start, next_free = self._daily_ready_cycle(now)
         self._roll_daily_backfill_cycle(ready_at)
-        vehicle_room = estimate_vehicle_energy_to_target_kwh(
-            stored_energy_kwh=stored_energy,
-            current_soc_percent=vehicle_soc,
-            target_soc_percent=vehicle_soft_limit,
-            charge_efficiency_percent=self._float(
-                CONF_EV_CHARGE_EFFICIENCY,
-                DEFAULT_EV_CHARGE_EFFICIENCY,
-            ),
-        )
-        return calculate_daily_backfill_plan(
-            DailyBackfillInputs(
+        return evaluate_daily_backfill_plan(
+            DailyBackfillPlanningEvidence(
                 now=now,
                 ready_at=ready_at,
                 planning_window_start=planning_start,
                 next_free_start=next_free,
-                available_ac_after_reserve_kwh=max(float(data.available_after_reserve_kwh), 0.0)
-                * self._float(
+                available_after_reserve_kwh=float(data.available_after_reserve_kwh),
+                discharge_efficiency_percent=self._float(
                     CONF_DISCHARGE_EFFICIENCY_PERCENT,
                     DEFAULT_DISCHARGE_EFFICIENCY_PERCENT,
-                )
-                / 100,
-                protected_house_kwh=max(float(protected_house), 0.0),
-                sellable_energy_kwh=max(
-                    float(export_plan.planned_export_energy_kwh),
-                    0.0,
                 ),
+                protected_house_kwh=float(protected_house),
+                sellable_energy_kwh=float(export_plan.planned_export_energy_kwh),
                 protected_ev_allocation_kwh=self._float(
                     CONF_EV_DAILY_BACKFILL_ENERGY,
                     DEFAULT_EV_DAILY_BACKFILL_ENERGY,
                 ),
                 delivered_this_cycle_kwh=self.daily_backfill_delivered_kwh,
-                vehicle_wall_room_kwh=vehicle_room,
+                stored_vehicle_energy_kwh=stored_energy,
+                vehicle_soc_percent=vehicle_soc,
+                vehicle_target_soc_percent=vehicle_soft_limit,
+                vehicle_charge_efficiency_percent=self._float(
+                    CONF_EV_CHARGE_EFFICIENCY,
+                    DEFAULT_EV_CHARGE_EFFICIENCY,
+                ),
                 inverter_output_limit_kw=self._float(
                     CONF_INVERTER_DISCHARGE_LIMIT_KW,
                     DEFAULT_INVERTER_DISCHARGE_LIMIT_KW,

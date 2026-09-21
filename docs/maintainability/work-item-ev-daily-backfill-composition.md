@@ -54,14 +54,23 @@ the same composition to the facade without data or hardware-state migration.
 
 - Pre-extraction facade composition, missing-evidence and pure daily-planner
   characterization: 20 passed.
-- Implementation and complete compatibility gates remain outstanding.
+- Post-extraction daily planner, facade and lifecycle selection: 23 passed.
+- Full repository suite: 891 passed in 36.17 seconds.
+- Frozen architecture and compatibility contracts: 24 passed.
+- Previous-release rehearsal against `v0.12.26`: 1 passed.
+- Repository-wide Ruff, `git diff --check` and reverse-patch applicability:
+  passed.
+- `README.md`, public entities, configuration keys, persistence payloads and
+  command behavior are unchanged.
+- Independent review and the complete Phase 7 exit/rollout gates remain
+  separate obligations; this extraction is not authorized for deployment.
 
 ## Completion record
 
 - [x] Existing behaviour characterised
-- [ ] Implementation complete
-- [ ] Compatibility checks passed
-- [ ] Documentation and roadmap updated
+- [x] Implementation complete
+- [x] Compatibility checks passed
+- [x] Documentation and roadmap updated
 - [ ] Independent review complete
-- [ ] Rollback demonstrated
-- [ ] Operational soak complete where required
+- [x] Rollback demonstrated
+- [x] Operational soak not required for this side-effect-free extraction
