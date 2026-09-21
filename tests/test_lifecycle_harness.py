@@ -2530,6 +2530,110 @@ async def test_active_export_ownership_survives_unavailable_feedback_and_reload(
 
 
 @pytest.mark.freeze_time("2026-09-17 02:30:00+00:00")
+async def test_manual_discharge_timeout_restores_self_use_and_clears(
+    hass, monkeypatch
+) -> None:
+    """A live diagnostic retains its exact start, timeout and clear trace."""
+    harness = LifecycleHarness(hass)
+    _register_foxess_services(harness, monkeypatch)
+    await _seed_foxess_states(harness, 80)
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Timed manual discharge",
+        version=6,
+        data=_active_entry_data(
+            inverter_charge_limit_kw=10.0,
+            inverter_discharge_limit_kw=10.0,
+        ),
+    )
+    entry.add_to_hass(hass)
+    await harness.setup(entry)
+    controller = entry.runtime_data.manual_test
+    store_key = f"home_energy_orchestrator.{entry.entry_id}.manual_test"
+
+    harness.clear_service_calls()
+    await controller.async_start("discharge", 8.0, 1.0)
+    assert [
+        (call.domain, call.service, call.service_data)
+        for call in harness.service_calls
+    ] == [
+        (
+            "number",
+            "set_value",
+            {"value": 8.0, "entity_id": "number.test_force_discharge"},
+        ),
+        (
+            "select",
+            "select_option",
+            {"option": "Force Discharge", "entity_id": "select.test_work_mode"},
+        ),
+    ]
+    assert controller.status == "active_discharge"
+    persisted = await harness.load_store(store_key)
+    assert persisted is not None
+    assert persisted["phase"] == "running"
+
+    await harness.set_state(
+        "number.test_force_discharge",
+        "8",
+        {"unit_of_measurement": "kW", "max": 10},
+    )
+    await harness.set_state(
+        "select.test_work_mode",
+        "Force Discharge",
+        {"options": ["Self Use", "Force Discharge", "Force Charge"]},
+    )
+    harness.clear_service_calls()
+    await controller._async_expire(None)
+
+    assert [
+        (call.domain, call.service, call.service_data)
+        for call in harness.service_calls
+    ] == [
+        (
+            "select",
+            "select_option",
+            {"option": "Self Use", "entity_id": "select.test_work_mode"},
+        ),
+        (
+            "number",
+            "set_value",
+            {"value": 0.0, "entity_id": "number.test_force_discharge"},
+        ),
+    ]
+    assert controller.status == "stopping_discharge"
+    assert controller.restore_attempts == 1
+    persisted = await harness.load_store(store_key)
+    assert persisted is not None
+    assert persisted["phase"] == "stopping"
+    assert persisted["restore_attempts"] == 1
+
+    await harness.set_state(
+        "number.test_force_discharge",
+        "0",
+        {"unit_of_measurement": "kW", "max": 10},
+    )
+    await harness.set_state(
+        "select.test_work_mode",
+        "Self Use",
+        {"options": ["Self Use", "Force Discharge", "Force Charge"]},
+    )
+    harness.clear_service_calls()
+    await controller._async_reconcile_restore("timer_expired")
+
+    assert controller.status == "idle"
+    assert harness.service_calls == ()
+    persisted = await harness.load_store(store_key)
+    assert persisted is not None
+    assert persisted["active_kind"] is None
+    assert persisted["phase"] == "idle"
+    await harness.unload(entry)
+    hass.services.async_remove("number", "set_value")
+    hass.services.async_remove("select", "select_option")
+    harness.close()
+
+
+@pytest.mark.freeze_time("2026-09-17 02:30:00+00:00")
 async def test_unfinished_manual_discharge_restores_and_clears_across_reload(
     hass, monkeypatch
 ) -> None:

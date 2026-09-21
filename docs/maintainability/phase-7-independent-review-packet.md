@@ -6,7 +6,7 @@ This packet lets an engineer with no implementation context review the Phase 7
 controller decomposition without reconstructing the programme history. It is a
 review aid, not evidence that independent review occurred.
 
-Review range: pre-Phase-7 commit `4838e51` through candidate `8c453b2`.
+Review range: pre-Phase-7 commit `4838e51` through candidate `HEAD`.
 
 Authoritative documents, in order:
 
@@ -69,10 +69,10 @@ python -m scripts.previous_release_rehearsal --tag v0.12.26
 python scripts/controller_boundary_contract.py --check
 python scripts/persistence_boundary_contract.py --check
 ruff check custom_components tests scripts
-git diff --check 4838e51..8c453b2
+git diff --check 4838e51..HEAD
 ```
 
-Expected repository evidence at this candidate is 953 full-suite tests, 24
+Expected repository evidence at this candidate is 954 full-suite tests, 24
 frozen contract tests and two passing release-roundtrip system cases. Test
 counts are descriptive; review the assertions and command traces rather than
 treating the count as proof.
