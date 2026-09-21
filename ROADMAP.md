@@ -48,6 +48,33 @@ Status here describes behavioral parity, not merely the presence of code.
   suite must no longer be presented as sufficient evidence for lifecycle
   safety.
 
+## High-priority feature — measured morning solar EV capture
+
+- [ ] Reuse the existing measured solar-spill strategy before the ZEROCHARGE
+  window without requiring a solar-forecast integration. Once the protected
+  house-energy reserve is demonstrably in place, allocate measured solar
+  surplus to an eligible, home-connected EV at the corresponding supported
+  charger-current step. Base the decision on coherent live power flows so
+  existing EV consumption is included in the reconstructed surplus and house
+  demand is not mistaken for available solar.
+
+  Recalculate the normal charging target on a 15-minute cadence to avoid
+  excessive current bouncing. Safety curtailment must remain immediate when
+  grid import, lost/stale telemetry, loss of reserve, disconnection, vehicle
+  limit, Safety Lock, or another commissioning gate makes the previous target
+  unsafe. Morning measured-solar charging is an earlier stage only: when the
+  scheduled pre-free backfill session starts, it takes exclusive control at
+  its planned current and completely replaces the variable measured-solar
+  target. Solar-spill must not continue to raise, lower, or otherwise modulate
+  EV current during that latched pre-free session. Define the corresponding
+  handovers with daily-backfill, free-window and export stages; preserve
+  restart/reload state; expose the selected phase and measured allocation; and
+  add full-day replay cases for gradual sunrise, cloud steps, changing house
+  load, a slow charger, unplug/replug, the exact pre-free takeover, and the
+  ZEROCHARGE boundary. The feature must work without forecast data and must not
+  create paid grid charging. A future optional forecast input may improve
+  planning but is not a prerequisite for this measured-power path.
+
 ## Optimisation and maintainability programme
 
 - [ ] Execute the staged
@@ -171,6 +198,33 @@ Status here describes behavioral parity, not merely the presence of code.
   suggestions without inferred signs, limits, ownership, or write authority.
 
 ## Confirmed bugs
+
+- [ ] Rate-limit the existing measured solar-spill EV controller so ordinary
+  changes to the Tessie charging-current setpoint occur no more frequently
+  than once every 15 minutes. Hold the last safe target between intervals,
+  suppress redundant writes, persist the hold across reload/restart, and add
+  hysteresis at whole-amp boundaries so small solar fluctuations cannot cause
+  repeated adjacent-current commands. Immediate downward curtailment remains
+  permitted for grid import, lost/stale telemetry, loss of protected reserve,
+  disconnection, vehicle limit, Safety Lock, or another safety/gating failure.
+  The 15-minute solar-spill hold ends when pre-free backfill starts; the
+  backfill target then has exclusive authority and is not blended with the
+  prior solar-spill target.
+  Add replay coverage for oscillating cloud cover, a sustained increase, a
+  sustained decrease, safety curtailment inside the hold period, and recovery
+  at the next eligible 15-minute evaluation.
+
+- [ ] Replace the direct-EVSE controller's fixed three-attempt terminal latch.
+  `maximum_attempts_reached` must not permanently abandon an otherwise valid
+  current target. Reconciliation should be governed by elapsed time and a
+  progressively slower retry schedule, with a strict write-rate bound, fresh
+  eligibility/safety checks before every attempt, restart-safe persistence,
+  and automatic recovery when actuator feedback becomes responsive. Preserve
+  protection against rapid current flapping and competing writers; do not
+  replace the fixed count with an unbounded fast retry loop. Add lifecycle
+  regressions for delayed Tessie feedback, a temporarily rejected low-current
+  request, eventual recovery without unplugging, target changes during
+  backoff, reload/restart during backoff, and a genuinely competing writer.
 
 - [x] Decouple EV driving and charge-limit learning from the live cable-
   connection gate. A disconnected vehicle currently causes the EV controller
@@ -485,10 +539,13 @@ Working Single Phase Pilot Site parity.
   documentation source as setup, entities, and README guidance.
 - [ ] Add safe Tessie convenience controls for unlock, front trunk, rear trunk,
   and window venting, with explicit confirmation appropriate to each action.
-- [ ] Add solar forecasting and weather context. First characterize whether and
-  how the Working Single Phase Pilot Site currently uses forecast, temperature,
-  heating-demand, and solar relationships; port that evidence before extending
-  control decisions.
+- [ ] **Lower priority:** add optional solar forecasting and weather context to
+  improve forward planning. First characterize how the Working Single Phase
+  Pilot Site used forecast, temperature, heating-demand, and solar
+  relationships, then port that evidence before extending control decisions.
+  Absence or failure of the forecast provider must not disable the measured
+  morning-solar or solar-spill paths, and forecast data must never override
+  live safety evidence.
 - [ ] Reduce unnecessary hyphenated prose during a dedicated human copy-edit
   without changing established entity IDs or configuration keys.
 - [ ] Add a Charge to Full decision estimate: completion time, predicted grid
