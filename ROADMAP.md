@@ -64,9 +64,11 @@ Status here describes behavioral parity, not merely the presence of code.
   limit, Safety Lock, or another commissioning gate makes the previous target
   unsafe. Morning measured-solar charging is an earlier stage only: when the
   scheduled pre-free backfill session starts, it takes exclusive control at
-  its planned current and completely replaces the variable measured-solar
-  target. Solar-spill must not continue to raise, lower, or otherwise modulate
-  EV current during that latched pre-free session. Define the corresponding
+  one fixed current selected and frozen at takeover, and completely replaces
+  the variable measured-solar target. That fixed pre-free backfill current is
+  retained for the session; solar-spill must not continue to raise, lower, or
+  otherwise modulate it, and the target must not be recomputed from changing
+  solar power while the pre-free session remains latched. Define the corresponding
   handovers with daily-backfill, free-window and export stages; preserve
   restart/reload state; expose the selected phase and measured allocation; and
   add full-day replay cases for gradual sunrise, cloud steps, changing house
@@ -207,9 +209,11 @@ Status here describes behavioral parity, not merely the presence of code.
   repeated adjacent-current commands. Immediate downward curtailment remains
   permitted for grid import, lost/stale telemetry, loss of protected reserve,
   disconnection, vehicle limit, Safety Lock, or another safety/gating failure.
-  The 15-minute solar-spill hold ends when pre-free backfill starts; the
-  backfill target then has exclusive authority and is not blended with the
-  prior solar-spill target.
+  The 15-minute solar-spill hold ends when pre-free backfill starts. At that
+  handover, select and freeze one fixed backfill current for the active
+  session. Pre-free then has exclusive authority: do not take the maximum of
+  the solar and backfill targets, blend them, or continue variable-power solar
+  adjustments until the pre-free session ends.
   Add replay coverage for oscillating cloud cover, a sustained increase, a
   sustained decrease, safety curtailment inside the hold period, and recovery
   at the next eligible 15-minute evaluation.
