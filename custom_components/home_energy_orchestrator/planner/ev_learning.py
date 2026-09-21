@@ -37,6 +37,55 @@ class LearnedChargeLimitDecision:
     free_window_soc_gain_percent: float
 
 
+@dataclass(frozen=True, slots=True)
+class LearnedChargeLimitEvidence:
+    """Primitive live vehicle, window and actuator evidence from the facade."""
+
+    samples_kwh: tuple[float, ...]
+    stored_energy_kwh: float
+    vehicle_soc_percent: float
+    maximum_current_a: float
+    voltage_v: float
+    phase_count: int
+    free_window_hours: float
+    charge_efficiency_percent: float
+    minimum_samples: int
+    arrival_reserve_percent: float
+    free_window_limit_percent: float
+    actuator_minimum_percent: float
+    actuator_maximum_percent: float
+    actuator_step_percent: float
+
+
+def evaluate_learned_charge_limit(
+    evidence: LearnedChargeLimitEvidence,
+) -> LearnedChargeLimitDecision:
+    """Compose retained capacity, free-window gain and learned-limit policy."""
+    usable = estimate_usable_ev_capacity_kwh(
+        stored_energy_kwh=evidence.stored_energy_kwh,
+        soc_percent=evidence.vehicle_soc_percent,
+    )
+    gain = estimate_free_window_soc_gain_percent(
+        maximum_current_a=evidence.maximum_current_a,
+        voltage_v=evidence.voltage_v,
+        phase_count=evidence.phase_count,
+        window_hours=evidence.free_window_hours,
+        charge_efficiency_percent=evidence.charge_efficiency_percent,
+        usable_capacity_kwh=usable,
+    )
+    return plan_learned_general_charge_limit(
+        list(evidence.samples_kwh),
+        minimum_samples=evidence.minimum_samples,
+        arrival_reserve_percent=evidence.arrival_reserve_percent,
+        free_window_limit_percent=evidence.free_window_limit_percent,
+        free_window_soc_gain_percent=gain,
+        usable_capacity_kwh=usable,
+        actuator_minimum_percent=evidence.actuator_minimum_percent,
+        actuator_maximum_percent=evidence.actuator_maximum_percent,
+        actuator_step_percent=evidence.actuator_step_percent,
+    )
+
+
 def snapshot_daily_driving_energy(
     state: DrivingSnapshotState,
     *,

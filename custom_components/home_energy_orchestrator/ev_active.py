@@ -190,9 +190,8 @@ from .planner.ev_daily_backfill import (
 from .planner.ev_learning import (
     DrivingSnapshotState,
     LearnedChargeLimitDecision,
-    estimate_free_window_soc_gain_percent,
-    estimate_usable_ev_capacity_kwh,
-    plan_learned_general_charge_limit,
+    LearnedChargeLimitEvidence,
+    evaluate_learned_charge_limit,
     snapshot_daily_driving_energy,
 )
 from .planner.ev_outside_state import (
@@ -2025,41 +2024,41 @@ class ActiveEvController:
             self.learned_charge_limit = None
             return None
         try:
-            usable = estimate_usable_ev_capacity_kwh(
-                stored_energy_kwh=stored,
-                soc_percent=vehicle_soc,
-            )
-            gain = estimate_free_window_soc_gain_percent(
-                maximum_current_a=self._path_ceiling_a(),
-                voltage_v=self._float(CONF_EV_VOLTAGE, DEFAULT_EV_VOLTAGE),
-                phase_count=int(self._float(CONF_EV_PHASE_COUNT, DEFAULT_EV_PHASE_COUNT)),
-                window_hours=self._free_window_duration_hours(),
-                charge_efficiency_percent=self._float(
-                    CONF_EV_CHARGE_EFFICIENCY, DEFAULT_EV_CHARGE_EFFICIENCY
-                ),
-                usable_capacity_kwh=usable,
-            )
-            self.learned_charge_limit = plan_learned_general_charge_limit(
-                [sample.energy_kwh for sample in self.driving_history.samples],
-                minimum_samples=int(
-                    self._float(
-                        CONF_EV_LEARNING_MINIMUM_SAMPLES,
-                        DEFAULT_EV_LEARNING_MINIMUM_SAMPLES,
-                    )
-                ),
-                arrival_reserve_percent=self._float(
-                    CONF_EV_ARRIVAL_RESERVE_SOC,
-                    DEFAULT_EV_ARRIVAL_RESERVE_SOC,
-                ),
-                free_window_limit_percent=self._float(
-                    CONF_EV_FREE_WINDOW_CHARGE_LIMIT,
-                    DEFAULT_EV_FREE_WINDOW_CHARGE_LIMIT,
-                ),
-                free_window_soc_gain_percent=gain,
-                usable_capacity_kwh=usable,
-                actuator_minimum_percent=minimum,
-                actuator_maximum_percent=maximum,
-                actuator_step_percent=step,
+            self.learned_charge_limit = evaluate_learned_charge_limit(
+                LearnedChargeLimitEvidence(
+                    samples_kwh=tuple(
+                        sample.energy_kwh for sample in self.driving_history.samples
+                    ),
+                    stored_energy_kwh=stored,
+                    vehicle_soc_percent=vehicle_soc,
+                    maximum_current_a=self._path_ceiling_a(),
+                    voltage_v=self._float(CONF_EV_VOLTAGE, DEFAULT_EV_VOLTAGE),
+                    phase_count=int(
+                        self._float(CONF_EV_PHASE_COUNT, DEFAULT_EV_PHASE_COUNT)
+                    ),
+                    free_window_hours=self._free_window_duration_hours(),
+                    charge_efficiency_percent=self._float(
+                        CONF_EV_CHARGE_EFFICIENCY,
+                        DEFAULT_EV_CHARGE_EFFICIENCY,
+                    ),
+                    minimum_samples=int(
+                        self._float(
+                            CONF_EV_LEARNING_MINIMUM_SAMPLES,
+                            DEFAULT_EV_LEARNING_MINIMUM_SAMPLES,
+                        )
+                    ),
+                    arrival_reserve_percent=self._float(
+                        CONF_EV_ARRIVAL_RESERVE_SOC,
+                        DEFAULT_EV_ARRIVAL_RESERVE_SOC,
+                    ),
+                    free_window_limit_percent=self._float(
+                        CONF_EV_FREE_WINDOW_CHARGE_LIMIT,
+                        DEFAULT_EV_FREE_WINDOW_CHARGE_LIMIT,
+                    ),
+                    actuator_minimum_percent=minimum,
+                    actuator_maximum_percent=maximum,
+                    actuator_step_percent=step,
+                )
             )
         except ValueError:
             self.learned_charge_limit = None

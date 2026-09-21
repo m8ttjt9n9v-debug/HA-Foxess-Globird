@@ -1,14 +1,62 @@
+from dataclasses import replace
 from datetime import UTC, datetime
 
 import pytest
 
 from custom_components.home_energy_orchestrator.planner.ev_learning import (
     DrivingSnapshotState,
+    LearnedChargeLimitEvidence,
     estimate_free_window_soc_gain_percent,
     estimate_usable_ev_capacity_kwh,
+    evaluate_learned_charge_limit,
     plan_learned_general_charge_limit,
     snapshot_daily_driving_energy,
 )
+
+LEARNED_EVIDENCE = LearnedChargeLimitEvidence(
+    samples_kwh=(),
+    stored_energy_kwh=30,
+    vehicle_soc_percent=40,
+    maximum_current_a=16,
+    voltage_v=230,
+    phase_count=1,
+    free_window_hours=178 / 60,
+    charge_efficiency_percent=90,
+    minimum_samples=14,
+    arrival_reserve_percent=20,
+    free_window_limit_percent=90,
+    actuator_minimum_percent=50,
+    actuator_maximum_percent=100,
+    actuator_step_percent=1,
+)
+
+
+def test_learned_limit_evaluation_composes_fallback_capacity_and_window_gain():
+    decision = evaluate_learned_charge_limit(LEARNED_EVIDENCE)
+
+    assert decision.mode == "learning_full_window_fallback"
+    assert decision.sample_count == 0
+    assert decision.p85_daily_energy_kwh is None
+    assert decision.usable_capacity_kwh == 75
+    assert decision.free_window_soc_gain_percent == 13.101
+    assert decision.limit_percent == 76
+
+
+def test_learned_limit_evaluation_composes_p85_branch_without_fixed_capacity():
+    decision = evaluate_learned_charge_limit(
+        replace(
+            LEARNED_EVIDENCE,
+            samples_kwh=tuple(range(8, 22)),
+            actuator_minimum_percent=0,
+        )
+    )
+
+    assert decision.mode == "learned_p85"
+    assert decision.sample_count == 14
+    assert decision.p85_daily_energy_kwh == pytest.approx(19.05)
+    assert decision.usable_capacity_kwh == 75
+    assert decision.free_window_soc_gain_percent == 13.101
+    assert decision.limit_percent == 33
 
 
 def test_daily_driving_snapshot_accepts_only_consecutive_boundary_days():
