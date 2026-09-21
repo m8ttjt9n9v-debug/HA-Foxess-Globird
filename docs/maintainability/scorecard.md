@@ -60,9 +60,10 @@ volume or subjective polish.
 
 Hard-gate status at this checkpoint:
 
-- **Partial — Safety Lock generated sequences:** named system fixtures prove
-  zero writes across reload and persisted recovery, but broader generated
-  transition sequences remain catalogue work.
+- **Pass — current Safety Lock generated corpus:** named system fixtures plus
+  the fixed-seed 100-event Home Assistant replay prove zero FoxESS writes
+  across mixed telemetry, external-feedback and reload transitions. Any
+  discovered counterexample must become a named deterministic fixture.
 - **Pass — restart/reload equivalence:** ordinary-day and incident lifecycle
   traces retain equivalent plans, ownership and obligations.
 - **Pass — incident replay completeness:** every catalogued class has a

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+from random import Random
 
 import pytest
 from homeassistant.config_entries import SOURCE_RECONFIGURE
@@ -17,6 +18,35 @@ from custom_components.home_energy_orchestrator.planner.ev_outside_window import
 )
 from tests.helpers.lifecycle import LifecycleHarness
 from tests.test_setup import ENTRY_DATA
+
+_SAFETY_REPLAY_SEED = 20260921
+_SAFETY_REPLAY_LENGTH = 100
+
+
+def _fixed_seed_safety_events() -> tuple[str, ...]:
+    """Generate a reproducible, mixed-order safety-gate input trace."""
+    event_kinds = (
+        "battery_fresh",
+        "battery_stale",
+        "battery_unavailable",
+        "grid_fresh",
+        "grid_unavailable",
+        "house_fresh",
+        "house_unavailable",
+        "mode_external",
+        "mode_unavailable",
+        "force_power_external",
+        "force_power_unavailable",
+        "reload",
+    )
+    events = list(event_kinds)
+    random = Random(_SAFETY_REPLAY_SEED)
+    events.extend(
+        random.choice(event_kinds)
+        for _ in range(_SAFETY_REPLAY_LENGTH - len(events))
+    )
+    random.shuffle(events)
+    return tuple(events)
 
 
 def _register_foxess_services(harness: LifecycleHarness, monkeypatch) -> None:
@@ -1162,6 +1192,108 @@ async def test_safety_lock_blocks_all_commands_across_reload(hass) -> None:
     assert status is not None
     assert status.attributes["control_gate"] == "rehearsal"
     assert harness.service_calls == ()
+    harness.close()
+
+
+@pytest.mark.freeze_time("2026-09-17 02:30:00+00:00")
+async def test_fixed_seed_safety_lock_replay_never_writes_foxess(hass, monkeypatch) -> None:
+    """Safety Lock survives 100 mixed telemetry and reload transitions."""
+    harness = LifecycleHarness(hass)
+    _register_foxess_services(harness, monkeypatch)
+    await _seed_foxess_states(harness, 50)
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Generated locked lifecycle replay",
+        data=_active_entry_data(
+            automatic_charge_enabled=True,
+            automatic_export_enabled=True,
+            rehearsal_mode=True,
+            free_charge_schedule_confirmed=True,
+            inverter_charge_limit_kw=10.0,
+            inverter_discharge_limit_kw=10.0,
+        ),
+    )
+    entry.add_to_hass(hass)
+    await harness.setup(entry)
+
+    events = _fixed_seed_safety_events()
+    assert len(events) == _SAFETY_REPLAY_LENGTH
+    assert set(events) == {
+        "battery_fresh",
+        "battery_stale",
+        "battery_unavailable",
+        "grid_fresh",
+        "grid_unavailable",
+        "house_fresh",
+        "house_unavailable",
+        "mode_external",
+        "mode_unavailable",
+        "force_power_external",
+        "force_power_unavailable",
+        "reload",
+    }
+
+    for ordinal, event in enumerate(events, start=1):
+        if event == "battery_fresh":
+            await harness.set_state(
+                "sensor.test_battery_soc", 50, {"unit_of_measurement": "%"}
+            )
+        elif event == "battery_stale":
+            await harness.set_state(
+                "sensor.test_battery_soc",
+                50,
+                {"unit_of_measurement": "%"},
+                observed_at=datetime(2026, 9, 16, tzinfo=UTC),
+            )
+        elif event == "battery_unavailable":
+            await harness.set_unavailable("sensor.test_battery_soc")
+        elif event == "grid_fresh":
+            await harness.set_state(
+                "sensor.test_grid_power", -5, {"unit_of_measurement": "kW"}
+            )
+        elif event == "grid_unavailable":
+            await harness.set_unavailable("sensor.test_grid_power")
+        elif event == "house_fresh":
+            await harness.set_state(
+                "sensor.test_house_load", 8, {"unit_of_measurement": "kW"}
+            )
+        elif event == "house_unavailable":
+            await harness.set_unavailable("sensor.test_house_load")
+        elif event == "mode_external":
+            await harness.set_state(
+                "select.test_work_mode",
+                "Force Discharge",
+                {"options": ["Self Use", "Force Discharge", "Force Charge"]},
+            )
+        elif event == "mode_unavailable":
+            await harness.set_unavailable("select.test_work_mode")
+        elif event == "force_power_external":
+            await harness.set_state(
+                "number.test_force_charge", 10, {"unit_of_measurement": "kW"}
+            )
+            await harness.set_state(
+                "number.test_force_discharge", 0, {"unit_of_measurement": "kW"}
+            )
+        elif event == "force_power_unavailable":
+            await harness.set_unavailable("number.test_force_charge")
+            await harness.set_unavailable("number.test_force_discharge")
+        else:
+            assert event == "reload"
+            await harness.reload(entry)
+
+        assert harness.service_calls == (), (
+            f"Safety Lock wrote after seed {_SAFETY_REPLAY_SEED}, "
+            f"event {ordinal}/{_SAFETY_REPLAY_LENGTH}: {event}"
+        )
+
+    status = hass.states.get("sensor.home_energy_status")
+    assert status is not None
+    assert status.attributes["control_gate"] == "rehearsal"
+    controller = entry.runtime_data.active_controller
+    assert controller.writes_performed == 0
+    assert controller.charge_session.phase == "idle"
+    assert controller.export_session.phase == "idle"
+    await harness.unload(entry)
     harness.close()
 
 
