@@ -202,3 +202,15 @@ free-window, solar-spill, pre-free, daily-backfill, or Charge to Full stage is
 active, HEO enforces the baseline. With a configured 0 A baseline, an observed
 charging switch creates a bounded `stop_charging` obligation immediately,
 including when HEO did not initiate the session.
+
+An active pre-free session is a boundary trigger as well as an outside-window
+stage. On entry to ZEROCHARGE, HEO clears that session and recalculates EV
+current immediately, applying the configured FoxESS settlement priority rather
+than carrying the battery-backed pre-free target for up to a normal decision
+interval.
+
+Pre-free charging is battery-backed and obeys the configured maximum EV power
+outside free power. HEO applies that percentage to the commissioned inverter
+output, converts the resulting power to a per-phase EV current, rounds down to
+an actuator-supported step, and also observes the live service ceiling. Solar
+spill remains measured-surplus control rather than battery-backed allocation.

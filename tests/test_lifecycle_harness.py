@@ -12,6 +12,9 @@ from homeassistant.helpers import entity_registry as er
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.home_energy_orchestrator.const import DOMAIN
+from custom_components.home_energy_orchestrator.planner.ev_outside_window import (
+    PreFreeSessionState,
+)
 from tests.helpers.lifecycle import LifecycleHarness
 from tests.test_setup import ENTRY_DATA
 
@@ -628,6 +631,96 @@ async def test_evening_plugin_cannot_resume_retained_current_above_zero_baseline
     target = hass.states.get("sensor.home_energy_ev_current_target")
     assert target is not None and target.state == "0.0"
     assert entry.runtime_data.ev_controller.outside_stop_requested is True
+
+    await harness.unload(entry)
+    hass.services.async_remove("number", "set_value")
+    hass.services.async_remove("switch", "turn_on")
+    hass.services.async_remove("switch", "turn_off")
+    harness.close()
+
+
+@pytest.mark.freeze_time("2026-09-17 12:00:00+00:00")
+async def test_zerocharge_entry_replaces_active_pre_free_current_immediately(
+    hass, monkeypatch
+) -> None:
+    """A pre-free target cannot survive the exact ZEROCHARGE boundary."""
+    harness = LifecycleHarness(hass)
+    _register_ev_services(harness, monkeypatch)
+    await _seed_foxess_states(harness, 80)
+    await _seed_ev_states(
+        harness,
+        soc=40,
+        actual_current=0,
+        requested_current=16,
+        stored_energy=24,
+        house_load=1.2,
+        site_current=0,
+    )
+    await harness.set_state("device_tracker.test_ev", "not_home")
+    await harness.set_state("binary_sensor.test_ev_cable", "off")
+    await harness.set_state("sensor.test_ev_charging", "disconnected")
+    await harness.set_state("switch.test_ev_charge", "off")
+    now = [datetime(2026, 9, 17, 11, 59, 50, tzinfo=UTC)]
+    monkeypatch.setattr(
+        "custom_components.home_energy_orchestrator.ev_active.dt_util.now",
+        lambda: now[0],
+    )
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Pre-free boundary replacement",
+        version=6,
+        data=_ev_entry_data(
+            foxess_control_owner="local_modbus",
+            ev_pre_free_backfill_enabled=True,
+            ev_free_window_priority="house_battery",
+            ev_free_window_settle_minutes=5.0,
+        ),
+    )
+    entry.add_to_hass(hass)
+    await harness.setup(entry)
+    assert harness.service_calls == ()
+
+    controller = entry.runtime_data.ev_controller
+    controller.pre_free_session = PreFreeSessionState(
+        True,
+        datetime(2026, 9, 17, 11, 45, tzinfo=UTC),
+    )
+    controller.outside_control_active = True
+    controller.outside_target_active = True
+    controller.target_current_a = 16
+    controller.target_limit_percent = 90
+    controller.last_decision_at = now[0]
+    harness.clear_service_calls()
+
+    now[0] = datetime(2026, 9, 17, 12, 0, tzinfo=UTC)
+    hass.states.async_set("device_tracker.test_ev", "home")
+    hass.states.async_set("binary_sensor.test_ev_cable", "on")
+    hass.states.async_set("sensor.test_ev_charging", "charging")
+    hass.states.async_set(
+        "sensor.test_ev_actual_current",
+        "16",
+        {"unit_of_measurement": "A"},
+    )
+    hass.states.async_set("switch.test_ev_charge", "on")
+    await controller.async_reconcile(now[0])
+    entry.runtime_data.async_update_listeners()
+    await hass.async_block_till_done()
+
+    assert controller.pre_free_session == PreFreeSessionState()
+    assert controller.target_current_a == 1
+    assert controller.decision_phase == "settling_foxess"
+    assert [
+        (call.domain, call.service, call.service_data)
+        for call in harness.service_calls
+    ] == [
+        (
+            "number",
+            "set_value",
+            {"entity_id": "number.test_ev_current", "value": 1},
+        )
+    ]
+    target = hass.states.get("sensor.home_energy_ev_current_target")
+    assert target is not None and target.state == "1.0"
 
     await harness.unload(entry)
     hass.services.async_remove("number", "set_value")
