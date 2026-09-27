@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.12.29rc10 — strict direct EVSE 90% command cap
+
+- Publish the strict direct-EVSE cap correction after its release validation
+  gate; the final command can never exceed 90% unless Charge to Full is on.
+
 ## 0.12.29rc9 — strict direct EVSE 90% command cap
 
 - Correct final direct-EVSE charge-limit quantisation: a non-Charge-to-Full

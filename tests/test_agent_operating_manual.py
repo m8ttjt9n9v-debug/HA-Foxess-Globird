@@ -1,9 +1,6 @@
 """Keep the task-level live-site safety boundary discoverable."""
 
-from __future__ import annotations
-
 from pathlib import Path
-
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 
