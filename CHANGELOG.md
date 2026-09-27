@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.12.29rc8 — direct EVSE 90% safety cap
+
+- Preserve the direct charger’s 1 A anti-fault keepalive and moving Tesla
+  charge-limit headroom, while enforcing a hard 90% ceiling whenever EV Charge
+  to Full is off.
+- Enforce that ceiling at the direct-EVSE reconciliation boundary, including
+  retained feedback, startup telemetry recovery, battery-reserve keepalive,
+  and the transition from Charge to Full back to normal control.
+- Retain 100% as the explicit EV Charge to Full exception.
+
 ## 0.12.29rc1 — Phase 7 staging candidate
 
 - Prepare the independently reviewed controller-decomposition and malformed-
