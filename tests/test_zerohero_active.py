@@ -1210,8 +1210,15 @@ async def test_completed_charge_session_round_trips_through_ha_storage(hass):
     assert restored.charge_session == first.charge_session
 
 
-async def test_active_free_charge_restarts_from_self_use_while_still_eligible(
-    hass, monkeypatch
+@pytest.mark.parametrize(
+    ("mode", "session"),
+    [
+        ("Self Use", ChargeSessionState("active", 10.0, 0)),
+        ("Back-up", ChargeSessionState("recovering", 10.0, 0)),
+    ],
+)
+async def test_unfinished_free_charge_restarts_from_safe_mode_while_still_eligible(
+    hass, monkeypatch, mode, session
 ):
     calls = []
     hass.bus.async_listen(EVENT_CALL_SERVICE, calls.append)
@@ -1226,8 +1233,8 @@ async def test_active_free_charge_restarts_from_self_use_while_still_eligible(
     hass.services.async_register("select", "select_option", noop)
     hass.states.async_set(
         "select.foxess_mode",
-        "Self Use",
-        {"options": ["Self Use", "Force Discharge", "Force Charge"]},
+        mode,
+        {"options": ["Self Use", "Back-up", "Force Discharge", "Force Charge"]},
     )
     hass.states.async_set(
         "number.foxess_charge", "0", {"unit_of_measurement": "kW", "max": 10}
@@ -1253,7 +1260,7 @@ async def test_active_free_charge_restarts_from_self_use_while_still_eligible(
     )
     coordinator.snapshot.battery_soc = 96.0
     controller = _loaded_controller(hass, coordinator)
-    controller.charge_session = ChargeSessionState("active", 10.0, 0)
+    controller.charge_session = session
 
     await controller.async_reconcile()
     await hass.async_block_till_done()
@@ -1267,6 +1274,63 @@ async def test_active_free_charge_restarts_from_self_use_while_still_eligible(
     assert {
         (event.data["domain"], event.data["service"]) for event in calls
     } == {("number", "set_value"), ("select", "select_option")}
+
+
+async def test_supervisor_rearms_exhausted_free_charge_session_once(
+    hass, monkeypatch
+) -> None:
+    calls = []
+    hass.bus.async_listen(EVENT_CALL_SERVICE, calls.append)
+
+    async def noop(_call):
+        return None
+
+    async def no_wait(_seconds):
+        return None
+
+    hass.services.async_register("number", "set_value", noop)
+    hass.services.async_register("select", "select_option", noop)
+    hass.states.async_set(
+        "select.foxess_mode",
+        "Back-up",
+        {"options": ["Self Use", "Back-up", "Force Discharge", "Force Charge"]},
+    )
+    hass.states.async_set(
+        "number.foxess_charge", "0", {"unit_of_measurement": "kW", "max": 10}
+    )
+    hass.states.async_set(
+        "number.foxess_discharge", "0", {"unit_of_measurement": "kW", "max": 10}
+    )
+    now = datetime(2026, 9, 10, 12, 46, tzinfo=UTC)
+    monkeypatch.setattr(
+        "custom_components.home_energy_orchestrator.active.dt_util.now",
+        lambda: now,
+    )
+    monkeypatch.setattr(
+        "custom_components.home_energy_orchestrator.foxess_adapter.asyncio.sleep",
+        no_wait,
+    )
+    coordinator = _coordinator(
+        **{
+            CONF_AUTOMATIC_CONTROL_ENABLED: True,
+            CONF_AUTOMATIC_CHARGE_ENABLED: True,
+            CONF_REHEARSAL_MODE: False,
+            CONF_INVERTER_CHARGE_LIMIT_KW: 10.0,
+        }
+    )
+    controller = _loaded_controller(hass, coordinator)
+    controller.charge_session = ChargeSessionState(
+        "starting", 10.0, 3, now - timedelta(minutes=5)
+    )
+
+    await controller.async_supervisory_repair("Force Charge")
+    await hass.async_block_till_done()
+
+    assert controller.charge_session == ChargeSessionState(
+        "starting", 10.0, 1, now
+    )
+    assert controller.last_actions == ("set_charge_power", "select_mode")
+    assert len(calls) == 2
 
 
 async def test_free_charge_does_not_start_after_allowance_is_exhausted(

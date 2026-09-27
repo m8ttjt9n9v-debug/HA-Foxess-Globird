@@ -28,3 +28,30 @@ The lifetime-energy entity is optional so existing installations continue to
 load. Without it, no daily samples are collected and the conservative
 full-window fallback remains in effect when the other capacity inputs are
 available.
+
+## Learning warm-up
+
+P85 is intentionally not calculated from the first few days of driving. HEO
+records one valid daily-driving sample when it can compare Tessie's cumulative
+lifetime-energy reading at a free-window boundary with the reading from the
+same boundary on the preceding day. A missed boundary, an unavailable reading,
+or a cumulative meter that decreases does not create a sample.
+
+The **EV driving samples required for P85 learning** setting controls when the
+model becomes mature. Its default is **14 valid daily samples**, so a new
+installation normally needs at least 14 completed daily boundary-to-boundary
+cycles. Until that threshold is reached, **EV Driving P85** is shown as
+unavailable. When the current vehicle SoC, stored energy, and charge-limit
+metadata are valid, the controller uses its conservative full-window fallback
+until the P85 model is mature. The displayed **EV Driving Learning Samples**
+value is the authoritative progress counter. The retained history is limited
+to the newest 28 valid samples and samples older than 35 days are discarded.
+
+**EV Driving Learning Status** is a separate live-input diagnostic. Its
+`unavailable` value does not mean that more samples are required; it means HEO
+cannot currently form either the fallback or learned limit because required
+live evidence or a configured learning input is unavailable or invalid. Check
+the mapped Tessie vehicle SoC, stored-energy, and charge-limit entities first.
+P85 can still be
+unavailable solely because the configured sample threshold has not yet been
+reached.

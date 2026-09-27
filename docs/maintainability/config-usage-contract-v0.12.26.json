@@ -1,5 +1,5 @@
 {
-  "access_count": 455,
+  "access_count": 477,
   "accesses": [
     {
       "access": "subscript_store",
@@ -593,6 +593,16 @@
     },
     {
       "access": "get",
+      "constant": "CONF_EV_HOUSE_BATTERY_TAPER_SOC",
+      "key": "ev_house_battery_taper_soc_percent",
+      "kind": "raw_mapping",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._apply_defaults",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
       "constant": "CONF_EV_LEARNING_MINIMUM_SAMPLES",
       "key": "ev_learning_minimum_samples",
       "kind": "raw_mapping",
@@ -655,6 +665,36 @@
       "access": "get",
       "constant": "CONF_EV_MIN_CURRENT",
       "key": "ev_min_current",
+      "kind": "raw_mapping",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._apply_defaults",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_MORNING_SOLAR_ENABLED",
+      "key": "ev_morning_solar_enabled",
+      "kind": "raw_mapping",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._apply_defaults",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_MORNING_SOLAR_RESERVE_SOC",
+      "key": "ev_morning_solar_reserve_soc_percent",
+      "kind": "raw_mapping",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._apply_defaults",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_OUTSIDE_BATTERY_RESERVE_PERCENT",
+      "key": "ev_outside_battery_reserve_percent",
       "kind": "raw_mapping",
       "layer": "boundary",
       "receiver": "data",
@@ -1302,6 +1342,16 @@
       "source": "custom_components/home_energy_orchestrator/config_flow.py"
     },
     {
+      "access": "get",
+      "constant": "CONF_SIGN_CONVENTIONS_VERIFIED",
+      "key": "sign_conventions_verified",
+      "kind": "raw_mapping",
+      "layer": "boundary",
+      "receiver": "user_input",
+      "scope": "ConfigFlow._async_finish_review",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
       "access": "subscript_store",
       "constant": "CONF_SIGN_CONVENTIONS_VERIFIED",
       "key": "sign_conventions_verified",
@@ -1365,6 +1415,26 @@
       "access": "subscript_store",
       "constant": "CONF_EV_MIN_CURRENT",
       "key": "ev_min_current",
+      "kind": "raw_mapping",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._capability_safe_data",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "subscript_store",
+      "constant": "CONF_EV_MORNING_SOLAR_ENABLED",
+      "key": "ev_morning_solar_enabled",
+      "kind": "raw_mapping",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._capability_safe_data",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "subscript_store",
+      "constant": "CONF_EV_MORNING_SOLAR_ENABLED",
+      "key": "ev_morning_solar_enabled",
       "kind": "raw_mapping",
       "layer": "boundary",
       "receiver": "data",
@@ -1803,6 +1873,16 @@
     },
     {
       "access": "get",
+      "constant": "CONF_EV_HOUSE_BATTERY_TAPER_SOC",
+      "key": "ev_house_battery_taper_soc_percent",
+      "kind": "raw_mapping",
+      "layer": "boundary",
+      "receiver": "defaults",
+      "scope": "ConfigFlow._schema",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
       "constant": "CONF_EV_LEARNING_MINIMUM_SAMPLES",
       "key": "ev_learning_minimum_samples",
       "kind": "raw_mapping",
@@ -1835,6 +1915,36 @@
       "access": "get",
       "constant": "CONF_EV_MIN_CURRENT",
       "key": "ev_min_current",
+      "kind": "raw_mapping",
+      "layer": "boundary",
+      "receiver": "defaults",
+      "scope": "ConfigFlow._schema",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_MORNING_SOLAR_ENABLED",
+      "key": "ev_morning_solar_enabled",
+      "kind": "raw_mapping",
+      "layer": "boundary",
+      "receiver": "defaults",
+      "scope": "ConfigFlow._schema",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_MORNING_SOLAR_RESERVE_SOC",
+      "key": "ev_morning_solar_reserve_soc_percent",
+      "kind": "raw_mapping",
+      "layer": "boundary",
+      "receiver": "defaults",
+      "scope": "ConfigFlow._schema",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_OUTSIDE_BATTERY_RESERVE_PERCENT",
+      "key": "ev_outside_battery_reserve_percent",
       "kind": "raw_mapping",
       "layer": "boundary",
       "receiver": "defaults",
@@ -2502,6 +2612,16 @@
       "source": "custom_components/home_energy_orchestrator/config_flow.py"
     },
     {
+      "access": "get",
+      "constant": "CONF_SIGN_CONVENTIONS_VERIFIED",
+      "key": "sign_conventions_verified",
+      "kind": "raw_mapping",
+      "layer": "boundary",
+      "receiver": "self._draft_input",
+      "scope": "ConfigFlow._show_review",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
       "access": "subscript_load",
       "constant": "CONF_FREE_CHARGE_END",
       "key": "free_charge_window_end",
@@ -2963,6 +3083,16 @@
     },
     {
       "access": "subscript_load",
+      "constant": "CONF_EV_HOUSE_BATTERY_TAPER_SOC",
+      "key": "ev_house_battery_taper_soc_percent",
+      "kind": "raw_mapping",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._validate_input",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "subscript_load",
       "constant": "CONF_EV_LEARNING_MINIMUM_SAMPLES",
       "key": "ev_learning_minimum_samples",
       "kind": "raw_mapping",
@@ -2995,6 +3125,36 @@
       "access": "subscript_load",
       "constant": "CONF_EV_MIN_CURRENT",
       "key": "ev_min_current",
+      "kind": "raw_mapping",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._validate_input",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_MORNING_SOLAR_ENABLED",
+      "key": "ev_morning_solar_enabled",
+      "kind": "raw_mapping",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._validate_input",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_MORNING_SOLAR_ENABLED",
+      "key": "ev_morning_solar_enabled",
+      "kind": "raw_mapping",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._validate_input",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "subscript_load",
+      "constant": "CONF_EV_MORNING_SOLAR_RESERVE_SOC",
+      "key": "ev_morning_solar_reserve_soc_percent",
       "kind": "raw_mapping",
       "layer": "boundary",
       "receiver": "data",
@@ -3812,6 +3972,36 @@
       "source": "custom_components/home_energy_orchestrator/config_flow.py"
     },
     {
+      "access": "not_in",
+      "constant": "CONF_EV_MORNING_SOLAR_RESERVE_SOC",
+      "key": "ev_morning_solar_reserve_soc_percent",
+      "kind": "raw_mapping",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "EvNumericSettings.from_mapping",
+      "source": "custom_components/home_energy_orchestrator/configuration.py"
+    },
+    {
+      "access": "subscript_store",
+      "constant": "CONF_EV_MORNING_SOLAR_RESERVE_SOC",
+      "key": "ev_morning_solar_reserve_soc_percent",
+      "kind": "raw_mapping",
+      "layer": "boundary",
+      "receiver": "values",
+      "scope": "EvNumericSettings.from_mapping",
+      "source": "custom_components/home_energy_orchestrator/configuration.py"
+    },
+    {
+      "access": "subscript_load",
+      "constant": "CONF_EV_OUTSIDE_BATTERY_RESERVE_PERCENT",
+      "key": "ev_outside_battery_reserve_percent",
+      "kind": "raw_mapping",
+      "layer": "boundary",
+      "receiver": "values",
+      "scope": "EvNumericSettings.from_mapping",
+      "source": "custom_components/home_energy_orchestrator/configuration.py"
+    },
+    {
       "access": "get",
       "constant": "CONF_AUTOMATIC_CHARGE_ENABLED",
       "key": "automatic_charge_enabled",
@@ -4135,6 +4325,16 @@
       "access": "get",
       "constant": "CONF_EV_LOCATION_MODE",
       "key": "ev_location_mode",
+      "kind": "raw_mapping",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "RuntimeConfiguration.from_mapping",
+      "source": "custom_components/home_energy_orchestrator/configuration.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_MORNING_SOLAR_ENABLED",
+      "key": "ev_morning_solar_enabled",
       "kind": "raw_mapping",
       "layer": "boundary",
       "receiver": "data",
@@ -4475,6 +4675,16 @@
     },
     {
       "access": "update_config_value",
+      "constant": "CONF_EV_MORNING_SOLAR_RESERVE_SOC",
+      "key": "ev_morning_solar_reserve_soc_percent",
+      "kind": "managed_mutation",
+      "layer": "runtime",
+      "receiver": "self.coordinator",
+      "scope": "EvMorningSolarReserveNumber.async_set_native_value",
+      "source": "custom_components/home_energy_orchestrator/number.py"
+    },
+    {
+      "access": "update_config_value",
       "constant": "CONF_HOUSE_OCCUPANCY_MODE",
       "key": "house_occupancy_mode",
       "kind": "managed_mutation",
@@ -4545,6 +4755,16 @@
     },
     {
       "access": "update_config_value",
+      "constant": "CONF_EV_MORNING_SOLAR_ENABLED",
+      "key": "ev_morning_solar_enabled",
+      "kind": "managed_mutation",
+      "layer": "runtime",
+      "receiver": "self.coordinator",
+      "scope": "EvMorningSolarSwitch._set_enabled",
+      "source": "custom_components/home_energy_orchestrator/switch.py"
+    },
+    {
+      "access": "update_config_value",
       "constant": "CONF_REHEARSAL_MODE",
       "key": "rehearsal_mode",
       "kind": "managed_mutation",
@@ -4555,28 +4775,28 @@
     }
   ],
   "accesses_by_kind": {
-    "managed_mutation": 11,
+    "managed_mutation": 13,
     "mutation_boundary": 2,
-    "raw_mapping": 442
+    "raw_mapping": 462
   },
   "accesses_by_layer": {
-    "boundary": 444,
-    "runtime": 11
+    "boundary": 464,
+    "runtime": 13
   },
   "accesses_by_source": {
     "custom_components/home_energy_orchestrator/__init__.py": 24,
-    "custom_components/home_energy_orchestrator/config_flow.py": 357,
-    "custom_components/home_energy_orchestrator/configuration.py": 61,
+    "custom_components/home_energy_orchestrator/config_flow.py": 373,
+    "custom_components/home_energy_orchestrator/configuration.py": 65,
     "custom_components/home_energy_orchestrator/coordinator.py": 2,
     "custom_components/home_energy_orchestrator/ev_active.py": 2,
-    "custom_components/home_energy_orchestrator/number.py": 1,
+    "custom_components/home_energy_orchestrator/number.py": 2,
     "custom_components/home_energy_orchestrator/select.py": 1,
-    "custom_components/home_energy_orchestrator/switch.py": 7
+    "custom_components/home_energy_orchestrator/switch.py": 8
   },
   "dynamic_access_count": 2,
-  "key_count": 131,
+  "key_count": 134,
   "raw_accesses_by_layer": {
-    "boundary": 442
+    "boundary": 462
   },
   "release_baseline": "0.12.26",
   "schema_version": 4

@@ -48,6 +48,115 @@ class SolarSpillDecision:
     phase: str
 
 
+MEASURED_SOLAR_ADJUSTMENT_INTERVAL = timedelta(minutes=15)
+_MEASURED_SOLAR_PHASES = frozenset({"solar_spill", "morning_solar"})
+
+
+@dataclass(frozen=True, slots=True)
+class MeasuredSolarAdjustmentState:
+    """Restart-safe accepted and pending measured-solar current evidence."""
+
+    phase: str | None = None
+    target_current_a: float | None = None
+    changed_at: datetime | None = None
+    pending_current_a: float | None = None
+    pending_since: datetime | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class MeasuredSolarAdjustment:
+    """One bounded target transition for a measured-solar EV stage."""
+
+    target_current_a: float
+    state: MeasuredSolarAdjustmentState
+    phase: str
+
+
+def rate_limit_measured_solar_current(
+    state: MeasuredSolarAdjustmentState,
+    *,
+    now: datetime,
+    policy_phase: str,
+    requested_current_a: float,
+    charger_minimum_a: float,
+    current_step_a: float,
+    immediate_curtailment: bool,
+) -> MeasuredSolarAdjustment:
+    """Accept stable solar targets no more frequently than every 15 minutes.
+
+    A target must remain unchanged for the interval before an ordinary change is
+    accepted.  That pending interval is the whole-amp hysteresis: a cloud edge
+    that alternates adjacent stepped currents cannot repeatedly command Tessie.
+    A valid grid-import observation may reduce an active target immediately;
+    any non-eligible solar decision is handled by the caller as an immediate
+    return to the protected baseline.
+    """
+    values = (requested_current_a, charger_minimum_a, current_step_a)
+    if (
+        policy_phase not in _MEASURED_SOLAR_PHASES
+        or now.tzinfo is None
+        or not all(isfinite(value) and value >= 0 for value in values)
+        or current_step_a <= 0
+    ):
+        raise ValueError("measured solar adjustment inputs are invalid")
+    if requested_current_a < charger_minimum_a:
+        return MeasuredSolarAdjustment(0.0, MeasuredSolarAdjustmentState(), "inactive")
+
+    if (
+        state.phase != policy_phase
+        or state.target_current_a is None
+        or state.changed_at is None
+    ):
+        accepted = MeasuredSolarAdjustmentState(
+            phase=policy_phase,
+            target_current_a=requested_current_a,
+            changed_at=now,
+        )
+        return MeasuredSolarAdjustment(requested_current_a, accepted, "started")
+
+    previous = state.target_current_a
+    if requested_current_a == previous:
+        stable = MeasuredSolarAdjustmentState(
+            phase=state.phase,
+            target_current_a=previous,
+            changed_at=state.changed_at,
+        )
+        return MeasuredSolarAdjustment(previous, stable, "steady")
+
+    if immediate_curtailment and requested_current_a < previous:
+        curtailed = MeasuredSolarAdjustmentState(
+            phase=policy_phase,
+            target_current_a=requested_current_a,
+            changed_at=now,
+        )
+        return MeasuredSolarAdjustment(requested_current_a, curtailed, "safety_curtailment")
+
+    pending_since = (
+        state.pending_since
+        if state.pending_current_a == requested_current_a and state.pending_since is not None
+        else now
+    )
+    if (
+        now - state.changed_at >= MEASURED_SOLAR_ADJUSTMENT_INTERVAL
+        and now - pending_since >= MEASURED_SOLAR_ADJUSTMENT_INTERVAL
+    ):
+        accepted = MeasuredSolarAdjustmentState(
+            phase=policy_phase,
+            target_current_a=requested_current_a,
+            changed_at=now,
+        )
+        return MeasuredSolarAdjustment(requested_current_a, accepted, "updated")
+
+    held = MeasuredSolarAdjustmentState(
+        phase=policy_phase,
+        target_current_a=previous,
+        changed_at=state.changed_at,
+        pending_current_a=requested_current_a,
+        pending_since=pending_since,
+    )
+    return MeasuredSolarAdjustment(previous, held, "held")
+
+
 @dataclass(frozen=True, slots=True)
 class SolarSpillTelemetryEvidence:
     """Primitive fast-telemetry evidence supplied by the HA-facing adapter."""
@@ -351,6 +460,38 @@ def plan_solar_spill_current(inputs: SolarSpillInputs) -> SolarSpillDecision:
     removes battery discharge and adds energy still being absorbed by a full
     battery, preventing the target from collapsing when EV charging begins.
     """
+    return _plan_measured_solar_current(
+        inputs,
+        threshold_phase="battery_not_full",
+        active_phase="solar_spill",
+        block_boosted_export=True,
+    )
+
+
+def plan_morning_solar_current(inputs: SolarSpillInputs) -> SolarSpillDecision:
+    """Apply the same measured-surplus arithmetic above a morning reserve.
+
+    Morning capture is intentionally independent of the post-free ``battery
+    full`` setting: the imminent free window makes additional battery charging
+    less useful than serving an eligible EV, while the configured reserve still
+    protects the house battery.
+    """
+    return _plan_measured_solar_current(
+        inputs,
+        threshold_phase="morning_battery_reserve_not_met",
+        active_phase="morning_solar_surplus",
+        block_boosted_export=False,
+    )
+
+
+def _plan_measured_solar_current(
+    inputs: SolarSpillInputs,
+    *,
+    threshold_phase: str,
+    active_phase: str,
+    block_boosted_export: bool,
+) -> SolarSpillDecision:
+    """Share coherent measured-surplus calculations between solar stages."""
     _validate_solar_spill(inputs)
     surplus = round(
         max(inputs.ev_power_kw + inputs.grid_export_kw + inputs.battery_charge_kw, 0.0),
@@ -359,10 +500,10 @@ def plan_solar_spill_current(inputs: SolarSpillInputs) -> SolarSpillDecision:
     if not inputs.telemetry_valid:
         return SolarSpillDecision(0.0, surplus, "telemetry_unavailable")
     if inputs.battery_soc_percent < inputs.battery_full_threshold_percent:
-        return SolarSpillDecision(0.0, surplus, "battery_not_full")
+        return SolarSpillDecision(0.0, surplus, threshold_phase)
     if not inputs.connected or inputs.vehicle_soc_percent >= inputs.vehicle_soft_limit_percent:
         return SolarSpillDecision(0.0, surplus, "vehicle_not_eligible")
-    if inputs.in_boosted_export_window:
+    if block_boosted_export and inputs.in_boosted_export_window:
         return SolarSpillDecision(0.0, surplus, "boosted_export_window")
     raw_current = surplus * 1000 / (inputs.voltage_v * inputs.phase_count)
     stepped = floor(raw_current / inputs.current_step_a) * inputs.current_step_a
@@ -371,7 +512,7 @@ def plan_solar_spill_current(inputs: SolarSpillInputs) -> SolarSpillDecision:
     return SolarSpillDecision(
         round(min(stepped, inputs.current_ceiling_a), 3),
         surplus,
-        "solar_spill",
+        active_phase,
     )
 
 
@@ -465,7 +606,7 @@ def select_outside_window_current(
     pre_free_current_a: float,
     solar_spill_current_a: float,
 ) -> EvCurrentDecision:
-    """Preserve source ordering: active backfill max spill, then spill, then baseline."""
+    """Select a fixed active backfill before variable spill or baseline."""
     values = (
         baseline_a,
         current_ceiling_a,
@@ -479,8 +620,8 @@ def select_outside_window_current(
         raise ValueError("baseline cannot exceed current ceiling")
     if pre_free_active:
         return EvCurrentDecision(
-            round(min(max(pre_free_current_a, solar_spill_current_a), current_ceiling_a), 3),
-            "pre_free_or_solar_spill",
+            round(min(pre_free_current_a, current_ceiling_a), 3),
+            "pre_free_backfill",
         )
     if solar_spill_current_a >= charger_minimum_a:
         return EvCurrentDecision(

@@ -66,11 +66,14 @@ from .const import (
     CONF_EV_FREE_WINDOW_MINIMUM_CURRENT,
     CONF_EV_FREE_WINDOW_PRIORITY,
     CONF_EV_FREE_WINDOW_SETTLE_MINUTES,
+    CONF_EV_HOUSE_BATTERY_TAPER_SOC,
     CONF_EV_LEARNING_MINIMUM_SAMPLES,
     CONF_EV_LIFETIME_ENERGY,
     CONF_EV_LOCATION_MODE,
     CONF_EV_MAX_CURRENT,
     CONF_EV_MIN_CURRENT,
+    CONF_EV_MORNING_SOLAR_ENABLED,
+    CONF_EV_MORNING_SOLAR_RESERVE_SOC,
     CONF_EV_OUTSIDE_BATTERY_RESERVE_PERCENT,
     CONF_EV_OUTSIDE_INVERTER_PERCENT,
     CONF_EV_PHASE_COUNT,
@@ -180,10 +183,13 @@ from .const import (
     DEFAULT_EV_FREE_WINDOW_MINIMUM_CURRENT,
     DEFAULT_EV_FREE_WINDOW_PRIORITY,
     DEFAULT_EV_FREE_WINDOW_SETTLE_MINUTES,
+    DEFAULT_EV_HOUSE_BATTERY_TAPER_SOC,
     DEFAULT_EV_LEARNING_MINIMUM_SAMPLES,
     DEFAULT_EV_LOCATION_MODE,
     DEFAULT_EV_MAX_CURRENT,
     DEFAULT_EV_MIN_CURRENT,
+    DEFAULT_EV_MORNING_SOLAR_ENABLED,
+    DEFAULT_EV_MORNING_SOLAR_RESERVE_SOC,
     DEFAULT_EV_OUTSIDE_BATTERY_RESERVE_PERCENT,
     DEFAULT_EV_OUTSIDE_INVERTER_PERCENT,
     DEFAULT_EV_PHASE_COUNT,
@@ -506,9 +512,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     "reconfigure_ev_policies", "reconfigure_recovery",
                 )
             )
-        options.extend(
-            ("reconfigure_verification", "reconfigure_automation", "reconfigure_review")
-        )
+        options.extend(("reconfigure_automation", "reconfigure_review"))
         return self.async_show_menu(step_id="reconfigure", menu_options=options)
 
     def _next_page(self, page: str) -> str:
@@ -518,7 +522,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         pages.append("house")
         if self._draft_input and self._draft_input.get(self._CONF_CONFIGURE_EV):
             pages.extend(("car", "charger", "ev_policies", "recovery"))
-        pages.extend(("verification", "automation", "review"))
+        pages.extend(("automation", "review"))
         return pages[pages.index(page) + 1]
 
     def _validate_page(self, page: str, data: dict[str, object]) -> dict[str, str]:
@@ -660,6 +664,8 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         <= number(CONF_EV_MAX_CURRENT),
                     CONF_EV_FREE_WINDOW_SETTLE_MINUTES:
                         number(CONF_EV_FREE_WINDOW_SETTLE_MINUTES) >= 0,
+                    CONF_EV_HOUSE_BATTERY_TAPER_SOC:
+                        0 <= number(CONF_EV_HOUSE_BATTERY_TAPER_SOC) <= 100,
                     CONF_EV_DIRECT_LIMIT_HEADROOM:
                         number(CONF_EV_DIRECT_LIMIT_HEADROOM) >= 0,
                     CONF_EV_CHARGE_TO_FULL_MAX_HOURS:
@@ -719,18 +725,35 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             data[CONF_EV_PRE_FREE_ENABLED] = False
             data[CONF_EV_BEFORE_EXPORT_ENABLED] = False
             data[CONF_EV_SOLAR_SPILL_ENABLED] = False
+            data[CONF_EV_MORNING_SOLAR_ENABLED] = False
             data[CONF_EV_MIN_CURRENT] = 0.0
             data[CONF_EV_MAX_CURRENT] = 0.0
             data[CONF_EV_FREE_WINDOW_MINIMUM_CURRENT] = 0.0
             data[CONF_EV_PROTECTED_BASELINE_A] = 0.0
         if not data.get(self._CONF_CONFIGURE_SOLAR):
             data[CONF_EV_SOLAR_SPILL_ENABLED] = False
+            data[CONF_EV_MORNING_SOLAR_ENABLED] = False
         return data
 
     @callback
     def _show_review(self, *, reconfigure: bool, errors: dict[str, str] | None = None):
         """Show the small, explicit commit boundary."""
         assert self._draft_input is not None
+        direction_verified = bool(
+            self._draft_input.get(
+                CONF_SIGN_CONVENTIONS_VERIFIED,
+                DEFAULT_SIGN_CONVENTIONS_VERIFIED,
+            )
+        )
+        directions_changed = False
+        if reconfigure:
+            old = self._apply_defaults(dict(self._get_reconfigure_entry().data))
+            pending = self._apply_defaults(dict(self._draft_input))
+            directions_changed = any(
+                pending.get(key) != old.get(key) for key in self._NORMALIZATION_KEYS
+            )
+            if directions_changed:
+                direction_verified = False
         start = time.fromisoformat(str(self._draft_input[CONF_FREE_CHARGE_START]))
         end = time.fromisoformat(str(self._draft_input[CONF_FREE_CHARGE_END]))
         placeholders = _schedule_confirmation(start, end)
@@ -747,12 +770,28 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     if self._draft_input.get(CONF_REHEARSAL_MODE)
                     else "Hardware writes allowed by Safety Lock"
                 ),
+                "direction_summary": (
+                    "An electrical source or direction changed. Verify the live electrical "
+                    "directions below before applying; leaving verification off safely blocks "
+                    "hardware commands."
+                    if directions_changed
+                    else "Confirm that the displayed live electrical directions are correct. "
+                    "Leaving verification off safely blocks hardware commands."
+                ),
             }
         )
         return self.async_show_form(
             step_id="reconfigure_review" if reconfigure else "review",
             data_schema=vol.Schema(
-                {vol.Required("apply_configuration", default=False): selector.BooleanSelector()}
+                {
+                    vol.Required(
+                        CONF_SIGN_CONVENTIONS_VERIFIED,
+                        default=direction_verified,
+                    ): selector.BooleanSelector(),
+                    vol.Required(
+                        "apply_configuration", default=False
+                    ): selector.BooleanSelector(),
+                }
             ),
             errors=errors or {},
             description_placeholders=placeholders,
@@ -772,10 +811,9 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         pending = self._capability_safe_data(
             self._apply_defaults(dict(self._draft_input))
         )
-        if reconfigure:
-            old = self._apply_defaults(dict(self._get_reconfigure_entry().data))
-            if any(pending.get(key) != old.get(key) for key in self._NORMALIZATION_KEYS):
-                pending[CONF_SIGN_CONVENTIONS_VERIFIED] = False
+        pending[CONF_SIGN_CONVENTIONS_VERIFIED] = bool(
+            user_input.get(CONF_SIGN_CONVENTIONS_VERIFIED, False)
+        )
         errors = self._validate_input(pending)
         if errors:
             self._draft_input = pending
@@ -1330,6 +1368,13 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     ),
                 ): vol.Coerce(float),
                 vol.Required(
+                    CONF_EV_HOUSE_BATTERY_TAPER_SOC,
+                    default=defaults.get(
+                        CONF_EV_HOUSE_BATTERY_TAPER_SOC,
+                        DEFAULT_EV_HOUSE_BATTERY_TAPER_SOC,
+                    ),
+                ): vol.Coerce(float),
+                vol.Required(
                     CONF_EV_DIRECT_LIMIT_HEADROOM,
                     default=defaults.get(
                         CONF_EV_DIRECT_LIMIT_HEADROOM, DEFAULT_EV_DIRECT_LIMIT_HEADROOM
@@ -1423,6 +1468,23 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     default=defaults.get(
                         CONF_EV_SOLAR_SPILL_BATTERY_SOC,
                         DEFAULT_EV_SOLAR_SPILL_BATTERY_SOC,
+                    ),
+                ): vol.Coerce(float),
+                vol.Required(
+                    CONF_EV_MORNING_SOLAR_ENABLED,
+                    default=defaults.get(
+                        CONF_EV_MORNING_SOLAR_ENABLED,
+                        DEFAULT_EV_MORNING_SOLAR_ENABLED,
+                    ),
+                ): selector.BooleanSelector(),
+                vol.Required(
+                    CONF_EV_MORNING_SOLAR_RESERVE_SOC,
+                    default=defaults.get(
+                        CONF_EV_MORNING_SOLAR_RESERVE_SOC,
+                        defaults.get(
+                            CONF_EV_OUTSIDE_BATTERY_RESERVE_PERCENT,
+                            DEFAULT_EV_MORNING_SOLAR_RESERVE_SOC,
+                        ),
                     ),
                 ): vol.Coerce(float),
                 vol.Required(
@@ -1796,6 +1858,10 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 CONF_EV_FREE_WINDOW_SETTLE_MINUTES,
                 DEFAULT_EV_FREE_WINDOW_SETTLE_MINUTES,
             ),
+            CONF_EV_HOUSE_BATTERY_TAPER_SOC: data.get(
+                CONF_EV_HOUSE_BATTERY_TAPER_SOC,
+                DEFAULT_EV_HOUSE_BATTERY_TAPER_SOC,
+            ),
             CONF_EV_DIRECT_LIMIT_HEADROOM: data.get(
                 CONF_EV_DIRECT_LIMIT_HEADROOM, DEFAULT_EV_DIRECT_LIMIT_HEADROOM
             ),
@@ -1834,6 +1900,16 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             CONF_EV_SOLAR_SPILL_BATTERY_SOC: data.get(
                 CONF_EV_SOLAR_SPILL_BATTERY_SOC,
                 DEFAULT_EV_SOLAR_SPILL_BATTERY_SOC,
+            ),
+            CONF_EV_MORNING_SOLAR_ENABLED: data.get(
+                CONF_EV_MORNING_SOLAR_ENABLED, DEFAULT_EV_MORNING_SOLAR_ENABLED
+            ),
+            CONF_EV_MORNING_SOLAR_RESERVE_SOC: data.get(
+                CONF_EV_MORNING_SOLAR_RESERVE_SOC,
+                data.get(
+                    CONF_EV_OUTSIDE_BATTERY_RESERVE_PERCENT,
+                    DEFAULT_EV_MORNING_SOLAR_RESERVE_SOC,
+                ),
             ),
             CONF_EV_PRE_FREE_ENABLED: data.get(
                 CONF_EV_PRE_FREE_ENABLED, DEFAULT_EV_PRE_FREE_ENABLED
@@ -2020,12 +2096,17 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
         if data.get(CONF_EV_CONTROL_COMMISSIONED) and not all(ev_mapping):
             return {"base": "incomplete_ev_mapping"}
-        if data.get(CONF_EV_SOLAR_SPILL_ENABLED) and not (
+        if (
+            data.get(CONF_EV_SOLAR_SPILL_ENABLED)
+            or data.get(CONF_EV_MORNING_SOLAR_ENABLED)
+        ) and not (
             data.get(CONF_BATTERY_POWER) or all(split_battery_mapping)
         ):
             return {"base": "solar_spill_battery_power_mapping_required"}
         if (
-            data.get(CONF_EV_SOLAR_SPILL_ENABLED) or data.get(CONF_EV_PRE_FREE_ENABLED)
+            data.get(CONF_EV_SOLAR_SPILL_ENABLED)
+            or data.get(CONF_EV_MORNING_SOLAR_ENABLED)
+            or data.get(CONF_EV_PRE_FREE_ENABLED)
         ) and data.get(CONF_FOXESS_CONTROL_OWNER) != FOXESS_CONTROL_OWNER_MODBUS:
             return {"base": "outside_ev_policy_requires_local_modbus"}
         if data.get(CONF_EV_LOCATION_MODE) not in EV_LOCATION_MODES:
@@ -2092,6 +2173,9 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             ev_free_limit = float(data[CONF_EV_FREE_WINDOW_CHARGE_LIMIT])
             ev_free_minimum = float(data[CONF_EV_FREE_WINDOW_MINIMUM_CURRENT])
             ev_settle_minutes = float(data[CONF_EV_FREE_WINDOW_SETTLE_MINUTES])
+            ev_house_battery_taper_soc = float(
+                data[CONF_EV_HOUSE_BATTERY_TAPER_SOC]
+            )
             ev_limit_headroom = float(data[CONF_EV_DIRECT_LIMIT_HEADROOM])
             charge_to_full_max_hours = float(data[CONF_EV_CHARGE_TO_FULL_MAX_HOURS])
             ev_charge_efficiency = float(data[CONF_EV_CHARGE_EFFICIENCY])
@@ -2103,6 +2187,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             battery_efficiency = float(data[CONF_BATTERY_CHARGE_EFFICIENCY])
             allowance_margin = float(data[CONF_EV_ALLOWANCE_SAFETY_MARGIN])
             solar_spill_soc = float(data[CONF_EV_SOLAR_SPILL_BATTERY_SOC])
+            morning_solar_reserve = float(data[CONF_EV_MORNING_SOLAR_RESERVE_SOC])
             telemetry_max_age = float(data[CONF_EV_TELEMETRY_MAX_AGE_SECONDS])
             normalized_telemetry_max_age = float(data[CONF_TELEMETRY_MAX_AGE_SECONDS])
             telemetry_max_skew = float(data[CONF_EV_TELEMETRY_MAX_SKEW_SECONDS])
@@ -2201,6 +2286,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             ev_free_limit,
             ev_free_minimum,
             ev_settle_minutes,
+            ev_house_battery_taper_soc,
             ev_limit_headroom,
             charge_to_full_max_hours,
             ev_charge_efficiency,
@@ -2212,6 +2298,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             battery_efficiency,
             allowance_margin,
             solar_spill_soc,
+            morning_solar_reserve,
             telemetry_max_age,
             telemetry_max_skew,
             fallback,
@@ -2259,6 +2346,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             or ev_free_minimum < 0
             or ev_free_minimum > max_current
             or ev_settle_minutes < 0
+            or not 0 <= ev_house_battery_taper_soc <= 100
             or ev_limit_headroom < 0
             or charge_to_full_max_hours <= 0
             or not 0 < ev_charge_efficiency <= 100
@@ -2272,6 +2360,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             or not 0 < battery_efficiency <= 100
             or allowance_margin < 0
             or not 0 <= solar_spill_soc <= 100
+            or not floor <= morning_solar_reserve <= 100
             or telemetry_max_age <= 0
             or normalized_telemetry_max_age <= 0
             or telemetry_max_skew < 0

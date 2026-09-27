@@ -32,8 +32,10 @@ from .const import (
     CONF_EV_FREE_WINDOW_CHARGE_LIMIT,
     CONF_EV_FREE_WINDOW_MINIMUM_CURRENT,
     CONF_EV_FREE_WINDOW_SETTLE_MINUTES,
+    CONF_EV_HOUSE_BATTERY_TAPER_SOC,
     CONF_EV_LEARNING_MINIMUM_SAMPLES,
     CONF_EV_MAX_CURRENT,
+    CONF_EV_MORNING_SOLAR_RESERVE_SOC,
     CONF_EV_OUTSIDE_BATTERY_RESERVE_PERCENT,
     CONF_EV_OUTSIDE_INVERTER_PERCENT,
     CONF_EV_PHASE_COUNT,
@@ -77,7 +79,9 @@ from .const import (
     DEFAULT_EV_FREE_WINDOW_CHARGE_LIMIT,
     DEFAULT_EV_FREE_WINDOW_MINIMUM_CURRENT,
     DEFAULT_EV_FREE_WINDOW_SETTLE_MINUTES,
+    DEFAULT_EV_HOUSE_BATTERY_TAPER_SOC,
     DEFAULT_EV_LEARNING_MINIMUM_SAMPLES,
+    DEFAULT_EV_MORNING_SOLAR_RESERVE_SOC,
     DEFAULT_EV_OUTSIDE_BATTERY_RESERVE_PERCENT,
     DEFAULT_EV_OUTSIDE_INVERTER_PERCENT,
     DEFAULT_EV_PHASE_COUNT,
@@ -116,6 +120,7 @@ from .ev_observation_adapter import (
     capture_ev_feedback,
     ev_observation_entity_map,
 )
+from .models import SiteSnapshot
 from .persistence import create_typed_value_repository
 from .planner.control_windows import (
     boosted_window_active,
@@ -125,8 +130,6 @@ from .planner.control_windows import (
     window_position,
 )
 from .planner.ev import (
-    DIRECT_EVSE_MAX_ATTEMPTS,
-    DIRECT_EVSE_RETRY_INTERVAL,
     AllowanceProjectionInputs,
     ChargeLimitInputs,
     DirectEvseObservation,
@@ -182,6 +185,8 @@ from .planner.ev_candidates import (
     select_outside_stage_candidate,
 )
 from .planner.ev_daily_backfill import (
+    DAILY_BACKFILL_STOP_MAX_ATTEMPTS,
+    DAILY_BACKFILL_STOP_RETRY_INTERVAL,
     DailyBackfillCycleState,
     DailyBackfillEnergyState,
     DailyBackfillPlan,
@@ -212,6 +217,7 @@ from .planner.ev_outside_state import (
     reconcile_outside_ownership,
 )
 from .planner.ev_outside_window import (
+    MeasuredSolarAdjustmentState,
     OutsideChargeLimitEvidence,
     OutsideCurrentEnvelopeEvidence,
     PreFreeCurrentInputs,
@@ -226,8 +232,10 @@ from .planner.ev_outside_window import (
     evaluate_outside_current_envelope,
     evaluate_pre_free_plan,
     evaluate_solar_spill_telemetry,
+    plan_morning_solar_current,
     plan_pre_free_current,
     plan_solar_spill_current,
+    rate_limit_measured_solar_current,
 )
 from .planner.ev_persistence import (
     DailyBackfillPersistenceState,
@@ -242,6 +250,7 @@ _CYCLE_FEEDBACK: ContextVar[EvFeedbackSnapshot | None] = ContextVar(
     "heo_ev_cycle_feedback",
     default=None,
 )
+EV_STARTUP_TELEMETRY_GRACE = timedelta(minutes=5)
 
 
 class ActiveEvController:
@@ -252,6 +261,8 @@ class ActiveEvController:
         self.coordinator = coordinator
         self._unsub_interval: CALLBACK_TYPE | None = None
         self._unsub_driving_snapshot: CALLBACK_TYPE | None = None
+        self._started_at: datetime | None = None
+        self._startup_grid_recovery_pending = False
         self._lock = asyncio.Lock()
         self._adapter: EvServiceAdapter | None = self._create_adapter()
         self._repository = create_typed_value_repository(
@@ -273,6 +284,8 @@ class ActiveEvController:
         self.pre_free_plan: PreFreePlan | None = None
         self.pre_free_phase = "disabled"
         self.solar_spill = SolarSpillDecision(0.0, 0.0, "disabled")
+        self.morning_solar = SolarSpillDecision(0.0, 0.0, "disabled")
+        self.measured_solar_adjustment = MeasuredSolarAdjustmentState()
         self.driving_history = DemandHistory([])
         self.driving_snapshot = DrivingSnapshotState()
         self.daily_driving_energy_kwh: float | None = None
@@ -308,6 +321,10 @@ class ActiveEvController:
         self.smart_recovery_candidate: EvStageCandidate | None = None
         self.eligibility_route: EvCycleRoute | None = None
         self.policy_route: EvCycleRoute | None = None
+        # The free-power window is a distinct control epoch.  Its recovery
+        # must not inherit a failed outside-window reconciliation merely
+        # because the safe baseline happens to be the same current.
+        self._previous_policy_route: str | None = None
         self.requested_current_a: float | None = None
         self.applied_limit_percent: float | None = None
         self.charge_switch_on: bool | None = None
@@ -329,6 +346,7 @@ class ActiveEvController:
         )
 
     async def async_start(self) -> None:
+        self._started_at = dt_util.now()
         await self._async_restore()
         if self._unsub_interval is None:
             self._unsub_interval = async_track_time_interval(
@@ -355,6 +373,15 @@ class ActiveEvController:
             self._unsub_driving_snapshot()
             self._unsub_driving_snapshot = None
         await self._async_save()
+
+    async def async_supervisory_repair(self, now: datetime) -> None:
+        """Open one fresh, rate-bounded reconciliation epoch."""
+        if self.gate_status != "ready":
+            return
+        self.last_decision_at = None
+        self._decision_fingerprint = None
+        self.reconciliation = DirectEvseReconciliationState()
+        await self.async_reconcile(now)
 
     async def _async_tick(self, _now) -> None:
         await self.async_reconcile()
@@ -486,6 +513,14 @@ class ActiveEvController:
                 self.outside_control_active = cleanup.outside_control_active
                 self.outside_target_active = cleanup.outside_target_active
                 self.solar_spill = cleanup.solar_spill
+                self.morning_solar = SolarSpillDecision(
+                    0.0,
+                    0.0,
+                    "vehicle_not_eligible"
+                    if policy.morning_solar_enabled
+                    else "disabled",
+                )
+                self.measured_solar_adjustment = MeasuredSolarAdjustmentState()
                 if self.eligibility_route.route == "disconnected_smart_socket":
                     await self._async_reconcile_disconnected_smart_socket(
                         now,
@@ -542,6 +577,7 @@ class ActiveEvController:
                         == FOXESS_CONTROL_OWNER_MODBUS
                     ),
                     solar_spill_enabled=policy.solar_spill_enabled,
+                    morning_solar_enabled=policy.morning_solar_enabled,
                     pre_free_enabled=policy.pre_free_enabled,
                 )
             )
@@ -550,6 +586,18 @@ class ActiveEvController:
                 outside_enabled=availability.outside_enabled,
                 outside_control_active=self.outside_control_active,
             )
+            pre_free_active_at_entry = self.pre_free_session.active
+            entered_free_window = (
+                self.policy_route.route == "free_window"
+                and (
+                    pre_free_active_at_entry
+                    or (
+                        self._previous_policy_route is not None
+                        and self._previous_policy_route != "free_window"
+                    )
+                )
+            )
+            self._previous_policy_route = self.policy_route.route
             if self.policy_route.route == "general_limit":
                 await self._async_reconcile_general_limit_only(
                     now,
@@ -558,6 +606,69 @@ class ActiveEvController:
                     gate=gate,
                 )
                 return
+            window_cleanup = cleanup_outside_ownership_for_free_window(
+                in_free_window=in_window,
+                pre_free_state=self.pre_free_session,
+                outside_control_active=self.outside_control_active,
+                outside_target_active=self.outside_target_active,
+            )
+            self.pre_free_session = window_cleanup.pre_free_state
+            self.outside_control_active = window_cleanup.outside_control_active
+            self.outside_target_active = window_cleanup.outside_target_active
+            if in_window:
+                self.measured_solar_adjustment = MeasuredSolarAdjustmentState()
+            grid_startup_evidence = self.grid_average.result(now)
+            startup_grid_incomplete = (
+                not grid_valid
+                or grid_startup_evidence.age_coverage_ratio < 0.67
+            )
+            service_overrun = (
+                grid_valid
+                and self._float(
+                    CONF_SERVICE_IMPORT_LIMIT_A,
+                    DEFAULT_SERVICE_IMPORT_LIMIT_A,
+                )
+                > 0
+                and grid_current
+                > self._float(
+                    CONF_SERVICE_IMPORT_LIMIT_A,
+                    DEFAULT_SERVICE_IMPORT_LIMIT_A,
+                )
+            )
+            within_startup_grace = (
+                self._started_at is not None
+                and now - self._started_at < EV_STARTUP_TELEMETRY_GRACE
+            )
+            if in_window and within_startup_grace and not grid_valid:
+                self._startup_grid_recovery_pending = True
+            if (
+                in_window
+                and not entered_free_window
+                and self._startup_grid_recovery_pending
+                and startup_grid_incomplete
+                and not service_overrun
+                and within_startup_grace
+            ):
+                # Tessie can recover before signed grid telemetry after a Home
+                # Assistant/integration restart. Preserve the live request
+                # during this bounded settling period instead of actively
+                # reducing an already healthy free-window charge to the
+                # fallback. The hold ends when the normal average has enough
+                # coverage, at the grace deadline, or immediately for a
+                # measured service-limit overrun.
+                self.target_current_a = observation.requested_current_a
+                self.target_limit_percent = observation.charge_limit_percent
+                self.decision_phase = "startup_telemetry_hold"
+                self.allowance_phase = "startup_telemetry_hold"
+                self.last_reason = "startup_telemetry_hold"
+                return
+            if (
+                not in_window
+                or not within_startup_grace
+                or not startup_grid_incomplete
+                or service_overrun
+            ):
+                self._startup_grid_recovery_pending = False
             charge_to_full_requested = self._charge_to_full_requested()
             cadence = evaluate_ev_decision_cadence(
                 EvDecisionCadenceEvidence(
@@ -578,7 +689,7 @@ class ActiveEvController:
                         DEFAULT_EV_FREE_WINDOW_CHARGE_LIMIT,
                     ),
                     in_free_window=in_window,
-                    pre_free_active=self.pre_free_session.active,
+                    pre_free_active=pre_free_active_at_entry,
                     current_target_available=self.target_current_a is not None,
                     allowance_guard_enabled=policy.allowance_guard_enabled,
                     house_load_includes_ev=(
@@ -598,15 +709,6 @@ class ActiveEvController:
             if cadence.defer_soc_redecision:
                 self.decision_phase = "ev_current_transition_hold"
                 self.allowance_phase = "transition_hold"
-            window_cleanup = cleanup_outside_ownership_for_free_window(
-                in_free_window=in_window,
-                pre_free_state=self.pre_free_session,
-                outside_control_active=self.outside_control_active,
-                outside_target_active=self.outside_target_active,
-            )
-            self.pre_free_session = window_cleanup.pre_free_state
-            self.outside_control_active = window_cleanup.outside_control_active
-            self.outside_target_active = window_cleanup.outside_target_active
             if cadence.should_decide:
                 try:
                     calculated = (
@@ -649,8 +751,8 @@ class ActiveEvController:
                     ),
                     charge_switch_on=observation.charge_switch_on,
                     now=now,
-                    maximum_attempts=DIRECT_EVSE_MAX_ATTEMPTS,
-                    retry_interval=DIRECT_EVSE_RETRY_INTERVAL,
+                    maximum_attempts=DAILY_BACKFILL_STOP_MAX_ATTEMPTS,
+                    retry_interval=DAILY_BACKFILL_STOP_RETRY_INTERVAL,
                 )
                 self._apply_daily_backfill_stop_state(stop.state)
                 if stop.save_required:
@@ -690,6 +792,12 @@ class ActiveEvController:
                     else f"rehearsal_{rehearsal_plan.reason}"
                 )
                 return
+            if entered_free_window:
+                # A free-power window is independently authorised.  Do not
+                # make it wait for an outside/pre-free fault cooldown; the
+                # normal direct-EVSE reconciliation remains rate-bounded from
+                # this fresh epoch onward.
+                self.reconciliation = DirectEvseReconciliationState()
             runtime = finalize_direct_evse_reconciliation(
                 reconcile_direct_evse(
                     self.reconciliation,
@@ -1188,6 +1296,26 @@ class ActiveEvController:
         )
         if vehicle_soc is None:
             return self._reject_free_window_candidate("ev_soc_unavailable")
+        battery_power = self.coordinator.telemetry.battery_power
+        battery_charge_power_kw = (
+            battery_power.value
+            if battery_power.valid and battery_power.fresh
+            else None
+        )
+        active_charge_target = getattr(
+            getattr(self.coordinator, "active_controller", None),
+            "charge_power_target_kw",
+            None,
+        )
+        try:
+            active_charge_target = float(active_charge_target)
+        except (TypeError, ValueError):
+            active_charge_target = None
+        battery_charge_target_kw = (
+            active_charge_target
+            if active_charge_target is not None and active_charge_target > 0
+            else self.coordinator.runtime_config.inverter.charge_limit_kw
+        )
         evaluation = evaluate_free_window_target(
             FreeWindowTargetEvidence(
                 ceiling_a=ceiling,
@@ -1221,6 +1349,17 @@ class ActiveEvController:
                 actual_ev_current_a=self._actual_ev_current_a()[0],
                 ev_average_a=ev.value,
                 ev_average_source_valid=ev.source_value_valid,
+                battery_soc_percent=snapshot.battery_soc,
+                battery_full_soc_percent=self._float(
+                    CONF_EV_HOUSE_BATTERY_TAPER_SOC,
+                    DEFAULT_EV_HOUSE_BATTERY_TAPER_SOC,
+                ),
+                battery_charge_power_kw=battery_charge_power_kw,
+                battery_charge_target_kw=battery_charge_target_kw,
+                site_phase_count=int(
+                    self._float(CONF_SITE_PHASE_COUNT, DEFAULT_SITE_PHASE_COUNT)
+                ),
+                voltage_v=self._float(CONF_EV_VOLTAGE, DEFAULT_EV_VOLTAGE),
                 elapsed_minutes=elapsed_minutes,
                 settle_minutes=self._float(
                     CONF_EV_FREE_WINDOW_SETTLE_MINUTES,
@@ -1455,6 +1594,7 @@ class ActiveEvController:
                 self._daily_backfill_cycle_state(),
                 charge_switch_on=observation.charge_switch_on,
                 charge_limit_percent=observation.charge_limit_percent,
+                protected_baseline_a=baseline,
             )
             self._apply_daily_backfill_cycle_state(abort.daily_state)
             self.pre_free_session = abort.pre_free_state
@@ -1493,9 +1633,21 @@ class ActiveEvController:
                 self._apply_daily_backfill_cycle_state(session.state)
                 daily_current_a = session.current_a
 
+        # The normal spill policy is post-free.  Morning capture is a distinct
+        # opt-in stage with its own reserve threshold and no battery-full
+        # requirement.  Both use the same coherent, measured-power arithmetic.
+        free_start, in_pre_free, hours_until_free = self._pre_free_window(now)
         self.solar_spill = SolarSpillDecision(0.0, 0.0, "disabled")
+        self.morning_solar = SolarSpillDecision(0.0, 0.0, "disabled")
         solar_configured = self.coordinator.runtime_config.site.solar_configured
-        if solar_configured and self.coordinator.runtime_config.ev_policy.solar_spill_enabled:
+        if (
+            solar_configured
+            and self.coordinator.runtime_config.ev_policy.solar_spill_enabled
+            and (
+                not in_pre_free
+                or not self.coordinator.runtime_config.ev_policy.morning_solar_enabled
+            )
+        ):
             if snapshot is None or snapshot.battery_soc is None:
                 self.solar_spill = SolarSpillDecision(0.0, 0.0, "site_snapshot_unavailable")
             else:
@@ -1508,11 +1660,34 @@ class ActiveEvController:
                     current_minimum,
                     current_step,
                 )
+        if (
+            solar_configured
+            and self.coordinator.runtime_config.ev_policy.morning_solar_enabled
+            and in_pre_free
+        ):
+            if snapshot is None or snapshot.battery_soc is None:
+                self.morning_solar = SolarSpillDecision(
+                    0.0, 0.0, "site_snapshot_unavailable"
+                )
+            else:
+                self.morning_solar = self._solar_spill_decision(
+                    now,
+                    snapshot.battery_soc,
+                    vehicle_soc,
+                    soft_limit,
+                    ceiling,
+                    current_minimum,
+                    current_step,
+                    battery_threshold_percent=self._float(
+                        CONF_EV_MORNING_SOLAR_RESERVE_SOC,
+                        DEFAULT_EV_MORNING_SOLAR_RESERVE_SOC,
+                    ),
+                    morning=True,
+                )
 
         self.pre_free_plan = None
         self.pre_free_current_a = baseline
         if self.coordinator.runtime_config.ev_policy.pre_free_enabled:
-            free_start, in_pre_free, hours_until_free = self._pre_free_window(now)
             active_controller = getattr(self.coordinator, "active_controller", None)
             export_plan = getattr(active_controller, "export_plan", None)
             stored_energy = self._mapped_energy(
@@ -1590,6 +1765,18 @@ class ActiveEvController:
             self.pre_free_session = PreFreeSessionState()
             self.pre_free_phase = "disabled"
 
+        if self.pre_free_session.active:
+            # A pre-free session is deliberately fixed-current.  It owns the
+            # handover completely rather than retaining a stale solar hold.
+            self.measured_solar_adjustment = MeasuredSolarAdjustmentState()
+        else:
+            self._apply_measured_solar_adjustment(
+                now,
+                snapshot=snapshot,
+                charger_minimum_a=current_minimum,
+                current_step_a=current_step,
+            )
+
         self.outside_stage_candidates = build_outside_stage_candidates(
             OutsideStageCandidateInputs(
                 charge_to_full=charge_to_full,
@@ -1605,6 +1792,8 @@ class ActiveEvController:
                 daily_stop_pending=self.daily_backfill_stop_pending,
                 solar_current_a=self.solar_spill.current_a,
                 solar_reason=self.solar_spill.phase,
+                morning_solar_current_a=self.morning_solar.current_a,
+                morning_solar_reason=self.morning_solar.phase,
                 pre_free_active=self.pre_free_session.active,
                 pre_free_reason=self.pre_free_phase,
                 pre_free_current_a=self.pre_free_current_a or 0.0,
@@ -1621,11 +1810,17 @@ class ActiveEvController:
             self.outside_stage_selection.target_current_a,
             self.outside_stage_selection.reason,
         )
+        if self.outside_stage_selection.stage not in {
+            "solar_spill",
+            "morning_solar",
+        }:
+            self.measured_solar_adjustment = MeasuredSolarAdjustmentState()
         ownership = reconcile_outside_ownership(
             self._daily_backfill_cycle_state(),
             charge_to_full=charge_to_full,
             pre_free_active=self.pre_free_session.active,
             solar_current_a=self.solar_spill.current_a,
+            morning_solar_current_a=self.morning_solar.current_a,
             physical_minimum_a=current_minimum,
             baseline_a=baseline,
             configured_baseline_a=configured_baseline,
@@ -1676,9 +1871,60 @@ class ActiveEvController:
         self.allowance_phase = "outside_free_window"
         return True
 
+    def _apply_measured_solar_adjustment(
+        self,
+        now: datetime,
+        *,
+        snapshot: SiteSnapshot | None,
+        charger_minimum_a: float,
+        current_step_a: float,
+    ) -> None:
+        """Rate-limit ordinary measured-solar changes while failing safe.
+
+        The raw policy remains responsible for all eligibility checks.  A
+        non-active raw decision clears the retained hold so a lost reserve,
+        incoherent telemetry, disconnection, EV limit or other safety gate
+        returns immediately to the normal protected-baseline path.
+        """
+        if self.morning_solar.phase == "morning_solar_surplus":
+            policy_phase = "morning_solar"
+            decision = self.morning_solar
+        elif self.solar_spill.phase == "solar_spill":
+            policy_phase = "solar_spill"
+            decision = self.solar_spill
+        else:
+            self.measured_solar_adjustment = MeasuredSolarAdjustmentState()
+            return
+        adjustment = rate_limit_measured_solar_current(
+            self.measured_solar_adjustment,
+            now=now,
+            policy_phase=policy_phase,
+            requested_current_a=decision.current_a,
+            charger_minimum_a=charger_minimum_a,
+            current_step_a=current_step_a,
+            immediate_curtailment=bool(
+                snapshot is not None
+                and snapshot.grid_power_kw is not None
+                and snapshot.grid_power_kw > 0
+            ),
+        )
+        self.measured_solar_adjustment = adjustment.state
+        if adjustment.phase in {"started", "steady", "updated"}:
+            return
+        adjusted = SolarSpillDecision(
+            adjustment.target_current_a,
+            decision.reconstructed_surplus_kw,
+            f"{policy_phase}_{adjustment.phase}",
+        )
+        if policy_phase == "morning_solar":
+            self.morning_solar = adjusted
+        else:
+            self.solar_spill = adjusted
+
     def _reject_outside_candidate(self, reason: str) -> bool:
         """Record an outside-window input rejection without changing control."""
         self.last_reason = reason
+        self.measured_solar_adjustment = MeasuredSolarAdjustmentState()
         self.outside_stage_candidates = (
             reject_ev_stage_candidate("outside_window", reason),
         )
@@ -2006,6 +2252,9 @@ class ActiveEvController:
         ceiling: float,
         current_minimum: float,
         current_step: float,
+        *,
+        battery_threshold_percent: float | None = None,
+        morning: bool = False,
     ) -> SolarSpillDecision:
         telemetry = self.coordinator.telemetry
         grid = None if telemetry is None else telemetry.grid_power
@@ -2054,27 +2303,35 @@ class ActiveEvController:
                 phase_count=phases,
             )
         )
-        return plan_solar_spill_current(
-            SolarSpillInputs(
-                telemetry_valid=evaluation.telemetry_valid,
-                battery_soc_percent=battery_soc,
-                battery_full_threshold_percent=self._float(
-                    CONF_EV_SOLAR_SPILL_BATTERY_SOC,
-                    DEFAULT_EV_SOLAR_SPILL_BATTERY_SOC,
-                ),
-                connected=True,
-                vehicle_soc_percent=vehicle_soc,
-                vehicle_soft_limit_percent=soft_limit,
-                in_boosted_export_window=self._boosted_window_active(now),
-                ev_power_kw=evaluation.ev_power_kw,
-                grid_export_kw=evaluation.grid_export_kw,
-                battery_charge_kw=evaluation.battery_charge_kw,
-                voltage_v=voltage,
-                phase_count=phases,
-                current_step_a=current_step,
-                charger_minimum_a=current_minimum,
-                current_ceiling_a=ceiling,
+        threshold = (
+            self._float(
+                CONF_EV_SOLAR_SPILL_BATTERY_SOC,
+                DEFAULT_EV_SOLAR_SPILL_BATTERY_SOC,
             )
+            if battery_threshold_percent is None
+            else battery_threshold_percent
+        )
+        inputs = SolarSpillInputs(
+            telemetry_valid=evaluation.telemetry_valid,
+            battery_soc_percent=battery_soc,
+            battery_full_threshold_percent=threshold,
+            connected=True,
+            vehicle_soc_percent=vehicle_soc,
+            vehicle_soft_limit_percent=soft_limit,
+            in_boosted_export_window=self._boosted_window_active(now),
+            ev_power_kw=evaluation.ev_power_kw,
+            grid_export_kw=evaluation.grid_export_kw,
+            battery_charge_kw=evaluation.battery_charge_kw,
+            voltage_v=voltage,
+            phase_count=phases,
+            current_step_a=current_step,
+            charger_minimum_a=current_minimum,
+            current_ceiling_a=ceiling,
+        )
+        return (
+            plan_morning_solar_current(inputs)
+            if morning
+            else plan_solar_spill_current(inputs)
         )
 
     def _pre_free_window(self, now: datetime) -> tuple[datetime, bool, float]:
@@ -2298,6 +2555,7 @@ class ActiveEvController:
         self.target_current_a = persisted.reconciliation.target_current_a
         self.target_limit_percent = persisted.reconciliation.target_limit_percent
         self.pre_free_session = persisted.pre_free_session
+        self.measured_solar_adjustment = persisted.measured_solar_adjustment
         daily = persisted.daily_backfill
         self.daily_backfill_cycle_ready_at = daily.cycle_ready_at
         self.daily_backfill_delivered_kwh = daily.delivered_kwh
@@ -2325,6 +2583,7 @@ class ActiveEvController:
             daily_driving_energy_kwh=self.daily_driving_energy_kwh,
             reconciliation=self.reconciliation,
             pre_free_session=self.pre_free_session,
+            measured_solar_adjustment=self.measured_solar_adjustment,
             daily_backfill=DailyBackfillPersistenceState(
                 cycle_ready_at=self.daily_backfill_cycle_ready_at,
                 delivered_kwh=self.daily_backfill_delivered_kwh,

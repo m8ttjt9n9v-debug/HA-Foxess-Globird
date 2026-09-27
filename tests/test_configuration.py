@@ -490,7 +490,7 @@ def test_nonnegative_bridge_preserves_valid_configured_values() -> None:
 
 def test_ev_numeric_snapshot_covers_all_reviewed_defaults_and_is_immutable() -> None:
     numbers = RuntimeConfiguration.from_mapping({}).ev_numbers
-    assert len(numbers.values) == 40
+    assert len(numbers.values) == 41
     for name in config_module._EV_NUMERIC_FIELD_NAMES:  # noqa: SLF001
         key = getattr(heo_const, f"CONF_{name}")
         default = float(getattr(heo_const, f"DEFAULT_{name}"))

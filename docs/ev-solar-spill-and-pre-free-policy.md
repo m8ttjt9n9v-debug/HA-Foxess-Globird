@@ -14,11 +14,43 @@ outside-window behavior is the direct-path protected baseline.
 | `configuration_v1.4.24.yaml:4862` | Require explicit home/cable/charging evidence and vehicle SoC below the soft free-window limit. |
 | `configuration_v1.4.24.yaml:4845` | Suppress spill capture during the configured boosted export window. |
 | `configuration_v1.4.24.yaml:4913` | Convert measured surplus to current, floor to the actuator step, reject values below its minimum, and cap at the commissioned connector ceiling. |
-| `configuration_v1.4.24.yaml:5084` | During active pre-free backfill select the greater of live backfill and live spill; otherwise spill precedes the protected baseline. |
+| `configuration_v1.4.24.yaml:5084` | The pilot coupled active pre-free backfill to live spill. HEO preserves its proven pre-free allocation, but applies the separately documented safety extension: active pre-free has exclusive fixed-current ownership, so variable morning or post-free spill cannot modulate that session. |
 
 The portable runtime requires an explicitly mapped signed battery-power
 sensor and sign convention. Grid power already has an explicit sign mapping.
 Missing, stale, or incoherent telemetry produces no spill target.
+
+## Morning measured-solar extension
+
+Morning solar capture is a separately identified, default-off extension.  It
+reuses the coherent measured-surplus equation above, but is available only in
+the interval after the previous ZEROHERO finish and before the next free-power
+window.  It deliberately does **not** use the post-free battery-full threshold:
+the independent `Morning Solar EV Reserve SoC` protects the house battery while
+energy that would otherwise be absorbed before free battery charging can serve
+an eligible connected EV.
+
+The two configuration-backed dashboard controls are:
+
+- `switch.home_energy_ev_morning_solar`
+- `number.home_energy_ev_morning_solar_reserve_soc`
+
+Existing entries leave the policy off.  Until the reserve number is explicitly
+saved, its runtime value is the entry's already commissioned outside-window
+house-battery reserve; this avoids silently reducing a site's safety margin.
+When a scheduled latest-start pre-free session becomes active, it takes
+exclusive control at its fixed current.  Morning solar does not raise, lower,
+or otherwise modulate that session.
+
+Both measured-solar stages share a restart-safe adjustment hold.  The first
+eligible current is accepted immediately, but any ordinary later change must
+remain the same for 15 minutes before it is sent to Tessie.  This filters
+whole-amp cloud-edge oscillation instead of repeatedly alternating adjacent
+current commands.  Verified grid import may reduce a target immediately.
+Lost or stale telemetry, loss of the configured reserve, EV disconnection or
+limit, Safety Lock, and all other eligibility failures immediately discard the
+hold and return to the protected-baseline path.  The hold is discarded at a
+pre-free, free-window, daily-backfill, or charge-to-full takeover.
 
 ## Latest-start pre-free mapping
 

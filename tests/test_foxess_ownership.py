@@ -71,6 +71,13 @@ def test_clean_self_use_is_verified_without_mutation() -> None:
     assert evaluate_foxess_ownership(_context()) == FoxessOwnershipResult("verified")
 
 
+def test_persisted_charge_recovery_owns_backup_mode() -> None:
+    """A reload must not strand an unfinished free charge in Back-up mode."""
+    assert evaluate_foxess_ownership(
+        _context(mode="Back-up", charge_phase="recovering")
+    ) == FoxessOwnershipResult("verified_session")
+
+
 @pytest.mark.parametrize("degraded_status", ["missing", "malformed", "not_loaded"])
 def test_self_use_reestablishes_safe_checkpoint_from_degraded_evidence(
     degraded_status: str,

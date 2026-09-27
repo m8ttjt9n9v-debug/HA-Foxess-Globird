@@ -56,6 +56,7 @@ class EvPolicyAvailabilityEvidence:
     modbus_outside_stages_authorized: bool
     solar_spill_enabled: bool
     pre_free_enabled: bool
+    morning_solar_enabled: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -83,7 +84,11 @@ def evaluate_ev_policy_availability(
         or evidence.daily_stop_pending
         or (
             evidence.modbus_outside_stages_authorized
-            and (evidence.solar_spill_enabled or evidence.pre_free_enabled)
+            and (
+                evidence.solar_spill_enabled
+                or evidence.morning_solar_enabled
+                or evidence.pre_free_enabled
+            )
         )
     )
     return EvPolicyAvailability(unexpected_direct_charge, outside_enabled)
@@ -145,6 +150,8 @@ class OutsideStageCandidateInputs:
     pre_free_current_a: float
     protected_baseline_a: float
     physical_minimum_a: float
+    morning_solar_current_a: float = 0.0
+    morning_solar_reason: str = "disabled"
 
 
 def build_ev_stage_candidate(
@@ -180,6 +187,9 @@ def build_outside_stage_candidates(
     """Describe retained outside stages without selecting among them."""
     command_intent = ("reconcile_current", "reconcile_charge_limit")
     solar_eligible = inputs.solar_current_a >= inputs.physical_minimum_a
+    morning_solar_eligible = (
+        inputs.morning_solar_current_a >= inputs.physical_minimum_a
+    )
     return (
         build_ev_stage_candidate(
             "charge_to_full",
@@ -214,6 +224,15 @@ def build_outside_stage_candidates(
             reason=inputs.solar_reason,
             target_current_a=(inputs.solar_current_a if solar_eligible else None),
             command_intent=command_intent if solar_eligible else (),
+        ),
+        build_ev_stage_candidate(
+            "morning_solar",
+            eligible=morning_solar_eligible,
+            reason=inputs.morning_solar_reason,
+            target_current_a=(
+                inputs.morning_solar_current_a if morning_solar_eligible else None
+            ),
+            command_intent=command_intent if morning_solar_eligible else (),
         ),
         build_ev_stage_candidate(
             "pre_free",
@@ -274,18 +293,22 @@ def select_outside_stage_candidate(
             current("daily_ready"),
         )
     pre_free = by_stage["pre_free"]
+    morning_solar = by_stage.get(
+        "morning_solar",
+        EvStageCandidate("morning_solar", False, "disabled"),
+    )
     solar = by_stage["solar_spill"]
     if pre_free.eligible:
         return EvStageSelection(
-            "pre_free_or_solar_spill",
-            "pre_free_or_solar_spill",
-            round(
-                min(
-                    max(current("pre_free"), current("solar_spill")),
-                    current_ceiling_a,
-                ),
-                3,
-            ),
+            "pre_free",
+            "pre_free_backfill",
+            round(min(current("pre_free"), current_ceiling_a), 3),
+        )
+    if morning_solar.eligible:
+        return EvStageSelection(
+            morning_solar.stage,
+            morning_solar.reason,
+            round(min(current("morning_solar"), current_ceiling_a), 3),
         )
     if solar.eligible:
         return EvStageSelection(

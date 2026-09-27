@@ -37,6 +37,13 @@ def complete_payload() -> dict[str, object]:
             "active": True,
             "frozen_start": (NOW - timedelta(hours=1)).isoformat(),
         },
+        "measured_solar_adjustment": {
+            "phase": "solar_spill",
+            "target_current_a": 10.0,
+            "changed_at": (NOW - timedelta(minutes=15)).isoformat(),
+            "pending_current_a": 8.0,
+            "pending_since": (NOW - timedelta(minutes=5)).isoformat(),
+        },
         "daily_backfill": {
             "cycle_ready_at": (NOW + timedelta(hours=20)).isoformat(),
             "delivered_kwh": 2.25,
@@ -76,6 +83,16 @@ def test_ev_persistence_retains_stable_feedback_wait_across_restart() -> None:
     assert state.to_payload() == payload
 
 
+def test_ev_persistence_migrates_old_payload_without_measured_solar_hold() -> None:
+    payload = complete_payload()
+    payload.pop("measured_solar_adjustment")
+
+    state = EvPersistenceState.from_payload(payload, NOW)
+
+    assert state.measured_solar_adjustment.phase is None
+    assert state.measured_solar_adjustment.target_current_a is None
+
+
 def test_ev_persistence_state_retains_driving_evidence_when_control_block_is_bad() -> None:
     payload = deepcopy(complete_payload())
     payload["reconciliation"]["phase"] = "invalid"
@@ -101,7 +118,7 @@ def test_ev_persistence_storage_validation_retains_grouped_safe_fallback() -> No
     state = EvPersistenceState.from_payload(complete_payload(), NOW)
     invalid = replace(
         state,
-        reconciliation=replace(state.reconciliation, attempts=4),
+        reconciliation=replace(state.reconciliation, attempts=-1),
     )
 
     validated = invalid.validated_for_storage()
@@ -114,3 +131,16 @@ def test_ev_persistence_storage_validation_retains_grouped_safe_fallback() -> No
     assert validated.charge_to_full_started_at is None
     assert validated.outside_control_active is False
     assert validated.smart_recovery.phase == "idle"
+
+
+def test_ev_persistence_retains_retry_count_above_legacy_three_attempt_limit() -> None:
+    state = EvPersistenceState.from_payload(complete_payload(), NOW)
+    retrying = replace(
+        state,
+        reconciliation=replace(state.reconciliation, attempts=7),
+    )
+
+    validated = retrying.validated_for_storage()
+
+    assert validated.reconciliation.attempts == 7
+    assert validated.reconciliation.phase == "awaiting_feedback"

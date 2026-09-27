@@ -19,7 +19,7 @@ been commissioned on a live site.
 |---|---|---|
 | Three-minute grid/current feedback | `grid_signed_current_avg_3m`, `tesla_actual_charging_current_avg_3m` | Preserve source-validity and grid coverage semantics. |
 | Physical current ceiling | `tesla_charge_path_maximum_current`, `tesla_effective_charge_current_ceiling` | Explicit commissioned rating is authoritative; live Tessie maximum only bounds an immediate API write. |
-| Free-window current | `tesla_free_window_current_target_v1` | Preserve the exact branch order and 0.5 A deadband. |
+| Free-window current | `tesla_free_window_current_target_v1` | Preserve the safety, priority, settling and feedback branches; correct House-battery allocation so FoxESS self-curtailment cannot silently give the EV first claim. |
 | Presence | `tesla_home_current_control_active`, `tesla_connected_for_energy_planning` | Auto/Home/Away must be explicit; unknown or contradictory evidence fails closed. |
 | Economic SoC target | `tesla_charge_policy_limit_v1` | Free-window and override targets stay separate from actuator protection. |
 | Tessie limit target | `tesla_charge_limit_target` | Retain the existing limit away; when a powered baseline is required, round live SoC plus configured headroom upward. |
@@ -43,11 +43,17 @@ The free-window planner evaluates these branches in order:
 4. FoxESS settling interval: configured effective minimum;
 5. invalid grid feedback or invalid service limit: effective minimum;
 6. invalid EV feedback: retain the bounded requested current;
-7. within the 0.5 A service deadband: retain the bounded request;
-8. otherwise: aligned, step-rounded, physically bounded correction.
+7. House-battery priority with missing battery SoC/power evidence: effective
+   minimum;
+8. House-battery priority at or above the configured full/taper SoC: physical
+   ceiling, still subject to the earlier service-overrun branch;
+9. below that SoC, subtract the battery charge-power shortfall from the EV's
+   available current, then step-round and physically bound the result;
+10. when battery charge power is on target and grid current is inside the 0.5 A
+    deadband: retain the bounded request.
 
-No phase count, inverter size, tariff allowance, or site identity changes this
-branch order.
+The battery shortfall conversion uses configured voltage and site phase count;
+no inverter size, tariff allowance, or site identity is hard-coded.
 
 ## FoxESS SoC and usable energy
 
@@ -115,10 +121,11 @@ phase count, connector rating, efficiency, time, or entity ID.
   enabled Local-Modbus-only solar-spill and pre-free stages use the same bounded
   actuator and return to the protected baseline without issuing stop or pause.
 - The requested current, charge limit, and switch response are confirmed from
-  mapped Tessie feedback. One unchanged target receives at most three attempts,
-  no faster than 30 seconds apart. Failure latches
-  `fault_maximum_attempts`; only a genuinely changed target re-arms writes.
-  This prevents another writer or stale cloud feedback causing indefinite
+  mapped Tessie feedback. An unchanged valid target is retried persistently,
+  using a restart-safe elapsed-time backoff of 30 seconds, 1, 2, 4, 8, 16 and
+  then 30 minutes between writes. It never enters a terminal attempt-count
+  latch. Every retry rechecks the normal eligibility and safety gates, while
+  the capped interval prevents another writer or stale cloud feedback causing
   current flapping.
 - The runtime, target/requested/actual current chain, target/applied charge
   limits, policy phase, allowance phase, feedback coverage, attempts, last

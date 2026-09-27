@@ -108,9 +108,11 @@ layers around the proven algorithm, not replacement algorithms.
   freezes bounded power for the session, persists its latch/retry state, and
   deliberately restores Self Use at the end or when the allowance is exhausted.
   After restart, current window, SoC, allowance, and control gates are
-  authoritative: transient Self Use feedback and an older persisted completed
-  phase cannot suppress an otherwise eligible current-window charge. Turning
-  off the independent charge request or enabling Safety Lock is the deliberate
+  authoritative: transient Self Use or Back-up feedback with an unfinished
+  HEO-owned session, and an older persisted completed phase, cannot suppress
+  an otherwise eligible current-window charge. A clean Back-up mode with no
+  unfinished HEO session remains external and is never adopted. Turning off
+  the independent charge request or enabling Safety Lock is the deliberate
   operator override. It does not program native schedule registers.
 - Automatic Force Charge additionally requires an explicitly confirmed
   schedule. Setup presents exact 24-hour times, duration, and a visual timeline;
@@ -123,7 +125,16 @@ layers around the proven algorithm, not replacement algorithms.
 - Direct-EVSE free-window Tessie current, charge-limit, and charge-start control
   is implemented. Default-off solar-spill and latest-start pre-free stages are
   also implemented for Local Modbus ownership. All three use the same bounded
-  feedback reconciliation; no direct path issues a stop or pause command.
+  feedback reconciliation; no direct path issues a stop or pause command. If
+  outside-window charging reaches its battery reserve, HEO ends the paid
+  session but retains a non-zero configured protected baseline through that
+  same reconciliation path; only a configured 0 A baseline may stop the
+  charge switch. Entry to the configured free-power window is a separate
+  reconciliation epoch, so it cannot inherit a failed pre-free/baseline retry
+  episode even when both stages select the same current. A valid direct-EVSE
+  target has no terminal attempt-count latch: retry intervals progress from
+  30 seconds through 1, 2, 4, 8 and 16 minutes, then remain capped at 30
+  minutes; the episode and its timing survive restart.
 - Charge-to-full operator intent is an integration-owned, persistent switch;
   it is not a site entity mapping. Existing installations retain the effective
   state of the pilot-style external helper until the HEO switch is first used.
@@ -134,6 +145,20 @@ layers around the proven algorithm, not replacement algorithms.
   and signed battery flow. Pre-free backfill consumes no more than the local
   protected export plan and the vehicle's wall-energy room, starts as late as
   possible, and persists only its active phase and frozen start.
+- Morning measured-solar EV capture is a separate default-off policy before
+  the free-power window. It uses the same coherent measured-surplus equation
+  but an independently configured house-battery reserve, rather than the
+  post-free solar-spill full-battery threshold. The dashboard exposes its
+  switch and reserve number. Existing entries keep the policy off and use their
+  commissioned outside-window reserve until the new number is explicitly
+  saved. An active scheduled pre-free session has exclusive fixed-current
+  ownership and completely replaces variable morning solar capture.
+- Normal measured-solar EV-current changes are restart-safe and require a
+  stable 15-minute target before Tessie is asked to change. Verified grid
+  import may curtail immediately. Any failed solar eligibility condition,
+  including stale telemetry, reserve loss, disconnection, EV limit or Safety
+  Lock, discards the hold and returns to the protected baseline. Pre-free,
+  free-window, daily-backfill and charge-to-full stages also discard it.
 - Solar-spill coherence applies to the fast electrical grid and effective
   battery sources. Rejected inactive-magnitude provenance cannot invalidate a
   fresh signed-battery fallback. Stable battery SoC and state-qualified Tessie
@@ -181,8 +206,11 @@ layers around the proven algorithm, not replacement algorithms.
 - Setup is a conditional multi-page commissioning workflow; reconfigure uses
   the same page schemas through a section menu. Values remain in an in-memory
   draft and cannot alter the live entry before explicit Review and Apply.
-  Electrical verification is a dedicated stage immediately before Automation
-  and Safety. Automatic sign calibration must use
+  Electrical-direction verification is part of the final Review and Apply
+  boundary, not a standalone reconfiguration section. Changing an electrical
+  source or direction clears the displayed confirmation there, so the operator
+  can re-verify it before applying rather than unknowingly saving an observer-only
+  configuration. Automatic sign calibration must use
   coherent physical evidence and the persisted diagnostic restoration path;
   it must not infer from entity names or enable an automatic-control request.
 - Paired battery charge/discharge magnitudes remain the canonical pilot source.
@@ -259,6 +287,21 @@ ports, with the learned policy's detailed mapping in
 The house-demand policy and its source mapping are retained in
 `docs/house-learning-port.md`.
 
+The pilot's original free-window **House battery** branch used only signed
+grid-current headroom. That is not the distributed product policy: a FoxESS
+inverter can keep grid current below the same limit by reducing its own battery
+charge first, leaving the EV untouched and reversing the selected priority.
+HEO therefore treats this as a characterized correction. Below the configured
+**House battery SoC for EV taper handoff**, the EV target accounts
+for the difference between commissioned inverter charge power and fresh
+canonical battery charge power. The conversion uses configured voltage and
+site phase count and remains bounded by the connector minimum/maximum and the
+physical service-limit correction. At or above that SoC, HEO releases the
+battery-power claim and lets the EV absorb capacity exposed by normal BMS
+taper. Missing battery SoC or battery-power evidence fails to the configured
+free-window minimum. FoxESS remains authoritative for its hardware import
+limit; HEO does not write that limit.
+
 The P85 daily-driving model contributes to the general charge limit outside the
 free window; it is not part of active free-window current calculation. HEO
 collects the same consecutive-day cumulative-meter deltas, persists the same
@@ -301,6 +344,41 @@ not merely an internal economic candidate. When EV-before-export or another
 effective gate withholds export, planned start, energy and duration are absent
 and the export status names the hold. The internal candidate remains available
 to the controller for immediate recalculation when the hold clears.
+
+## Delayed control-conformance supervision
+
+The active controllers remain the only normal policy writers and continue to
+reconcile every 30 seconds. A separate supervisor observes their declared
+targets and actuator feedback. It requires the same mismatch continuously for
+five minutes before opening one fresh, bounded reconciliation epoch. It does
+not write every cycle, does not bypass Safety Lock or commissioning gates, and
+does not replace the underlying controller state machines.
+
+The supervisor covers failures that are unambiguous from commissioned local
+evidence: a battery charge or export session not holding its HEO-owned mode, an
+unexpected Force Charge or non-forced mode outside an HEO session, and an EV
+requested current or charge switch that does not match HEO's current target.
+It emits `home_energy_orchestrator_control_issue` when a sustained issue opens
+and when it recovers, and mirrors the issue in the Orchestrator Status entity
+attributes and a local persistent notification. Notification delivery is a
+Home Assistant automation concern, so Telegram, ntfy, mobile-app and other
+channels do not become integration dependencies.
+
+An unexpected Force Discharge is not inferred to be a VPP event. FoxESS Modbus
+does not provide FoxESS Cloud/VPP event provenance, so HEO reports it as an
+unattributed external forced discharge with cloud verification unavailable.
+It alerts but does not automatically cancel that mode, because doing so could
+fight a legitimate VPP instruction. A future exemption may be labelled
+verified VPP only when an explicit cloud event source supplies affirmative,
+fresh evidence; timing correlation, absence of an HEO command, or the mode
+itself is insufficient.
+
+During Home Assistant startup inside ZEROCHARGE, Tessie feedback may recover
+before the signed grid-current average. HEO preserves an already-running EV
+request for at most five minutes while the normal average gains coverage. A
+measured service-limit overrun still curtails immediately. This prevents a
+healthy free-window request being actively reduced to the fallback current
+solely because integrations restored in a different order.
 
 ## Inverter evidence rules
 

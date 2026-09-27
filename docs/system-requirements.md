@@ -140,9 +140,20 @@ outlet vendor.
 Solar-spill control additionally
 requires an explicitly mapped signed battery-power sensor, its charge-positive
 sign convention, battery SoC threshold, and coherent grid/battery/Tessie
-timestamps. Latest-start pre-free backfill additionally requires the Local
-Modbus ZEROHERO export ledger. Both outside-window stages are independently
-default-off and are rejected unless Local Modbus is selected as FoxESS owner.
+timestamps. The independent, default-off Morning Solar EV Charging policy uses
+the same evidence only before the free-power window; it has its own dashboard
+editable house-battery reserve SoC and does not use the post-free
+battery-full threshold. Latest-start pre-free backfill additionally requires
+the Local Modbus ZEROHERO export ledger and, when active, takes exclusive
+fixed-current ownership from either measured-solar stage. These
+outside-window stages are independently default-off and are rejected unless
+Local Modbus is selected as FoxESS owner.
+
+Measured-solar EV current changes are held until the candidate remains stable
+for 15 minutes. This rate limit persists across restart and prevents ordinary
+cloud-edge variation from producing repeated adjacent-current Tessie writes.
+Verified grid import and any failed eligibility evidence curtail immediately;
+the hold does not delay the protected-baseline safety path.
 
 The Working Single Phase Pilot Site uses Tessie entities for these roles.
 Portable code maps roles and never embeds that vehicle's entity IDs. See the

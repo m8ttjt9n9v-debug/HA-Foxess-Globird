@@ -147,7 +147,9 @@ HEO-managed force-power setpoints.
   at most one restart-safe, current-first outlet recovery cycle before latching.
 - Tessie daily-driving learning from a mapped cumulative energy meter. It keeps
   the source's 28-cycle P85, configured arrival reserve, complete-window
-  fallback, actuator-step rounding, and away/disconnected hold behavior. See
+  fallback, actuator-step rounding, and away/disconnected hold behavior. P85
+  becomes available only after the configured number of valid daily samples
+  (14 by default); until then the conservative fallback remains active. See
   the [learning provenance](docs/ev-driving-learning-port.md).
 - Preview-first, explicitly submitted FoxESS force-charge and force-discharge
   diagnostics. Tests require Local Modbus ownership, the FoxESS gate, complete
@@ -192,6 +194,21 @@ These are intentionally absent rather than represented by simplified rewrite
 code. The [project source of truth](docs/source-of-truth.md) records the public
 engineering evidence; the [port-first guide](docs/port-first-development.md)
 defines the proof required before behavior returns.
+
+## Control issue notifications
+
+HEO observes its commissioned battery and EV actuator feedback every 30
+seconds. A mismatch must remain continuous for five minutes before HEO opens
+one bounded recovery attempt and emits the Home Assistant event
+`home_energy_orchestrator_control_issue`. The same issue also creates a local
+persistent notification. Use a normal Home Assistant automation to forward the
+event to Telegram, ntfy, the mobile app, or another notification service; HEO
+does not require any particular notification provider.
+
+An unexpected `Force Discharge` is reported as an unattributed external forced
+discharge when FoxESS Cloud provenance is unavailable. HEO does not call it a
+VPP event and does not automatically cancel it. Only affirmative, fresh cloud
+event evidence could support a future verified-VPP exemption.
 
 ## Safety boundary
 

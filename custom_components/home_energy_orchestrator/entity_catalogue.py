@@ -677,6 +677,17 @@ EV_BEFORE_EXPORT_TARGET_DESCRIPTION = NumberEntityDescription(
     entity_category=EntityCategory.CONFIG,
 )
 
+EV_MORNING_SOLAR_RESERVE_DESCRIPTION = NumberEntityDescription(
+    key="ev_morning_solar_reserve_soc",
+    name="Morning Solar EV Reserve SoC",
+    icon="mdi:battery-sun",
+    native_unit_of_measurement=PERCENTAGE,
+    native_min_value=0.0,
+    native_max_value=100.0,
+    native_step=1.0,
+    entity_category=EntityCategory.CONFIG,
+)
+
 HOUSE_OCCUPANCY_DESCRIPTION = SelectEntityDescription(
     key="house_occupancy_mode",
     name="House Energy Occupancy Mode",
@@ -714,6 +725,12 @@ EV_BEFORE_EXPORT_DESCRIPTION = SwitchEntityDescription(
     icon="mdi:car-electric-outline",
     entity_category=EntityCategory.CONFIG,
 )
+EV_MORNING_SOLAR_DESCRIPTION = SwitchEntityDescription(
+    key="ev_morning_solar",
+    name="Morning Solar EV Charging",
+    icon="mdi:solar-power-variant",
+    entity_category=EntityCategory.CONFIG,
+)
 CHARGE_TO_FULL_DESCRIPTION = SwitchEntityDescription(
     key="ev_charge_to_full",
     name="EV Charge to Full",
@@ -736,12 +753,14 @@ _NON_SENSOR_PROJECTIONS = {
     "test_discharge_power": "TestNumber.native_value",
     "test_duration": "TestNumber.native_value",
     "ev_before_export_soc_target": "EvBeforeExportTargetNumber.native_value",
+    "ev_morning_solar_reserve_soc": "EvMorningSolarReserveNumber.native_value",
     "house_occupancy_mode": "HouseOccupancyModeSelect.current_option",
     "safety_lock": "SafetyLockSwitch.is_on",
     "automatic_charge": "AutomaticChargeSwitch.is_on",
     "automatic_export": "AutomaticExportSwitch.is_on",
     "automatic_ev_control": "AutomaticEvControlSwitch.is_on",
     "ev_before_export": "EvBeforeExportSwitch.is_on",
+    "ev_morning_solar": "EvMorningSolarSwitch.is_on",
     "ev_charge_to_full": "EvChargeToFullSwitch.is_on",
     "sign_conventions_verified": "SignConventionsVerifiedBinarySensor.is_on",
 }
@@ -762,12 +781,14 @@ ENTITY_SPECS = (
     *(_entity_spec("button", description) for description in BUTTON_DESCRIPTIONS),
     *(_entity_spec("number", description) for description in NUMBER_DESCRIPTIONS),
     _entity_spec("number", EV_BEFORE_EXPORT_TARGET_DESCRIPTION),
+    _entity_spec("number", EV_MORNING_SOLAR_RESERVE_DESCRIPTION),
     _entity_spec("select", HOUSE_OCCUPANCY_DESCRIPTION),
     _entity_spec("switch", SAFETY_DESCRIPTION),
     _entity_spec("switch", CHARGE_DESCRIPTION),
     _entity_spec("switch", EXPORT_DESCRIPTION),
     _entity_spec("switch", EV_DESCRIPTION),
     _entity_spec("switch", EV_BEFORE_EXPORT_DESCRIPTION),
+    _entity_spec("switch", EV_MORNING_SOLAR_DESCRIPTION),
     _entity_spec("switch", CHARGE_TO_FULL_DESCRIPTION),
     _entity_spec("binary_sensor", SIGN_CONVENTIONS_DESCRIPTION),
 )

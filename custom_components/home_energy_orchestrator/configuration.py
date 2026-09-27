@@ -56,6 +56,9 @@ from .const import (
     CONF_EV_LOCATION_MODE,
     CONF_EV_MAX_CURRENT,
     CONF_EV_MIN_CURRENT,
+    CONF_EV_MORNING_SOLAR_ENABLED,
+    CONF_EV_MORNING_SOLAR_RESERVE_SOC,
+    CONF_EV_OUTSIDE_BATTERY_RESERVE_PERCENT,
     CONF_EV_PHASE_COUNT,
     CONF_EV_PRE_FREE_ENABLED,
     CONF_EV_PROTECTED_BASELINE_A,
@@ -136,6 +139,7 @@ from .const import (
     DEFAULT_EV_DAILY_READY_TIME,
     DEFAULT_EV_FREE_WINDOW_PRIORITY,
     DEFAULT_EV_LOCATION_MODE,
+    DEFAULT_EV_MORNING_SOLAR_ENABLED,
     DEFAULT_EV_PHASE_COUNT,
     DEFAULT_EV_PRE_FREE_ENABLED,
     DEFAULT_EV_PROTECTED_BASELINE_A,
@@ -329,6 +333,7 @@ class EvPolicySettings:
     free_window_priority: str
     allowance_guard_enabled: bool
     solar_spill_enabled: bool
+    morning_solar_enabled: bool
     pre_free_enabled: bool
     smart_socket_power_switching: bool
     smart_socket_current_limit_a: float | None
@@ -352,6 +357,7 @@ _EV_NUMERIC_FIELD_NAMES = (
     "EV_FREE_WINDOW_SETTLE_MINUTES",
     "EV_LEARNING_MINIMUM_SAMPLES",
     "EV_MAX_CURRENT",
+    "EV_MORNING_SOLAR_RESERVE_SOC",
     "EV_OUTSIDE_INVERTER_PERCENT",
     "EV_OUTSIDE_BATTERY_RESERVE_PERCENT",
     "EV_PHASE_COUNT",
@@ -401,6 +407,13 @@ class EvNumericSettings:
             except (TypeError, ValueError):
                 value = default
             values[key] = value if isfinite(value) else default
+        # An existing entry has a reviewed outside-window reserve but no
+        # separate morning-solar value.  Use that reserve until the optional
+        # dashboard/configuration control is explicitly saved.
+        if CONF_EV_MORNING_SOLAR_RESERVE_SOC not in data:
+            values[CONF_EV_MORNING_SOLAR_RESERVE_SOC] = values[
+                CONF_EV_OUTSIDE_BATTERY_RESERVE_PERCENT
+            ]
         return cls(MappingProxyType(values))
 
     def value(self, key: str, default: float) -> float:
@@ -957,6 +970,12 @@ class RuntimeConfiguration:
                     data.get(
                         CONF_EV_SOLAR_SPILL_ENABLED,
                         DEFAULT_EV_SOLAR_SPILL_ENABLED,
+                    )
+                ),
+                morning_solar_enabled=bool(
+                    data.get(
+                        CONF_EV_MORNING_SOLAR_ENABLED,
+                        DEFAULT_EV_MORNING_SOLAR_ENABLED,
                     )
                 ),
                 pre_free_enabled=bool(

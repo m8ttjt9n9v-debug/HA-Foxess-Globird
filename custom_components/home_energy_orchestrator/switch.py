@@ -17,6 +17,7 @@ from .const import (
     CONF_EV_BEFORE_EXPORT_ENABLED,
     CONF_EV_CHARGE_TO_FULL,
     CONF_EV_CHARGE_TO_FULL_ENABLED,
+    CONF_EV_MORNING_SOLAR_ENABLED,
     CONF_REHEARSAL_MODE,
 )
 from .coordinator import EnergyCoordinator
@@ -25,6 +26,7 @@ from .entity_catalogue import (
     CHARGE_TO_FULL_DESCRIPTION,
     EV_BEFORE_EXPORT_DESCRIPTION,
     EV_DESCRIPTION,
+    EV_MORNING_SOLAR_DESCRIPTION,
     EXPORT_DESCRIPTION,
     SAFETY_DESCRIPTION,
 )
@@ -44,6 +46,11 @@ async def async_setup_entry(
                 entry.runtime_data,
                 entry,
                 EV_BEFORE_EXPORT_DESCRIPTION,
+            ),
+            EvMorningSolarSwitch(
+                entry.runtime_data,
+                entry,
+                EV_MORNING_SOLAR_DESCRIPTION,
             ),
             EvChargeToFullSwitch(
                 entry.runtime_data,
@@ -251,6 +258,45 @@ class EvBeforeExportSwitch(CoordinatorEntity[EnergyCoordinator], SwitchEntity):
         self.coordinator.update_config_value(CONF_EV_BEFORE_EXPORT_ENABLED, enabled)
         self.async_write_ha_state()
         controller = self.coordinator.active_controller
+        if controller is not None:
+            await controller.async_reconcile()
+        self.coordinator.async_update_listeners()
+
+
+class EvMorningSolarSwitch(CoordinatorEntity[EnergyCoordinator], SwitchEntity):
+    """Enable measured EV solar capture before the free-power window."""
+
+    entity_description: SwitchEntityDescription
+
+    def __init__(
+        self,
+        coordinator: EnergyCoordinator,
+        entry: ConfigEntry,
+        description: SwitchEntityDescription,
+    ) -> None:
+        super().__init__(coordinator)
+        self.entity_description = description
+        self._entry = entry
+        self._attr_unique_id = f"{entry.entry_id}_{description.key}"
+        self.entity_id = "switch.home_energy_ev_morning_solar"
+        self._attr_has_entity_name = True
+
+    @property
+    def is_on(self) -> bool:
+        return self.coordinator.runtime_config.ev_policy.morning_solar_enabled
+
+    async def async_turn_on(self, **kwargs: object) -> None:
+        await self._set_enabled(True)
+
+    async def async_turn_off(self, **kwargs: object) -> None:
+        await self._set_enabled(False)
+
+    async def _set_enabled(self, enabled: bool) -> None:
+        config = {**self._entry.data, CONF_EV_MORNING_SOLAR_ENABLED: enabled}
+        self.hass.config_entries.async_update_entry(self._entry, data=config)
+        self.coordinator.update_config_value(CONF_EV_MORNING_SOLAR_ENABLED, enabled)
+        self.async_write_ha_state()
+        controller = self.coordinator.ev_controller
         if controller is not None:
             await controller.async_reconcile()
         self.coordinator.async_update_listeners()

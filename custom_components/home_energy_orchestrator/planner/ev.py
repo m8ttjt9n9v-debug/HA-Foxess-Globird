@@ -13,10 +13,21 @@ from datetime import datetime, timedelta
 from math import ceil, floor, isfinite
 from typing import Literal, cast
 
-DIRECT_EVSE_MAX_ATTEMPTS = 3
-DIRECT_EVSE_RETRY_INTERVAL = timedelta(seconds=30)
+# Direct Tessie feedback can take time to converge, and some chargers briefly
+# reject an otherwise valid request. Retrying is therefore elapsed-time based,
+# not a fixed command-count latch. The sequence preserves prompt recovery for
+# a transient cloud delay, then protects the vehicle API from flapping. Once
+# the cap is reached, reconciliation continues at that safe cadence.
+DIRECT_EVSE_RETRY_INTERVALS = (
+    timedelta(seconds=30),
+    timedelta(minutes=1),
+    timedelta(minutes=2),
+    timedelta(minutes=4),
+    timedelta(minutes=8),
+    timedelta(minutes=16),
+    timedelta(minutes=30),
+)
 DIRECT_EVSE_FEEDBACK_SETTLE_INTERVAL = timedelta(seconds=30)
-DIRECT_EVSE_FAULT_REARM_INTERVAL = timedelta(minutes=30)
 DIRECT_EVSE_RECONCILIATION_PHASES = frozenset(
     {
         "idle",
@@ -24,7 +35,6 @@ DIRECT_EVSE_RECONCILIATION_PHASES = frozenset(
         "awaiting_feedback",
         "awaiting_stable_current_feedback",
         "confirmed",
-        "fault_maximum_attempts",
         "blocked",
     }
 )
@@ -47,6 +57,12 @@ class FreeWindowCurrentInputs:
     actual_ev_current_a: float
     ev_average_a: float
     ev_average_source_valid: bool
+    battery_soc_percent: float | None
+    battery_full_soc_percent: float
+    battery_charge_power_kw: float | None
+    battery_charge_target_kw: float
+    site_phase_count: int
+    voltage_v: float
     elapsed_minutes: float
     settle_minutes: float
     current_step_a: float
@@ -83,6 +99,12 @@ class FreeWindowTargetEvidence:
     actual_ev_current_a: float
     ev_average_a: float | None
     ev_average_source_valid: bool
+    battery_soc_percent: float | None
+    battery_full_soc_percent: float
+    battery_charge_power_kw: float | None
+    battery_charge_target_kw: float
+    site_phase_count: int
+    voltage_v: float
     elapsed_minutes: float
     settle_minutes: float
     ev_priority_selected: bool
@@ -110,6 +132,8 @@ EvDecisionFingerprint = tuple[
     float | None,
     float | None,
     float | None,
+    bool,
+    bool,
 ]
 
 
@@ -173,6 +197,8 @@ def evaluate_ev_decision_cadence(
         evidence.limit_minimum_percent,
         evidence.limit_maximum_percent,
         evidence.limit_step_percent,
+        evidence.grid_current_valid,
+        evidence.actual_ev_current_valid,
     )
     interval_elapsed = (
         evidence.last_decision_at is not None
@@ -281,6 +307,12 @@ def evaluate_free_window_target(
             actual_ev_current_a=evidence.actual_ev_current_a,
             ev_average_a=evidence.ev_average_a or 0.0,
             ev_average_source_valid=evidence.ev_average_source_valid,
+            battery_soc_percent=evidence.battery_soc_percent,
+            battery_full_soc_percent=evidence.battery_full_soc_percent,
+            battery_charge_power_kw=evidence.battery_charge_power_kw,
+            battery_charge_target_kw=evidence.battery_charge_target_kw,
+            site_phase_count=evidence.site_phase_count,
+            voltage_v=evidence.voltage_v,
             elapsed_minutes=evidence.elapsed_minutes,
             settle_minutes=evidence.settle_minutes,
             current_step_a=evidence.current_step_a,
@@ -365,7 +397,7 @@ def reset_smart_state_for_path(
 
 @dataclass(frozen=True, slots=True)
 class DirectEvseReconciliationState:
-    """Restart-safe, bounded command/feedback state for one direct EVSE."""
+    """Restart-safe, rate-bounded command/feedback state for one direct EVSE."""
 
     target_current_a: float | None = None
     target_limit_percent: float | None = None
@@ -1231,6 +1263,17 @@ def direct_evse_response_matches(
     return plan.reason == "direct_path_ready" and not plan.commands
 
 
+def direct_evse_retry_interval(attempts: int) -> timedelta:
+    """Return the next write delay for a failed direct-EVSE command episode."""
+    if attempts < 0:
+        raise ValueError("reconciliation attempts must be non-negative")
+    if attempts == 0:
+        return timedelta(0)
+    return DIRECT_EVSE_RETRY_INTERVALS[
+        min(attempts - 1, len(DIRECT_EVSE_RETRY_INTERVALS) - 1)
+    ]
+
+
 def reconcile_direct_evse(
     state: DirectEvseReconciliationState,
     observation: DirectEvseObservation,
@@ -1239,21 +1282,13 @@ def reconcile_direct_evse(
     target_limit_percent: float,
     physical_ceiling_a: float,
     now: datetime,
-    retry_interval: timedelta = DIRECT_EVSE_RETRY_INTERVAL,
     feedback_settle_interval: timedelta = DIRECT_EVSE_FEEDBACK_SETTLE_INTERVAL,
-    fault_rearm_interval: timedelta = DIRECT_EVSE_FAULT_REARM_INTERVAL,
-    maximum_attempts: int = DIRECT_EVSE_MAX_ATTEMPTS,
 ) -> DirectEvseReconciliation:
-    """Bound feedback retries so another writer cannot cause endless flapping."""
+    """Rate-bound feedback retries without abandoning a valid target."""
     if now.tzinfo is None or now.utcoffset() is None:
         raise ValueError("reconciliation time must be timezone-aware")
-    if (
-        retry_interval < timedelta(0)
-        or feedback_settle_interval < timedelta(0)
-        or fault_rearm_interval <= timedelta(0)
-        or maximum_attempts < 1
-    ):
-        raise ValueError("retry policy must be non-negative and have attempts")
+    if feedback_settle_interval < timedelta(0):
+        raise ValueError("feedback settle interval must be non-negative")
     target_changed = (
         state.target_current_a != target_current_a
         or state.target_limit_percent != target_limit_percent
@@ -1267,13 +1302,11 @@ def reconcile_direct_evse(
     elif (
         state.attempts > 0
         and state.last_command_at is not None
-        and state.phase
-        in {
-            "confirmed",
-            "fault_maximum_attempts",
-        }
-        and now - state.last_command_at >= fault_rearm_interval
+        and state.phase == "confirmed"
+        and now - state.last_command_at >= DIRECT_EVSE_RETRY_INTERVALS[-1]
     ):
+        # A target that remained confirmed for the full capped interval starts
+        # a fresh episode if another writer later changes it.
         state = DirectEvseReconciliationState(
             target_current_a=target_current_a,
             target_limit_percent=target_limit_percent,
@@ -1295,17 +1328,7 @@ def reconcile_direct_evse(
             ),
             EvCommandPlan((), "feedback_confirmed"),
         )
-    if state.attempts >= maximum_attempts:
-        return DirectEvseReconciliation(
-            DirectEvseReconciliationState(
-                target_current_a,
-                target_limit_percent,
-                state.attempts,
-                state.last_command_at,
-                "fault_maximum_attempts",
-            ),
-            EvCommandPlan((), "maximum_attempts_reached"),
-        )
+    retry_interval = direct_evse_retry_interval(state.attempts)
     if state.last_command_at is not None and now - state.last_command_at < retry_interval:
         return DirectEvseReconciliation(
             DirectEvseReconciliationState(
@@ -1371,7 +1394,16 @@ def reconcile_direct_evse(
 
 
 def plan_free_window_current(inputs: FreeWindowCurrentInputs) -> EvCurrentDecision:
-    """Port the canonical pilot-site branch order without topology assumptions."""
+    """Allocate free-window current without making FoxESS yield to the EV.
+
+    FoxESS already enforces its physical import limit by reducing its own
+    battery charge.  A grid-only EV controller therefore observes a healthy
+    site current after the inverter has yielded and cannot deliver a genuine
+    house-battery priority.  Below the configured battery-full threshold, use
+    the missing battery charge power as an explicit claim on the shared import
+    capacity.  At and above that threshold, release the claim so the EV can
+    absorb capacity freed by the battery's normal BMS taper.
+    """
     _validate_free_window_inputs(inputs)
     ceiling = inputs.ceiling_a
     baseline = min(inputs.protected_baseline_a, ceiling)
@@ -1400,10 +1432,41 @@ def plan_free_window_current(inputs: FreeWindowCurrentInputs) -> EvCurrentDecisi
         return _decision(inputs.effective_minimum_a, "telemetry_fallback_minimum")
     if not ev_average_valid:
         return _decision(house_hold, "ev_feedback_hold")
-    if abs(grid_error) <= 0.5:
+    battery_evidence_valid = (
+        inputs.battery_soc_percent is not None
+        and inputs.battery_charge_power_kw is not None
+        and inputs.battery_charge_target_kw > 0
+    )
+    if not battery_evidence_valid:
+        return _decision(
+            inputs.effective_minimum_a,
+            "battery_telemetry_fallback_minimum",
+        )
+    if inputs.battery_soc_percent >= inputs.battery_full_soc_percent:
+        return _decision(ceiling, "house_battery_taper_handoff")
+
+    accepted_battery_kw = max(inputs.battery_charge_power_kw, 0.0)
+    battery_shortfall_kw = max(
+        inputs.battery_charge_target_kw - accepted_battery_kw,
+        0.0,
+    )
+    # Small conversion/loss differences should not move a whole charger step.
+    battery_shortfall_kw = 0.0 if battery_shortfall_kw <= 0.25 else battery_shortfall_kw
+    battery_shortfall_a = (
+        battery_shortfall_kw * 1000 / (inputs.voltage_v * inputs.site_phase_count)
+    )
+    raw_battery_first_a = inputs.ev_average_a + grid_error - battery_shortfall_a
+    stepped_battery_first_a = (
+        floor(raw_battery_first_a / inputs.current_step_a) * inputs.current_step_a
+    )
+    bounded_battery_first_a = max(
+        min(stepped_battery_first_a, ceiling),
+        inputs.effective_minimum_a,
+    )
+    if battery_shortfall_kw == 0.0 and abs(grid_error) <= 0.5:
         return _decision(house_hold, "service_deadband_hold")
     return _decision(
-        min(max(bounded_aligned, inputs.effective_minimum_a), ceiling),
+        bounded_battery_first_a,
         "house_battery_priority",
     )
 
@@ -1783,6 +1846,10 @@ def _validate_free_window_inputs(inputs: FreeWindowCurrentInputs) -> None:
         inputs.service_headroom_a,
         inputs.actual_ev_current_a,
         inputs.ev_average_a,
+        inputs.battery_full_soc_percent,
+        inputs.battery_charge_target_kw,
+        inputs.site_phase_count,
+        inputs.voltage_v,
         inputs.elapsed_minutes,
         inputs.settle_minutes,
         inputs.current_step_a,
@@ -1791,6 +1858,15 @@ def _validate_free_window_inputs(inputs: FreeWindowCurrentInputs) -> None:
         raise ValueError("EV current inputs must be finite")
     if any(value < 0 for value in values) or inputs.current_step_a <= 0:
         raise ValueError("EV current inputs must be non-negative with a positive step")
+    optional_values = (inputs.battery_soc_percent, inputs.battery_charge_power_kw)
+    if not all(value is None or isfinite(value) for value in optional_values):
+        raise ValueError("battery-priority inputs must be finite when supplied")
+    if not 0 <= inputs.battery_full_soc_percent <= 100:
+        raise ValueError("battery-full threshold must be between zero and 100")
+    if inputs.battery_soc_percent is not None and not 0 <= inputs.battery_soc_percent <= 100:
+        raise ValueError("battery SoC must be between zero and 100")
+    if inputs.site_phase_count not in {1, 2, 3} or inputs.voltage_v <= 0:
+        raise ValueError("site phase count and voltage must describe a valid supply")
     if inputs.protected_baseline_a > inputs.ceiling_a:
         raise ValueError("protected baseline cannot exceed the physical ceiling")
     if inputs.effective_minimum_a > inputs.ceiling_a:

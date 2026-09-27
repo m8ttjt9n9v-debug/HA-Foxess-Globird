@@ -98,7 +98,6 @@
         "last_actions": "Ordered EV command actions attempted in the latest reconciliation.",
         "last_write_at": "Timestamp of the latest HEO EV hardware service call.",
         "learned_general_limit_percent": "Same value as EV Learned General Charge Limit.",
-        "maximum_reconciliation_attempts": "Fixed maximum direct-EVSE attempts allowed in one command episode.",
         "outside_control_active": "Whether HEO currently owns an outside-free-window EV charging stage.",
         "pre_free_current_a": "Same target as EV Pre-Free Current Target.",
         "pre_free_frozen_start": "Start timestamp frozen for the retained pre-free session.",
@@ -202,8 +201,8 @@
       }
     }
   },
-  "reviewed_entity_count": 107,
-  "total_entity_count": 107,
+  "reviewed_entity_count": 109,
+  "total_entity_count": 109,
   "entities": [
     {
       "key": "battery_power",
@@ -755,6 +754,21 @@
       "audience": "primary",
       "equivalents": {"foxess": null, "globird": "User preference affecting energy retained before automatic export", "tessie": "Uses mapped EV SoC and eligibility"},
       "consumers": ["Export planner", "EV-before-export dashboard"],
+      "decision": "retain",
+      "review_status": "engineering_draft"
+    },
+    {
+      "key": "ev_morning_solar",
+      "definition": "Operator preference enabling measured solar-surplus EV charging only before the next free-power window.",
+      "producer": "CONF_EV_MORNING_SOLAR_ENABLED via EvMorningSolarSwitch",
+      "role": "configuration",
+      "unit_and_sign": "Boolean; on enables the morning policy",
+      "time_basis": "Persistent config-entry setting",
+      "availability": "Available after setup; the runtime separately requires eligible EV, Local Modbus ownership and coherent signed power telemetry.",
+      "state_vocabulary": "on or off",
+      "audience": "primary",
+      "equivalents": {"foxess": "Uses canonical local signed grid and battery telemetry", "globird": null, "tessie": "Uses mapped EV connection, state of charge and charging-current controls"},
+      "consumers": ["Morning solar EV policy", "EV dashboard"],
       "decision": "retain",
       "review_status": "engineering_draft"
     },
@@ -1352,6 +1366,21 @@
       "review_status": "engineering_draft"
     },
     {
+      "key": "ev_morning_solar_reserve_soc",
+      "definition": "Operator-adjustable minimum house-battery state of charge required before morning measured solar surplus may be allocated to the EV.",
+      "producer": "CONF_EV_MORNING_SOLAR_RESERVE_SOC via EvMorningSolarReserveNumber",
+      "role": "configuration",
+      "unit_and_sign": "% from 0 to 100; minimum retained house-battery state of charge",
+      "time_basis": "Persistent config-entry setting",
+      "availability": "Available after setup; before its first explicit save, existing entries use the commissioned outside-window reserve as their migration default.",
+      "state_vocabulary": "Finite percentage from 0 to 100",
+      "audience": "primary",
+      "equivalents": {"foxess": "Compared with mapped house-battery SoC", "globird": null, "tessie": null},
+      "consumers": ["Morning solar EV policy", "EV dashboard"],
+      "decision": "retain",
+      "review_status": "engineering_draft"
+    },
+    {
       "key": "ev_before_export_status",
       "definition": "Current reason explaining whether EV-before-export policy permits or withholds automatic export.",
       "producer": "EvBeforeExportDecision.reason via EnergySensor.native_value",
@@ -1428,13 +1457,13 @@
     },
     {
       "key": "ev_reconciliation_attempts",
-      "definition": "Number of bounded direct-EVSE reconciliation attempts in the current command episode.",
+      "definition": "Number of elapsed-time-backoff direct-EVSE reconciliation attempts in the current command episode.",
       "producer": "ActiveEvController.reconciliation.attempts via EnergySensor.native_value",
       "role": "session_state",
       "unit_and_sign": "Count; non-negative integer",
       "time_basis": "Current EV reconciliation episode",
       "availability": "Zero when no direct-path reconciliation episode is active.",
-      "state_vocabulary": "Bounded non-negative integer",
+      "state_vocabulary": "Non-negative integer; continues while a valid target remains unconfirmed.",
       "audience": "diagnostic",
       "equivalents": {"foxess": null, "globird": null, "tessie": "HEO command-confirmation attempts"},
       "consumers": ["EV diagnostics", "fault analysis"],

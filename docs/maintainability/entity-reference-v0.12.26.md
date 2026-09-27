@@ -5,7 +5,7 @@ to the reviewed semantic worksheet. It records the current names, including
 the nine owner-approved naming-only changes. Edit the catalogue or semantic
 worksheet, then regenerate this file; do not edit rows by hand.
 
-Total entities: **107**.
+Total entities: **109**.
 
 ## Binary Sensor
 
@@ -26,6 +26,7 @@ Total entities: **107**.
 | Entity ID | Current name | Role | Audience | Unit | Projection | Availability | Decision | Definition |
 |---|---|---|---|---|---|---|---|---|
 | `number.home_energy_ev_before_export_soc_target` | EV Before Export SoC Target | configuration | primary | % | `EvBeforeExportTargetNumber.native_value` | coordinator | retain | Operator-adjustable EV SoC threshold below which the enabled EV-before-export preference withholds discretionary export. |
+| `number.home_energy_ev_morning_solar_reserve_soc` | Morning Solar EV Reserve SoC | configuration | primary | % | `EvMorningSolarReserveNumber.native_value` | coordinator | retain | Operator-adjustable minimum house-battery state of charge required before morning measured solar surplus may be allocated to the EV. |
 | `number.home_energy_test_charge_power` | Test Charge Power | configuration | diagnostic | kW | `TestNumber.native_value` | coordinator | retain | Operator-selected power for the next manual house-battery Force Charge diagnostic. |
 | `number.home_energy_test_discharge_power` | Test Discharge Power | configuration | diagnostic | kW | `TestNumber.native_value` | coordinator | retain | Operator-selected power for the next manual house-battery Force Discharge diagnostic. |
 | `number.home_energy_test_duration` | Test Duration | configuration | diagnostic | min | `TestNumber.native_value` | coordinator | retain | Operator-selected duration for the next manual charge or discharge diagnostic. |
@@ -79,7 +80,7 @@ Total entities: **107**.
 | `sensor.home_energy_ev_pre_free_planned_energy` | EV Pre-Free Planned Energy | plan | advanced | kWh | `EnergySensor.native_value['ev_pre_free_planned_energy']` | coordinator_and_projection | retain | Wall-side EV energy selected for the current reserve-aware pre-free backfill plan. |
 | `sensor.home_energy_ev_pre_free_planned_start` | EV Pre-Free Planned Start | plan | advanced | — | `EnergySensor.native_value['ev_pre_free_planned_start']` | coordinator_and_projection | retain | Latest calculated timestamp for starting the current pre-free EV backfill plan before the free-power window. |
 | `sensor.home_energy_ev_pre_free_status` | EV Pre-Free Status | session_state | advanced | — | `EnergySensor.native_value['ev_pre_free_status']` | coordinator_and_projection | retain | Current eligibility, planning or persistent session phase of reserve-aware pre-free EV backfill. |
-| `sensor.home_energy_ev_reconciliation_attempts` | EV Reconciliation Attempts | session_state | diagnostic | — | `EnergySensor.native_value['ev_reconciliation_attempts']` | coordinator_and_projection | retain | Number of bounded direct-EVSE reconciliation attempts in the current command episode. |
+| `sensor.home_energy_ev_reconciliation_attempts` | EV Reconciliation Attempts | session_state | diagnostic | — | `EnergySensor.native_value['ev_reconciliation_attempts']` | coordinator_and_projection | retain | Number of elapsed-time-backoff direct-EVSE reconciliation attempts in the current command episode. |
 | `sensor.home_energy_ev_requested_current` | EV Requested Current | actuator_setting | advanced | A | `EnergySensor.native_value['ev_requested_current']` | coordinator_and_projection | retain | Charging-current setting currently reported by the mapped EV actuator, distinct from HEO target and physical actual current. |
 | `sensor.home_energy_ev_smart_socket_recovery_status` | EV Smart Socket Recovery Status | session_state | diagnostic | — | `EnergySensor.native_value['ev_smart_socket_recovery_status']` | coordinator_and_projection | retain | Current phase of the bounded one-shot smart-socket EV charging recovery state machine. |
 | `sensor.home_energy_ev_soc` | EV State of Charge | canonical_measurement | primary | % | `EnergySensor.native_value['ev_soc']` | coordinator_and_projection | retain | Current vehicle state of charge copied into HEO's canonical site snapshot. |
@@ -142,4 +143,5 @@ Total entities: **107**.
 | `switch.home_energy_automatic_export` | Automatic Battery Export | configuration | primary | — | `AutomaticExportSwitch.is_on` | coordinator | relabel | Operator request enabling HEO's automatic battery export policy while all ownership and safety gates permit it. |
 | `switch.home_energy_ev_before_export` | Prioritise EV Before Export | configuration | primary | — | `EvBeforeExportSwitch.is_on` | coordinator | retain | Operator preference to withhold discretionary automatic export while an eligible EV is below the configured SoC target. |
 | `switch.home_energy_ev_charge_to_full` | EV Charge to Full | configuration | primary | — | `EvChargeToFullSwitch.is_on` | coordinator | retain | Bounded operator override asking HEO to charge the connected EV to the actuator maximum subject to existing safety and electrical gates. |
+| `switch.home_energy_ev_morning_solar` | Morning Solar EV Charging | configuration | primary | — | `EvMorningSolarSwitch.is_on` | coordinator | retain | Operator preference enabling measured solar-surplus EV charging only before the next free-power window. |
 | `switch.home_energy_safety_lock` | Safety Lock | configuration | primary | — | `SafetyLockSwitch.is_on` | coordinator | retain | Absolute operator interlock; on prevents all HEO FoxESS and EV hardware writes without discarding pending restoration obligations. |

@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 from dataclasses import replace
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
 from custom_components.home_energy_orchestrator.planner.ev_outside_window import (
+    MeasuredSolarAdjustmentState,
     OutsideChargeLimitEvidence,
     OutsideCurrentEnvelopeEvidence,
     PreFreeCurrentInputs,
@@ -20,8 +21,10 @@ from custom_components.home_energy_orchestrator.planner.ev_outside_window import
     evaluate_outside_current_envelope,
     evaluate_pre_free_plan,
     evaluate_solar_spill_telemetry,
+    plan_morning_solar_current,
     plan_pre_free_current,
     plan_solar_spill_current,
+    rate_limit_measured_solar_current,
     select_outside_window_current,
 )
 
@@ -253,6 +256,29 @@ def test_pilot_solar_spill_golden_branches(changes, expected, phase):
     assert decision.phase == phase
 
 
+def test_morning_solar_uses_its_reserve_not_the_post_free_full_threshold():
+    decision = plan_morning_solar_current(
+        replace(
+            SOLAR,
+            battery_soc_percent=25,
+            battery_full_threshold_percent=20,
+            in_boosted_export_window=True,
+        )
+    )
+
+    assert decision.current_a == 11
+    assert decision.phase == "morning_solar_surplus"
+
+
+def test_morning_solar_holds_below_its_separate_house_reserve():
+    decision = plan_morning_solar_current(
+        replace(SOLAR, battery_soc_percent=19, battery_full_threshold_percent=20)
+    )
+
+    assert decision.current_a == 0
+    assert decision.phase == "morning_battery_reserve_not_met"
+
+
 def test_solar_spill_removes_battery_discharge_and_preserves_existing_ev_power():
     decision = plan_solar_spill_current(
         replace(SOLAR, ev_power_kw=2.39, grid_export_kw=1, battery_charge_kw=-1)
@@ -479,7 +505,7 @@ def test_three_phase_pre_free_extension_uses_configured_phase_count():
     assert decision.current_a == 11
 
 
-def test_outside_branch_order_takes_maximum_of_active_backfill_and_spill():
+def test_outside_branch_order_keeps_active_backfill_fixed_over_solar_spill():
     decision = select_outside_window_current(
         baseline_a=1,
         current_ceiling_a=15,
@@ -488,8 +514,8 @@ def test_outside_branch_order_takes_maximum_of_active_backfill_and_spill():
         pre_free_current_a=5,
         solar_spill_current_a=8,
     )
-    assert decision.current_a == 8
-    assert decision.phase == "pre_free_or_solar_spill"
+    assert decision.current_a == 5
+    assert decision.phase == "pre_free_backfill"
 
 
 def test_outside_branch_falls_back_to_protected_baseline():
@@ -503,3 +529,102 @@ def test_outside_branch_falls_back_to_protected_baseline():
     )
     assert decision.current_a == 1
     assert decision.phase == "protected_baseline"
+
+
+def test_measured_solar_adjustment_requires_a_stable_fifteen_minute_target():
+    started = rate_limit_measured_solar_current(
+        MeasuredSolarAdjustmentState(),
+        now=NOW,
+        policy_phase="solar_spill",
+        requested_current_a=10,
+        charger_minimum_a=1,
+        current_step_a=1,
+        immediate_curtailment=False,
+    )
+    assert started.target_current_a == 10
+    assert started.phase == "started"
+
+    pending = rate_limit_measured_solar_current(
+        started.state,
+        now=NOW + timedelta(minutes=3),
+        policy_phase="solar_spill",
+        requested_current_a=9,
+        charger_minimum_a=1,
+        current_step_a=1,
+        immediate_curtailment=False,
+    )
+    assert pending.target_current_a == 10
+    assert pending.phase == "held"
+    assert pending.state.pending_current_a == 9
+
+    # A one-amp cloud-edge reversal cancels the pending target rather than
+    # producing adjacent-current commands.
+    steady = rate_limit_measured_solar_current(
+        pending.state,
+        now=NOW + timedelta(minutes=6),
+        policy_phase="solar_spill",
+        requested_current_a=10,
+        charger_minimum_a=1,
+        current_step_a=1,
+        immediate_curtailment=False,
+    )
+    assert steady.target_current_a == 10
+    assert steady.state.pending_current_a is None
+
+    stable_pending = rate_limit_measured_solar_current(
+        steady.state,
+        now=NOW + timedelta(minutes=7),
+        policy_phase="solar_spill",
+        requested_current_a=8,
+        charger_minimum_a=1,
+        current_step_a=1,
+        immediate_curtailment=False,
+    )
+    updated = rate_limit_measured_solar_current(
+        stable_pending.state,
+        now=NOW + timedelta(minutes=22),
+        policy_phase="solar_spill",
+        requested_current_a=8,
+        charger_minimum_a=1,
+        current_step_a=1,
+        immediate_curtailment=False,
+    )
+    assert updated.target_current_a == 8
+    assert updated.phase == "updated"
+    assert updated.state.pending_current_a is None
+
+
+def test_measured_solar_adjustment_curtails_immediately_and_clears_when_inactive():
+    started = rate_limit_measured_solar_current(
+        MeasuredSolarAdjustmentState(),
+        now=NOW,
+        policy_phase="morning_solar",
+        requested_current_a=10,
+        charger_minimum_a=1,
+        current_step_a=1,
+        immediate_curtailment=False,
+    )
+    curtailed = rate_limit_measured_solar_current(
+        started.state,
+        now=NOW + timedelta(minutes=1),
+        policy_phase="morning_solar",
+        requested_current_a=5,
+        charger_minimum_a=1,
+        current_step_a=1,
+        immediate_curtailment=True,
+    )
+    assert curtailed.target_current_a == 5
+    assert curtailed.phase == "safety_curtailment"
+
+    inactive = rate_limit_measured_solar_current(
+        curtailed.state,
+        now=NOW + timedelta(minutes=2),
+        policy_phase="morning_solar",
+        requested_current_a=0,
+        charger_minimum_a=1,
+        current_step_a=1,
+        immediate_curtailment=False,
+    )
+    assert inactive.target_current_a == 0
+    assert inactive.phase == "inactive"
+    assert inactive.state == MeasuredSolarAdjustmentState()

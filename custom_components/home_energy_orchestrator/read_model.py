@@ -10,7 +10,6 @@ from homeassistant.util import dt as dt_util
 
 from .const import DOMAIN, FOXESS_CONTROL_OWNER_CLOUD
 from .ev_adapter import ev_control_gate_status
-from .planner.ev import DIRECT_EVSE_MAX_ATTEMPTS
 from .planner.export import ExportPlan
 
 if TYPE_CHECKING:
@@ -588,7 +587,6 @@ class EvReadModel:
             "charge_switch_on": self.charge_switch_on,
             "reconciliation_phase": self.reconciliation_phase,
             "reconciliation_attempts": self.reconciliation_attempts,
-            "maximum_reconciliation_attempts": DIRECT_EVSE_MAX_ATTEMPTS,
             "smart_socket_recovery_phase": self.smart_recovery_phase,
             "smart_socket_recovery_attempted": self.smart_recovery_attempted,
             "smart_socket_recovery_started_at": self.smart_recovery_started_at,

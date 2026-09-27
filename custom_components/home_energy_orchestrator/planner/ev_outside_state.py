@@ -103,6 +103,7 @@ def reconcile_outside_ownership(
     configured_baseline_a: float,
     charge_switch_on: bool,
     outside_control_active: bool,
+    morning_solar_current_a: float = 0.0,
 ) -> OutsideOwnershipTransition:
     """Preserve outside ownership and stop obligations after stage selection."""
     target_active = bool(
@@ -110,6 +111,7 @@ def reconcile_outside_ownership(
         or daily_state.active
         or pre_free_active
         or solar_current_a >= physical_minimum_a
+        or morning_solar_current_a >= physical_minimum_a
     )
     control_active = outside_control_active
     stop_requested = False
@@ -121,6 +123,7 @@ def reconcile_outside_ownership(
         and configured_baseline_a <= 0
         and not pre_free_active
         and solar_current_a < physical_minimum_a
+        and morning_solar_current_a < physical_minimum_a
     ):
         stop_requested = True
         control_active = True
@@ -247,41 +250,60 @@ def abort_outside_charge_at_battery_reserve(
     *,
     charge_switch_on: bool,
     charge_limit_percent: float,
+    protected_baseline_a: float,
 ) -> BatteryFloorAbortTransition:
-    """Stop automatic outside-window EV charging at its configured reserve."""
+    """End paid charging at reserve while retaining a configured EV baseline.
+
+    A non-zero baseline is a deliberate anti-fault keepalive for chargers that
+    do not recover reliably after an off command.  It is not paid backfill:
+    the session is cleared, but normal direct-EVSE reconciliation keeps the
+    mapped charger enabled at that small configured current.
+    """
+    retain_baseline = protected_baseline_a > 0
+    request_stop = charge_switch_on and not retain_baseline
     next_daily = replace(
         daily_state,
         active=False,
         session_target_kwh=0.0,
         session_start_delivered_kwh=0.0,
         frozen_start=None,
-        stop_pending=(True if charge_switch_on else daily_state.stop_pending),
-        stop_attempts=(0 if charge_switch_on else daily_state.stop_attempts),
-        last_stop_at=(None if charge_switch_on else daily_state.last_stop_at),
+        stop_pending=(
+            False if retain_baseline else (True if request_stop else daily_state.stop_pending)
+        ),
+        stop_attempts=(
+            0 if retain_baseline or request_stop else daily_state.stop_attempts
+        ),
+        last_stop_at=(
+            None if retain_baseline or request_stop else daily_state.last_stop_at
+        ),
     )
     candidate = build_ev_stage_candidate(
         "battery_reserve",
-        eligible=charge_switch_on,
+        eligible=retain_baseline or charge_switch_on,
         reason="ev_battery_reserve_reached",
-        target_current_a=0.0,
+        target_current_a=protected_baseline_a if retain_baseline else 0.0,
         target_limit_percent=charge_limit_percent,
-        command_intent=("stop_charging",) if charge_switch_on else (),
+        command_intent=("stop_charging",) if request_stop else (),
         persistence_transition=(
-            "daily_backfill_stop_pending" if charge_switch_on else "none"
+            "daily_backfill_stop_pending" if request_stop else "none"
         ),
     )
     return BatteryFloorAbortTransition(
         daily_state=next_daily,
         pre_free_state=PreFreeSessionState(),
         pre_free_phase="ev_battery_reserve_reached",
-        target_current_a=0.0,
+        target_current_a=protected_baseline_a if retain_baseline else 0.0,
         target_limit_percent=charge_limit_percent,
         decision_phase="ev_battery_reserve_reached",
         allowance_phase="outside_free_window",
-        outside_target_active=False,
-        outside_stop_requested=charge_switch_on,
-        outside_control_active=charge_switch_on,
+        outside_target_active=retain_baseline,
+        outside_stop_requested=request_stop,
+        outside_control_active=retain_baseline or request_stop,
         candidates=(candidate,),
-        continue_reconciliation=charge_switch_on,
-        last_reason=None if charge_switch_on else "ev_battery_reserve_reached",
+        continue_reconciliation=retain_baseline or request_stop,
+        last_reason=(
+            None
+            if retain_baseline or request_stop
+            else "ev_battery_reserve_reached"
+        ),
     )

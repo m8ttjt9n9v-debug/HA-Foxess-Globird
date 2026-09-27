@@ -51,11 +51,14 @@
     "ev_free_window_minimum_current_a",
     "ev_free_window_priority",
     "ev_free_window_settle_minutes",
+    "ev_house_battery_taper_soc_percent",
     "ev_learning_minimum_samples",
     "ev_lifetime_energy_entity",
     "ev_location_mode",
     "ev_max_current",
     "ev_min_current",
+    "ev_morning_solar_enabled",
+    "ev_morning_solar_reserve_soc_percent",
     "ev_outside_battery_reserve_percent",
     "ev_outside_inverter_percent",
     "ev_phase_count",
@@ -142,7 +145,7 @@
     "free_charge_schedule_confirmed",
     "grid_import_positive"
   ],
-  "page_field_count": 125,
+  "page_field_count": 128,
   "pages": {
     "automation": [
       "foxess_control_owner",
@@ -197,6 +200,7 @@
       "ev_free_window_charge_limit_percent",
       "ev_free_window_minimum_current_a",
       "ev_free_window_settle_minutes",
+      "ev_house_battery_taper_soc_percent",
       "ev_direct_limit_headroom_percent",
       "ev_charge_to_full_max_hours",
       "ev_charge_efficiency_percent",
@@ -206,6 +210,8 @@
       "ev_allowance_safety_margin_kwh",
       "ev_solar_spill_enabled",
       "ev_solar_spill_battery_soc_percent",
+      "ev_morning_solar_enabled",
+      "ev_morning_solar_reserve_soc_percent",
       "ev_pre_free_backfill_enabled",
       "ev_daily_backfill_energy_kwh",
       "ev_daily_ready_time",
@@ -298,5 +304,5 @@
   },
   "release_baseline": "0.12.26",
   "schema_version": 1,
-  "unique_page_field_count": 125
+  "unique_page_field_count": 128
 }

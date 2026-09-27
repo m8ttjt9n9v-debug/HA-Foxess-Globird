@@ -17,11 +17,11 @@ def test_clean_install_usability_audit_is_current() -> None:
 def test_clean_install_usability_audit_accounts_for_every_entity() -> None:
     """Audience coverage and open presentation decisions must stay explicit."""
     audit = build_usability_audit()
-    assert audit["entity_count"] == 107
-    assert sum(audit["audience_counts"].values()) == 107
+    assert audit["entity_count"] == 109
+    assert sum(audit["audience_counts"].values()) == 109
     assert sum(
         result["total"] for result in audit["dashboard_coverage"].values()
-    ) == 107
+    ) == 109
     assert not audit["relabel_candidates"]
     assert len(audit["approved_relabels"]) == 9
     assert audit["translated_count"] == 0

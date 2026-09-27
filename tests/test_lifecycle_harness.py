@@ -497,6 +497,11 @@ async def test_ev_soc_update_holds_allowance_during_ramp_but_not_service_overrun
     harness = LifecycleHarness(hass)
     _register_ev_services(harness, monkeypatch)
     await _seed_foxess_states(harness, 58)
+    await harness.set_state(
+        "sensor.test_battery_power",
+        "10",
+        {"unit_of_measurement": "kW"},
+    )
     await _seed_ev_states(
         harness,
         soc=80,
@@ -523,6 +528,9 @@ async def test_ev_soc_update_holds_allowance_during_ramp_but_not_service_overrun
             ev_free_window_priority="house_battery",
             ev_free_window_charge_limit_percent=100.0,
             ev_allowance_safety_margin_kwh=1.0,
+            battery_power_entity="sensor.test_battery_power",
+            battery_power_positive_direction="positive_charge",
+            inverter_charge_limit_kw=10.0,
             rehearsal_mode=True,
         ),
     )
@@ -556,6 +564,12 @@ async def test_ev_soc_update_holds_allowance_during_ramp_but_not_service_overrun
         "sensor.test_site_current",
         "38",
         {"unit_of_measurement": "A"},
+        observed_at=now[0],
+    )
+    await harness.set_state(
+        "sensor.test_battery_power",
+        "10",
+        {"unit_of_measurement": "kW"},
         observed_at=now[0],
     )
     await entry.runtime_data.async_refresh()
@@ -1854,10 +1868,11 @@ async def test_free_charge_exact_end_restores_self_use_and_clears_on_reload(
 
 
 @pytest.mark.freeze_time("2026-09-17 02:30:00+00:00")
-async def test_active_charge_ownership_survives_unavailable_feedback_and_reload(
-    hass, monkeypatch
+@pytest.mark.parametrize("recovered_mode", ["Self Use", "Back-up"])
+async def test_active_charge_ownership_survives_unavailable_feedback_and_safe_mode_reload(
+    hass, monkeypatch, recovered_mode
 ) -> None:
-    """Unavailable actuator feedback persists recovery instead of erasing ownership."""
+    """Unavailable feedback must resume a retained charge from either safe mode."""
     harness = LifecycleHarness(hass)
     _register_foxess_services(harness, monkeypatch)
     await _seed_foxess_states(harness, 80)
@@ -1913,8 +1928,8 @@ async def test_active_charge_ownership_survives_unavailable_feedback_and_reload(
     )
     await harness.set_state(
         "select.test_work_mode",
-        "Self Use",
-        {"options": ["Self Use", "Force Discharge", "Force Charge"]},
+        recovered_mode,
+        {"options": ["Self Use", "Back-up", "Force Discharge", "Force Charge"]},
     )
     harness.clear_service_calls()
     await harness.reload(entry)

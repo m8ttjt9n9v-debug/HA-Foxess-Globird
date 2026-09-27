@@ -175,6 +175,12 @@ views:
             heading_style: title
             icon: mdi:solar-power-variant
           - type: tile
+            entity: switch.home_energy_ev_morning_solar
+            name: Morning solar EV charging
+          - type: tile
+            entity: number.home_energy_ev_morning_solar_reserve_soc
+            name: Morning house-battery reserve
+          - type: tile
             entity: sensor.home_energy_ev_solar_spill_status
             name: Solar-spill decision
           - type: tile

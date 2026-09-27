@@ -7,13 +7,13 @@ from datetime import datetime
 from math import isfinite
 
 from .ev import (
-    DIRECT_EVSE_MAX_ATTEMPTS,
     DIRECT_EVSE_RECONCILIATION_PHASES,
     DirectEvseReconciliationState,
     SmartSocketRecoveryState,
 )
+from .ev_daily_backfill import DAILY_BACKFILL_STOP_MAX_ATTEMPTS
 from .ev_learning import DrivingSnapshotState
-from .ev_outside_window import PreFreeSessionState
+from .ev_outside_window import MeasuredSolarAdjustmentState, PreFreeSessionState
 from .learning import DemandHistory
 
 
@@ -46,6 +46,9 @@ class EvPersistenceState:
         default_factory=DirectEvseReconciliationState
     )
     pre_free_session: PreFreeSessionState = field(default_factory=PreFreeSessionState)
+    measured_solar_adjustment: MeasuredSolarAdjustmentState = field(
+        default_factory=MeasuredSolarAdjustmentState
+    )
     daily_backfill: DailyBackfillPersistenceState = field(
         default_factory=DailyBackfillPersistenceState
     )
@@ -93,6 +96,7 @@ class EvPersistenceState:
 
         reconciliation = DirectEvseReconciliationState()
         pre_free_session = PreFreeSessionState()
+        measured_solar_adjustment = MeasuredSolarAdjustmentState()
         daily_backfill = DailyBackfillPersistenceState()
         charge_to_full_started_at = None
         outside_control_active = False
@@ -100,6 +104,9 @@ class EvPersistenceState:
         try:
             reconciliation = _reconciliation(mapping.get("reconciliation"), now)
             pre_free_session = _pre_free(mapping.get("pre_free_session"), now)
+            measured_solar_adjustment = _measured_solar_adjustment(
+                mapping.get("measured_solar_adjustment"), now
+            )
             daily_backfill = _daily_backfill(mapping.get("daily_backfill"), now)
             charge_raw = mapping.get("charge_to_full_started_at")
             charge_to_full_started_at = (
@@ -115,6 +122,7 @@ class EvPersistenceState:
         except (KeyError, TypeError, ValueError):
             reconciliation = DirectEvseReconciliationState()
             pre_free_session = PreFreeSessionState()
+            measured_solar_adjustment = MeasuredSolarAdjustmentState()
             daily_backfill = DailyBackfillPersistenceState()
             charge_to_full_started_at = None
             outside_control_active = False
@@ -129,6 +137,7 @@ class EvPersistenceState:
             daily_driving_energy_kwh=daily_driving,
             reconciliation=reconciliation,
             pre_free_session=pre_free_session,
+            measured_solar_adjustment=measured_solar_adjustment,
             daily_backfill=daily_backfill,
             charge_to_full_started_at=charge_to_full_started_at,
             outside_control_active=outside_control_active,
@@ -169,6 +178,23 @@ class EvPersistenceState:
                 "frozen_start": (
                     self.pre_free_session.frozen_start.isoformat()
                     if self.pre_free_session.frozen_start is not None
+                    else None
+                ),
+            },
+            "measured_solar_adjustment": {
+                "phase": self.measured_solar_adjustment.phase,
+                "target_current_a": self.measured_solar_adjustment.target_current_a,
+                "changed_at": (
+                    self.measured_solar_adjustment.changed_at.isoformat()
+                    if self.measured_solar_adjustment.changed_at is not None
+                    else None
+                ),
+                "pending_current_a": (
+                    self.measured_solar_adjustment.pending_current_a
+                ),
+                "pending_since": (
+                    self.measured_solar_adjustment.pending_since.isoformat()
+                    if self.measured_solar_adjustment.pending_since is not None
                     else None
                 ),
             },
@@ -233,16 +259,19 @@ def _reconciliation(payload: object, now: datetime) -> DirectEvseReconciliationS
     phase = str(payload.get("phase", "idle"))
     if (
         attempts < 0
-        or attempts > DIRECT_EVSE_MAX_ATTEMPTS
         or last_at is not None
         and last_at > now
         or target_current is not None
         and (not isfinite(target_current) or target_current < 0)
         or target_limit is not None
         and (not isfinite(target_limit) or target_limit < 0)
-        or phase not in DIRECT_EVSE_RECONCILIATION_PHASES
+        or phase not in DIRECT_EVSE_RECONCILIATION_PHASES | {"fault_maximum_attempts"}
     ):
         raise ValueError
+    # Retain the timing and attempt count from pre-backoff versions, but
+    # migrate their terminal latch into an ordinary feedback wait.
+    if phase == "fault_maximum_attempts":
+        phase = "awaiting_feedback"
     return DirectEvseReconciliationState(
         target_current_a=target_current,
         target_limit_percent=target_limit,
@@ -263,6 +292,55 @@ def _pre_free(payload: object, now: datetime) -> PreFreeSessionState:
     if active != (frozen is not None):
         raise ValueError
     return PreFreeSessionState(active=active, frozen_start=frozen)
+
+
+def _measured_solar_adjustment(
+    payload: object,
+    now: datetime,
+) -> MeasuredSolarAdjustmentState:
+    """Decode the optional rate-limit state without blocking old EV stores."""
+    if payload is None:
+        return MeasuredSolarAdjustmentState()
+    if not isinstance(payload, dict):
+        raise ValueError
+    phase = payload.get("phase")
+    target_raw = payload.get("target_current_a")
+    changed_raw = payload.get("changed_at")
+    pending_raw = payload.get("pending_current_a")
+    pending_since_raw = payload.get("pending_since")
+    if phase is None and all(
+        value is None
+        for value in (target_raw, changed_raw, pending_raw, pending_since_raw)
+    ):
+        return MeasuredSolarAdjustmentState()
+    target = float(target_raw) if target_raw is not None else None
+    changed_at = datetime.fromisoformat(str(changed_raw)) if changed_raw else None
+    pending = float(pending_raw) if pending_raw is not None else None
+    pending_since = (
+        datetime.fromisoformat(str(pending_since_raw)) if pending_since_raw else None
+    )
+    if (
+        phase not in {"solar_spill", "morning_solar"}
+        or target is None
+        or changed_at is None
+        or not isfinite(target)
+        or target <= 0
+        or changed_at.tzinfo is None
+        or changed_at > now
+        or (pending is None) != (pending_since is None)
+        or pending is not None
+        and (not isfinite(pending) or pending <= 0)
+        or pending_since is not None
+        and (pending_since.tzinfo is None or pending_since > now or pending_since < changed_at)
+    ):
+        raise ValueError
+    return MeasuredSolarAdjustmentState(
+        phase=phase,
+        target_current_a=target,
+        changed_at=changed_at,
+        pending_current_a=pending,
+        pending_since=pending_since,
+    )
 
 
 def _daily_backfill(payload: object, now: datetime) -> DailyBackfillPersistenceState:
@@ -286,7 +364,7 @@ def _daily_backfill(payload: object, now: datetime) -> DailyBackfillPersistenceS
         or frozen is not None
         and frozen.tzinfo is None
         or active != (frozen is not None)
-        or not 0 <= attempts <= DIRECT_EVSE_MAX_ATTEMPTS
+        or not 0 <= attempts <= DAILY_BACKFILL_STOP_MAX_ATTEMPTS
         or last_stop is not None
         and (last_stop.tzinfo is None or last_stop > now)
     ):

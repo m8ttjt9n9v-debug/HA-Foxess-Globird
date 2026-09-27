@@ -84,6 +84,7 @@
           "ev_free_window_charge_limit_percent": "Free-window EV charge target (%)",
           "ev_free_window_minimum_current_a": "Guaranteed free-window EV current (A)",
           "ev_free_window_settle_minutes": "Battery-charging settle time before house-priority control (minutes)",
+          "ev_house_battery_taper_soc_percent": "House battery SoC for EV taper handoff (%)",
           "ev_direct_limit_headroom_percent": "Powered-connector charge-limit headroom (%)",
           "ev_charge_to_full_max_hours": "Charge to Full automatic timeout (hours)",
           "ev_charge_efficiency_percent": "EV wall-to-battery charging efficiency (%)",
@@ -99,7 +100,9 @@
           "ev_allowance_guard_enabled": "Keep free-window EV charging within the free-energy allowance",
           "ev_allowance_safety_margin_kwh": "Free-energy allowance safety margin (kWh)",
           "ev_solar_spill_enabled": "Enable measured solar-spill EV charging",
-          "ev_solar_spill_battery_soc_percent": "Battery SoC required for solar-spill charging (%)",
+          "ev_solar_spill_battery_soc_percent": "Solar-spill battery SoC activation (%)",
+          "ev_morning_solar_enabled": "Enable morning solar-surplus EV charging",
+          "ev_morning_solar_reserve_soc_percent": "Minimum house-battery SoC for morning solar EV charging (%)",
           "ev_pre_free_backfill_enabled": "Enable latest-start reserve-aware pre-free EV backfill",
           "ev_daily_backfill_energy_kwh": "Daily EV energy protected for ready-by backfill (wall-side kWh; 0 disables)",
           "ev_daily_ready_time": "Daily EV ready-by time (must be before free-power window)",
@@ -233,6 +236,7 @@
           "ev_free_window_charge_limit_percent": "Free-window EV charge target (%)",
           "ev_free_window_minimum_current_a": "Guaranteed free-window EV current (A)",
           "ev_free_window_settle_minutes": "Battery-charging settle time before house-priority control (minutes)",
+          "ev_house_battery_taper_soc_percent": "House battery SoC for EV taper handoff (%)",
           "ev_direct_limit_headroom_percent": "Powered-connector charge-limit headroom (%)",
           "ev_charge_to_full_max_hours": "Charge to Full automatic timeout (hours)",
           "ev_charge_efficiency_percent": "EV wall-to-battery charging efficiency (%)",
@@ -248,7 +252,9 @@
           "ev_allowance_guard_enabled": "Keep free-window EV charging within the free-energy allowance",
           "ev_allowance_safety_margin_kwh": "Free-energy allowance safety margin (kWh)",
           "ev_solar_spill_enabled": "Enable measured solar-spill EV charging",
-          "ev_solar_spill_battery_soc_percent": "Battery SoC required for solar-spill charging (%)",
+          "ev_solar_spill_battery_soc_percent": "Solar-spill battery SoC activation (%)",
+          "ev_morning_solar_enabled": "Enable morning solar-surplus EV charging",
+          "ev_morning_solar_reserve_soc_percent": "Minimum house-battery SoC for morning solar EV charging (%)",
           "ev_pre_free_backfill_enabled": "Enable latest-start reserve-aware pre-free EV backfill",
           "ev_daily_backfill_energy_kwh": "Daily EV energy protected for ready-by backfill (wall-side kWh; 0 disables)",
           "ev_daily_ready_time": "Daily EV ready-by time (must be before free-power window)",
@@ -453,6 +459,7 @@
             "ev_free_window_charge_limit_percent": "Free-window EV charge target (%)",
             "ev_free_window_minimum_current_a": "Guaranteed free-window EV current (A)",
             "ev_free_window_settle_minutes": "Battery-charging settle time before house-priority control (minutes)",
+            "ev_house_battery_taper_soc_percent": "House battery SoC for EV taper handoff (%)",
             "ev_direct_limit_headroom_percent": "Powered-connector charge-limit headroom (%)",
             "ev_charge_to_full_max_hours": "Charge to Full automatic timeout (hours)",
             "ev_charge_efficiency_percent": "EV wall-to-battery charging efficiency (%)",
@@ -461,7 +468,9 @@
             "ev_allowance_guard_enabled": "Keep free-window EV charging within the free-energy allowance",
             "ev_allowance_safety_margin_kwh": "Free-energy allowance safety margin (kWh)",
             "ev_solar_spill_enabled": "Enable measured solar-spill EV charging",
-            "ev_solar_spill_battery_soc_percent": "Battery SoC required for solar-spill charging (%)",
+            "ev_solar_spill_battery_soc_percent": "Solar-spill battery SoC activation (%)",
+            "ev_morning_solar_enabled": "Enable morning solar-surplus EV charging",
+            "ev_morning_solar_reserve_soc_percent": "Minimum house-battery SoC for morning solar EV charging (%)",
             "ev_pre_free_backfill_enabled": "Enable latest-start reserve-aware pre-free EV backfill",
             "ev_daily_backfill_energy_kwh": "Daily EV energy protected for ready-by backfill (wall-side kWh; 0 disables)",
             "ev_daily_ready_time": "Daily EV ready-by time (must be before free-power window)",
@@ -476,6 +485,8 @@
           },
           "data_description": {
             "ev_allowance_guard_enabled": "When enabled, HEO reduces or stops EV charging when the daily free grid-import allowance is exhausted. Solar may continue supplying the EV. When disabled, EV charging may continue using normally priced grid power.",
+            "ev_morning_solar_enabled": "Before the free-power window, use only coherent measured solar surplus for a home-connected EV. It will not use the post-free solar-spill threshold and it yields immediately to fixed pre-free backfill.",
+            "ev_morning_solar_reserve_soc_percent": "Morning solar charging starts only at or above this house-battery reserve. Existing entries initially use the configured outside-window reserve until this value is saved.",
             "ev_outside_battery_reserve_percent": "Outside the free-power window, HEO stops automatic EV charging and recovery at this house-battery level. Set it above the inverter's hard minimum to retain a safety buffer."
           }
         },
@@ -682,6 +693,7 @@
             "ev_free_window_charge_limit_percent": "Free-window EV charge target (%)",
             "ev_free_window_minimum_current_a": "Guaranteed free-window EV current (A)",
             "ev_free_window_settle_minutes": "Battery-charging settle time before house-priority control (minutes)",
+            "ev_house_battery_taper_soc_percent": "House battery SoC for EV taper handoff (%)",
             "ev_direct_limit_headroom_percent": "Powered-connector charge-limit headroom (%)",
             "ev_charge_to_full_max_hours": "Charge to Full automatic timeout (hours)",
             "ev_charge_efficiency_percent": "EV wall-to-battery charging efficiency (%)",
@@ -690,7 +702,9 @@
             "ev_allowance_guard_enabled": "Keep free-window EV charging within the free-energy allowance",
             "ev_allowance_safety_margin_kwh": "Free-energy allowance safety margin (kWh)",
             "ev_solar_spill_enabled": "Enable measured solar-spill EV charging",
-            "ev_solar_spill_battery_soc_percent": "Battery SoC required for solar-spill charging (%)",
+            "ev_solar_spill_battery_soc_percent": "Solar-spill battery SoC activation (%)",
+            "ev_morning_solar_enabled": "Enable morning solar-surplus EV charging",
+            "ev_morning_solar_reserve_soc_percent": "Minimum house-battery SoC for morning solar EV charging (%)",
             "ev_pre_free_backfill_enabled": "Enable latest-start reserve-aware pre-free EV backfill",
             "ev_daily_backfill_energy_kwh": "Daily EV energy protected for ready-by backfill (wall-side kWh; 0 disables)",
             "ev_daily_ready_time": "Daily EV ready-by time (must be before free-power window)",
@@ -705,6 +719,8 @@
           },
           "data_description": {
             "ev_allowance_guard_enabled": "When enabled, HEO reduces or stops EV charging when the daily free grid-import allowance is exhausted. Solar may continue supplying the EV. When disabled, EV charging may continue using normally priced grid power.",
+            "ev_morning_solar_enabled": "Before the free-power window, use only coherent measured solar surplus for a home-connected EV. It will not use the post-free solar-spill threshold and it yields immediately to fixed pre-free backfill.",
+            "ev_morning_solar_reserve_soc_percent": "Morning solar charging starts only at or above this house-battery reserve. Existing entries initially use the configured outside-window reserve until this value is saved.",
             "ev_outside_battery_reserve_percent": "Outside the free-power window, HEO stops automatic EV charging and recovery at this house-battery level. Set it above the inverter's hard minimum to retain a safety buffer."
           }
         },
@@ -743,15 +759,17 @@
         },
       "review": {
           "title": "Review and apply",
-          "description": "Nothing has changed yet. Review this site and exact free-power schedule.\n\n**{site_summary}**\n\n{capability_summary}\n\n**{schedule_summary}**\n\n{schedule_timeline}\n\n{safety_summary}\n\nTick Apply only when these details are correct.",
+          "description": "Nothing has changed yet. Review this site and exact free-power schedule.\n\n**{site_summary}**\n\n{capability_summary}\n\n**{schedule_summary}**\n\n{schedule_timeline}\n\n{safety_summary}\n\n{direction_summary}\n\nTick Apply only when these details are correct.",
           "data": {
+            "sign_conventions_verified": "I have verified the live electrical directions",
             "apply_configuration": "Apply this complete configuration"
           }
         },
       "reconfigure_review": {
           "title": "Review and apply",
-          "description": "Nothing has changed yet. Review this site and exact free-power schedule.\n\n**{site_summary}**\n\n{capability_summary}\n\n**{schedule_summary}**\n\n{schedule_timeline}\n\n{safety_summary}\n\nTick Apply only when these details are correct.",
+          "description": "Nothing has changed yet. Review this site and exact free-power schedule.\n\n**{site_summary}**\n\n{capability_summary}\n\n**{schedule_summary}**\n\n{schedule_timeline}\n\n{safety_summary}\n\n{direction_summary}\n\nTick Apply only when these details are correct.",
           "data": {
+            "sign_conventions_verified": "I have verified the live electrical directions",
             "apply_configuration": "Apply this complete configuration"
           }
         },

@@ -61,6 +61,7 @@ def test_battery_floor_abort_clears_sessions_and_creates_stop_obligation():
         state,
         charge_switch_on=True,
         charge_limit_percent=80,
+        protected_baseline_a=0,
     )
 
     assert transition.daily_state.active is False
@@ -92,6 +93,7 @@ def test_battery_floor_abort_without_active_charge_retains_existing_stop_state()
         state,
         charge_switch_on=False,
         charge_limit_percent=80,
+        protected_baseline_a=0,
     )
 
     assert transition.daily_state.stop_pending is True
@@ -100,6 +102,23 @@ def test_battery_floor_abort_without_active_charge_retains_existing_stop_state()
     assert transition.outside_control_active is False
     assert transition.continue_reconciliation is False
     assert transition.last_reason == "ev_battery_reserve_reached"
+
+
+def test_battery_floor_abort_retains_nonzero_protected_baseline():
+    transition = abort_outside_charge_at_battery_reserve(
+        DailyBackfillCycleState(active=True, session_target_kwh=2),
+        charge_switch_on=True,
+        charge_limit_percent=80,
+        protected_baseline_a=1,
+    )
+
+    assert transition.daily_state.active is False
+    assert transition.daily_state.stop_pending is False
+    assert transition.target_current_a == 1
+    assert transition.outside_target_active is True
+    assert transition.outside_stop_requested is False
+    assert transition.outside_control_active is True
+    assert transition.continue_reconciliation is True
     assert transition.candidates[0].command_intent == ()
 
 

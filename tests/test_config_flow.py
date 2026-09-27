@@ -13,6 +13,7 @@ from custom_components.home_energy_orchestrator.const import (
     CONF_EV_AUTOMATIC_CONTROL_ENABLED,
     CONF_EV_BEFORE_EXPORT_ENABLED,
     CONF_EV_BEFORE_EXPORT_SOC_TARGET,
+    CONF_EV_HOUSE_BATTERY_TAPER_SOC,
     CONF_FORCE_DISCHARGE_OFFSET_MINUTES,
     CONF_FOXESS_CONTROL_OWNER,
     CONF_FREE_CHARGE_SCHEDULE_CONFIRMED,
@@ -22,6 +23,7 @@ from custom_components.home_energy_orchestrator.const import (
     DEFAULT_AUTOMATIC_EXPORT_LIMIT_KWH,
     DEFAULT_EV_BEFORE_EXPORT_ENABLED,
     DEFAULT_EV_BEFORE_EXPORT_SOC_TARGET,
+    DEFAULT_EV_HOUSE_BATTERY_TAPER_SOC,
     DEFAULT_FORCE_DISCHARGE_OFFSET_MINUTES,
     DEFAULT_FOXESS_CONTROL_OWNER,
     DEFAULT_OFFPEAK_EXPORT_RATE,
@@ -81,7 +83,6 @@ async def test_human_setup_is_multi_page_and_skips_absent_optional_equipment(has
         "grid",
         "tariff",
         "house",
-        "verification",
         "automation",
     ]
     for step in expected_steps:
@@ -91,13 +92,22 @@ async def test_human_setup_is_multi_page_and_skips_absent_optional_equipment(has
 
     assert result["step_id"] == "review"
     assert result["description_placeholders"]["capability_summary"] == "Solar: no; EV: no"
+    assert [marker.schema for marker in result["data_schema"].schema] == [
+        "sign_conventions_verified",
+        "apply_configuration",
+    ]
     created = await hass.config_entries.flow.async_configure(
-        result["flow_id"], user_input={"apply_configuration": True}
+        result["flow_id"],
+        user_input={
+            "sign_conventions_verified": True,
+            "apply_configuration": True,
+        },
     )
     assert created["type"] is FlowResultType.CREATE_ENTRY, created
     assert created["data"]["configure_solar"] is False
     assert created["data"]["configure_ev"] is False
     assert created["data"][CONF_EV_AUTOMATIC_CONTROL_ENABLED] is False
+    assert created["data"]["sign_conventions_verified"] is True
 
 
 async def test_invalid_page_retains_submitted_values(hass):
@@ -246,7 +256,10 @@ async def test_user_flow_creates_a_config_entry(hass):
     assert result["title"] == "Test Site"
     assert result["data"] == {
         **ENTRY_DATA,
+        "ev_morning_solar_enabled": False,
+        "ev_morning_solar_reserve_soc_percent": 20.0,
         "ev_outside_battery_reserve_percent": 20.0,
+        CONF_EV_HOUSE_BATTERY_TAPER_SOC: DEFAULT_EV_HOUSE_BATTERY_TAPER_SOC,
         "offpeak_export_rate_per_kwh": 0.0,
         "force_discharge_offset_minutes": 1.0,
     }
@@ -974,7 +987,10 @@ async def test_reconfigure_updates_and_reloads_an_entry(hass):
     assert entry.title == "Updated Site"
     assert entry.data == {
         **updated_data,
+        "ev_morning_solar_enabled": False,
+        "ev_morning_solar_reserve_soc_percent": 20.0,
         "ev_outside_battery_reserve_percent": 20.0,
+        CONF_EV_HOUSE_BATTERY_TAPER_SOC: DEFAULT_EV_HOUSE_BATTERY_TAPER_SOC,
         "offpeak_export_rate_per_kwh": 0.0,
         "force_discharge_offset_minutes": 1.0,
     }
@@ -1040,6 +1056,55 @@ async def test_reconfigure_resets_sign_verification_when_a_source_changes(hass):
     await hass.async_block_till_done()
     assert entry.data["grid_power_entity"] == "sensor.replacement_grid"
     assert entry.data["sign_conventions_verified"] is False
+    assert await hass.config_entries.async_unload(entry.entry_id)
+
+
+async def test_reconfigure_reviews_direction_verification_after_source_change(hass):
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Verified Site",
+        version=6,
+        data={**ENTRY_DATA, "sign_conventions_verified": True},
+    )
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": SOURCE_RECONFIGURE, "entry_id": entry.entry_id},
+    )
+    assert "reconfigure_verification" not in result["menu_options"]
+
+    result = await _open_reconfigure_page(hass, result, "grid")
+    values = {}
+    for marker in result["data_schema"].schema:
+        if marker.schema in ENTRY_DATA:
+            values[marker.schema] = ENTRY_DATA[marker.schema]
+        elif marker.default is not vol.UNDEFINED:
+            values[marker.schema] = marker.default()
+    values["grid_power_entity"] = "sensor.replacement_grid"
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], user_input=values
+    )
+
+    result = await _open_reconfigure_page(hass, result, "review")
+    markers = {
+        marker.schema: marker
+        for marker in result["data_schema"].schema
+        if hasattr(marker, "schema")
+    }
+    assert markers["sign_conventions_verified"].default() is False
+
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        user_input={
+            "sign_conventions_verified": True,
+            "apply_configuration": True,
+        },
+    )
+    assert result["type"] is FlowResultType.ABORT
+    await hass.async_block_till_done()
+    assert entry.data["grid_power_entity"] == "sensor.replacement_grid"
+    assert entry.data["sign_conventions_verified"] is True
     assert await hass.config_entries.async_unload(entry.entry_id)
 
 

@@ -11,10 +11,12 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from . import EnergyConfigEntry
 from .const import (
     CONF_EV_BEFORE_EXPORT_SOC_TARGET,
+    CONF_EV_MORNING_SOLAR_RESERVE_SOC,
 )
 from .coordinator import EnergyCoordinator
 from .entity_catalogue import (
     EV_BEFORE_EXPORT_TARGET_DESCRIPTION,
+    EV_MORNING_SOLAR_RESERVE_DESCRIPTION,
 )
 from .entity_catalogue import (
     NUMBER_DESCRIPTIONS as DESCRIPTIONS,
@@ -32,6 +34,11 @@ async def async_setup_entry(
                 entry.runtime_data,
                 entry,
                 EV_BEFORE_EXPORT_TARGET_DESCRIPTION,
+            ),
+            EvMorningSolarReserveNumber(
+                entry.runtime_data,
+                entry,
+                EV_MORNING_SOLAR_RESERVE_DESCRIPTION,
             ),
         )
     )
@@ -66,6 +73,43 @@ class EvBeforeExportTargetNumber(CoordinatorEntity[EnergyCoordinator], NumberEnt
         self.coordinator.update_config_value(CONF_EV_BEFORE_EXPORT_SOC_TARGET, target)
         self.async_write_ha_state()
         controller = self.coordinator.active_controller
+        if controller is not None:
+            await controller.async_reconcile()
+        self.coordinator.async_update_listeners()
+
+
+class EvMorningSolarReserveNumber(CoordinatorEntity[EnergyCoordinator], NumberEntity):
+    """Persist the independent house-battery reserve for morning solar EV use."""
+
+    entity_description: NumberEntityDescription
+
+    def __init__(
+        self,
+        coordinator: EnergyCoordinator,
+        entry: ConfigEntry,
+        description: NumberEntityDescription,
+    ) -> None:
+        super().__init__(coordinator)
+        self.entity_description = description
+        self._entry = entry
+        self._attr_unique_id = f"{entry.entry_id}_{description.key}"
+        self.entity_id = "number.home_energy_ev_morning_solar_reserve_soc"
+        self._attr_has_entity_name = True
+
+    @property
+    def native_value(self) -> float:
+        return self.coordinator.runtime_config.ev_numbers.value(
+            CONF_EV_MORNING_SOLAR_RESERVE_SOC,
+            20.0,
+        )
+
+    async def async_set_native_value(self, value: float) -> None:
+        reserve = min(max(float(value), 0.0), 100.0)
+        config = {**self._entry.data, CONF_EV_MORNING_SOLAR_RESERVE_SOC: reserve}
+        self.hass.config_entries.async_update_entry(self._entry, data=config)
+        self.coordinator.update_config_value(CONF_EV_MORNING_SOLAR_RESERVE_SOC, reserve)
+        self.async_write_ha_state()
+        controller = self.coordinator.ev_controller
         if controller is not None:
             await controller.async_reconcile()
         self.coordinator.async_update_listeners()

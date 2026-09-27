@@ -67,7 +67,11 @@ def evaluate_foxess_ownership(
     )
     if matching_owner:
         return FoxessOwnershipResult("verified_session")
-    if context.mode == "Self Use" and (
+    # A persisted unfinished HEO session remains the owner when FoxESS reports
+    # either non-forced safe mode. Back-up is used by the inverter as a normal
+    # non-forced mode and can appear after reload/restart; treating it as an
+    # unrelated external owner would strand an otherwise eligible free window.
+    if context.mode in {"Self Use", "Back-up"} and (
         charge_owned or export_owned or manual_owned
     ):
         return FoxessOwnershipResult("verified_session")

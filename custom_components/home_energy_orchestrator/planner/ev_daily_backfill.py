@@ -9,6 +9,12 @@ from math import isfinite
 from .ev import EvCommand, EvCommandPlan, estimate_vehicle_energy_to_target_kwh
 from .ev_power_constraints import inverter_backed_current_ceiling
 
+# This applies only to an explicit 0 A configured baseline, where HEO is
+# intentionally asking the EVSE to stop. It is distinct from direct-current
+# reconciliation, which never abandons a non-zero valid target.
+DAILY_BACKFILL_STOP_MAX_ATTEMPTS = 3
+DAILY_BACKFILL_STOP_RETRY_INTERVAL = timedelta(seconds=30)
+
 
 @dataclass(frozen=True, slots=True)
 class DailyBackfillInputs:

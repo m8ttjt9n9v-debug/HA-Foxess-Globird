@@ -9,6 +9,7 @@ complete FoxESS actuator mapping.
 from __future__ import annotations
 
 import logging
+from dataclasses import replace
 from datetime import datetime, time, timedelta
 
 from homeassistant.core import CALLBACK_TYPE, HomeAssistant
@@ -43,8 +44,10 @@ from .planner.ev_before_export import (
 from .planner.export import ExportPlan
 from .planner.export_session import ExportSessionState, advance_export_session
 from .planner.foxess import (
+    ControlDecision,
     FoxessObservation,
     apply_force_mode_command_delays,
+    plan_foxess_commands,
 )
 from .planner.foxess_charge_policy import (
     FoxessChargePolicyContext,
@@ -226,6 +229,70 @@ class ActiveFoxessController:
             return
         self.last_reason = "no_automatic_foxess_policy_active"
         self.last_actions = ()
+
+    async def async_supervisory_repair(self, expected_mode: str) -> None:
+        """Re-arm one proven HEO intent after a persistent feedback mismatch."""
+        if self.gate_status != "ready":
+            return
+        runtime = self.coordinator.runtime_config
+        entities = FoxessEntityMap(
+            str(runtime.inverter.work_mode_entity),
+            str(runtime.inverter.force_charge_power_entity),
+            str(runtime.inverter.force_discharge_power_entity),
+        )
+        feedback = capture_foxess_feedback(self.hass, entities)
+        if feedback.observation is None:
+            return
+        if expected_mode == "Force Charge" and self.charge_session.phase in {
+            "starting",
+            "active",
+            "recovering",
+        }:
+            self.charge_session = replace(
+                self.charge_session,
+                phase="recovering",
+                attempts=0,
+                last_command_at=None,
+            )
+            await self._charge_repository.async_save(self.charge_session)
+            await self.async_reconcile()
+            return
+        if expected_mode == "Force Discharge" and self.export_session.phase in {
+            "starting",
+            "active",
+            "recovering",
+        }:
+            self.export_session = replace(
+                self.export_session,
+                phase="recovering",
+                attempts=0,
+                last_command_at=None,
+            )
+            await self._export_repository.async_save(self.export_session)
+            await self.async_reconcile()
+            return
+        if expected_mode != "Self Use":
+            return
+        plan = plan_foxess_commands(
+            ControlDecision(
+                "restore_self_use", 0.0, "supervisor_restore_self_use"
+            ),
+            feedback.observation,
+            charge_power_max_kw=max(feedback.charge_power_max_kw or 0.0, 0.0),
+            discharge_power_max_kw=max(
+                feedback.discharge_power_max_kw or 0.0, 0.0
+            ),
+        )
+        if not plan.commands:
+            return
+        if self._adapter is None:
+            self._adapter = FoxessServiceAdapter(
+                self.hass, entities, allow_writes=True
+            )
+        executed = await self._adapter.async_execute(plan)
+        self.last_actions = executed
+        self.writes_performed += len(executed)
+        self.last_reason = "supervisor_restore_self_use"
 
     async def _async_reconcile_charge(
         self,

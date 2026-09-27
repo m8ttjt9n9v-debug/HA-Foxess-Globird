@@ -60,6 +60,14 @@ POLICY_AVAILABILITY = EvPolicyAvailabilityEvidence(
             False,
             True,
         ),
+        (
+            {
+                "modbus_outside_stages_authorized": True,
+                "morning_solar_enabled": True,
+            },
+            False,
+            True,
+        ),
         ({"solar_spill_enabled": True}, False, False),
     ),
 )
@@ -154,6 +162,8 @@ def test_outside_builder_preserves_simultaneous_stage_eligibility() -> None:
             daily_stop_pending=False,
             solar_current_a=10,
             solar_reason="solar_spill",
+            morning_solar_current_a=8,
+            morning_solar_reason="morning_solar_surplus",
             pre_free_active=True,
             pre_free_reason="started",
             pre_free_current_a=12,
@@ -166,6 +176,7 @@ def test_outside_builder_preserves_simultaneous_stage_eligibility() -> None:
         "charge_to_full",
         "daily_ready",
         "solar_spill",
+        "morning_solar",
         "pre_free",
         "protected_baseline",
     )
@@ -174,11 +185,12 @@ def test_outside_builder_preserves_simultaneous_stage_eligibility() -> None:
         16,
         6,
         10,
+        8,
         12,
         1,
     )
     assert candidates[1].persistence_transition == "daily_backfill_active"
-    assert candidates[3].persistence_transition == "pre_free_session_active"
+    assert candidates[4].persistence_transition == "pre_free_session_active"
 
 
 def test_outside_builder_distinguishes_disabled_from_unavailable_daily_stage() -> None:
@@ -234,18 +246,18 @@ def test_outside_builder_distinguishes_disabled_from_unavailable_daily_stage() -
             6,
         ),
         (
-            (False, False, True, True, True),
-            (0, 0, 10, 12, 1),
-            "pre_free_or_solar_spill",
-            "pre_free_or_solar_spill",
-            12,
+        (False, False, True, True, True),
+        (0, 0, 10, 12, 1),
+        "pre_free",
+        "pre_free_backfill",
+        12,
         ),
         (
-            (False, False, True, True, True),
-            (0, 0, 10, 8, 1),
-            "pre_free_or_solar_spill",
-            "pre_free_or_solar_spill",
-            10,
+        (False, False, True, True, True),
+        (0, 0, 10, 8, 1),
+        "pre_free",
+        "pre_free_backfill",
+        8,
         ),
         (
             (False, False, True, False, True),

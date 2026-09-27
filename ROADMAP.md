@@ -25,6 +25,15 @@ Status here describes behavioral parity, not merely the presence of code.
   must re-evaluate the current window, SoC, allowance, and gates and resume when
   eligible. The complete lifecycle/incident harness remains outstanding.
 
+  v0.12.29rc7 adds another named restart regression for the EV path: an
+  already-running 15 A free-window request is preserved while signed grid
+  telemetry and its rolling average rebuild, and a recovered validity signal
+  forces an immediate decision rather than waiting for the ordinary cadence.
+  It also adds a five-minute conformance supervisor with one bounded repair,
+  deduplicated Home Assistant events and persistent notifications. Unexpected
+  Force Discharge is explicitly reported as externally unattributed and is
+  never called a VPP event without affirmative FoxESS Cloud evidence.
+
   Add deterministic stale, unavailable, delayed, contradictory, and
   out-of-order feedback injection for mode, force-power, grid, battery, solar,
   SoC, house, and EV channels. Exercise exact free-window, export-window,
@@ -50,8 +59,14 @@ Status here describes behavioral parity, not merely the presence of code.
 
 ## High-priority feature — measured morning solar EV capture
 
-- [ ] Reuse the existing measured solar-spill strategy before the ZEROCHARGE
-  window without requiring a solar-forecast integration. Once the protected
+- [x] Add a distinct, default-off Morning Solar EV Charging dashboard switch
+  and independent house-battery reserve SoC number. The stage reuses coherent
+  measured-surplus calculations before the free-power window, never uses the
+  post-free full-battery threshold, and yields exclusively to fixed pre-free
+  backfill. Existing entries retain their outside-window reserve as the
+  migration default until the new number is saved.
+- [ ] Complete the remaining measured morning-solar lifecycle work without
+  requiring a solar-forecast integration. Once the protected
   house-energy reserve is demonstrably in place, allocate measured solar
   surplus to an eligible, home-connected EV at the corresponding supported
   charger-current step. Base the decision on coherent live power flows so
@@ -76,6 +91,78 @@ Status here describes behavioral parity, not merely the presence of code.
   ZEROCHARGE boundary. The feature must work without forecast data and must not
   create paid grid charging. A future optional forecast input may improve
   planning but is not a prerequisite for this measured-power path.
+
+## High-priority feature — P85-driven EV ready reserve
+
+- [ ] Add an opt-in **Automatic EV ready reserve** that makes learned P85
+  driving demand useful for export planning without replacing the existing
+  daily ready-by backfill mechanism. This is an additional calculation layer,
+  not a new uncontrolled charging path and not a replacement for manual
+  backfill.
+
+  Convert the mature P85 driving-energy estimate into a next-ready deadline
+  requirement using the measured usable EV capacity, a clearly named and
+  configurable arrival margin, the current EV stored energy, and only energy
+  that HEO can demonstrate it can deliver before the deadline. Feed the
+  remaining shortfall into the existing daily-backfill protection and delivery
+  path: it must reduce sellable/export energy only by the still-undelivered EV
+  requirement, then use the existing bounded ready-by current control to
+  deliver that protected energy. Do not start charging merely because the
+  reserve exists.
+
+  Preserve manual fixed-kWh daily backfill as an explicit operator choice;
+  define and display whether manual and automatic requirements combine as a
+  floor, override, or maximum before implementation. The automatic mode must
+  remain off by default, never treat EV consumption as house demand, and fail
+  safe for stale telemetry, an away/disconnected EV, an unavailable charger,
+  insufficient house-battery energy, or an impossible deadline. It must report
+  an infeasible target rather than silently consuming the house reserve or
+  paying for grid energy.
+
+  Provide an auditable dashboard breakdown: P85 energy, usable capacity,
+  arrival margin, current EV energy, reliably deliverable energy, protected
+  shortfall, export withheld, and infeasibility reason. Add deterministic
+  historical replays before enabling writes: P85-only and P85-plus-margin
+  coverage, rolling no-future-data evaluation, ordinary and high-driving days,
+  a single outlier, low/high starting EV SoC, export energy above/below the
+  shortfall, free-window placement relative to ready-by time, no solar,
+  unplug/replug, stale telemetry, restart/reload, and coexistence with manual
+  backfill. Record only sanitized fixtures and require that the layer never
+  weakens the existing protected house reserve.
+
+## High-priority feature — opportunistic EV surplus before departure
+
+- [ ] Add a separate opt-in **opportunistic before-departure EV surplus**
+  policy. This is not the existing fixed-kWh daily ready-by allocation and
+  must not change that feature's semantics. It must not reserve a future EV
+  allocation from the preceding evening's automatic export.
+
+  Instead, derive a declining battery-energy safety envelope from the existing
+  protected house-demand budget, battery floor, fixed reserve, and the time
+  remaining until the next free-power window. At each coherent evaluation,
+  compare current usable battery energy with the required energy at that point
+  on the envelope. Only the positive difference is discretionary EV energy.
+  An eligible home-connected vehicle may receive that genuinely surplus energy
+  before a configured departure time; higher-than-expected remaining battery
+  energy after low household use must therefore be usable rather than stranded.
+
+  The policy must continuously re-evaluate and curtail immediately for grid
+  import, loss of protected reserve, unexpected house load, stale or
+  contradictory telemetry, disconnection, vehicle limit, Safety Lock, or any
+  other gate failure. It must never create paid-grid charging, drain below the
+  dynamic house-safe envelope, weaken ordinary automatic-export protection, or
+  retain an unearned morning allocation from the previous evening. Show the
+  live safe-energy requirement, currently available discretionary surplus,
+  departure deadline, and current policy phase so the decision is auditable.
+
+  Define explicit priority and handover rules with solar spill, pre-free
+  backfill, daily fixed-allocation ready-by backfill, free-window charging,
+  automatic export, reload/restart, and an unplug/replug. Add deterministic
+  lifecycle replays for low and high overnight house use, a departure before
+  the free window, a battery above/below the envelope, a sharp load increase,
+  telemetry loss, a changing calculated surplus, and the exact departure and
+  free-window boundaries. This is a high-priority feature but remains subject
+  to the lifecycle-and-incident harness prerequisite above.
 
 ## Optimisation and maintainability programme
 
@@ -201,7 +288,18 @@ Status here describes behavioral parity, not merely the presence of code.
 
 ## Confirmed bugs
 
-- [ ] Rate-limit the existing measured solar-spill EV controller so ordinary
+- [x] Correct free-window **House battery** priority so it does not duplicate
+  FoxESS's grid-limit response. The original grid-only controller could leave
+  the EV at maximum because FoxESS reduced its own charge power first. Below
+  the configured battery-full/taper SoC, HEO now assigns the measured battery
+  charge-power shortfall ahead of EV current; at that SoC it releases the claim
+  so the EV can absorb normal BMS taper capacity. Missing battery evidence
+  fails to the free-window minimum, and a measured physical service overrun
+  retains immediate precedence. Pure and Home Assistant runtime regressions
+  cover the observed single-phase shortfall, taper handoff, missing telemetry,
+  and service-overrun collision.
+
+- [x] Rate-limit the existing measured solar-spill EV controller so ordinary
   changes to the Tessie charging-current setpoint occur no more frequently
   than once every 15 minutes. Hold the last safe target between intervals,
   suppress redundant writes, persist the hold across reload/restart, and add
@@ -214,21 +312,18 @@ Status here describes behavioral parity, not merely the presence of code.
   session. Pre-free then has exclusive authority: do not take the maximum of
   the solar and backfill targets, blend them, or continue variable-power solar
   adjustments until the pre-free session ends.
-  Add replay coverage for oscillating cloud cover, a sustained increase, a
-  sustained decrease, safety curtailment inside the hold period, and recovery
-  at the next eligible 15-minute evaluation.
+  Pure planner and runtime tests cover oscillation, a stable decrease,
+  immediate import curtailment, inactive safety clearing, restart persistence,
+  and exact pre-free takeover. A future full-day replay corpus remains part of
+  the broader lifecycle programme above.
 
-- [ ] Replace the direct-EVSE controller's fixed three-attempt terminal latch.
-  `maximum_attempts_reached` must not permanently abandon an otherwise valid
-  current target. Reconciliation should be governed by elapsed time and a
-  progressively slower retry schedule, with a strict write-rate bound, fresh
-  eligibility/safety checks before every attempt, restart-safe persistence,
-  and automatic recovery when actuator feedback becomes responsive. Preserve
-  protection against rapid current flapping and competing writers; do not
-  replace the fixed count with an unbounded fast retry loop. Add lifecycle
-  regressions for delayed Tessie feedback, a temporarily rejected low-current
-  request, eventual recovery without unplugging, target changes during
-  backoff, reload/restart during backoff, and a genuinely competing writer.
+- [x] Replace the direct-EVSE controller's fixed three-attempt terminal latch.
+  Direct current reconciliation now retries a still-valid target on a
+  restart-safe progressive schedule of 30 seconds, 1, 2, 4, 8, 16 and then
+  30 minutes. Each retry rechecks the normal safety/eligibility gates, and
+  the 30-minute cap prevents rapid write flapping without abandoning recovery.
+  The separately configured explicit-0-A daily-backfill stop remains a bounded
+  stop operation; it is not part of the non-zero direct-current path.
 
 - [x] Decouple EV driving and charge-limit learning from the live cable-
   connection gate. A disconnected vehicle currently causes the EV controller
@@ -269,9 +364,11 @@ Status here describes behavioral parity, not merely the presence of code.
   its floor after the safe export budget disappears. The ready-by extension
   must be capped by the live ZEROHERO export plan, an active session's energy
   authority may shrink but never grow, a configured 0 A baseline must remain
-  zero, and HEO must stop its charge at the free-window boundary or battery
-  floor unless the operator has explicitly selected paid Charge to Full.
-  Completed in v0.12.19.
+  zero, and HEO may stop its charge at the free-window boundary or battery
+  floor unless the operator has explicitly selected paid Charge to Full. A
+  non-zero protected baseline instead stays enabled at that baseline so a
+  fault-prone charger is not shut off. Completed in v0.12.19, with the
+  protected-baseline reserve correction characterized after release.
 
 - [x] Persist manual diagnostic ownership across integration reload and Home
   Assistant restart. An interrupted timed Force Charge/Discharge test must not

@@ -27,6 +27,7 @@ from custom_components.home_energy_orchestrator.planner.ev import (
     apply_daily_allowance_ceiling,
     charging_path_ceiling_a,
     direct_evse_response_matches,
+    direct_evse_retry_interval,
     estimate_other_free_window_import_kwh,
     estimate_vehicle_energy_to_target_kwh,
     evaluate_allowance_projection,
@@ -65,6 +66,12 @@ BASE = FreeWindowCurrentInputs(
     actual_ev_current_a=12,
     ev_average_a=12,
     ev_average_source_valid=True,
+    battery_soc_percent=50,
+    battery_full_soc_percent=95,
+    battery_charge_power_kw=10,
+    battery_charge_target_kw=10,
+    site_phase_count=1,
+    voltage_v=230,
     elapsed_minutes=10,
     settle_minutes=5,
     current_step_a=1,
@@ -89,6 +96,12 @@ FREE_WINDOW_TARGET = FreeWindowTargetEvidence(
     actual_ev_current_a=0,
     ev_average_a=None,
     ev_average_source_valid=False,
+    battery_soc_percent=50,
+    battery_full_soc_percent=95,
+    battery_charge_power_kw=10,
+    battery_charge_target_kw=10,
+    site_phase_count=1,
+    voltage_v=230,
     elapsed_minutes=0,
     settle_minutes=5,
     ev_priority_selected=True,
@@ -98,7 +111,7 @@ CADENCE_NOW = datetime(2026, 9, 7, 12, 29, 15, tzinfo=UTC)
 CADENCE = EvDecisionCadenceEvidence(
     now=CADENCE_NOW,
     last_decision_at=CADENCE_NOW - timedelta(seconds=58),
-    previous_fingerprint=(80, False, "ev", 1, 16, 1, 50, 100, 1),
+    previous_fingerprint=(80, False, "ev", 1, 16, 1, 50, 100, 1, True, True),
     vehicle_soc_percent=81,
     charge_to_full_requested=False,
     free_window_priority="ev",
@@ -132,6 +145,30 @@ def test_ev_decision_cadence_holds_only_soc_change_during_current_convergence():
     assert evaluation.service_overrun is False
     assert evaluation.defer_soc_redecision is True
     assert evaluation.should_decide is False
+
+
+def test_ev_decision_cadence_redecides_immediately_when_grid_feedback_recovers():
+    evaluation = evaluate_ev_decision_cadence(
+        replace(
+            CADENCE,
+            previous_fingerprint=(
+                81,
+                False,
+                "ev",
+                1,
+                16,
+                1,
+                50,
+                100,
+                1,
+                False,
+                True,
+            ),
+        )
+    )
+
+    assert evaluation.only_vehicle_soc_changed is False
+    assert evaluation.should_decide is True
 
 
 @pytest.mark.parametrize(
@@ -257,6 +294,91 @@ def test_exporting_grid_current_is_a_valid_signed_measurement():
     decision = plan_free_window_current(replace(BASE, grid_average_a=-4))
     assert decision.current_a == 32
     assert decision.phase == "house_battery_priority"
+
+
+def test_house_battery_priority_reduces_ev_for_battery_charge_shortfall():
+    """The EV yields enough current to restore the configured battery target."""
+    decision = plan_free_window_current(
+        replace(
+            BASE,
+            ceiling_a=15,
+            requested_a=15,
+            actual_ev_current_a=15,
+            ev_average_a=15,
+            grid_average_a=59.8,
+            battery_soc_percent=34,
+            battery_charge_power_kw=8.41,
+            battery_charge_target_kw=10,
+        )
+    )
+
+    assert decision.current_a == 10
+    assert decision.phase == "house_battery_priority"
+
+
+def test_three_phase_battery_shortfall_is_converted_across_all_site_phases():
+    """A site-level kW shortfall must not be treated as single-phase EV power."""
+    decision = plan_free_window_current(
+        replace(
+            BASE,
+            ceiling_a=16,
+            requested_a=15,
+            actual_ev_current_a=15,
+            ev_average_a=15,
+            grid_average_a=59.8,
+            battery_soc_percent=34,
+            battery_charge_power_kw=8.41,
+            battery_charge_target_kw=10,
+            site_phase_count=3,
+        )
+    )
+
+    assert decision.current_a == 14
+    assert decision.phase == "house_battery_priority"
+
+
+def test_house_battery_priority_releases_ev_at_battery_taper_threshold():
+    """Once the battery is considered full, natural taper belongs to the EV."""
+    decision = plan_free_window_current(
+        replace(
+            BASE,
+            ceiling_a=15,
+            requested_a=8,
+            actual_ev_current_a=8,
+            ev_average_a=8,
+            battery_soc_percent=95,
+            battery_charge_power_kw=8,
+            battery_charge_target_kw=10,
+        )
+    )
+
+    assert decision.current_a == 15
+    assert decision.phase == "house_battery_taper_handoff"
+
+
+@pytest.mark.parametrize("missing", ["battery_soc_percent", "battery_charge_power_kw"])
+def test_house_battery_priority_fails_to_minimum_without_battery_evidence(missing):
+    decision = plan_free_window_current(replace(BASE, **{missing: None}))
+
+    assert decision.current_a == BASE.effective_minimum_a
+    assert decision.phase == "battery_telemetry_fallback_minimum"
+
+
+def test_service_overrun_still_curbs_ev_above_battery_taper_threshold():
+    decision = plan_free_window_current(
+        replace(
+            BASE,
+            ceiling_a=15,
+            requested_a=15,
+            actual_ev_current_a=15,
+            ev_average_a=15,
+            grid_average_a=65,
+            battery_soc_percent=96,
+        )
+    )
+
+    assert decision.current_a == 12
+    assert decision.phase == "service_limit_correction"
 
 
 def test_charge_limit_retained_away_and_policy_kept_separate_from_guard():
@@ -1265,32 +1387,64 @@ def test_direct_feedback_match_requires_current_limit_and_switch():
     )
 
 
-def test_direct_reconciliation_retries_are_bounded_and_fault_visible():
+def test_direct_reconciliation_retries_progressively_without_terminal_fault():
     now = datetime(2026, 9, 7, 12, 1, tzinfo=UTC)
-    state = DirectEvseReconciliationState()
-    for attempt in range(3):
-        transition = reconcile_direct_evse(
-            state,
-            DIRECT,
-            target_current_a=14,
-            target_limit_percent=90,
-            physical_ceiling_a=15,
-            now=now + timedelta(seconds=30 * attempt),
-        )
-        assert transition.plan.commands
-        state = transition.state
-    fault = reconcile_direct_evse(
-        state,
+    first = reconcile_direct_evse(
+        DirectEvseReconciliationState(),
+        DIRECT,
+        target_current_a=14,
+        target_limit_percent=90,
+        physical_ceiling_a=15,
+        now=now,
+    )
+    second = reconcile_direct_evse(
+        first.state,
+        DIRECT,
+        target_current_a=14,
+        target_limit_percent=90,
+        physical_ceiling_a=15,
+        now=now + timedelta(seconds=30),
+    )
+    waiting = reconcile_direct_evse(
+        second.state,
+        DIRECT,
+        target_current_a=14,
+        target_limit_percent=90,
+        physical_ceiling_a=15,
+        now=now + timedelta(seconds=89),
+    )
+    third = reconcile_direct_evse(
+        waiting.state,
         DIRECT,
         target_current_a=14,
         target_limit_percent=90,
         physical_ceiling_a=15,
         now=now + timedelta(seconds=90),
     )
-    assert fault.plan.commands == ()
-    assert fault.plan.reason == "maximum_attempts_reached"
-    assert fault.state.phase == "fault_maximum_attempts"
-    assert fault.state.attempts == 3
+    delayed = reconcile_direct_evse(
+        third.state,
+        DIRECT,
+        target_current_a=14,
+        target_limit_percent=90,
+        physical_ceiling_a=15,
+        now=now + timedelta(seconds=209),
+    )
+    fourth = reconcile_direct_evse(
+        delayed.state,
+        DIRECT,
+        target_current_a=14,
+        target_limit_percent=90,
+        physical_ceiling_a=15,
+        now=now + timedelta(seconds=210),
+    )
+    assert first.plan.commands and second.plan.commands and third.plan.commands
+    assert waiting.plan.reason == delayed.plan.reason == "awaiting_feedback"
+    assert fourth.plan.commands
+    assert fourth.state.attempts == 4
+    assert direct_evse_retry_interval(1) == timedelta(seconds=30)
+    assert direct_evse_retry_interval(2) == timedelta(minutes=1)
+    assert direct_evse_retry_interval(3) == timedelta(minutes=2)
+    assert direct_evse_retry_interval(100) == timedelta(minutes=30)
 
 
 def test_confirmed_attempt_budget_rearms_after_thirty_minutes():
@@ -1324,7 +1478,7 @@ def test_confirmed_attempt_budget_rearms_after_thirty_minutes():
     assert rearmed.state.last_command_at is None
 
 
-def test_maximum_attempts_rearm_after_thirty_minutes():
+def test_direct_reconciliation_continues_at_capped_retry_interval():
     now = datetime(2026, 9, 7, 20, tzinfo=UTC)
     coerced = replace(
         DIRECT,
@@ -1332,16 +1486,16 @@ def test_maximum_attempts_rearm_after_thirty_minutes():
         charge_limit_percent=78,
         charge_switch_on=True,
     )
-    exhausted = DirectEvseReconciliationState(
+    retrying = DirectEvseReconciliationState(
         1,
         78,
-        3,
+        7,
         now - timedelta(minutes=30),
-        "fault_maximum_attempts",
+        "awaiting_feedback",
     )
 
     rearmed = reconcile_direct_evse(
-        exhausted,
+        retrying,
         coerced,
         target_current_a=1,
         target_limit_percent=78,
@@ -1351,21 +1505,21 @@ def test_maximum_attempts_rearm_after_thirty_minutes():
 
     assert rearmed.plan.commands == (EvCommand("set_charge_current", 1),)
     assert rearmed.state.phase == "awaiting_feedback"
-    assert rearmed.state.attempts == 1
+    assert rearmed.state.attempts == 8
 
 
-def test_maximum_attempts_remain_latched_during_cooldown():
+def test_direct_reconciliation_waits_until_capped_retry_interval():
     now = datetime(2026, 9, 7, 20, tzinfo=UTC)
-    exhausted = DirectEvseReconciliationState(
+    retrying = DirectEvseReconciliationState(
         1,
         78,
-        3,
+        7,
         now - timedelta(minutes=29, seconds=59),
-        "fault_maximum_attempts",
+        "awaiting_feedback",
     )
 
     retained = reconcile_direct_evse(
-        exhausted,
+        retrying,
         replace(
             DIRECT,
             requested_current_a=5,
@@ -1379,8 +1533,8 @@ def test_maximum_attempts_remain_latched_during_cooldown():
     )
 
     assert retained.plan.commands == ()
-    assert retained.plan.reason == "maximum_attempts_reached"
-    assert retained.state.phase == "fault_maximum_attempts"
+    assert retained.plan.reason == "awaiting_feedback"
+    assert retained.state.phase == "awaiting_feedback"
 
 
 def test_direct_reconciliation_waits_for_feedback_between_attempts():
@@ -1462,9 +1616,9 @@ def test_direct_reconciliation_waits_for_overwritten_current_to_settle():
     assert settled.state.attempts == 2
 
 
-def test_new_target_rearms_bounded_reconciliation():
+def test_new_target_starts_a_fresh_reconciliation_episode():
     now = datetime(2026, 9, 7, 12, 1, tzinfo=UTC)
-    exhausted = DirectEvseReconciliationState(14, 90, 3, now, "fault_maximum_attempts")
+    exhausted = DirectEvseReconciliationState(14, 90, 7, now, "awaiting_feedback")
     changed = reconcile_direct_evse(
         exhausted,
         DIRECT,
@@ -1577,7 +1731,7 @@ def test_competing_writer_cannot_rearm_by_briefly_accepting_same_target():
         assert confirmed.state.phase == "confirmed"
         assert confirmed.state.attempts == attempt + 1
         state = confirmed.state
-    fault = reconcile_direct_evse(
+    delayed = reconcile_direct_evse(
         state,
         DIRECT,
         target_current_a=14,
@@ -1585,5 +1739,5 @@ def test_competing_writer_cannot_rearm_by_briefly_accepting_same_target():
         physical_ceiling_a=15,
         now=now + timedelta(seconds=180),
     )
-    assert fault.plan.reason == "maximum_attempts_reached"
-    assert fault.state.phase == "fault_maximum_attempts"
+    assert delayed.plan.reason == "awaiting_feedback"
+    assert delayed.state.phase == "awaiting_feedback"

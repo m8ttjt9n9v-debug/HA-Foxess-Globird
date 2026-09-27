@@ -548,7 +548,6 @@ def test_ev_control_attributes_preserve_existing_public_values() -> None:
         "charge_switch_on": True,
         "reconciliation_phase": "confirming",
         "reconciliation_attempts": 2,
-        "maximum_reconciliation_attempts": 3,
         "smart_socket_recovery_phase": "healthy",
         "smart_socket_recovery_attempted": True,
         "smart_socket_recovery_started_at": datetime(

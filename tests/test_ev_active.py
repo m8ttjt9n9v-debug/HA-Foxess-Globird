@@ -20,7 +20,9 @@ from custom_components.home_energy_orchestrator.planner.ev import (
     SmartSocketRecoveryState,
 )
 from custom_components.home_energy_orchestrator.planner.ev_outside_window import (
+    MeasuredSolarAdjustmentState,
     PreFreeSessionState,
+    SolarSpillDecision,
 )
 from custom_components.home_energy_orchestrator.planner.export import ExportPlan
 from custom_components.home_energy_orchestrator.planner.export_session import (
@@ -671,6 +673,8 @@ async def test_soc_update_does_not_recalculate_whole_house_allowance_during_curr
         50,
         100,
         1,
+        True,
+        True,
     )
 
     await controller.async_reconcile(observed_at)
@@ -761,6 +765,8 @@ async def test_current_transition_hold_never_masks_safety_or_policy_boundaries(
         50,
         100,
         1,
+        True,
+        True,
     )
 
     await controller.async_reconcile(observed_at)
@@ -972,6 +978,90 @@ async def test_solar_spill_runtime_ports_measured_surplus_to_tessie(
     assert solar.target_current_a == controller.target_current_a
     _assert_outside_selection_matches_retained(controller)
     assert {event.data["domain"] for event in calls} == {"number", "switch"}
+
+
+async def test_measured_solar_runtime_holds_normal_changes_but_curtails_grid_import(
+    hass: HomeAssistant,
+) -> None:
+    """The HA-facing controller binds the pure hold to safe live evidence."""
+    controller = ActiveEvController(hass, _coordinator(_controller_config()))
+    now = datetime(2026, 9, 7, 9, tzinfo=UTC)
+    controller.solar_spill = SolarSpillDecision(10, 2.3, "solar_spill")
+    controller._apply_measured_solar_adjustment(  # noqa: SLF001
+        now,
+        snapshot=replace(controller.coordinator.snapshot, grid_power_kw=-0.1),
+        charger_minimum_a=1,
+        current_step_a=1,
+    )
+
+    controller.solar_spill = SolarSpillDecision(8, 1.9, "solar_spill")
+    controller._apply_measured_solar_adjustment(  # noqa: SLF001
+        now + timedelta(minutes=1),
+        snapshot=replace(controller.coordinator.snapshot, grid_power_kw=-0.1),
+        charger_minimum_a=1,
+        current_step_a=1,
+    )
+    assert controller.solar_spill.current_a == 10
+    assert controller.solar_spill.phase == "solar_spill_held"
+
+    controller.solar_spill = SolarSpillDecision(6, 1.4, "solar_spill")
+    controller._apply_measured_solar_adjustment(  # noqa: SLF001
+        now + timedelta(minutes=2),
+        snapshot=replace(controller.coordinator.snapshot, grid_power_kw=0.1),
+        charger_minimum_a=1,
+        current_step_a=1,
+    )
+    assert controller.solar_spill.current_a == 6
+    assert controller.solar_spill.phase == "solar_spill_safety_curtailment"
+
+
+@pytest.mark.freeze_time("2026-09-07 00:01:00+00:00")
+async def test_morning_solar_runtime_uses_separate_reserve_before_free_window(
+    hass: HomeAssistant,
+) -> None:
+    """Morning surplus works below the post-free full threshold, never on it."""
+    _set_ev_states(hass)
+    hass.states.async_set("sensor.site_grid", "-2", {"unit_of_measurement": "kW"})
+    hass.states.async_set(
+        "sensor.battery_power", "0.5", {"unit_of_measurement": "kW"}
+    )
+
+    async def accept(_call):
+        return None
+
+    hass.services.async_register("number", "set_value", accept)
+    hass.services.async_register("switch", "turn_on", accept)
+    coordinator = _coordinator(
+        _controller_config(
+            foxess_control_owner="local_modbus",
+            ev_morning_solar_enabled=True,
+            ev_morning_solar_reserve_soc_percent=20,
+            ev_solar_spill_battery_soc_percent=100,
+            battery_power_entity="sensor.battery_power",
+            battery_power_positive_direction="positive_charge",
+            grid_power_entity="sensor.site_grid",
+            grid_power_positive_direction="positive_import",
+            bonus_window_start="21:00:00",
+            bonus_window_end="22:00:00",
+        )
+    )
+    _set_power_telemetry(coordinator, hass, grid_kw=-2, battery_kw=0.5)
+    coordinator.snapshot = replace(coordinator.snapshot, battery_soc=25)
+    hass.states.async_set("sensor.site_battery_soc", "25", {"unit_of_measurement": "%"})
+    controller = ActiveEvController(hass, coordinator)
+    soc_state = hass.states.get("sensor.site_battery_soc")
+    assert soc_state is not None
+
+    await controller.async_reconcile(soc_state.last_updated)
+    await hass.async_block_till_done()
+
+    assert controller.solar_spill.phase == "disabled"
+    assert controller.morning_solar.phase == "morning_solar_surplus"
+    assert controller.morning_solar.reconstructed_surplus_kw == 2.5
+    assert controller.target_current_a == 10
+    morning = _outside_candidate(controller, "morning_solar")
+    assert morning.eligible is True
+    assert morning.target_current_a == 10
 
 
 @pytest.mark.freeze_time("2026-09-07 00:01:00+00:00")
@@ -1241,19 +1331,25 @@ async def test_pre_free_runtime_latches_latest_start_and_uses_export_budget(
         export_plan=ExportPlan(5, 5, 5 / 3.45, "ready"),
         export_session=ExportSessionState(),
     )
-    controller = ActiveEvController(hass, coordinator)
     now = datetime(2026, 9, 7, 10, 40, tzinfo=UTC)
+    controller = ActiveEvController(hass, coordinator)
+    controller.measured_solar_adjustment = MeasuredSolarAdjustmentState(
+        phase="morning_solar",
+        target_current_a=10,
+        changed_at=now - timedelta(minutes=5),
+    )
 
     await controller.async_reconcile(now)
 
     assert controller.pre_free_session.active is True
+    assert controller.measured_solar_adjustment == MeasuredSolarAdjustmentState()
     assert controller.pre_free_phase == "started"
     assert controller.pre_free_session.frozen_start == datetime(2026, 9, 7, 10, 34, tzinfo=UTC)
     assert controller.pre_free_plan is not None
     assert controller.pre_free_plan.planned_energy_kwh == 5
     assert controller.pre_free_plan.planned_start == controller.pre_free_session.frozen_start
     assert controller.target_current_a == 16
-    assert controller.decision_phase == "pre_free_or_solar_spill"
+    assert controller.decision_phase == "pre_free_backfill"
     pre_free = _outside_candidate(controller, "pre_free")
     assert pre_free.eligible is True
     assert pre_free.reason == controller.pre_free_phase
@@ -1345,6 +1441,8 @@ async def test_free_window_entry_immediately_redecides_active_pre_free_current(
         50,
         100,
         1,
+        True,
+        True,
     )
 
     await controller.async_reconcile(now)
@@ -1352,6 +1450,160 @@ async def test_free_window_entry_immediately_redecides_active_pre_free_current(
     assert controller.pre_free_session == PreFreeSessionState()
     assert controller.target_current_a == 1
     assert controller.decision_phase == "settling_foxess"
+
+
+async def test_house_battery_priority_uses_charge_shortfall_then_hands_off_at_taper(
+    hass: HomeAssistant,
+) -> None:
+    """The HA facade supplies canonical battery evidence to the pure allocator."""
+    _set_ev_states(hass)
+    hass.states.async_set("sensor.car_charging", "charging")
+    hass.states.async_set(
+        "sensor.car_actual_current", "15", {"unit_of_measurement": "A"}
+    )
+    hass.states.async_set(
+        "number.car_current",
+        "15",
+        {"min": 1, "max": 16, "step": 1, "unit_of_measurement": "A"},
+    )
+    hass.states.async_set(
+        "number.car_limit", "90", {"min": 50, "max": 100, "step": 1}
+    )
+    hass.states.async_set("switch.car_charge", "on")
+    coordinator = _coordinator(
+        _controller_config(
+            ev_max_current=15,
+            ev_free_window_priority="house_battery",
+            ev_house_battery_taper_soc_percent=95,
+            inverter_charge_limit_kw=10.5,
+            rehearsal_mode=True,
+        )
+    )
+    # The actuator has capped the live command below the configured inverter
+    # value. Allocation must follow what FoxESS was actually asked to accept.
+    coordinator.active_controller.charge_power_target_kw = 10
+    now = datetime(2026, 9, 7, 12, 10, tzinfo=UTC)
+    grid_source = TelemetrySource("sensor.site_grid", 59.8, "A", now)
+    coordinator.snapshot = replace(
+        coordinator.snapshot,
+        battery_soc=34,
+        inverter_charge_limit_kw=10.5,
+    )
+    coordinator.telemetry = replace(
+        coordinator.telemetry,
+        battery_power=NormalizedSample(
+            8.41,
+            "kW",
+            (TelemetrySource("sensor.battery_power", 8.41, "kW", now),),
+            "positive_charge",
+            True,
+            True,
+            "ok",
+        ),
+        site_grid_current=NormalizedSample(
+            59.8,
+            "A",
+            (grid_source,),
+            "positive_import",
+            True,
+            True,
+            "ok",
+        ),
+    )
+    controller = ActiveEvController(hass, coordinator)
+    controller.grid_average.observe(
+        now - timedelta(minutes=3), 59.8, source_valid=True
+    )
+    controller.ev_average.observe(
+        now - timedelta(minutes=3), 15, source_valid=True
+    )
+
+    await controller.async_reconcile(now)
+
+    assert controller.target_current_a == 10
+    assert controller.decision_phase == "house_battery_priority"
+    assert controller.last_actions == ("would_set_charge_current",)
+
+    coordinator.snapshot = replace(coordinator.snapshot, battery_soc=95)
+    coordinator.telemetry = replace(
+        coordinator.telemetry,
+        battery_power=replace(coordinator.telemetry.battery_power, value=7),
+    )
+    await controller.async_reconcile(now + timedelta(minutes=3))
+
+    assert controller.target_current_a == 15
+    assert controller.decision_phase == "house_battery_taper_handoff"
+
+
+async def test_restart_free_window_holds_current_until_grid_average_recovers(
+    hass: HomeAssistant,
+) -> None:
+    """A restart must never push a healthy free-window EV from 15 A to 1 A."""
+    _set_ev_states(hass)
+    hass.states.async_set("sensor.car_charging", "charging")
+    hass.states.async_set(
+        "sensor.car_actual_current", "15", {"unit_of_measurement": "A"}
+    )
+    hass.states.async_set(
+        "number.car_current",
+        "15",
+        {"min": 1, "max": 16, "step": 1, "unit_of_measurement": "A"},
+    )
+    hass.states.async_set("number.car_limit", "100", {"min": 50, "max": 100, "step": 1})
+    hass.states.async_set("switch.car_charge", "on")
+    coordinator = _coordinator(
+        _controller_config(
+            ev_free_window_priority="ev",
+            ev_free_window_charge_limit_percent=100,
+            rehearsal_mode=True,
+        )
+    )
+    coordinator.telemetry = replace(
+        coordinator.telemetry,
+        site_grid_current=unavailable_sample(
+            unit="A", positive_direction="positive_import", reason="startup"
+        ),
+    )
+    controller = ActiveEvController(hass, coordinator)
+    start = datetime(2026, 9, 7, 12, 1, tzinfo=UTC)
+    controller._started_at = start  # noqa: SLF001
+
+    await controller.async_reconcile(start)
+
+    assert controller.target_current_a == 15
+    assert controller.last_reason == "startup_telemetry_hold"
+    assert controller.last_actions == ()
+
+    coordinator.telemetry = replace(
+        coordinator.telemetry,
+        site_grid_current=NormalizedSample(
+            20,
+            "A",
+            (
+                TelemetrySource(
+                    "sensor.site_grid",
+                    20,
+                    "A",
+                    start + timedelta(seconds=30),
+                ),
+            ),
+            "positive_import",
+            True,
+            True,
+            "ok",
+        ),
+    )
+    await controller.async_reconcile(start + timedelta(seconds=30))
+
+    assert controller.target_current_a == 15
+    assert controller.last_reason == "startup_telemetry_hold"
+    assert controller.last_actions == ()
+
+    await controller.async_reconcile(start + timedelta(seconds=121))
+
+    assert controller.target_current_a == 16
+    assert controller.decision_phase == "ev_priority_maximum"
+    assert "would_set_charge_current" in controller.last_actions
     assert controller.last_actions == ("would_set_charge_current",)
 
 
@@ -1875,6 +2127,54 @@ async def test_ev_battery_reserve_stops_automatic_outside_charge(
     assert stopped == ["switch.car_charge"]
 
 
+async def test_ev_battery_reserve_reverts_to_configured_protected_baseline(
+    hass: HomeAssistant,
+) -> None:
+    """A non-zero keepalive must not turn a fault-prone charger off."""
+    _set_ev_states(hass)
+    actions = []
+
+    async def set_current(call):
+        actions.append(("set_charge_current", call.data["value"]))
+
+    async def start(call):
+        actions.append(("start_charging", None))
+
+    async def stop(call):
+        actions.append(("stop_charging", None))
+
+    hass.services.async_register("number", "set_value", set_current)
+    hass.services.async_register("switch", "turn_on", start)
+    hass.services.async_register("switch", "turn_off", stop)
+    coordinator = _coordinator(
+        _controller_config(
+            battery_floor_percent=10,
+            ev_protected_baseline_a=1,
+            ev_outside_battery_reserve_percent=20,
+            ev_daily_backfill_energy_kwh=2,
+            ev_daily_ready_time="08:00:00",
+            ev_outside_inverter_percent=30,
+            inverter_discharge_limit_kw=15,
+        )
+    )
+    coordinator.snapshot = replace(coordinator.snapshot, battery_soc=20)
+    coordinator.data = SimpleNamespace(available_after_reserve_kwh=0)
+    coordinator.learning_remaining_kwh = 3
+    controller = ActiveEvController(hass, coordinator)
+    controller.daily_backfill_active = True
+    controller.daily_backfill_session_target_kwh = 2
+
+    await controller.async_reconcile(datetime(2026, 9, 7, 6, 30, tzinfo=UTC))
+
+    assert controller.decision_phase == "ev_battery_reserve_reached"
+    assert controller.target_current_a == 1
+    assert controller.daily_backfill_active is False
+    assert controller.daily_backfill_stop_pending is False
+    assert controller.outside_stop_requested is False
+    assert controller.last_actions == ("set_charge_current", "start_charging")
+    assert actions == [("set_charge_current", 1), ("start_charging", None)]
+
+
 async def test_daily_backfill_cycle_and_delivered_energy_survive_restart(
     hass: HomeAssistant,
 ) -> None:
@@ -2340,7 +2640,7 @@ async def test_smart_socket_recovery_runtime_is_ordered_and_restart_latched(
     assert actions.count("turn_off_smart_socket") == 1
 
 
-async def test_runtime_does_not_flap_forever_when_feedback_never_changes(
+async def test_runtime_uses_progressively_slower_retries_when_feedback_never_changes(
     hass: HomeAssistant,
 ) -> None:
     _set_ev_states(hass)
@@ -2362,14 +2662,60 @@ async def test_runtime_does_not_flap_forever_when_feedback_never_changes(
     assert len(calls) == 9
     assert controller.writes_performed == 9
     assert controller.reconciliation.attempts == 3
-    assert controller.reconciliation.phase == "fault_maximum_attempts"
-    assert controller.last_reason == "maximum_attempts_reached"
+    assert controller.reconciliation.phase == "awaiting_feedback"
+    assert controller.last_reason == "awaiting_feedback"
 
 
-async def test_coerced_one_amp_baseline_retries_after_cooldown_without_stopping(
+async def test_free_window_entry_rearms_failed_same_current_baseline(
     hass: HomeAssistant,
 ) -> None:
-    """Preserve the powered recovery path with bounded 30-minute laps."""
+    """A free window must not inherit a pre-free/baseline fault latch."""
+    _set_ev_states(hass)
+    calls = []
+    hass.bus.async_listen(EVENT_CALL_SERVICE, calls.append)
+
+    async def ignore(_call):
+        return None
+
+    hass.services.async_register("number", "set_value", ignore)
+    hass.services.async_register("switch", "turn_on", ignore)
+    controller = ActiveEvController(
+        hass,
+        _coordinator(
+            _controller_config(
+                foxess_control_owner="local_modbus",
+                ev_protected_baseline_a=1,
+                ev_free_window_priority="house_battery",
+                ev_free_window_settle_minutes=5,
+            )
+        ),
+    )
+    before_window = datetime(2026, 9, 7, 11, 59, tzinfo=UTC)
+
+    for offset in (0, 30, 60, 90):
+        await controller.async_reconcile(before_window + timedelta(seconds=offset))
+    assert controller.reconciliation.phase == "awaiting_feedback"
+    assert controller.reconciliation.attempts == 3
+    calls.clear()
+
+    await controller.async_reconcile(datetime(2026, 9, 7, 12, 1, tzinfo=UTC))
+    await hass.async_block_till_done()
+
+    assert controller.target_current_a == 1
+    assert controller.reconciliation.attempts == 1
+    assert controller.reconciliation.phase == "awaiting_feedback"
+    assert controller.last_actions == (
+        "set_charge_limit",
+        "set_charge_current",
+        "start_charging",
+    )
+    assert len(calls) == 3
+
+
+async def test_coerced_one_amp_baseline_retries_with_progressive_backoff_without_stopping(
+    hass: HomeAssistant,
+) -> None:
+    """Preserve the powered recovery path with progressively slower retries."""
     _set_ev_states(hass)
     hass.states.async_set("sensor.car_charging", "charging")
     hass.states.async_set("sensor.car_actual_current", "5", {"unit_of_measurement": "A"})
@@ -2412,11 +2758,11 @@ async def test_coerced_one_amp_baseline_retries_after_cooldown_without_stopping(
             "5",
             {"min": 1, "max": 16, "step": 1, "unit_of_measurement": "A"},
         )
-    assert current_commands == [1, 1, 1, 1, 1, 1, 1]
+    assert current_commands == [1, 1, 1, 1, 1]
     assert hass.states.get("switch.car_charge").state == "on"
     assert controller.target_current_a == 1
     assert controller.reconciliation.phase == "awaiting_feedback"
-    assert controller.reconciliation.attempts == 1
+    assert controller.reconciliation.attempts == 5
 
 
 async def test_runtime_waits_for_overwritten_tessie_current_to_settle(

@@ -69,7 +69,6 @@
         "last_actions",
         "last_write_at",
         "learned_general_limit_percent",
-        "maximum_reconciliation_attempts",
         "outside_control_active",
         "pre_free_current_a",
         "pre_free_frozen_start",

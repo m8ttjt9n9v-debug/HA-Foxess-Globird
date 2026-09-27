@@ -76,7 +76,7 @@ def test_runtime_config_writes_use_the_coordinator_boundary() -> None:
         (item["scope"], item["receiver"]) for item in boundary_writes
     } == {("EnergyCoordinator.update_config_value", "self.config")}
     mutations = [item for item in runtime if item["kind"] == "managed_mutation"]
-    assert len(mutations) == 11
+    assert len(mutations) == 13
     assert {item["access"] for item in mutations} <= {
         "update_config_value",
         "update_persisted_config_value",

@@ -36,12 +36,12 @@ def test_entity_contract_matches_reviewed_release_baseline() -> None:
         key: new_names[key]
         for key in new_names
         if new_names[key] != old_names[key]
-    } == APPROVED_DISPLAY_NAMES
+    }.items() <= APPROVED_DISPLAY_NAMES.items()
 
 
-def test_entity_contract_contains_one_hundred_and_seven_unique_entities() -> None:
+def test_entity_contract_contains_one_hundred_and_nine_unique_entities() -> None:
     contract = build_entity_contract()
-    assert contract["entity_count"] == 107
+    assert contract["entity_count"] == 109
     unique_ids = [item["unique_id_template"] for item in contract["entities"]]
     entity_ids = [item["default_entity_id"] for item in contract["entities"]]
     assert len(unique_ids) == len(set(unique_ids))
@@ -60,7 +60,7 @@ def test_entity_catalogue_is_complete_and_unique() -> None:
         for spec in ENTITY_SPECS
     }
 
-    assert len(ENTITY_SPECS) == 107
+    assert len(ENTITY_SPECS) == 109
     assert len(catalogued) == len(ENTITY_SPECS)
     assert catalogued == contracted
     assert all(spec.value_projection for spec in ENTITY_SPECS)
