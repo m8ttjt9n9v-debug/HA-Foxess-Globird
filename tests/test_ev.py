@@ -1369,6 +1369,52 @@ def test_direct_path_caps_a_retained_limit_above_90_without_charge_to_full():
     assert plan.commands == (EvCommand("set_charge_limit", 90),)
 
 
+@pytest.mark.parametrize(
+    ("limit_minimum", "expected_limit"),
+    ((50, 85), (88, 88)),
+)
+@pytest.mark.parametrize("requested_limit", (89, 90, 91, 100))
+def test_direct_path_never_rounds_a_non_override_cap_above_90(
+    limit_minimum,
+    expected_limit,
+    requested_limit,
+):
+    plan = plan_direct_evse_commands(
+        replace(
+            DIRECT,
+            charge_limit_percent=100,
+            charge_switch_on=True,
+            limit_minimum_percent=limit_minimum,
+            limit_step_percent=7,
+        ),
+        target_current_a=6,
+        target_limit_percent=requested_limit,
+        physical_ceiling_a=15,
+        start_allowed=True,
+    )
+
+    assert plan.commands == (EvCommand("set_charge_limit", expected_limit),)
+    assert plan.commands[0].value <= 90
+
+
+def test_direct_path_refuses_an_unrepresentable_non_override_cap():
+    plan = plan_direct_evse_commands(
+        replace(
+            DIRECT,
+            charge_limit_percent=100,
+            charge_switch_on=True,
+            limit_minimum_percent=91,
+        ),
+        target_current_a=6,
+        target_limit_percent=100,
+        physical_ceiling_a=15,
+        start_allowed=True,
+    )
+
+    assert plan.commands == ()
+    assert plan.reason == "direct_path_charge_limit_cap_unrepresentable"
+
+
 def test_direct_path_permits_full_charge_only_when_explicitly_requested():
     plan = plan_direct_evse_commands(
         replace(DIRECT, charge_limit_percent=90, charge_switch_on=True),

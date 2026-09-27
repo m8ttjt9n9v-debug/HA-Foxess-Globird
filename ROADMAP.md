@@ -249,7 +249,9 @@ Status here describes behavioral parity, not merely the presence of code.
   baseline/headroom behavior but cannot raise the Tesla limit above 90% while
   Charge to Full is off. Charge to Full remains the sole path to the mapped
   actuator maximum (100% where supported), and turning it off re-applies the
-  90% ceiling.
+  90% ceiling. Final direct-actuator rounding is downward-bounded by that
+  ceiling; an actuator without a representable limit at or below 90% is
+  rejected rather than sent an unsafe higher value.
 - [x] Fail-closed direct-EVSE command boundary and Tessie service adapter.
 - [x] Explicit direct-path commissioning schema and restart-serializable
   three-minute feedback primitive with coverage/source-validity evidence.

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.12.29rc9 — strict direct EVSE 90% command cap
+
+- Correct final direct-EVSE charge-limit quantisation: a non-Charge-to-Full
+  target is rounded to a permitted value at or below 90%, never upward beyond
+  it.
+- Reject an actuator configuration that cannot represent a charge limit at or
+  below 90% rather than issuing an unsafe higher command.
+
 ## 0.12.29rc8 — direct EVSE 90% safety cap
 
 - Preserve the direct charger’s 1 A anti-fault keepalive and moving Tesla

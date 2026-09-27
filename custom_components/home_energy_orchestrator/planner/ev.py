@@ -1258,6 +1258,16 @@ def plan_direct_evse_commands(
         limit_minimum,
         limit_maximum,
     )
+    if not charge_to_full:
+        # The policy cap must still hold after the actuator's discrete-step
+        # rounding. Rounding up a 90% target on (for example) a 7%-step number
+        # would otherwise issue a 91% command and defeat the cap.
+        if limit_minimum > NON_OVERRIDE_CHARGE_LIMIT_MAX_PERCENT:
+            return EvCommandPlan((), "direct_path_charge_limit_cap_unrepresentable")
+        capped_limit = limit_minimum + floor(
+            (NON_OVERRIDE_CHARGE_LIMIT_MAX_PERCENT - limit_minimum) / limit_step
+        ) * limit_step
+        bounded_limit = min(bounded_limit, capped_limit)
     commands: list[EvCommand] = []
     if abs(observation.charge_limit_percent - bounded_limit) >= limit_step:
         commands.append(EvCommand("set_charge_limit", bounded_limit))

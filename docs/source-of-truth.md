@@ -127,9 +127,11 @@ layers around the proven algorithm, not replacement algorithms.
   also implemented for Local Modbus ownership. All three use the same bounded
   feedback reconciliation; no direct path issues a stop or pause command. If
   the powered direct-path anti-pause guard is active, it retains its configured
-  SoC headroom but is capped at 90% whenever Charge to Full is off. Charge to
-  Full is the only exception and may use the mapped actuator's live maximum
-  (100% where supported). If outside-window charging reaches its battery
+  SoC headroom but is capped at 90% whenever Charge to Full is off, including
+  after final actuator-step rounding. If that actuator cannot represent a
+  value at or below 90%, the direct path issues no command. Charge to Full is
+  the only exception and may use the mapped actuator's live maximum (100%
+  where supported). If outside-window charging reaches its battery
   reserve, HEO ends the paid
   session but retains a non-zero configured protected baseline through that
   same reconciliation path; only a configured 0 A baseline may stop the
