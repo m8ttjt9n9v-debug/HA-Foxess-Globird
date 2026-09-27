@@ -28,5 +28,11 @@ change.
 The workflow will fail rather than publish a release with generic generated
 notes when the tag has no non-empty matching changelog section.
 
+To repair titles and notes on existing releases, run the **Repair GitHub
+Release notes** workflow from the Actions page. Its default tag list covers
+the releases published with generic generated notes; it derives each title and
+body from the current matching changelog section and does not alter the tag or
+release asset.
+
 Do not manually publish the GitHub release before pushing its tag: the workflow
 owns release creation so the downloadable asset is present from the start.

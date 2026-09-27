@@ -40,3 +40,12 @@ def test_release_workflow_uses_the_matching_changelog_section() -> None:
     assert "--notes-file .github-release-notes.md" in release
     assert "gh release edit" in release
     assert "--generate-notes" not in release
+
+
+def test_release_note_repair_workflow_is_manual_and_uses_the_same_extractor() -> None:
+    """Existing releases can be repaired without retagging or replacing assets."""
+    repair = (WORKFLOW_DIRECTORY / "repair-release-notes.yml").read_text(encoding="utf-8")
+    assert "workflow_dispatch:" in repair
+    assert "python -m scripts.release_notes" in repair
+    assert "gh release edit" in repair
+    assert "gh release upload" not in repair
