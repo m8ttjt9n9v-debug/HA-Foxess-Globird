@@ -31,11 +31,14 @@ jobs:
           normalized_tags="$(printf '%s' "$RELEASE_TAGS" | tr ',[:space:]' '\n' | sed '/^$/d')"
           test -n "$normalized_tags"
           while IFS= read -r tag; do
+            if ! gh release view "$tag" >/dev/null 2>&1; then
+              echo "::warning title=Release not found::$tag has no published GitHub Release; skipped"
+              continue
+            fi
             python -m scripts.release_notes \
               --tag "$tag" \
               --title-file .github-release-title.txt \
               --notes-file .github-release-notes.md
-            gh release view "$tag" >/dev/null
             gh release edit "$tag" \
               --title "$(<.github-release-title.txt)" \
               --notes-file .github-release-notes.md

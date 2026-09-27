@@ -49,3 +49,4 @@ def test_release_note_repair_workflow_is_manual_and_uses_the_same_extractor() ->
     assert "python -m scripts.release_notes" in repair
     assert "gh release edit" in repair
     assert "gh release upload" not in repair
+    assert "has no published GitHub Release; skipped" in repair
