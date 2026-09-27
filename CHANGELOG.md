@@ -10,6 +10,17 @@
   and the transition from Charge to Full back to normal control.
 - Retain 100% as the explicit EV Charge to Full exception.
 
+## 0.12.29rc7 — EV control hardening and conformance supervision
+
+- Serialize conflicting direct-EVSE requests and retain eligible recovery
+  obligations across a restart, preventing overlapping current, limit and stop
+  commands from fighting each other.
+- Add a read-only 30-second conformance supervisor. A battery or EV mismatch
+  must persist for five minutes before one bounded recovery request and a
+  Home Assistant notification are produced.
+- Keep Safety Lock, configured ownership, commissioning and actuator-feedback
+  gates in front of every recovery request.
+
 ## 0.12.29rc1 — Phase 7 staging candidate
 
 - Prepare the independently reviewed controller-decomposition and malformed-

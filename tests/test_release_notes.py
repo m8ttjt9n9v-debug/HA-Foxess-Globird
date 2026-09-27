@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from scripts.release_notes import release_text
+from scripts.release_notes import CHANGELOG_PATH, release_text
 
 
 def test_release_text_uses_only_the_matching_changelog_section() -> None:
@@ -31,3 +31,10 @@ def test_release_text_requires_matching_nonempty_section() -> None:
 
     with pytest.raises(ValueError, match="no release notes"):
         release_text("v1.2.3", "## 1.2.3 — Empty\n\n## 1.2.2 — Earlier\n")
+
+
+def test_published_rc7_has_descriptive_release_metadata() -> None:
+    """The historical release repaired by the workflow must remain described."""
+    title, notes = release_text("v0.12.29rc7", CHANGELOG_PATH.read_text(encoding="utf-8"))
+    assert title == "v0.12.29rc7 — EV control hardening and conformance supervision"
+    assert "conformance supervisor" in notes
