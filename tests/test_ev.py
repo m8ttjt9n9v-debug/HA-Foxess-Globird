@@ -1357,6 +1357,49 @@ def test_direct_path_orders_limit_current_then_start():
     ]
 
 
+def test_direct_path_caps_a_retained_limit_above_90_without_charge_to_full():
+    plan = plan_direct_evse_commands(
+        replace(DIRECT, charge_limit_percent=91, charge_switch_on=True),
+        target_current_a=6,
+        target_limit_percent=91,
+        physical_ceiling_a=15,
+        start_allowed=True,
+    )
+
+    assert plan.commands == (EvCommand("set_charge_limit", 90),)
+
+
+def test_direct_path_permits_full_charge_only_when_explicitly_requested():
+    plan = plan_direct_evse_commands(
+        replace(DIRECT, charge_limit_percent=90, charge_switch_on=True),
+        target_current_a=6,
+        target_limit_percent=100,
+        physical_ceiling_a=15,
+        start_allowed=True,
+        charge_to_full=True,
+    )
+
+    assert plan.commands == (EvCommand("set_charge_limit", 100),)
+
+
+def test_direct_reconciliation_reduces_a_full_target_when_override_ends():
+    now = datetime(2026, 9, 7, 12, 1, tzinfo=UTC)
+    transition = reconcile_direct_evse(
+        DirectEvseReconciliationState(
+            6, 100, 1, now - timedelta(minutes=1), "confirmed"
+        ),
+        replace(DIRECT, charge_limit_percent=100, charge_switch_on=True),
+        target_current_a=6,
+        target_limit_percent=100,
+        physical_ceiling_a=15,
+        now=now,
+        charge_to_full=False,
+    )
+
+    assert transition.state.target_limit_percent == 90
+    assert transition.plan.commands == (EvCommand("set_charge_limit", 90),)
+
+
 def test_live_transport_max_bounds_write_but_does_not_change_physical_rating():
     plan = plan_direct_evse_commands(
         DIRECT,

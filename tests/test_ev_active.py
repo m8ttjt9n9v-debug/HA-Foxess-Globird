@@ -1596,8 +1596,9 @@ async def test_restart_free_window_holds_current_until_grid_average_recovers(
     await controller.async_reconcile(start)
 
     assert controller.target_current_a == 15
-    assert controller.last_reason == "startup_telemetry_hold"
-    assert controller.last_actions == ()
+    assert controller.target_limit_percent == 90
+    assert controller.last_reason == "rehearsal_direct_path_ready"
+    assert controller.last_actions == ("would_set_charge_limit",)
 
     coordinator.telemetry = replace(
         coordinator.telemetry,
@@ -1621,8 +1622,9 @@ async def test_restart_free_window_holds_current_until_grid_average_recovers(
     await controller.async_reconcile(start + timedelta(seconds=30))
 
     assert controller.target_current_a == 15
-    assert controller.last_reason == "startup_telemetry_hold"
-    assert controller.last_actions == ()
+    assert controller.target_limit_percent == 90
+    assert controller.last_reason == "rehearsal_direct_path_ready"
+    assert controller.last_actions == ("would_set_charge_limit",)
 
     await controller.async_reconcile(start + timedelta(seconds=121))
 
@@ -2160,6 +2162,9 @@ async def test_ev_battery_reserve_reverts_to_configured_protected_baseline(
 ) -> None:
     """A non-zero keepalive must not turn a fault-prone charger off."""
     _set_ev_states(hass)
+    hass.states.async_set(
+        "number.car_limit", "91", {"min": 50, "max": 100, "step": 1}
+    )
     actions = []
 
     async def set_current(call):
@@ -2196,11 +2201,20 @@ async def test_ev_battery_reserve_reverts_to_configured_protected_baseline(
 
     assert controller.decision_phase == "ev_battery_reserve_reached"
     assert controller.target_current_a == 1
+    assert controller.target_limit_percent == 90
     assert controller.daily_backfill_active is False
     assert controller.daily_backfill_stop_pending is False
     assert controller.outside_stop_requested is False
-    assert controller.last_actions == ("set_charge_current", "start_charging")
-    assert actions == [("set_charge_current", 1), ("start_charging", None)]
+    assert controller.last_actions == (
+        "set_charge_limit",
+        "set_charge_current",
+        "start_charging",
+    )
+    assert actions == [
+        ("set_charge_current", 90),
+        ("set_charge_current", 1),
+        ("start_charging", None),
+    ]
 
 
 async def test_daily_backfill_cycle_and_delivered_energy_survive_restart(

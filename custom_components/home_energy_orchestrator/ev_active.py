@@ -146,6 +146,7 @@ from .planner.ev import (
     SmartSocketRecoveryObservation,
     SmartSocketRecoveryState,
     SmartSocketStageState,
+    cap_direct_charge_limit_target,
     charging_path_ceiling_a,
     evaluate_allowance_projection,
     evaluate_ev_decision_cadence,
@@ -641,14 +642,15 @@ class ActiveEvController:
             )
             if in_window and within_startup_grace and not grid_valid:
                 self._startup_grid_recovery_pending = True
-            if (
+            startup_telemetry_hold = (
                 in_window
                 and not entered_free_window
                 and self._startup_grid_recovery_pending
                 and startup_grid_incomplete
                 and not service_overrun
                 and within_startup_grace
-            ):
+            )
+            if startup_telemetry_hold:
                 # Tessie can recover before signed grid telemetry after a Home
                 # Assistant/integration restart. Preserve the live request
                 # during this bounded settling period instead of actively
@@ -657,11 +659,13 @@ class ActiveEvController:
                 # coverage, at the grace deadline, or immediately for a
                 # measured service-limit overrun.
                 self.target_current_a = observation.requested_current_a
-                self.target_limit_percent = observation.charge_limit_percent
+                self.target_limit_percent = cap_direct_charge_limit_target(
+                    observation.charge_limit_percent,
+                    charge_to_full=self._charge_to_full_requested(),
+                )
                 self.decision_phase = "startup_telemetry_hold"
                 self.allowance_phase = "startup_telemetry_hold"
                 self.last_reason = "startup_telemetry_hold"
-                return
             if (
                 not in_window
                 or not within_startup_grace
@@ -706,10 +710,10 @@ class ActiveEvController:
                     ),
                 )
             )
-            if cadence.defer_soc_redecision:
+            if not startup_telemetry_hold and cadence.defer_soc_redecision:
                 self.decision_phase = "ev_current_transition_hold"
                 self.allowance_phase = "transition_hold"
-            if cadence.should_decide:
+            if not startup_telemetry_hold and cadence.should_decide:
                 try:
                     calculated = (
                         self._calculate_target(
@@ -741,6 +745,10 @@ class ActiveEvController:
                     gate=gate,
                 )
                 return
+            self.target_limit_percent = cap_direct_charge_limit_target(
+                self.target_limit_percent,
+                charge_to_full=charge_to_full_requested,
+            )
             if self.outside_stop_requested:
                 stop = reconcile_daily_backfill_stop(
                     DailyBackfillStopState(
@@ -782,6 +790,7 @@ class ActiveEvController:
                     target_limit_percent=self.target_limit_percent,
                     physical_ceiling_a=self._float(CONF_EV_MAX_CURRENT, 0.0),
                     start_allowed=True,
+                    charge_to_full=charge_to_full_requested,
                 )
                 self.last_actions = tuple(
                     f"would_{command.action}" for command in rehearsal_plan.commands
@@ -806,6 +815,7 @@ class ActiveEvController:
                     target_limit_percent=self.target_limit_percent,
                     physical_ceiling_a=self._float(CONF_EV_MAX_CURRENT, 0.0),
                     now=now,
+                    charge_to_full=charge_to_full_requested,
                 ),
                 in_free_window=in_window,
                 outside_enabled=availability.outside_enabled,
@@ -1594,7 +1604,10 @@ class ActiveEvController:
             abort = abort_outside_charge_at_battery_reserve(
                 self._daily_backfill_cycle_state(),
                 charge_switch_on=observation.charge_switch_on,
-                charge_limit_percent=observation.charge_limit_percent,
+                charge_limit_percent=cap_direct_charge_limit_target(
+                    observation.charge_limit_percent,
+                    charge_to_full=charge_to_full,
+                ),
                 protected_baseline_a=baseline,
             )
             self._apply_daily_backfill_cycle_state(abort.daily_state)

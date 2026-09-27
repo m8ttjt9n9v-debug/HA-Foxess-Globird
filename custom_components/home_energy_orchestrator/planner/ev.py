@@ -45,6 +45,19 @@ DIRECT_EVSE_RECONCILIATION_PHASES = frozenset(
 )
 
 
+def cap_direct_charge_limit_target(
+    target_limit_percent: float,
+    *,
+    charge_to_full: bool,
+) -> float:
+    """Enforce the direct-path charge-limit ceiling at every write boundary."""
+    return (
+        target_limit_percent
+        if charge_to_full
+        else min(target_limit_percent, NON_OVERRIDE_CHARGE_LIMIT_MAX_PERCENT)
+    )
+
+
 @dataclass(frozen=True, slots=True)
 class FreeWindowCurrentInputs:
     """Inputs used by the canonical pilot-site free-window current policy."""
@@ -1196,11 +1209,16 @@ def plan_direct_evse_commands(
     target_limit_percent: float,
     physical_ceiling_a: float,
     start_allowed: bool,
+    charge_to_full: bool = False,
     rehearsal: bool = False,
 ) -> EvCommandPlan:
     """Port the pilot site's direct path without adding stop/pause behavior."""
     _validate_direct_observation(
         observation, target_current_a, target_limit_percent, physical_ceiling_a
+    )
+    target_limit_percent = cap_direct_charge_limit_target(
+        target_limit_percent,
+        charge_to_full=charge_to_full,
     )
     if rehearsal:
         return EvCommandPlan((), "rehearsal_mode")
@@ -1256,6 +1274,7 @@ def direct_evse_response_matches(
     target_current_a: float,
     target_limit_percent: float,
     physical_ceiling_a: float,
+    charge_to_full: bool = False,
 ) -> bool:
     """Confirm current, limit and charge-switch feedback after a direct write."""
     plan = plan_direct_evse_commands(
@@ -1264,6 +1283,7 @@ def direct_evse_response_matches(
         target_limit_percent=target_limit_percent,
         physical_ceiling_a=physical_ceiling_a,
         start_allowed=True,
+        charge_to_full=charge_to_full,
     )
     return plan.reason == "direct_path_ready" and not plan.commands
 
@@ -1287,6 +1307,7 @@ def reconcile_direct_evse(
     target_limit_percent: float,
     physical_ceiling_a: float,
     now: datetime,
+    charge_to_full: bool = False,
     feedback_settle_interval: timedelta = DIRECT_EVSE_FEEDBACK_SETTLE_INTERVAL,
 ) -> DirectEvseReconciliation:
     """Rate-bound feedback retries without abandoning a valid target."""
@@ -1294,6 +1315,10 @@ def reconcile_direct_evse(
         raise ValueError("reconciliation time must be timezone-aware")
     if feedback_settle_interval < timedelta(0):
         raise ValueError("feedback settle interval must be non-negative")
+    target_limit_percent = cap_direct_charge_limit_target(
+        target_limit_percent,
+        charge_to_full=charge_to_full,
+    )
     target_changed = (
         state.target_current_a != target_current_a
         or state.target_limit_percent != target_limit_percent
@@ -1322,6 +1347,7 @@ def reconcile_direct_evse(
         target_current_a=target_current_a,
         target_limit_percent=target_limit_percent,
         physical_ceiling_a=physical_ceiling_a,
+        charge_to_full=charge_to_full,
     ):
         return DirectEvseReconciliation(
             DirectEvseReconciliationState(
@@ -1351,6 +1377,7 @@ def reconcile_direct_evse(
         target_limit_percent=target_limit_percent,
         physical_ceiling_a=physical_ceiling_a,
         start_allowed=True,
+        charge_to_full=charge_to_full,
     )
     current_feedback_changed_after_command = (
         state.attempts > 0
