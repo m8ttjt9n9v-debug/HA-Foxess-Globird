@@ -19,7 +19,14 @@ Pushing the tag runs `.github/workflows/release.yml`. The workflow rejects a
 tag that differs from the manifest version, builds a ZIP containing the files
 inside `custom_components/home_energy_orchestrator`, verifies that
 `manifest.json` and `__init__.py` are at the ZIP root, and creates the GitHub
-release with the archive attached.
+release with the archive attached. It also extracts the matching
+`CHANGELOG.md` heading and section, using the heading as the GitHub Release
+title and the section as its notes. HACS displays that title in its version
+picker, so the changelog heading should briefly describe the user-visible
+change.
+
+The workflow will fail rather than publish a release with generic generated
+notes when the tag has no non-empty matching changelog section.
 
 Do not manually publish the GitHub release before pushing its tag: the workflow
 owns release creation so the downloadable asset is present from the start.

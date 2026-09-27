@@ -30,3 +30,13 @@ def test_release_workflow_fetches_the_rollback_tag_before_rehearsal() -> None:
     release = (WORKFLOW_DIRECTORY / "release.yml").read_text(encoding="utf-8")
     assert "fetch-depth: 0" in release
     assert "scripts.previous_release_rehearsal --tag v0.12.26" in release
+
+
+def test_release_workflow_uses_the_matching_changelog_section() -> None:
+    """HACS must receive a descriptive GitHub Release title and notes."""
+    release = (WORKFLOW_DIRECTORY / "release.yml").read_text(encoding="utf-8")
+    assert "python -m scripts.release_notes" in release
+    assert "--title-file .github-release-title.txt" in release
+    assert "--notes-file .github-release-notes.md" in release
+    assert "gh release edit" in release
+    assert "--generate-notes" not in release

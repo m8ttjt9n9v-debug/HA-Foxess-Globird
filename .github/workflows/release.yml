@@ -48,16 +48,30 @@ jobs:
           unzip -Z1 home_energy_orchestrator.zip | grep -Fxq 'manifest.json'
           unzip -Z1 home_energy_orchestrator.zip | grep -Fxq '__init__.py'
 
+      - name: Prepare HACS release title and notes
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m scripts.release_notes \
+            --tag "$GITHUB_REF_NAME" \
+            --title-file .github-release-title.txt \
+            --notes-file .github-release-notes.md
+
       - name: Create or repair GitHub release with counted asset
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
+          set -euo pipefail
+          release_title="$(<.github-release-title.txt)"
           if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release edit "$GITHUB_REF_NAME" \
+              --title "$release_title" \
+              --notes-file .github-release-notes.md
             gh release upload "$GITHUB_REF_NAME" home_energy_orchestrator.zip --clobber
           else
             gh release create "$GITHUB_REF_NAME" home_energy_orchestrator.zip \
               --verify-tag \
-              --title "$GITHUB_REF_NAME" \
-              --generate-notes
+              --title "$release_title" \
+              --notes-file .github-release-notes.md
           fi
