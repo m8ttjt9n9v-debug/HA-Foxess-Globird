@@ -7,11 +7,29 @@ Before changing control behavior, read these files in order:
 3. `docs/port-first-development.md`
 4. `docs/system-requirements.md`
 
+Before inspecting or changing a live Home Assistant site, also read
+`docs/agent-operating-manual.md`.
+
 If a private local operational record is named by the workspace's local agent
 instructions, read it too. Never copy its hostnames, addresses, credentials,
 or incident evidence into this public repository.
 
 These instructions are mandatory for AI-assisted work in this repository.
+
+## Live-site boundary
+
+A designated pilot HACS site is controlled staging and acceptance
+infrastructure, not a scratch environment. Do not alter its Home Assistant
+configuration, helpers, switches, integration options, installed component,
+or runtime merely to explore, debug, or try an idea. Do not issue FoxESS or EV
+commands, restart/reload Home Assistant, or disable automation as a shortcut.
+
+Live mutation requires explicit user authorisation for the named site and
+action, together with a task-specific deployment or recovery plan. Read-only
+inspection is permitted only when the user's request places that site in scope.
+For a normal change, prove the repository build first, then use the controlled
+deployment sequence in `docs/agent-operating-manual.md`. An unexpected live
+state is evidence to collect and diagnose, not permission to fix forward.
 
 - The proven Working Single Phase Pilot Site configuration is the algorithmic source. Port existing
   behavior first; do not invent a replacement controller because the target
