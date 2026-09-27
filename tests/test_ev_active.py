@@ -689,7 +689,10 @@ async def test_soc_update_does_not_recalculate_whole_house_allowance_during_curr
 
     assert controller.target_current_a == 1
     assert controller.allowance_phase == "allowance_exhausted"
-    assert controller.last_actions == ("would_set_charge_current",)
+    assert controller.last_actions == (
+        "would_set_charge_limit",
+        "would_set_charge_current",
+    )
 
 
 @pytest.mark.parametrize(
@@ -834,6 +837,28 @@ async def test_safety_lock_calculates_rehearsal_plan_without_writing(
     assert controller.reconciliation.attempts == 0
     assert controller.writes_performed == 0
     assert calls == []
+
+
+async def test_direct_anti_pause_reconciliation_cannot_raise_limit_above_90(
+    hass: HomeAssistant,
+) -> None:
+    _set_ev_states(hass)
+    hass.states.async_set("sensor.car_soc", "95", {"unit_of_measurement": "%"})
+    hass.states.async_set("number.car_limit", "100", {"min": 50, "max": 100, "step": 1})
+    controller = ActiveEvController(
+        hass,
+        _coordinator(
+            _controller_config(
+                ev_protected_baseline_a=1,
+                rehearsal_mode=True,
+            )
+        ),
+    )
+
+    await controller.async_reconcile(datetime(2026, 9, 7, 12, 1, tzinfo=UTC))
+
+    assert controller.target_limit_percent == 90
+    assert "would_set_charge_limit" in controller.last_actions
 
 
 async def test_ev_runtime_only_applies_general_limit_outside_free_window(
@@ -1604,7 +1629,10 @@ async def test_restart_free_window_holds_current_until_grid_average_recovers(
     assert controller.target_current_a == 16
     assert controller.decision_phase == "ev_priority_maximum"
     assert "would_set_charge_current" in controller.last_actions
-    assert controller.last_actions == ("would_set_charge_current",)
+    assert controller.last_actions == (
+        "would_set_charge_limit",
+        "would_set_charge_current",
+    )
 
 
 def test_daily_backfill_facade_composes_efficiency_and_live_vehicle_room(

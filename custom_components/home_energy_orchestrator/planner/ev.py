@@ -13,6 +13,11 @@ from datetime import datetime, timedelta
 from math import ceil, floor, isfinite
 from typing import Literal, cast
 
+# The direct-path anti-pause guard may keep a fault-prone powered connector
+# accepting its protected baseline, but it is never authority to charge above
+# this operator safety ceiling. Charge to Full is the sole exception.
+NON_OVERRIDE_CHARGE_LIMIT_MAX_PERCENT = 90.0
+
 # Direct Tessie feedback can take time to converge, and some chargers briefly
 # reject an otherwise valid request. Retrying is therefore elapsed-time based,
 # not a fixed command-count latch. The sequence preserves prompt recovery for
@@ -1484,6 +1489,7 @@ class ChargeLimitInputs:
     minimum_percent: float
     maximum_percent: float
     step_percent: float
+    charge_to_full: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -1514,17 +1520,22 @@ class GeneralChargeLimitDecision:
 
 
 def plan_charge_limit_target(inputs: ChargeLimitInputs) -> float:
-    """Preserve policy while protecting a powered connector from pause faults."""
+    """Preserve anti-pause headroom without overriding the 90% safety ceiling."""
     _validate_charge_limit_inputs(inputs)
+    maximum = (
+        inputs.maximum_percent
+        if inputs.charge_to_full
+        else min(inputs.maximum_percent, NON_OVERRIDE_CHARGE_LIMIT_MAX_PERCENT)
+    )
     if not inputs.connected:
-        return inputs.current_limit_percent
-    policy = _clip(inputs.policy_limit_percent, inputs.minimum_percent, inputs.maximum_percent)
+        return round(min(inputs.current_limit_percent, maximum), 3)
+    policy = _clip(inputs.policy_limit_percent, inputs.minimum_percent, maximum)
     if not inputs.protected_baseline_required or inputs.vehicle_soc_percent is None:
-        return policy
+        return round(min(policy, maximum), 3)
     raw_guard = inputs.vehicle_soc_percent + inputs.direct_limit_headroom_percent
     stepped_guard = ceil(raw_guard / inputs.step_percent) * inputs.step_percent
-    guard = _clip(stepped_guard, inputs.minimum_percent, inputs.maximum_percent)
-    return round(max(policy, guard), 3)
+    guard = _clip(stepped_guard, inputs.minimum_percent, maximum)
+    return round(min(max(policy, guard), maximum), 3)
 
 
 def evaluate_general_charge_limit(
@@ -1547,6 +1558,7 @@ def evaluate_general_charge_limit(
             minimum_percent=evidence.minimum_percent,
             maximum_percent=evidence.maximum_percent,
             step_percent=evidence.step_percent,
+            charge_to_full=evidence.charge_to_full,
         )
     )
     if abs(target - evidence.current_limit_percent) < evidence.step_percent:

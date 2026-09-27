@@ -126,7 +126,11 @@ layers around the proven algorithm, not replacement algorithms.
   is implemented. Default-off solar-spill and latest-start pre-free stages are
   also implemented for Local Modbus ownership. All three use the same bounded
   feedback reconciliation; no direct path issues a stop or pause command. If
-  outside-window charging reaches its battery reserve, HEO ends the paid
+  the powered direct-path anti-pause guard is active, it retains its configured
+  SoC headroom but is capped at 90% whenever Charge to Full is off. Charge to
+  Full is the only exception and may use the mapped actuator's live maximum
+  (100% where supported). If outside-window charging reaches its battery
+  reserve, HEO ends the paid
   session but retains a non-zero configured protected baseline through that
   same reconciliation path; only a configured 0 A baseline may stop the
   charge switch. Entry to the configured free-power window is a separate

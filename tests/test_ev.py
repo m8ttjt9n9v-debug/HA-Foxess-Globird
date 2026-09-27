@@ -381,7 +381,7 @@ def test_service_overrun_still_curbs_ev_above_battery_taper_threshold():
     assert decision.phase == "service_limit_correction"
 
 
-def test_charge_limit_retained_away_and_policy_kept_separate_from_guard():
+def test_charge_limit_retained_away_and_guard_is_capped_without_charge_to_full():
     base = ChargeLimitInputs(
         connected=False,
         policy_limit_percent=80,
@@ -394,8 +394,46 @@ def test_charge_limit_retained_away_and_policy_kept_separate_from_guard():
         step_percent=1,
     )
     assert plan_charge_limit_target(base) == 90
-    assert plan_charge_limit_target(replace(base, connected=True)) == 91
+    assert plan_charge_limit_target(replace(base, current_limit_percent=100)) == 90
+    assert plan_charge_limit_target(replace(base, connected=True)) == 90
     assert plan_charge_limit_target(replace(base, connected=True, vehicle_soc_percent=60)) == 80
+
+
+@pytest.mark.parametrize("vehicle_soc", (88, 89, 90, 95, 100))
+def test_direct_anti_pause_headroom_never_exceeds_90_percent(vehicle_soc):
+    target = plan_charge_limit_target(
+        ChargeLimitInputs(
+            connected=True,
+            policy_limit_percent=90,
+            current_limit_percent=90,
+            vehicle_soc_percent=vehicle_soc,
+            protected_baseline_required=True,
+            direct_limit_headroom_percent=2,
+            minimum_percent=50,
+            maximum_percent=100,
+            step_percent=1,
+        )
+    )
+
+    assert target == 90
+
+
+def test_charge_to_full_permits_100_and_switching_it_off_restores_90_percent_cap():
+    inputs = ChargeLimitInputs(
+        connected=True,
+        policy_limit_percent=100,
+        current_limit_percent=100,
+        vehicle_soc_percent=95,
+        protected_baseline_required=True,
+        direct_limit_headroom_percent=2,
+        minimum_percent=50,
+        maximum_percent=100,
+        step_percent=1,
+        charge_to_full=True,
+    )
+
+    assert plan_charge_limit_target(inputs) == 100
+    assert plan_charge_limit_target(replace(inputs, charge_to_full=False)) == 90
 
 
 GENERAL_LIMIT = GeneralChargeLimitEvidence(

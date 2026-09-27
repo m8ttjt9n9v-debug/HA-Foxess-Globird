@@ -375,6 +375,7 @@ def evaluate_outside_charge_limit(
             minimum_percent=evidence.minimum_percent,
             maximum_percent=evidence.maximum_percent,
             step_percent=evidence.step_percent,
+            charge_to_full=evidence.charge_to_full,
         )
     )
     return OutsideChargeLimitEvaluation(policy_limit, target)

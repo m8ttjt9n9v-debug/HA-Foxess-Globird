@@ -1416,6 +1416,7 @@ class ActiveEvController:
                 minimum_percent=limit_min,
                 maximum_percent=limit_max,
                 step_percent=limit_step,
+                charge_to_full=charge_to_full,
             )
         )
         self.free_window_candidate = build_ev_stage_candidate(

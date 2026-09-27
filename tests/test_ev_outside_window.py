@@ -103,7 +103,7 @@ OUTSIDE_LIMIT = OutsideChargeLimitEvidence(
         (
             {"vehicle_soc_percent": 89, "protected_baseline_a": 1},
             80,
-            91,
+            90,
         ),
     ],
 )

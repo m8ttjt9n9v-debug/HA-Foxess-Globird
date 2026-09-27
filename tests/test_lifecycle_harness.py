@@ -626,10 +626,7 @@ async def test_ev_soc_update_holds_allowance_during_ramp_but_not_service_overrun
     )
     assert controller.target_current_a is not None
     assert controller.target_current_a < 16
-    assert controller.last_actions == (
-        "would_set_charge_limit",
-        "would_set_charge_current",
-    )
+    assert controller.last_actions == ("would_set_charge_current",)
     assert harness.service_calls == ()
     await harness.unload(entry)
     hass.services.async_remove("number", "set_value")
