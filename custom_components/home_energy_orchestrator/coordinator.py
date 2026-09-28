@@ -294,6 +294,8 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
                     self.runtime_config.house.heater_power_entity,
                     self.runtime_config.power_sources.solar_entity,
                     self.runtime_config.site.grid_current_entity,
+                    *self.runtime_config.site.phase_power_entities,
+                    *self.runtime_config.site.phase_voltage_entities,
                     self.runtime_config.ev_telemetry.soc_entity,
                     self.runtime_config.ev_telemetry.charging_state_entity,
                     self.runtime_config.ev_telemetry.actual_current_entity,
@@ -913,6 +915,8 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
                 ),
                 house_load=power_sources.house_load_entity,
                 site_grid_current=site.grid_current_entity,
+                phase_grid_power=site.phase_power_entities,
+                phase_grid_voltage=site.phase_voltage_entities,
             ),
         )
         return normalize_site_telemetry(

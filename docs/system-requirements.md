@@ -110,12 +110,19 @@ vehicle is away, unplugged or not charging. Location, cable and charging state
 continue to gate actuation absolutely; they do not erase valid learning
 evidence. Missing or invalid learning inputs still make the result unavailable.
 
-Single-phase sites may derive service current from signed grid power. A
-multiphase site must additionally provide signed current in amperes for the
-most-loaded service phase, positive for import. This may be a trustworthy
-template/helper built from phase sensors. Aggregate power is not a substitute
-because the controller must protect each phase's configured service limit.
-If that mapped multiphase current is unavailable, EV actuation is blocked.
+Single-phase sites may derive service current from signed grid power. For
+multiphase EV control, map either a trustworthy signed most-loaded-phase grid
+current sensor (A), or all three explicitly identified grid CT phase-power
+sensors plus their matching grid-voltage sensors (V). The latter calculation
+is performed inside HEO; it does not depend on vehicle or charger telemetry.
+The phase-power sign must be verified during commissioning. Every phase source
+must be fresh and every voltage plausible (180–300 V), or current feedback
+remains unavailable and EV actuation is blocked. Aggregate grid power is not
+a substitute for per-phase evidence. Existing current-sensor mappings remain
+compatible; if both methods are configured, a valid direct sensor takes
+precedence and the six phase sources provide a fallback. Some device
+integrations disable phase-voltage entities by default; enable and verify
+those entities before mapping them.
 
 FoxESS Modbus profiles that expose an unambiguous `BMS kWh Remaining` capacity
 entity are suggested automatically, and its current value prefills the setup

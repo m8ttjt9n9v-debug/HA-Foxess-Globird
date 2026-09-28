@@ -70,6 +70,8 @@ class SiteTelemetrySources:
     solar_power: TelemetrySource | None
     house_load: TelemetrySource | None
     site_grid_current: TelemetrySource | None
+    phase_grid_power: tuple[TelemetrySource | None, ...] = ()
+    phase_grid_voltage: tuple[TelemetrySource | None, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -212,6 +214,57 @@ def normalize_current_sample(
         unit="A",
         multiplier=multiplier,
         positive_direction=positive_direction,
+    )
+
+
+def most_loaded_phase_current(
+    powers: tuple[TelemetrySource | None, ...],
+    voltages: tuple[TelemetrySource | None, ...],
+    *,
+    now: datetime,
+    max_age_seconds: float,
+    power_positive_direction: str,
+) -> NormalizedSample:
+    """Derive import-positive grid current from three matched CT/voltage pairs.
+
+    Aggregate three-phase kW cannot reveal the most-loaded phase. A missing,
+    stale, or implausible reading on *any* phase therefore blocks this source.
+    """
+    raw_sources = tuple(source for source in (*powers, *voltages) if source is not None)
+    if len(powers) != 3 or len(voltages) != 3 or len(raw_sources) != 6:
+        return unavailable_sample(
+            unit="A", positive_direction=GRID_POSITIVE_IMPORT,
+            reason="incomplete_phase_mapping", sources=raw_sources,
+        )
+    sign = 1.0 if power_positive_direction == GRID_POSITIVE_IMPORT else -1.0
+    currents: list[float] = []
+    for power_source, voltage_source in zip(powers, voltages, strict=True):
+        assert power_source is not None and voltage_source is not None
+        power = normalize_power_sample(
+            power_source, now=now, max_age_seconds=max_age_seconds,
+            multiplier=sign, positive_direction=GRID_POSITIVE_IMPORT,
+        )
+        voltage = normalize_sample(
+            voltage_source, now=now, max_age_seconds=max_age_seconds,
+            converter=lambda value, unit: value if unit == "V" else float("nan"),
+            unit="V", multiplier=1.0, positive_direction="positive_voltage",
+        )
+        if power.value is None or voltage.value is None:
+            return unavailable_sample(
+                unit="A", positive_direction=GRID_POSITIVE_IMPORT,
+                reason=f"phase_{power.reason if power.value is None else voltage.reason}",
+                sources=raw_sources,
+            )
+        if not 180 <= voltage.value <= 300:
+            return unavailable_sample(
+                unit="A", positive_direction=GRID_POSITIVE_IMPORT,
+                reason="implausible_phase_voltage", sources=raw_sources,
+            )
+        currents.append(power.value * 1000 / voltage.value)
+    return NormalizedSample(
+        value=max(currents), unit="A", sources=raw_sources,
+        positive_direction=GRID_POSITIVE_IMPORT, valid=True, fresh=True,
+        reason="derived_from_phase_grid_power_and_voltage",
     )
 
 
@@ -408,6 +461,14 @@ def normalize_site_telemetry(
                 else -1.0
             ),
             positive_direction=GRID_POSITIVE_IMPORT,
+        )
+    if (current is None or current.value is None) and any(sources.phase_grid_power):
+        current = most_loaded_phase_current(
+            sources.phase_grid_power,
+            sources.phase_grid_voltage,
+            now=now,
+            max_age_seconds=configuration.max_age_seconds,
+            power_positive_direction=configuration.site_grid_current_direction,
         )
     if (current is None or current.value is None) and grid.value is not None:
         phase_count = configuration.site_phase_count

@@ -111,6 +111,8 @@ from .const import (
     CONF_SITE_GRID_CURRENT,
     CONF_SITE_GRID_CURRENT_DIRECTION,
     CONF_SITE_PHASE_COUNT,
+    CONF_SITE_PHASE_POWER_ENTITIES,
+    CONF_SITE_PHASE_VOLTAGE_ENTITIES,
     CONF_SOLAR_POWER,
     CONF_SOLAR_POWER_DIRECTION,
     CONF_SUPER_EXPORT_RATE,
@@ -504,6 +506,8 @@ class SiteSettings:
     solar_configured: bool
     phase_count: float | None
     grid_current_entity: str | None
+    phase_power_entities: tuple[str | None, str | None, str | None] = (None, None, None)
+    phase_voltage_entities: tuple[str | None, str | None, str | None] = (None, None, None)
 
 
 @dataclass(frozen=True, slots=True)
@@ -1098,6 +1102,14 @@ class RuntimeConfiguration:
                 ),
                 grid_current_entity=(
                     str(site_grid_current_entity) if site_grid_current_entity else None
+                ),
+                phase_power_entities=tuple(
+                    str(data[key]) if data.get(key) else None
+                    for key in CONF_SITE_PHASE_POWER_ENTITIES
+                ),
+                phase_voltage_entities=tuple(
+                    str(data[key]) if data.get(key) else None
+                    for key in CONF_SITE_PHASE_VOLTAGE_ENTITIES
                 ),
             ),
             battery=BatterySettings(

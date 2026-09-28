@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.12.29rc13 — independent three-phase grid feedback
+
+- Allow a configured three-phase site to derive most-loaded service current
+  from its three grid CT phase-power sensors and matching grid-voltage sensors,
+  without depending on EV or charger voltage. Existing direct amp-sensor and
+  single-phase mappings remain compatible.
+- Require all six phase mappings and reject missing, stale, wrongly unitised,
+  or implausible live phase evidence before multiphase EV control can use it.
+- Permit reconfiguration while a correctly typed current sensor is temporarily
+  unavailable; runtime freshness checks still block action until it recovers.
+
 ## 0.12.29rc12 — reliable configuration review and solar-spill coverage
 
 - Fix the reconfiguration Review and apply boundary: a late cross-page

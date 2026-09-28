@@ -143,6 +143,8 @@ from .const import (
     CONF_SITE_GRID_CURRENT_DIRECTION,
     CONF_SITE_GRID_HEADROOM_CURRENT,
     CONF_SITE_PHASE_COUNT,
+    CONF_SITE_PHASE_POWER_ENTITIES,
+    CONF_SITE_PHASE_VOLTAGE_ENTITIES,
     CONF_SOLAR_POWER,
     CONF_SOLAR_POWER_DIRECTION,
     CONF_SUPER_EXPORT_RATE,
@@ -265,7 +267,7 @@ from .const import (
 )
 from .discovery import DiscoveryEntity, discover_entity_defaults
 from .field_catalogue import FIELD_KEYS_BY_PAGE, FIELD_SPECS_BY_KEY
-from .normalise import current_to_a, energy_to_kwh
+from .normalise import current_to_a, energy_to_kwh, power_to_kw
 
 ENTITY = selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor"))
 CURRENT_ENTITY = selector.EntitySelector(
@@ -378,6 +380,8 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             CONF_HOUSE_LOAD,
             CONF_SITE_GRID_CURRENT,
             CONF_SITE_GRID_CURRENT_DIRECTION,
+            *CONF_SITE_PHASE_POWER_ENTITIES,
+            *CONF_SITE_PHASE_VOLTAGE_ENTITIES,
         }
     )
 
@@ -545,6 +549,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             "incomplete_ev_mapping": "charger",
             "incomplete_smart_socket_mapping": "charger",
             "multiphase_current_mapping_required": "charger",
+            "incomplete_phase_grid_mapping": "grid",
             "invalid_schedule": "tariff",
             "invalid_daily_ev_backfill": "ev_policies",
             "solar_spill_battery_power_mapping_required": "ev_policies",
@@ -828,6 +833,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 "incomplete_ev_mapping": "charger",
                 "incomplete_smart_socket_mapping": "charger",
                 "multiphase_current_mapping_required": "grid",
+                "incomplete_phase_grid_mapping": "grid",
                 "invalid_schedule": "tariff",
                 "invalid_daily_ev_backfill": "ev_policies",
                 "solar_spill_battery_power_mapping_required": "battery",
@@ -2107,6 +2113,8 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             CONF_EV_CHARGE_SWITCH,
             CONF_EV_SMART_SOCKET,
             CONF_SITE_GRID_CURRENT,
+            *CONF_SITE_PHASE_POWER_ENTITIES,
+            *CONF_SITE_PHASE_VOLTAGE_ENTITIES,
             CONF_FOXESS_WORK_MODE,
             CONF_FOXESS_FORCE_CHARGE_POWER,
             CONF_FOXESS_FORCE_DISCHARGE_POWER,
@@ -2118,12 +2126,41 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         current_state = self.hass.states.get(str(current_entity)) if current_entity else None
         if current_state is not None:
             try:
+                # Entity selection is structural configuration.  A brief
+                # telemetry outage must not make a valid current sensor
+                # impossible to save; the runtime freshness gate will keep
+                # control inactive until it has a fresh numeric observation.
+                # Still validate its declared unit so a power sensor cannot be
+                # accepted merely because it happens to be unavailable.
                 current_to_a(
-                    float(current_state.state),
+                    0.0
+                    if current_state.state in {"unknown", "unavailable"}
+                    else float(current_state.state),
                     current_state.attributes.get("unit_of_measurement"),
                 )
             except (TypeError, ValueError):
                 return {CONF_SITE_GRID_CURRENT: "invalid_current_entity_unit"}
+        phase_keys = (*CONF_SITE_PHASE_POWER_ENTITIES, *CONF_SITE_PHASE_VOLTAGE_ENTITIES)
+        configured_phases = [key for key in phase_keys if data.get(key)]
+        if configured_phases and len(configured_phases) != len(phase_keys):
+            return {"base": "incomplete_phase_grid_mapping"}
+        if configured_phases:
+            for key in CONF_SITE_PHASE_POWER_ENTITIES:
+                state = self.hass.states.get(str(data[key]))
+                if state is not None:
+                    try:
+                        power_to_kw(
+                            0.0
+                            if state.state in {"unknown", "unavailable"}
+                            else float(state.state),
+                            state.attributes.get("unit_of_measurement"),
+                        )
+                    except (TypeError, ValueError):
+                        return {key: "invalid_power_entity_unit"}
+            for key in CONF_SITE_PHASE_VOLTAGE_ENTITIES:
+                state = self.hass.states.get(str(data[key]))
+                if state is not None and state.attributes.get("unit_of_measurement") != "V":
+                    return {key: "invalid_voltage_entity_unit"}
         foxess_mapping = (
             data.get(CONF_FOXESS_WORK_MODE),
             data.get(CONF_FOXESS_FORCE_CHARGE_POWER),
@@ -2432,6 +2469,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             data.get(CONF_EV_CONTROL_COMMISSIONED)
             and site_phase_count > 1
             and not data.get(CONF_SITE_GRID_CURRENT)
+            and not all(data.get(key) for key in phase_keys)
         ):
             return {"base": "multiphase_current_mapping_required"}
         if (

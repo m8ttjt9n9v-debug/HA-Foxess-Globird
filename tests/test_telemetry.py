@@ -12,6 +12,7 @@ from custom_components.home_energy_orchestrator.telemetry import (
     TelemetrySource,
     battery_power_from_magnitudes_or_signed,
     combine_battery_magnitudes,
+    most_loaded_phase_current,
     normalize_current_sample,
     normalize_power_sample,
     normalize_site_telemetry,
@@ -71,6 +72,77 @@ def test_site_telemetry_boundary_does_not_invent_solar_when_absent() -> None:
     assert telemetry.solar_power.value == 0.0
     assert telemetry.solar_power.reason == "configured_absent"
     assert telemetry.grid_power.reason == "not_configured"
+
+
+def _phase_sources(
+    power_values: tuple[object, object, object] = (-2.4, -4.8, -1.2),
+    voltage_values: tuple[object, object, object] = (240, 230, 220),
+    *,
+    power_age: int = 0,
+) -> tuple[tuple[TelemetrySource, ...], tuple[TelemetrySource, ...]]:
+    powers = tuple(
+        TelemetrySource(f"sensor.phase_{phase}_ct", value, "kW", NOW - timedelta(seconds=power_age))
+        for phase, value in zip("rst", power_values, strict=True)
+    )
+    voltages = tuple(
+        TelemetrySource(f"sensor.phase_{phase}_voltage", value, "V", NOW)
+        for phase, value in zip("rst", voltage_values, strict=True)
+    )
+    return powers, voltages
+
+
+def test_multiphase_current_uses_most_imported_phase_not_aggregate_average() -> None:
+    powers, voltages = _phase_sources()
+    current = most_loaded_phase_current(
+        powers, voltages, now=NOW, max_age_seconds=90,
+        power_positive_direction="positive_export",
+    )
+    assert current.value == pytest.approx(4800 / 230)
+    assert current.reason == "derived_from_phase_grid_power_and_voltage"
+    assert len(current.sources) == 6
+
+
+@pytest.mark.parametrize(
+    ("powers", "voltages", "power_age", "reason"),
+    [
+        ((-2.4, "unavailable", -1.2), (240, 230, 220), 0, "phase_source_unavailable"),
+        ((-2.4, -4.8, -1.2), (240, 1, 220), 0, "implausible_phase_voltage"),
+        ((-2.4, -4.8, -1.2), (240, 230, 220), 91, "phase_stale"),
+    ],
+)
+def test_multiphase_current_fails_closed_on_bad_phase_evidence(
+    powers, voltages, power_age, reason
+) -> None:
+    power_sources, voltage_sources = _phase_sources(
+        powers, voltages, power_age=power_age
+    )
+    current = most_loaded_phase_current(
+        power_sources, voltage_sources, now=NOW, max_age_seconds=90,
+        power_positive_direction="positive_export",
+    )
+    assert current.value is None
+    assert current.reason == reason
+
+
+def test_multiphase_telemetry_can_recover_from_unavailable_direct_helper() -> None:
+    powers, voltages = _phase_sources()
+    telemetry = normalize_site_telemetry(
+        SiteTelemetrySources(
+            None, None, None, None, None, None,
+            TelemetrySource("sensor.current_helper", "unavailable", "A", NOW),
+            powers, voltages,
+        ),
+        TelemetryNormalizationConfiguration(
+            max_age_seconds=90, grid_power_direction="positive_export",
+            battery_power_direction="positive_charge", solar_configured=False,
+            solar_generation_direction="generation_positive",
+            site_grid_current_direction="positive_export", site_phase_count=3.0,
+            voltage_v=230.0,
+        ),
+        now=NOW,
+    )
+    assert telemetry.site_grid_current.value == pytest.approx(4800 / 230)
+    assert telemetry.site_grid_current.reason == "derived_from_phase_grid_power_and_voltage"
 
 
 def power(

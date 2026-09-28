@@ -134,6 +134,22 @@ CONF_EV_LEARNING_MINIMUM_SAMPLES = "ev_learning_minimum_samples"
 CONF_SITE_GRID_HEADROOM_CURRENT = "site_grid_headroom_current_a"
 CONF_SITE_GRID_CURRENT = "site_grid_current_entity"
 CONF_SITE_GRID_CURRENT_DIRECTION = "site_grid_current_positive_direction"
+CONF_SITE_GRID_PHASE_R_POWER = "site_grid_phase_r_power_entity"
+CONF_SITE_GRID_PHASE_R_VOLTAGE = "site_grid_phase_r_voltage_entity"
+CONF_SITE_GRID_PHASE_S_POWER = "site_grid_phase_s_power_entity"
+CONF_SITE_GRID_PHASE_S_VOLTAGE = "site_grid_phase_s_voltage_entity"
+CONF_SITE_GRID_PHASE_T_POWER = "site_grid_phase_t_power_entity"
+CONF_SITE_GRID_PHASE_T_VOLTAGE = "site_grid_phase_t_voltage_entity"
+CONF_SITE_PHASE_POWER_ENTITIES = (
+    CONF_SITE_GRID_PHASE_R_POWER,
+    CONF_SITE_GRID_PHASE_S_POWER,
+    CONF_SITE_GRID_PHASE_T_POWER,
+)
+CONF_SITE_PHASE_VOLTAGE_ENTITIES = (
+    CONF_SITE_GRID_PHASE_R_VOLTAGE,
+    CONF_SITE_GRID_PHASE_S_VOLTAGE,
+    CONF_SITE_GRID_PHASE_T_VOLTAGE,
+)
 CONF_SIGN_CONVENTIONS_VERIFIED = "sign_conventions_verified"
 CONF_TELEMETRY_MAX_AGE_SECONDS = "telemetry_max_age_seconds"
 CONF_BATTERY_FREE_WINDOW_TARGET = "battery_free_window_target_percent"

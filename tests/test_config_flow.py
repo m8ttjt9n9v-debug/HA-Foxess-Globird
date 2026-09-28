@@ -837,6 +837,158 @@ async def test_current_mapping_rejects_power_unit_and_preserves_submitted_values
     assert markers["site_grid_current_entity"].default() == "sensor.grid_ct"
 
 
+async def test_three_phase_grid_mapping_is_portable_and_requires_all_six_inputs(hass):
+    phase_mapping = {
+        f"site_grid_phase_{phase}_{kind}_entity": f"sensor.grid_{phase}_{kind}"
+        for phase in "rst"
+        for kind in ("power", "voltage")
+    }
+    for phase in "rst":
+        hass.states.async_set(
+            f"sensor.grid_{phase}_power", "-2", {"unit_of_measurement": "kW"}
+        )
+        hass.states.async_set(
+            f"sensor.grid_{phase}_voltage", "unavailable", {"unit_of_measurement": "V"}
+        )
+    ev_mapping = {
+        "ev_soc_entity": "sensor.car_soc",
+        "ev_at_home_entity": "device_tracker.car",
+        "ev_cable_connected_entity": "binary_sensor.car_cable",
+        "ev_charging_state_entity": "sensor.car_charging",
+        "ev_actual_current_entity": "sensor.car_current",
+        "ev_stored_energy_entity": "sensor.car_energy",
+        "ev_current_limit_entity": "number.car_current",
+        "ev_charge_limit_entity": "number.car_limit",
+        "ev_charge_switch_entity": "switch.car_charge",
+    }
+    base = {
+        "name": "Three-phase site",
+        **ENTRY_DATA,
+        **ev_mapping,
+        "site_phase_count": 3,
+        "service_import_limit_a": 80,
+        "ev_control_commissioned": True,
+        "site_grid_current_positive_direction": "positive_export",
+    }
+    incomplete = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": SOURCE_USER},
+        data={**base, **{key: value for key, value in phase_mapping.items() if "_t_" not in key}},
+    )
+    assert incomplete["type"] is FlowResultType.FORM
+    assert incomplete["errors"] == {"base": "incomplete_phase_grid_mapping"}
+
+    accepted = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": SOURCE_USER}, data={**base, **phase_mapping},
+    )
+    assert accepted["type"] is FlowResultType.CREATE_ENTRY
+    assert accepted["data"]["site_grid_phase_s_voltage_entity"] == "sensor.grid_s_voltage"
+
+    hass.states.async_set("sensor.grid_t_voltage", "230", {"unit_of_measurement": "kW"})
+    wrong_unit = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": SOURCE_USER}, data={**base, **phase_mapping},
+    )
+    assert wrong_unit["type"] is FlowResultType.FORM
+    assert wrong_unit["errors"] == {
+        "site_grid_phase_t_voltage_entity": "invalid_voltage_entity_unit"
+    }
+
+
+async def test_current_mapping_allows_a_temporarily_unavailable_amp_sensor(hass):
+    """A live telemetry gap must not make an otherwise valid site impossible to save."""
+    hass.states.async_set(
+        "sensor.grid_ct",
+        "unavailable",
+        {"unit_of_measurement": "A", "device_class": "current"},
+    )
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": SOURCE_USER},
+        data={
+            "name": "Temporarily unavailable current telemetry",
+            **ENTRY_DATA,
+            "site_grid_current_entity": "sensor.grid_ct",
+        },
+    )
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["data"]["site_grid_current_entity"] == "sensor.grid_ct"
+
+
+async def test_current_mapping_rejects_an_unavailable_power_sensor(hass):
+    """An outage must not disguise a sensor with the wrong physical unit."""
+    hass.states.async_set(
+        "sensor.grid_ct",
+        "unavailable",
+        {"unit_of_measurement": "kW", "device_class": "power"},
+    )
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": SOURCE_USER},
+        data={
+            "name": "Unavailable power telemetry",
+            **ENTRY_DATA,
+            "site_grid_current_entity": "sensor.grid_ct",
+        },
+    )
+
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"] == {"site_grid_current_entity": "invalid_current_entity_unit"}
+
+
+async def test_reconfigure_accepts_unavailable_amp_current_for_multiphase_ev(hass):
+    """Reconfiguration must not strand a three-phase site during a telemetry gap."""
+    hass.states.async_set(
+        "sensor.grid_ct",
+        "unavailable",
+        {"unit_of_measurement": "A", "device_class": "current"},
+    )
+    ev_mapping = {
+        "ev_soc_entity": "sensor.car_soc",
+        "ev_at_home_entity": "device_tracker.car",
+        "ev_cable_connected_entity": "binary_sensor.car_cable",
+        "ev_charging_state_entity": "sensor.car_charging",
+        "ev_actual_current_entity": "sensor.car_current",
+        "ev_stored_energy_entity": "sensor.car_energy",
+        "ev_current_limit_entity": "number.car_current",
+        "ev_charge_limit_entity": "number.car_limit",
+        "ev_charge_switch_entity": "switch.car_charge",
+    }
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Three-phase site",
+        data={
+            **ENTRY_DATA,
+            **ev_mapping,
+            "site_phase_count": 3,
+            "service_import_limit_a": 80,
+            "site_grid_current_entity": "sensor.grid_ct",
+            "ev_control_commissioned": True,
+        },
+    )
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": SOURCE_RECONFIGURE, "entry_id": entry.entry_id},
+    )
+    result = await _open_reconfigure_page(hass, result, "review")
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        user_input={
+            "sign_conventions_verified": True,
+            "apply_configuration": True,
+        },
+    )
+
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "reconfigure_successful"
+    await hass.async_block_till_done()
+    assert entry.data["site_grid_current_entity"] == "sensor.grid_ct"
+    assert await hass.config_entries.async_unload(entry.entry_id)
+
+
 async def test_user_flow_preserves_explicit_foxess_actuator_mappings(hass):
     mappings = {
         "foxess_work_mode_entity": "select.foxess_work_mode",

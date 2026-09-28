@@ -9,8 +9,8 @@ def test_config_contract_matches_reviewed_release_baseline() -> None:
     assert BASELINE_PATH.read_text(encoding="utf-8") == rendered_contract()
 
 
-def test_config_pages_have_one_hundred_and_twenty_eight_unique_fields() -> None:
+def test_config_pages_have_one_hundred_and_thirty_four_unique_fields() -> None:
     contract = build_config_contract()
     assert contract["config_entry_version"] == 6
-    assert contract["page_field_count"] == 128
-    assert contract["unique_page_field_count"] == 128
+    assert contract["page_field_count"] == 134
+    assert contract["unique_page_field_count"] == 134

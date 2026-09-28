@@ -30,6 +30,8 @@ class TelemetryEntityIds:
     solar_power: str | None
     house_load: str | None
     site_grid_current: str | None
+    phase_grid_power: tuple[str | None, str | None, str | None] = (None, None, None)
+    phase_grid_voltage: tuple[str | None, str | None, str | None] = (None, None, None)
 
 
 class StateTimestamp(Protocol):
@@ -82,6 +84,14 @@ def capture_site_telemetry(
         house_load=capture_telemetry_source(hass, entity_ids.house_load),
         site_grid_current=capture_telemetry_source(
             hass, entity_ids.site_grid_current
+        ),
+        phase_grid_power=tuple(
+            capture_telemetry_source(hass, entity_id)
+            for entity_id in entity_ids.phase_grid_power
+        ),
+        phase_grid_voltage=tuple(
+            capture_telemetry_source(hass, entity_id)
+            for entity_id in entity_ids.phase_grid_voltage
         ),
     )
 

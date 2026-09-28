@@ -233,7 +233,11 @@ layers around the proven algorithm, not replacement algorithms.
   otherwise valid battery export plan.
 - A multiphase EV controller must receive explicit signed current for the
   most-loaded service phase. Aggregate power is not treated as proof that phase
-  loading is balanced.
+  loading is balanced. A separately mapped six-source extension can derive
+  this feedback from three grid CT phase powers and their corresponding grid
+  voltages, with sign, unit, plausible-voltage and freshness checks. It never
+  depends on an EV charger voltage or silently replaces an existing current
+  mapping. Missing evidence blocks EV control rather than assuming balance.
 - House-load topology is explicit. The retained pilot mapping already excludes
   EV power and remains the default. A whole-house mapping may opt into removing
   measured EV current converted with the commissioned voltage and EV phase

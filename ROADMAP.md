@@ -222,6 +222,10 @@ Status here describes behavioral parity, not merely the presence of code.
   service-current directions; W/kW/MW conversion; timestamp freshness and
   provenance; pilot paired battery magnitudes; migration lock; shared automatic
   write gate; canonical entities; and single-/three-phase golden tests.
+- [x] Optional multiphase current derivation from explicitly mapped per-phase
+  grid CT power and grid voltage, without a vehicle/charger telemetry dependency.
+  Existing direct-current and single-phase mappings remain unchanged; incomplete,
+  stale, or implausible phase evidence blocks multiphase EV control.
 - [x] Configurable tariff, battery reserve, phase, service, inverter, EV, export,
   and timing inputs without site entity IDs in control code.
 - [x] Explicit FoxESS ownership: Observer, Local Modbus, or FoxCloud Scheduler.

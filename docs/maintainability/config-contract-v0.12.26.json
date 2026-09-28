@@ -127,6 +127,12 @@
     "site_grid_current_entity",
     "site_grid_current_positive_direction",
     "site_grid_headroom_current_a",
+    "site_grid_phase_r_power_entity",
+    "site_grid_phase_r_voltage_entity",
+    "site_grid_phase_s_power_entity",
+    "site_grid_phase_s_voltage_entity",
+    "site_grid_phase_t_power_entity",
+    "site_grid_phase_t_voltage_entity",
     "site_phase_count",
     "solar_power_entity",
     "solar_power_generation_direction",
@@ -145,7 +151,7 @@
     "free_charge_schedule_confirmed",
     "grid_import_positive"
   ],
-  "page_field_count": 128,
+  "page_field_count": 134,
   "pages": {
     "automation": [
       "foxess_control_owner",
@@ -230,6 +236,12 @@
       "site_phase_count",
       "service_import_limit_a",
       "site_grid_current_entity",
+      "site_grid_phase_r_power_entity",
+      "site_grid_phase_r_voltage_entity",
+      "site_grid_phase_s_power_entity",
+      "site_grid_phase_s_voltage_entity",
+      "site_grid_phase_t_power_entity",
+      "site_grid_phase_t_voltage_entity",
       "site_grid_current_positive_direction",
       "site_grid_headroom_current_a",
       "telemetry_max_age_seconds",
@@ -304,5 +316,5 @@
   },
   "release_baseline": "0.12.26",
   "schema_version": 1,
-  "unique_page_field_count": 128
+  "unique_page_field_count": 134
 }
