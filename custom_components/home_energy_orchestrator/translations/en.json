@@ -800,6 +800,7 @@
       "battery_capacity_required": "Select a live FoxESS battery-capacity sensor, or enter a commissioned fallback capacity.",
       "invalid_daily_ev_backfill": "Daily EV backfill requires a commissioned inverter output/discharge limit, a non-zero outside-window percentage, and a ready time before the free-power window.",
       "invalid_schedule": "Choose different free-charge times and a non-negative fallback.",
+      "review_configuration_invalid": "This configuration has a problem that needs correcting. Return to the relevant section and review its values.",
       "invalid_foxess_control_owner": "Choose observer only, local Modbus, or FoxCloud Mode Scheduler.",
       "invalid_power_direction": "Choose the direction represented by a positive sensor value.",
       "incomplete_split_battery_mapping": "Map both battery charge and discharge magnitude sensors, or leave both blank.",

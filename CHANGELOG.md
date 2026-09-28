@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.12.29rc12 — reliable configuration review and solar-spill coverage
+
+- Fix the reconfiguration Review and apply boundary: a late cross-page
+  validation failure now returns to the section that can correct it, preserving
+  the draft and showing the real error instead of appearing to loop on Submit.
+- Prove that a valid automatic-charge review advances to the separate
+  free-power schedule confirmation screen.
+- Add end-to-end and planner regression coverage for measured solar spill when
+  a briefly discharging house battery buffers cloud cover. A carried-over high
+  EV current must be replaced by the fresh solar-minus-house target.
+
 ## 0.12.29rc11 — measured solar-spill safeguard
 
 - Correct measured solar-spill reconstruction to subtract grid import rather

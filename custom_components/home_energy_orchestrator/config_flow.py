@@ -264,7 +264,7 @@ from .const import (
     SOLAR_POWER_DIRECTIONS,
 )
 from .discovery import DiscoveryEntity, discover_entity_defaults
-from .field_catalogue import FIELD_KEYS_BY_PAGE
+from .field_catalogue import FIELD_KEYS_BY_PAGE, FIELD_SPECS_BY_KEY
 from .normalise import current_to_a, energy_to_kwh
 
 ENTITY = selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor"))
@@ -797,6 +797,58 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             description_placeholders=placeholders,
         )
 
+    def _show_review_validation_error(
+        self, *, errors: dict[str, str], reconfigure: bool
+    ):
+        """Return a late validation failure to the section that can fix it.
+
+        Reconfiguration may be entered through the section menu, so a draft can
+        contain a cross-field inconsistency that no individual section submit
+        sees.  The old behaviour put that error on Review, whose tiny schema has
+        no matching field.  Home Assistant then renders little or no useful
+        feedback on mobile and the operator appears to be stuck in a submit
+        loop.  Keep the draft and reopen the relevant page instead.
+        """
+        assert self._draft_input is not None
+        key, error = next(iter(errors.items()))
+
+        # Direct field failures have one authoritative home in the generated
+        # field catalogue.  Cross-field failures are deliberately assigned to
+        # the section where the operator can make the required change.
+        page = (
+            FIELD_SPECS_BY_KEY[key].page
+            if key in FIELD_SPECS_BY_KEY
+            else None
+        )
+        if key == "base":
+            page = {
+                "incomplete_split_battery_mapping": "battery",
+                "battery_capacity_required": "battery",
+                "incomplete_foxess_mapping": "inverter",
+                "incomplete_ev_mapping": "charger",
+                "incomplete_smart_socket_mapping": "charger",
+                "multiphase_current_mapping_required": "grid",
+                "invalid_schedule": "tariff",
+                "invalid_daily_ev_backfill": "ev_policies",
+                "solar_spill_battery_power_mapping_required": "battery",
+                "outside_ev_policy_requires_local_modbus": "automation",
+            }.get(error)
+
+        if page is None:
+            # Every current validation failure has a mapped home.  Fail safely
+            # if a later validator is added without one: show a visible review
+            # error rather than silently returning an unrelated field error.
+            return self._show_review(
+                reconfigure=reconfigure,
+                errors={"base": "review_configuration_invalid"},
+            )
+
+        return self.async_show_form(
+            step_id=(f"reconfigure_{page}" if reconfigure else page),
+            data_schema=self._page_schema(page, self._draft_input),
+            errors=errors,
+        )
+
     async def _async_finish_review(
         self, user_input: dict[str, object] | None, *, reconfigure: bool
     ):
@@ -817,7 +869,9 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors = self._validate_input(pending)
         if errors:
             self._draft_input = pending
-            return self._show_review(reconfigure=reconfigure, errors=errors)
+            return self._show_review_validation_error(
+                errors=errors, reconfigure=reconfigure
+            )
         self._draft_input = None
         if pending.get(CONF_AUTOMATIC_CHARGE_ENABLED):
             return self._show_schedule_confirmation(pending, reconfigure=reconfigure)

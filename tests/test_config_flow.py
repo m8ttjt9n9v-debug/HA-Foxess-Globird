@@ -1108,6 +1108,81 @@ async def test_reconfigure_reviews_direction_verification_after_source_change(ha
     assert await hass.config_entries.async_unload(entry.entry_id)
 
 
+async def test_reconfigure_review_reopens_the_section_with_a_late_validation_error(hass):
+    """Review must not hide an error for a field that it does not display."""
+    ev_mapping = {
+        "ev_soc_entity": "sensor.car_soc",
+        "ev_at_home_entity": "device_tracker.car",
+        "ev_cable_connected_entity": "binary_sensor.car_cable",
+        "ev_charging_state_entity": "sensor.car_charging",
+        "ev_actual_current_entity": "sensor.car_current",
+        "ev_stored_energy_entity": "sensor.car_energy",
+        "ev_current_limit_entity": "number.car_current",
+        "ev_charge_limit_entity": "number.car_limit",
+        "ev_charge_switch_entity": "switch.car_charge",
+    }
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Three phase site",
+        data={
+            **ENTRY_DATA,
+            **ev_mapping,
+            "site_phase_count": 3,
+            "service_import_limit_a": 63,
+            "ev_control_commissioned": True,
+            "site_grid_current_entity": None,
+        },
+    )
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": SOURCE_RECONFIGURE, "entry_id": entry.entry_id},
+    )
+    result = await _open_reconfigure_page(hass, result, "review")
+
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        user_input={
+            "sign_conventions_verified": True,
+            "apply_configuration": True,
+        },
+    )
+
+    assert result["step_id"] == "reconfigure_grid"
+    assert result["errors"] == {"base": "multiphase_current_mapping_required"}
+    assert entry.data["site_grid_current_entity"] is None
+
+
+async def test_reconfigure_review_with_automatic_charge_opens_schedule_confirmation(hass):
+    """Review must visibly advance to schedule confirmation, not loop back."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Scheduled site",
+        data={**ENTRY_DATA, CONF_AUTOMATIC_CHARGE_ENABLED: True},
+    )
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": SOURCE_RECONFIGURE, "entry_id": entry.entry_id},
+    )
+    result = await _open_reconfigure_page(hass, result, "review")
+
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        user_input={
+            "sign_conventions_verified": True,
+            "apply_configuration": True,
+        },
+    )
+
+    assert result["step_id"] == "confirm_schedule"
+    assert result["description_placeholders"]["schedule_summary"] == (
+        "12:01 → 14:59 (2 h 58 min, same day)"
+    )
+
+
 async def test_reconfigure_preserves_hidden_legacy_charge_to_full_mapping(hass):
     legacy_data = {
         key: value for key, value in ENTRY_DATA.items() if key != "ev_charge_to_full_enabled"

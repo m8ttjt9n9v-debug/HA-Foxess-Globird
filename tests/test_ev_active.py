@@ -1005,6 +1005,72 @@ async def test_solar_spill_runtime_ports_measured_surplus_to_tessie(
     assert {event.data["domain"] for event in calls} == {"number", "switch"}
 
 
+@pytest.mark.freeze_time("2026-09-07 15:00:00+00:00")
+async def test_solar_spill_replaces_a_high_previous_current_with_live_surplus(
+    hass: HomeAssistant,
+) -> None:
+    """A solar-stage entry calculates fresh surplus instead of inheriting 15 A.
+
+    This is the battery-buffer case: actual EV power is 3.45 kW (15 A), no
+    grid energy is flowing, and the battery supplies 2.27 kW while cloud cover
+    leaves only 1.18 kW of solar after house demand.  The immediate solar-spill
+    target is therefore 5 A.  The measured-solar cadence applies only to later
+    ordinary changes; it cannot preserve a previous high setting at entry.
+    """
+    _set_ev_states(hass)
+    hass.states.async_set("sensor.car_charging", "charging")
+    hass.states.async_set(
+        "sensor.car_actual_current", "15", {"unit_of_measurement": "A"}
+    )
+    hass.states.async_set(
+        "number.car_current",
+        "15",
+        {"min": 1, "max": 16, "step": 1, "unit_of_measurement": "A"},
+    )
+    hass.states.async_set("switch.car_charge", "on")
+    hass.states.async_set("sensor.site_grid", "0", {"unit_of_measurement": "kW"})
+    hass.states.async_set(
+        "sensor.battery_power", "-2.27", {"unit_of_measurement": "kW"}
+    )
+    commands = []
+
+    async def set_value(call):
+        if call.data["entity_id"] == "number.car_current":
+            commands.append(call.data["value"])
+
+    hass.services.async_register("number", "set_value", set_value)
+    hass.services.async_register("switch", "turn_on", lambda _call: None)
+    coordinator = _coordinator(
+        _controller_config(
+            foxess_control_owner="local_modbus",
+            solar_configured=True,
+            ev_solar_spill_enabled=True,
+            ev_solar_spill_battery_soc_percent=95,
+            ev_protected_baseline_a=1,
+            battery_power_entity="sensor.battery_power",
+            battery_power_positive_direction="positive_charge",
+            grid_power_entity="sensor.site_grid",
+            grid_power_positive_direction="positive_import",
+            bonus_window_start="21:00:00",
+            bonus_window_end="22:00:00",
+        )
+    )
+    _set_power_telemetry(coordinator, hass, grid_kw=0, battery_kw=-2.27)
+    coordinator.snapshot = replace(coordinator.snapshot, battery_soc=95, grid_power_kw=0)
+    hass.states.async_set("sensor.site_battery_soc", "95", {"unit_of_measurement": "%"})
+    controller = ActiveEvController(hass, coordinator)
+    soc_state = hass.states.get("sensor.site_battery_soc")
+    assert soc_state is not None
+
+    await controller.async_reconcile(soc_state.last_updated)
+    await hass.async_block_till_done()
+
+    assert controller.solar_spill.reconstructed_surplus_kw == 1.18
+    assert controller.solar_spill.phase == "solar_spill"
+    assert controller.target_current_a == 5
+    assert commands == [5]
+
+
 async def test_measured_solar_runtime_holds_normal_changes_but_curtails_grid_import(
     hass: HomeAssistant,
 ) -> None:

@@ -318,6 +318,30 @@ def test_solar_spill_cannot_validate_a_high_existing_ev_current_from_grid_import
     assert decision.current_a == 5
 
 
+def test_solar_spill_uses_the_battery_as_a_short_term_cloud_buffer():
+    """A brief battery discharge does not turn a solar-derived target into grid charging.
+
+    A 15 A EV can be physically drawing 3.45 kW while a cloud reduces PV
+    surplus to 1.18 kW.  With no grid flow, the 2.27 kW difference is supplied
+    by the house battery.  The next solar decision must still reconstruct the
+    1.18 kW solar-minus-house surplus (5 A), rather than treating the existing
+    15 A request as evidence of 3.45 kW of available solar.
+    """
+    decision = plan_solar_spill_current(
+        replace(
+            SOLAR,
+            ev_power_kw=3.45,
+            net_grid_export_kw=0.0,
+            battery_charge_kw=-2.27,
+            voltage_v=230,
+        )
+    )
+
+    assert decision.reconstructed_surplus_kw == 1.18
+    assert decision.current_a == 5
+    assert decision.phase == "solar_spill"
+
+
 def test_three_phase_extension_changes_only_power_to_current_conversion():
     decision = plan_solar_spill_current(
         replace(
