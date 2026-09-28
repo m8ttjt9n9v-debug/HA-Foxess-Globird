@@ -147,8 +147,10 @@ layers around the proven algorithm, not replacement algorithms.
   The switch then becomes the sole persistent owner. It preserves the
   source policy ordering and cannot bypass commissioning, ownership, telemetry,
   service-current, allowance, or Safety Lock gates.
-- Solar spill reconstructs only measured surplus from EV power, grid export,
-  and signed battery flow. Pre-free backfill consumes no more than the local
+- Solar spill reconstructs only measured surplus from EV power, signed grid
+  flow (export positive and import negative), and signed battery flow. This
+  prevents a carried-over high EV request from treating grid import as free
+  solar. Pre-free backfill consumes no more than the local
   protected export plan and the vehicle's wall-energy room, starts as late as
   possible, and persists only its active phase and frozen start.
 - Morning measured-solar EV capture is a separate default-off policy before
@@ -160,10 +162,12 @@ layers around the proven algorithm, not replacement algorithms.
   saved. An active scheduled pre-free session has exclusive fixed-current
   ownership and completely replaces variable morning solar capture.
 - Normal measured-solar EV-current changes are restart-safe and require a
-  stable 15-minute target before Tessie is asked to change. Verified grid
-  import may curtail immediately. Any failed solar eligibility condition,
-  including stale telemetry, reserve loss, disconnection, EV limit or Safety
-  Lock, discards the hold and returns to the protected baseline. Pre-free,
+  stable 10-minute target before Tessie is asked to change. Verified grid
+  import may curtail immediately. The configured measured-solar SoC threshold
+  is a hard cutoff: below it, the held spill target is discarded immediately
+  and the EV returns to the protected baseline. Any other failed solar
+  eligibility condition, including stale telemetry, reserve loss,
+  disconnection, EV limit or Safety Lock, also discards the hold. Pre-free,
   free-window, daily-backfill and charge-to-full stages also discard it.
 - Solar-spill coherence applies to the fast electrical grid and effective
   battery sources. Rejected inactive-magnitude provenance cannot invalidate a

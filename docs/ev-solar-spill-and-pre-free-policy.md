@@ -9,7 +9,7 @@ outside-window behavior is the direct-path protected baseline.
 
 | Pilot source | Preserved HEO decision |
 | --- | --- |
-| `configuration_v1.4.24.yaml:4806` | Reconstruct currently available spill from EV charging power + grid export + signed battery charge; do not forecast future solar. |
+| `configuration_v1.4.24.yaml:4806` | Reconstruct currently available spill from EV charging power + signed grid flow (export positive, import negative) + signed battery charge; do not forecast future solar. |
 | `configuration_v1.4.24.yaml:4858` | Require battery SoC at or above the configured full threshold. |
 | `configuration_v1.4.24.yaml:4862` | Require explicit home/cable/charging evidence and vehicle SoC below the soft free-window limit. |
 | `configuration_v1.4.24.yaml:4845` | Suppress spill capture during the configured boosted export window. |
@@ -42,14 +42,15 @@ When a scheduled latest-start pre-free session becomes active, it takes
 exclusive control at its fixed current.  Morning solar does not raise, lower,
 or otherwise modulate that session.
 
-Both measured-solar stages share a restart-safe adjustment hold.  The first
+Both measured-solar stages share a restart-safe adjustment hold. The first
 eligible current is accepted immediately, but any ordinary later change must
-remain the same for 15 minutes before it is sent to Tessie.  This filters
+remain the same for 10 minutes before it is sent to Tessie. This filters
 whole-amp cloud-edge oscillation instead of repeatedly alternating adjacent
 current commands.  Verified grid import may reduce a target immediately.
+The configured SoC threshold is a hard cutoff: the instant SoC falls below it,
+the held target is discarded and the EV returns to the protected baseline.
 Lost or stale telemetry, loss of the configured reserve, EV disconnection or
-limit, Safety Lock, and all other eligibility failures immediately discard the
-hold and return to the protected-baseline path.  The hold is discarded at a
+limit, Safety Lock, and all other eligibility failures do the same. The hold is discarded at a
 pre-free, free-window, daily-backfill, or charge-to-full takeover.
 
 ## Latest-start pre-free mapping

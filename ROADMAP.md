@@ -73,7 +73,7 @@ Status here describes behavioral parity, not merely the presence of code.
   existing EV consumption is included in the reconstructed surplus and house
   demand is not mistaken for available solar.
 
-  Recalculate the normal charging target on a 15-minute cadence to avoid
+  Recalculate the normal charging target on a 10-minute cadence to avoid
   excessive current bouncing. Safety curtailment must remain immediate when
   grid import, lost/stale telemetry, loss of reserve, disconnection, vehicle
   limit, Safety Lock, or another commissioning gate makes the previous target
@@ -308,13 +308,14 @@ Status here describes behavioral parity, not merely the presence of code.
 
 - [x] Rate-limit the existing measured solar-spill EV controller so ordinary
   changes to the Tessie charging-current setpoint occur no more frequently
-  than once every 15 minutes. Hold the last safe target between intervals,
+  than once every 10 minutes. Hold the last safe target between intervals,
   suppress redundant writes, persist the hold across reload/restart, and add
   hysteresis at whole-amp boundaries so small solar fluctuations cannot cause
-  repeated adjacent-current commands. Immediate downward curtailment remains
-  permitted for grid import, lost/stale telemetry, loss of protected reserve,
+  repeated adjacent-current commands. The configured solar-spill SoC is a hard
+  cutoff, returning immediately to the protected baseline below that boundary.
+  Immediate downward curtailment remains permitted for grid import, lost/stale telemetry, loss of protected reserve,
   disconnection, vehicle limit, Safety Lock, or another safety/gating failure.
-  The 15-minute solar-spill hold ends when pre-free backfill starts. At that
+  The 10-minute solar-spill hold ends when pre-free backfill starts. At that
   handover, select and freeze one fixed backfill current for the active
   session. Pre-free then has exclusive authority: do not take the maximum of
   the solar and backfill targets, blend them, or continue variable-power solar

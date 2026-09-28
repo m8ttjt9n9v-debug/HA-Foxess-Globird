@@ -150,10 +150,11 @@ outside-window stages are independently default-off and are rejected unless
 Local Modbus is selected as FoxESS owner.
 
 Measured-solar EV current changes are held until the candidate remains stable
-for 15 minutes. This rate limit persists across restart and prevents ordinary
+for 10 minutes. This rate limit persists across restart and prevents ordinary
 cloud-edge variation from producing repeated adjacent-current Tessie writes.
-Verified grid import and any failed eligibility evidence curtail immediately;
-the hold does not delay the protected-baseline safety path.
+Verified grid import and any failed eligibility evidence curtail immediately.
+The configured measured-solar SoC threshold is a hard cutoff, so the hold
+cannot preserve extra EV current below the house-battery boundary.
 
 The Working Single Phase Pilot Site uses Tessie entities for these roles.
 Portable code maps roles and never embeds that vehicle's entity IDs. See the

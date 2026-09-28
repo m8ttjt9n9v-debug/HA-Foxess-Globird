@@ -1898,7 +1898,9 @@ class ActiveEvController:
         The raw policy remains responsible for all eligibility checks.  A
         non-active raw decision clears the retained hold so a lost reserve,
         incoherent telemetry, disconnection, EV limit or other safety gate
-        returns immediately to the normal protected-baseline path.
+        returns immediately to the normal protected-baseline path. In
+        particular, the configured solar-spill SoC threshold is a hard
+        boundary: an old higher spill target cannot remain held below it.
         """
         if self.morning_solar.phase == "morning_solar_surplus":
             policy_phase = "morning_solar"
@@ -2334,7 +2336,7 @@ class ActiveEvController:
             vehicle_soft_limit_percent=soft_limit,
             in_boosted_export_window=self._boosted_window_active(now),
             ev_power_kw=evaluation.ev_power_kw,
-            grid_export_kw=evaluation.grid_export_kw,
+            net_grid_export_kw=evaluation.net_grid_export_kw,
             battery_charge_kw=evaluation.battery_charge_kw,
             voltage_v=voltage,
             phase_count=phases,

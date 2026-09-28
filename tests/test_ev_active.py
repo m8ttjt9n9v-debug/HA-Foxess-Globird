@@ -1040,6 +1040,31 @@ async def test_measured_solar_runtime_holds_normal_changes_but_curtails_grid_imp
     assert controller.solar_spill.phase == "solar_spill_safety_curtailment"
 
 
+def test_solar_spill_soc_cutoff_discards_a_held_high_current_immediately(
+    hass: HomeAssistant,
+) -> None:
+    """A below-threshold SoC cannot retain an old solar-spill target."""
+    controller = ActiveEvController(hass, _coordinator(_controller_config()))
+    now = datetime(2026, 9, 7, 9, tzinfo=UTC)
+    controller.measured_solar_adjustment = MeasuredSolarAdjustmentState(
+        phase="solar_spill",
+        target_current_a=15,
+        changed_at=now - timedelta(minutes=1),
+    )
+    controller.solar_spill = SolarSpillDecision(0, 0, "battery_not_full")
+
+    controller._apply_measured_solar_adjustment(  # noqa: SLF001
+        now,
+        snapshot=controller.coordinator.snapshot,
+        charger_minimum_a=1,
+        current_step_a=1,
+    )
+
+    assert controller.measured_solar_adjustment == MeasuredSolarAdjustmentState()
+    assert controller.solar_spill.current_a == 0
+    assert controller.solar_spill.phase == "battery_not_full"
+
+
 @pytest.mark.freeze_time("2026-09-07 00:01:00+00:00")
 async def test_morning_solar_runtime_uses_separate_reserve_before_free_window(
     hass: HomeAssistant,

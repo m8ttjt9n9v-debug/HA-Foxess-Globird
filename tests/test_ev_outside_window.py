@@ -37,7 +37,7 @@ SOLAR = SolarSpillInputs(
     vehicle_soft_limit_percent=90,
     in_boosted_export_window=False,
     ev_power_kw=0.239,
-    grid_export_kw=2.0,
+    net_grid_export_kw=2.0,
     battery_charge_kw=0.5,
     voltage_v=239,
     phase_count=1,
@@ -158,12 +158,12 @@ def test_solar_spill_telemetry_evaluation_preserves_inclusive_boundaries():
 
     assert evaluation.telemetry_valid is True
     assert evaluation.ev_power_kw == 2.3
-    assert evaluation.grid_export_kw == 2.0
+    assert evaluation.net_grid_export_kw == 2.0
     assert evaluation.battery_charge_kw == 0.5
 
 
 @pytest.mark.parametrize(
-    ("changes", "expected_grid_export", "expected_battery_charge"),
+    ("changes", "expected_net_grid_export", "expected_battery_charge"),
     [
         ({"grid_power_kw": None}, 0.0, 0.5),
         ({"battery_power_kw": None}, 2.0, 0.0),
@@ -189,14 +189,14 @@ def test_solar_spill_telemetry_evaluation_preserves_inclusive_boundaries():
 )
 def test_solar_spill_telemetry_rejects_each_incoherent_evidence_term(
     changes,
-    expected_grid_export,
+    expected_net_grid_export,
     expected_battery_charge,
 ):
     evaluation = evaluate_solar_spill_telemetry(replace(TELEMETRY, **changes))
 
     assert evaluation.telemetry_valid is False
     assert evaluation.ev_power_kw == 2.3
-    assert evaluation.grid_export_kw == expected_grid_export
+    assert evaluation.net_grid_export_kw == expected_net_grid_export
     assert evaluation.battery_charge_kw == expected_battery_charge
 
 
@@ -229,7 +229,7 @@ def test_solar_spill_telemetry_fails_closed_for_empty_provenance(changes):
 
     assert evaluation.telemetry_valid is False
     assert evaluation.ev_power_kw == 2.3
-    assert evaluation.grid_export_kw == 2.0
+    assert evaluation.net_grid_export_kw == 2.0
     assert evaluation.battery_charge_kw == 0.5
 
 
@@ -243,11 +243,11 @@ def test_solar_spill_telemetry_fails_closed_for_empty_provenance(changes):
         ({"vehicle_soc_percent": 90}, 0, "vehicle_not_eligible"),
         ({"in_boosted_export_window": True}, 0, "boosted_export_window"),
         (
-            {"ev_power_kw": 0, "grid_export_kw": 0.1, "battery_charge_kw": 0},
+            {"ev_power_kw": 0, "net_grid_export_kw": 0.1, "battery_charge_kw": 0},
             0,
             "below_charger_minimum",
         ),
-        ({"grid_export_kw": 10}, 15, "solar_spill"),
+        ({"net_grid_export_kw": 10}, 15, "solar_spill"),
     ],
 )
 def test_pilot_solar_spill_golden_branches(changes, expected, phase):
@@ -279,12 +279,43 @@ def test_morning_solar_holds_below_its_separate_house_reserve():
     assert decision.phase == "morning_battery_reserve_not_met"
 
 
+def test_solar_spill_soc_activation_is_an_inclusive_hard_cutoff():
+    """At the configured boundary spill may run; below it returns to baseline."""
+    active = plan_solar_spill_current(
+        replace(SOLAR, battery_soc_percent=95, battery_full_threshold_percent=95)
+    )
+    cut_off = plan_solar_spill_current(
+        replace(SOLAR, battery_soc_percent=94.999, battery_full_threshold_percent=95)
+    )
+
+    assert active.current_a == 11
+    assert active.phase == "solar_spill"
+    assert cut_off.current_a == 0
+    assert cut_off.phase == "battery_not_full"
+
+
 def test_solar_spill_removes_battery_discharge_and_preserves_existing_ev_power():
     decision = plan_solar_spill_current(
-        replace(SOLAR, ev_power_kw=2.39, grid_export_kw=1, battery_charge_kw=-1)
+        replace(SOLAR, ev_power_kw=2.39, net_grid_export_kw=1, battery_charge_kw=-1)
     )
     assert decision.reconstructed_surplus_kw == 2.39
     assert decision.current_a == 10
+
+
+def test_solar_spill_cannot_validate_a_high_existing_ev_current_from_grid_import():
+    """Grid import must subtract from a carried-over free-window request."""
+    decision = plan_solar_spill_current(
+        replace(
+            SOLAR,
+            ev_power_kw=3.45,
+            net_grid_export_kw=-2.27,
+            battery_charge_kw=0,
+            voltage_v=230,
+        )
+    )
+
+    assert decision.reconstructed_surplus_kw == 1.18
+    assert decision.current_a == 5
 
 
 def test_three_phase_extension_changes_only_power_to_current_conversion():
@@ -292,7 +323,7 @@ def test_three_phase_extension_changes_only_power_to_current_conversion():
         replace(
             SOLAR,
             ev_power_kw=0,
-            grid_export_kw=6.9,
+            net_grid_export_kw=6.9,
             battery_charge_kw=0,
             voltage_v=230,
             phase_count=3,
@@ -531,7 +562,7 @@ def test_outside_branch_falls_back_to_protected_baseline():
     assert decision.phase == "protected_baseline"
 
 
-def test_measured_solar_adjustment_requires_a_stable_fifteen_minute_target():
+def test_measured_solar_adjustment_requires_a_stable_ten_minute_target():
     started = rate_limit_measured_solar_current(
         MeasuredSolarAdjustmentState(),
         now=NOW,
@@ -582,7 +613,7 @@ def test_measured_solar_adjustment_requires_a_stable_fifteen_minute_target():
     )
     updated = rate_limit_measured_solar_current(
         stable_pending.state,
-        now=NOW + timedelta(minutes=22),
+        now=NOW + timedelta(minutes=17),
         policy_phase="solar_spill",
         requested_current_a=8,
         charger_minimum_a=1,

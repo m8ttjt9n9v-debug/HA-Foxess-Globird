@@ -30,7 +30,7 @@ class SolarSpillInputs:
     vehicle_soft_limit_percent: float
     in_boosted_export_window: bool
     ev_power_kw: float
-    grid_export_kw: float
+    net_grid_export_kw: float
     battery_charge_kw: float
     voltage_v: float
     phase_count: int
@@ -48,7 +48,10 @@ class SolarSpillDecision:
     phase: str
 
 
-MEASURED_SOLAR_ADJUSTMENT_INTERVAL = timedelta(minutes=15)
+# Measured solar capture is intentionally less chatty than the regular EV
+# reconciliation loop. Ten minutes filters ordinary cloud-edge movement
+# without allowing a stale high solar target to persist for a quarter-hour.
+MEASURED_SOLAR_ADJUSTMENT_INTERVAL = timedelta(minutes=10)
 _MEASURED_SOLAR_PHASES = frozenset({"solar_spill", "morning_solar"})
 
 
@@ -82,7 +85,7 @@ def rate_limit_measured_solar_current(
     current_step_a: float,
     immediate_curtailment: bool,
 ) -> MeasuredSolarAdjustment:
-    """Accept stable solar targets no more frequently than every 15 minutes.
+    """Accept stable solar targets no more frequently than every 10 minutes.
 
     A target must remain unchanged for the interval before an ordinary change is
     accepted.  That pending interval is the whole-amp hysteresis: a cloud edge
@@ -184,7 +187,7 @@ class SolarSpillTelemetryEvaluation:
 
     telemetry_valid: bool
     ev_power_kw: float
-    grid_export_kw: float
+    net_grid_export_kw: float
     battery_charge_kw: float
 
 
@@ -449,7 +452,11 @@ def evaluate_solar_spill_telemetry(
             * evidence.phase_count
             / 1000
         ),
-        grid_export_kw=max(-(evidence.grid_power_kw or 0.0), 0.0),
+        # Export is positive and import is negative.  Retaining the signed
+        # contribution is essential when an existing EV request is being
+        # reconstructed: treating import as zero would allow that request to
+        # validate itself as solar spill.
+        net_grid_export_kw=-(evidence.grid_power_kw or 0.0),
         battery_charge_kw=evidence.battery_power_kw or 0.0,
     )
 
@@ -457,9 +464,10 @@ def evaluate_solar_spill_telemetry(
 def plan_solar_spill_current(inputs: SolarSpillInputs) -> SolarSpillDecision:
     """Reconstruct spill and floor it to a whole supported current step.
 
-    The source equation is EV power + grid export + signed battery charge.  It
-    removes battery discharge and adds energy still being absorbed by a full
-    battery, preventing the target from collapsing when EV charging begins.
+    The source equation is EV power + signed grid flow (export positive,
+    import negative) + signed battery charge. It removes battery discharge,
+    import and adds energy still being absorbed by a full battery, preventing
+    the target from collapsing when EV charging begins.
     """
     return _plan_measured_solar_current(
         inputs,
@@ -495,7 +503,12 @@ def _plan_measured_solar_current(
     """Share coherent measured-surplus calculations between solar stages."""
     _validate_solar_spill(inputs)
     surplus = round(
-        max(inputs.ev_power_kw + inputs.grid_export_kw + inputs.battery_charge_kw, 0.0),
+        max(
+            inputs.ev_power_kw
+            + inputs.net_grid_export_kw
+            + inputs.battery_charge_kw,
+            0.0,
+        ),
         3,
     )
     if not inputs.telemetry_valid:
@@ -639,7 +652,7 @@ def _validate_solar_spill(inputs: SolarSpillInputs) -> None:
         inputs.vehicle_soc_percent,
         inputs.vehicle_soft_limit_percent,
         inputs.ev_power_kw,
-        inputs.grid_export_kw,
+        inputs.net_grid_export_kw,
         inputs.battery_charge_kw,
         inputs.voltage_v,
         inputs.current_step_a,
@@ -654,7 +667,6 @@ def _validate_solar_spill(inputs: SolarSpillInputs) -> None:
         inputs.vehicle_soc_percent,
         inputs.vehicle_soft_limit_percent,
         inputs.ev_power_kw,
-        inputs.grid_export_kw,
         inputs.voltage_v,
         inputs.current_step_a,
         inputs.charger_minimum_a,

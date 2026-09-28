@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.12.29rc11 — measured solar-spill safeguard
+
+- Correct measured solar-spill reconstruction to subtract grid import rather
+  than treating it as zero. A high current carried over from free charging can
+  no longer validate itself as available solar spill.
+- Shorten measured solar-spill and morning-solar current adjustment from 15 to
+  10 minutes. The configured solar-spill SoC has explicit regression coverage
+  as a hard cutoff: below it, a held higher target is discarded and the EV
+  returns to its protected baseline.
+
 ## 0.12.29rc10 — strict direct EVSE 90% command cap
 
 - Publish the strict direct-EVSE cap correction after its release validation
