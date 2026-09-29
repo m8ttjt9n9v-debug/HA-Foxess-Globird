@@ -120,9 +120,16 @@ must be fresh and every voltage plausible (180–300 V), or current feedback
 remains unavailable and EV actuation is blocked. Aggregate grid power is not
 a substitute for per-phase evidence. Existing current-sensor mappings remain
 compatible; if both methods are configured, a valid direct sensor takes
-precedence and the six phase sources provide a fallback. Some device
-integrations disable phase-voltage entities by default; enable and verify
-those entities before mapping them.
+precedence and the six phase sources provide a fallback. For the FoxESS
+Modbus six-source method, **enable Grid Voltage R, S and T in the FoxESS
+Modbus entity list**; these voltage entities are disabled by default on
+supported H3 models. Confirm that **Grid CT R, S and T** each report signed
+power in W or kW. Match R power with R voltage, S with S, and T with T in
+HEO's Grid connection configuration. **Do not use EPS Current R/S/T**: those
+sensors describe the inverter's backup/EPS output, not the grid connection.
+This FoxESS Modbus configuration is essential only for the six-source
+multiphase EV safety method; single-phase sites and sites with a separately
+commissioned direct grid-current sensor do not require it.
 
 FoxESS Modbus profiles that expose an unambiguous `BMS kWh Remaining` capacity
 entity are suggested automatically, and its current value prefills the setup

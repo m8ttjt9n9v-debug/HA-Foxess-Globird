@@ -342,7 +342,7 @@
         },
       "grid": {
           "title": "Grid connection",
-          "description": "Map signed grid telemetry and enter physical supply limits.",
+          "description": "For three-phase EV control, map either a signed most-loaded grid-current sensor (A), or all six matching phase sensors. For the six-sensor method, first enable Grid Voltage R, S and T in FoxESS Modbus, then map Grid CT R/S/T power and Grid Voltage R/S/T here. EPS Current R/S/T measures backup output, not the grid connection; do not use it. Verify the positive direction before enabling control.",
           "data": {
             "grid_power_entity": "Signed grid power sensor",
             "grid_power_positive_direction": "Grid power sensor positive direction",
@@ -582,7 +582,7 @@
         },
       "reconfigure_grid": {
           "title": "Reconfigure: Grid connection",
-          "description": "Map signed grid telemetry and enter physical supply limits.",
+          "description": "For three-phase EV control, map either a signed most-loaded grid-current sensor (A), or all six matching phase sensors. For the six-sensor method, first enable Grid Voltage R, S and T in FoxESS Modbus, then map Grid CT R/S/T power and Grid Voltage R/S/T here. EPS Current R/S/T measures backup output, not the grid connection; do not use it. Verify the positive direction before enabling control.",
           "data": {
             "grid_power_entity": "Signed grid power sensor",
             "grid_power_positive_direction": "Grid power sensor positive direction",

@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.12.29rc14 — clear three-phase FoxESS Modbus commissioning
+
+- Explain in setup, reconfiguration and the commissioning guides that the
+  six-source multiphase grid-current method requires Grid CT R/S/T power and
+  Grid Voltage R/S/T enabled in FoxESS Modbus. These voltage entities can be
+  disabled by default.
+- Warn explicitly that EPS Current R/S/T measures backup output, not grid
+  service current, and must not be used for HEO's grid safety mapping.
+
 ## 0.12.29rc13 — independent three-phase grid feedback
 
 - Allow a configured three-phase site to derive most-loaded service current

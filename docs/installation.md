@@ -72,11 +72,15 @@ commissioned physical current ceiling, a positive service limit, the independent
 operates in the free window or separately enabled outside stages; the general
 charge-limit policy may update while connected outside those stages. It never
 writes FoxESS. Map cumulative lifetime energy to enable daily-driving samples;
-otherwise the conservative full-window limit fallback remains. A multiphase site must also
-map a signed amperage sensor for the most-loaded service phase, positive for
-import; HEO deliberately refuses to infer per-phase safety from aggregate
-three-phase power. Commission first with the EV intent off, verify all portable
-diagnostic values, and keep any competing Tesla current automation disabled.
+otherwise the conservative full-window limit fallback remains. A multiphase
+site must map either a signed amperage sensor for the most-loaded grid phase
+or all three Grid CT phase-power sensors plus matching Grid Voltage R/S/T
+sensors. For the six-source method, enable Grid Voltage R/S/T in FoxESS Modbus
+first; these entities may be disabled by default. Never substitute EPS Current
+R/S/T: it measures backup output, not grid service current. HEO refuses to
+infer per-phase safety from aggregate three-phase power. Commission first
+with the EV intent off, verify all portable diagnostic values, and keep any
+competing Tesla current automation disabled.
 Solar-spill and latest-start pre-free control are additional default-off setup
 options. Both require Local Modbus ownership; solar spill also requires a signed
 battery-power mapping and verified charge-positive convention. Enabling either

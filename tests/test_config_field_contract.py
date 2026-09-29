@@ -7,6 +7,7 @@ import json
 from custom_components.home_energy_orchestrator.config_flow import ConfigFlow
 from scripts.config_field_contract import (
     BASELINE_PATH,
+    TRANSLATION_PATH,
     build_config_field_contract,
     rendered_contract,
 )
@@ -32,3 +33,14 @@ def test_config_field_contract_covers_every_wizard_field_once() -> None:
         item["setup_label"] == item["reconfigure_label"]
         for item in contract["fields"]
     )
+
+
+def test_multiphase_grid_setup_explains_upstream_foxess_modbus_entities() -> None:
+    translations = json.loads(
+        TRANSLATION_PATH.read_text(encoding="utf-8")
+    )["config"]["step"]
+    for step in ("grid", "reconfigure_grid"):
+        description = translations[step]["description"]
+        assert "Grid Voltage R, S and T" in description
+        assert "Grid CT R/S/T" in description
+        assert "EPS Current R/S/T" in description

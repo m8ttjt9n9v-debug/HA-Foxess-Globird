@@ -76,6 +76,10 @@ FoxESS commissioning must include the upstream integration's Export Power
 Limit, Force Charge Power, Force Discharge Power, and Import Power Limit. See
 the commissioning checklist for the distinction between inverter limits and
 HEO-managed force-power setpoints.
+For three-phase EV control using HEO's phase calculation, FoxESS Modbus must
+also have **Grid Voltage R/S/T enabled** and working **Grid CT R/S/T** power
+sensors. EPS Current is backup-output telemetry and must not be mapped as grid
+current. See the [commissioning checklist](docs/commissioning.md).
 
 ## Current capabilities
 

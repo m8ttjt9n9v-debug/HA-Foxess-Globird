@@ -66,11 +66,23 @@ configured physical connector rating and service limit. On a single-phase site,
 leave the optional most-loaded-phase current mapping blank unless a genuine
 amperage sensor is available; HEO derives service current from normalized grid
 power and configured voltage. Do not map a W or kW CT power entity into that
-current role. A multiphase site also
-requires a signed most-loaded-phase current sensor in amperes; aggregate site
-power is not accepted. After rehearsal, disable competing Tesla writers before
-unlocking and enabling this path. A latched maximum-attempt fault is evidence
-to investigate, not permission to toggle the gate repeatedly.
+current role. A multiphase site needs either a signed most-loaded-phase grid
+current sensor in amperes or HEO's six-source phase calculation. For the latter:
+
+1. In **FoxESS Modbus → Entities**, enable **Grid Voltage R**, **Grid Voltage S**,
+   and **Grid Voltage T**. They are disabled by default on supported H3 models.
+2. Confirm that **Grid CT R/S/T** report signed power in W or kW, and that the
+   three grid-voltage readings are available and plausible.
+3. In **HEO → Reconfigure → Grid connection**, map each Grid CT phase power to
+   the matching Grid Voltage phase. Set and verify the CT positive direction.
+4. Check HEO's canonical site-grid-current reading before enabling automatic
+   EV control. Missing or stale phase evidence must leave it unavailable.
+
+**Do not enable or map EPS Current R/S/T for this purpose.** EPS is the backup
+output, not service current at the grid connection. Aggregate site power also
+cannot prove per-phase safety. After rehearsal, disable competing Tesla
+writers before unlocking and enabling this path. A latched maximum-attempt
+fault is evidence to investigate, not permission to toggle the gate repeatedly.
 
 Before selecting EV location policy **Auto**, verify Home Assistant's Home
 location under Settings → System → General. The mapped Tessie device tracker is
