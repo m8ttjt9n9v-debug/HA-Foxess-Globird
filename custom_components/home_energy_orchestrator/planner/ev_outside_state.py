@@ -130,6 +130,7 @@ def reconcile_outside_ownership(
     elif (
         baseline_a < physical_minimum_a
         and charge_switch_on
+        and not daily_state.stop_pending
     ):
         # Automatic EV control owns the configured site baseline, not merely
         # sessions that HEO happened to start.  A vehicle can resume its last

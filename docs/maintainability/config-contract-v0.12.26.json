@@ -222,11 +222,11 @@
       "ev_daily_backfill_energy_kwh",
       "ev_daily_ready_time",
       "ev_outside_inverter_percent",
+      "ev_outside_battery_reserve_percent",
+      "ev_protected_baseline_a",
       "ev_backfill_buffer_minutes",
       "ev_telemetry_max_age_seconds",
       "ev_telemetry_max_skew_seconds",
-      "ev_protected_baseline_a",
-      "ev_outside_battery_reserve_percent",
       "ev_before_export_enabled",
       "ev_before_export_soc_target_percent"
     ],

@@ -46,6 +46,7 @@ from custom_components.home_energy_orchestrator.const import (
     FOXESS_CONTROL_OWNER_CLOUD,
     FOXESS_CONTROL_OWNER_MODBUS,
 )
+from custom_components.home_energy_orchestrator.foxess_adapter import FoxessWriteBlocked
 from custom_components.home_energy_orchestrator.planner.charge_session import (
     ChargeSessionState,
 )
@@ -876,6 +877,65 @@ async def test_local_modbus_free_charge_starts_at_noon_boundary(hass, monkeypatc
     assert {
         (event.data["domain"], event.data["service"]) for event in calls
     } == {("number", "set_value"), ("select", "select_option")}
+
+
+async def test_free_charge_cannot_select_force_mode_after_safety_lock_engages(
+    hass, monkeypatch
+):
+    """The runtime interlock is rechecked after the power-setpoint delay."""
+    calls = []
+
+    async def accept_number(_call):
+        calls.append("power")
+
+    async def accept_mode(_call):
+        calls.append("mode")
+
+    hass.services.async_register("number", "set_value", accept_number)
+    hass.services.async_register("select", "select_option", accept_mode)
+    hass.states.async_set(
+        "select.foxess_mode",
+        "Self Use",
+        {"options": ["Self Use", "Force Discharge", "Force Charge"]},
+    )
+    hass.states.async_set(
+        "number.foxess_charge", "0", {"unit_of_measurement": "kW", "max": 15}
+    )
+    hass.states.async_set(
+        "number.foxess_discharge", "0", {"unit_of_measurement": "kW", "max": 15}
+    )
+    monkeypatch.setattr(
+        "custom_components.home_energy_orchestrator.active.dt_util.now",
+        lambda: datetime(2026, 9, 10, 12, 1, tzinfo=UTC),
+    )
+    coordinator = _coordinator(
+        **{
+            CONF_AUTOMATIC_CONTROL_ENABLED: True,
+            CONF_AUTOMATIC_CHARGE_ENABLED: True,
+            CONF_REHEARSAL_MODE: False,
+            CONF_BATTERY_FREE_WINDOW_TARGET: 100.0,
+            CONF_INVERTER_CHARGE_LIMIT_KW: 15.0,
+        }
+    )
+    coordinator.snapshot.battery_soc = 20.0
+
+    async def engage_lock(_seconds):
+        coordinator.config[CONF_REHEARSAL_MODE] = True
+        coordinator.runtime_config = RuntimeConfiguration.from_mapping(coordinator.config)
+
+    monkeypatch.setattr(
+        "custom_components.home_energy_orchestrator.foxess_adapter.asyncio.sleep",
+        engage_lock,
+    )
+    controller = _loaded_controller(hass, coordinator)
+
+    with pytest.raises(FoxessWriteBlocked):
+        await controller.async_reconcile()
+
+    assert calls == ["power"]
+    assert controller.last_actions == ("set_charge_power",)
+    assert controller.charge_session.phase == "starting"
+    assert controller.gate_status == "rehearsal"
 
 
 async def test_charge_controller_retains_partial_trace_when_mode_write_fails(

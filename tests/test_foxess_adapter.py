@@ -100,3 +100,44 @@ async def test_adapter_retains_partial_trace_when_a_later_service_fails(
         await adapter.async_execute(plan)
 
     assert adapter.last_executed == ("set_charge_power",)
+
+
+async def test_adapter_rechecks_safety_guard_before_force_mode_after_delay(
+    hass: HomeAssistant, monkeypatch
+) -> None:
+    """A lock engaged mid-plan must prevent the subsequent forced mode."""
+    calls = []
+    allowed = True
+
+    async def accept_number(_call) -> None:
+        calls.append("power")
+
+    async def accept_select(_call) -> None:
+        calls.append("mode")
+
+    async def engage_lock(_seconds) -> None:
+        nonlocal allowed
+        allowed = False
+
+    monkeypatch.setattr(
+        "custom_components.home_energy_orchestrator.foxess_adapter.asyncio.sleep",
+        engage_lock,
+    )
+    hass.services.async_register("number", "set_value", accept_number)
+    hass.services.async_register("select", "select_option", accept_select)
+    adapter = FoxessServiceAdapter(
+        hass, ENTITIES, allow_writes=True, write_guard=lambda: allowed
+    )
+    plan = FoxessCommandPlan(
+        (
+            FoxessCommand("set_charge_power", 10, wait_seconds=5),
+            FoxessCommand("select_mode", "Force Charge"),
+        ),
+        "test",
+    )
+
+    with pytest.raises(FoxessWriteBlocked):
+        await adapter.async_execute(plan)
+
+    assert calls == ["power"]
+    assert adapter.last_executed == ("set_charge_power",)

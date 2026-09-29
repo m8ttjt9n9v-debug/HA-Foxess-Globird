@@ -12,6 +12,9 @@ from typing import Any
 import voluptuous as vol
 
 from custom_components.home_energy_orchestrator.config_flow import ConfigFlow
+from custom_components.home_energy_orchestrator.config_page_schema import (
+    iter_page_schema_fields,
+)
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 BASELINE_PATH = (
@@ -78,10 +81,11 @@ def build_config_field_contract() -> dict[str, Any]:
     records: list[dict[str, Any]] = []
     for page, expected_keys in flow._PAGE_FIELDS.items():  # noqa: SLF001
         schema = flow._page_schema(page, defaults)  # noqa: SLF001
-        actual_keys = tuple(marker.schema for marker in schema.schema)
+        page_fields = tuple(iter_page_schema_fields(schema))
+        actual_keys = tuple(marker.schema for marker, _ in page_fields)
         if actual_keys != tuple(expected_keys):
             raise ValueError(f"page schema order drifted for {page!r}")
-        for order, (marker, validator) in enumerate(schema.schema.items(), start=1):
+        for order, (marker, validator) in enumerate(page_fields, start=1):
             has_default, default = _default(marker)
             input_kind, selector_config = _input_contract(validator)
             key = marker.schema

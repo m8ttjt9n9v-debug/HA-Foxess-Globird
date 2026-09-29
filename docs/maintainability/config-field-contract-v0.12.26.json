@@ -286,9 +286,9 @@
       "key": "ev_free_window_charge_limit_percent",
       "order": 3,
       "page": "ev_policies",
-      "reconfigure_label": "Free-window EV charge target (%)",
+      "reconfigure_label": "Normal EV charging target (%)",
       "required": true,
-      "setup_label": "Free-window EV charge target (%)"
+      "setup_label": "Normal EV charging target (%)"
     },
     {
       "default": 1.0,
@@ -436,9 +436,9 @@
       "key": "ev_solar_spill_enabled",
       "order": 14,
       "page": "ev_policies",
-      "reconfigure_label": "Enable measured solar-spill EV charging",
+      "reconfigure_label": "Use surplus solar for EV when home battery is full enough",
       "required": true,
-      "setup_label": "Enable measured solar-spill EV charging"
+      "setup_label": "Use surplus solar for EV when home battery is full enough"
     },
     {
       "default": 100.0,
@@ -450,9 +450,9 @@
       "key": "ev_solar_spill_battery_soc_percent",
       "order": 15,
       "page": "ev_policies",
-      "reconfigure_label": "Solar-spill battery SoC activation (%)",
+      "reconfigure_label": "Home battery SoC to start regular solar EV charging (%)",
       "required": true,
-      "setup_label": "Solar-spill battery SoC activation (%)"
+      "setup_label": "Home battery SoC to start regular solar EV charging (%)"
     },
     {
       "default": false,
@@ -462,9 +462,9 @@
       "key": "ev_morning_solar_enabled",
       "order": 16,
       "page": "ev_policies",
-      "reconfigure_label": "Enable morning solar-surplus EV charging",
+      "reconfigure_label": "Use morning solar for EV before free power",
       "required": true,
-      "setup_label": "Enable morning solar-surplus EV charging"
+      "setup_label": "Use morning solar for EV before free power"
     },
     {
       "default": 20.0,
@@ -476,9 +476,9 @@
       "key": "ev_morning_solar_reserve_soc_percent",
       "order": 17,
       "page": "ev_policies",
-      "reconfigure_label": "Minimum house-battery SoC for morning solar EV charging (%)",
+      "reconfigure_label": "Home battery minimum for morning solar EV charging (%)",
       "required": true,
-      "setup_label": "Minimum house-battery SoC for morning solar EV charging (%)"
+      "setup_label": "Home battery minimum for morning solar EV charging (%)"
     },
     {
       "default": false,
@@ -488,9 +488,9 @@
       "key": "ev_pre_free_backfill_enabled",
       "order": 18,
       "page": "ev_policies",
-      "reconfigure_label": "Enable latest-start reserve-aware pre-free EV backfill",
+      "reconfigure_label": "Use spare home-battery energy for EV before free power",
       "required": true,
-      "setup_label": "Enable latest-start reserve-aware pre-free EV backfill"
+      "setup_label": "Use spare home-battery energy for EV before free power"
     },
     {
       "default": 0.0,
@@ -502,9 +502,9 @@
       "key": "ev_daily_backfill_energy_kwh",
       "order": 19,
       "page": "ev_policies",
-      "reconfigure_label": "Daily EV energy protected for ready-by backfill (wall-side kWh; 0 disables)",
+      "reconfigure_label": "EV energy for daily ready-by charging (kWh; 0 disables)",
       "required": true,
-      "setup_label": "Daily EV energy protected for ready-by backfill (wall-side kWh; 0 disables)"
+      "setup_label": "EV energy for daily ready-by charging (kWh; 0 disables)"
     },
     {
       "default": "08:00:00",
@@ -514,9 +514,9 @@
       "key": "ev_daily_ready_time",
       "order": 20,
       "page": "ev_policies",
-      "reconfigure_label": "Daily EV ready-by time (must be before free-power window)",
+      "reconfigure_label": "Daily EV ready-by time",
       "required": true,
-      "setup_label": "Daily EV ready-by time (must be before free-power window)"
+      "setup_label": "Daily EV ready-by time"
     },
     {
       "default": 0.0,
@@ -528,9 +528,37 @@
       "key": "ev_outside_inverter_percent",
       "order": 21,
       "page": "ev_policies",
-      "reconfigure_label": "Maximum EV charging power outside free power (% of inverter output)",
+      "reconfigure_label": "Max EV power outside free window (% of inverter output)",
       "required": true,
-      "setup_label": "Maximum EV charging power outside free power (% of inverter output)"
+      "setup_label": "Max EV power outside free window (% of inverter output)"
+    },
+    {
+      "default": 20.0,
+      "has_default": true,
+      "input_config": {
+        "coerce": "float"
+      },
+      "input_kind": "number",
+      "key": "ev_outside_battery_reserve_percent",
+      "order": 22,
+      "page": "ev_policies",
+      "reconfigure_label": "Home battery minimum for EV charging outside free window (%)",
+      "required": true,
+      "setup_label": "Home battery minimum for EV charging outside free window (%)"
+    },
+    {
+      "default": 0.0,
+      "has_default": true,
+      "input_config": {
+        "coerce": "float"
+      },
+      "input_kind": "number",
+      "key": "ev_protected_baseline_a",
+      "order": 23,
+      "page": "ev_policies",
+      "reconfigure_label": "EV keep-alive current outside free window (A; 0 disables keep-alive)",
+      "required": true,
+      "setup_label": "EV keep-alive current outside free window (A; 0 disables keep-alive)"
     },
     {
       "default": 0.0,
@@ -540,7 +568,7 @@
       },
       "input_kind": "number",
       "key": "ev_backfill_buffer_minutes",
-      "order": 22,
+      "order": 24,
       "page": "ev_policies",
       "reconfigure_label": "Ready-by planning buffer (minutes)",
       "required": true,
@@ -554,7 +582,7 @@
       },
       "input_kind": "number",
       "key": "ev_telemetry_max_age_seconds",
-      "order": 23,
+      "order": 25,
       "page": "ev_policies",
       "reconfigure_label": "Maximum age for outside-window power telemetry (seconds)",
       "required": true,
@@ -568,39 +596,11 @@
       },
       "input_kind": "number",
       "key": "ev_telemetry_max_skew_seconds",
-      "order": 24,
+      "order": 26,
       "page": "ev_policies",
       "reconfigure_label": "Maximum timestamp skew between outside-window power sensors (seconds)",
       "required": true,
       "setup_label": "Maximum timestamp skew between outside-window power sensors (seconds)"
-    },
-    {
-      "default": 0.0,
-      "has_default": true,
-      "input_config": {
-        "coerce": "float"
-      },
-      "input_kind": "number",
-      "key": "ev_protected_baseline_a",
-      "order": 25,
-      "page": "ev_policies",
-      "reconfigure_label": "Mandatory connected-EV baseline until free power (A; 0 if none)",
-      "required": true,
-      "setup_label": "Mandatory connected-EV baseline until free power (A; 0 if none)"
-    },
-    {
-      "default": 20.0,
-      "has_default": true,
-      "input_config": {
-        "coerce": "float"
-      },
-      "input_kind": "number",
-      "key": "ev_outside_battery_reserve_percent",
-      "order": 26,
-      "page": "ev_policies",
-      "reconfigure_label": "Minimum house-battery SoC for outside-window EV charging and recovery (%)",
-      "required": true,
-      "setup_label": "Minimum house-battery SoC for outside-window EV charging and recovery (%)"
     },
     {
       "default": false,
@@ -807,9 +807,9 @@
       "key": "site_grid_current_entity",
       "order": 5,
       "page": "grid",
-      "reconfigure_label": "Most-loaded phase signed grid current (A; required for multiphase EV control)",
+      "reconfigure_label": "Existing most-loaded phase grid-current sensor (A; optional alternative to phase mappings)",
       "required": false,
-      "setup_label": "Most-loaded phase signed grid current (A; required for multiphase EV control)"
+      "setup_label": "Existing most-loaded phase grid-current sensor (A; optional alternative to phase mappings)"
     },
     {
       "default": null,

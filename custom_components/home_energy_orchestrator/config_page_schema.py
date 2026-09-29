@@ -3,13 +3,26 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Mapping
+from collections.abc import Iterator, Mapping
 from typing import Any
 
 import voluptuous as vol
+from homeassistant.data_entry_flow import section
 from homeassistant.helpers import selector
 
 from .field_catalogue import FIELD_KEYS_BY_PAGE, FIELD_SPECS_BY_KEY, FieldSpec
+
+GRID_PHASE_SECTIONS: dict[str, tuple[str, str]] = {
+    phase: (
+        f"site_grid_phase_{phase[-1]}_power_entity",
+        f"site_grid_phase_{phase[-1]}_voltage_entity",
+    )
+    for phase in ("phase_r", "phase_s", "phase_t")
+}
+_GRID_SECTION_BY_POWER = {
+    keys[0]: name for name, keys in GRID_PHASE_SECTIONS.items()
+}
+_GRID_SECTION_KEYS = {key for keys in GRID_PHASE_SECTIONS.values() for key in keys}
 
 
 def _marker(spec: FieldSpec, defaults: Mapping[str, object]) -> vol.Marker:
@@ -24,7 +37,10 @@ def _marker(spec: FieldSpec, defaults: Mapping[str, object]) -> vol.Marker:
 
     value = defaults.get(spec.key)
     if (spec.selector_kind == "number" and value is not None) or value:
-        return vol.Optional(spec.key, default=value)
+        # A voluptuous default silently re-inserts the old value when the user
+        # clears an optional field.  HA's suggested_value pre-fills the UI
+        # without turning an omitted selector into a saved mapping.
+        return vol.Optional(spec.key, description={"suggested_value": value})
     return vol.Optional(spec.key)
 
 
@@ -58,12 +74,34 @@ def _validator(spec: FieldSpec) -> Any:
 
 
 def build_page_schema(page: str, defaults: Mapping[str, object]) -> vol.Schema:
-    """Return one ordered configuration page without changing its UI contract."""
-    return vol.Schema(
-        {
-            _marker(FIELD_SPECS_BY_KEY[key], defaults): _validator(
-                FIELD_SPECS_BY_KEY[key]
-            )
-            for key in FIELD_KEYS_BY_PAGE[page]
-        }
-    )
+    """Return one ordered page, grouping matched grid phases for operators."""
+    fields: dict[vol.Marker, Any] = {}
+    for key in FIELD_KEYS_BY_PAGE[page]:
+        if page == "grid" and key in _GRID_SECTION_KEYS:
+            phase = _GRID_SECTION_BY_POWER.get(key)
+            if phase is not None:
+                fields[vol.Required(phase)] = section(
+                    vol.Schema(
+                        {
+                            _marker(FIELD_SPECS_BY_KEY[phase_key], defaults): _validator(
+                                FIELD_SPECS_BY_KEY[phase_key]
+                            )
+                            for phase_key in GRID_PHASE_SECTIONS[phase]
+                        }
+                    ),
+                    {"collapsed": False},
+                )
+            continue
+        fields[_marker(FIELD_SPECS_BY_KEY[key], defaults)] = _validator(
+            FIELD_SPECS_BY_KEY[key]
+        )
+    return vol.Schema(fields)
+
+
+def iter_page_schema_fields(schema: vol.Schema) -> Iterator[tuple[vol.Marker, Any]]:
+    """Yield real fields in display order, including those inside sections."""
+    for marker, validator in schema.schema.items():
+        if isinstance(validator, section):
+            yield from validator.schema.schema.items()
+        else:
+            yield marker, validator

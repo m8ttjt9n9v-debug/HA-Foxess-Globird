@@ -74,6 +74,16 @@ def test_ev_persistence_state_round_trips_complete_existing_payload() -> None:
     assert state.to_payload() == payload
 
 
+def test_zero_baseline_stop_retry_survives_more_than_three_attempts() -> None:
+    payload = complete_payload()
+    payload["daily_backfill"]["stop_attempts"] = 48
+
+    state = EvPersistenceState.from_payload(payload, NOW)
+
+    assert state.daily_backfill.stop_attempts == 48
+    assert state.validated_for_storage().to_payload() == payload
+
+
 def test_ev_persistence_retains_stable_feedback_wait_across_restart() -> None:
     payload = complete_payload()
     payload["reconciliation"]["phase"] = "awaiting_stable_current_feedback"

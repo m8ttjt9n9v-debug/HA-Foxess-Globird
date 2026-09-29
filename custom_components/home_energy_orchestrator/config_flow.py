@@ -12,7 +12,7 @@ from homeassistant.core import callback, valid_entity_id
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import selector
 
-from .config_page_schema import build_page_schema
+from .config_page_schema import GRID_PHASE_SECTIONS, build_page_schema
 from .const import (
     BATTERY_POSITIVE_DISCHARGE,
     BATTERY_POWER_DIRECTIONS,
@@ -477,7 +477,21 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors: dict[str, str] = {}
         displayed = self._draft_input
         if user_input is not None:
-            candidate = {**self._draft_input, **user_input}
+            submitted = dict(user_input)
+            if page == "grid":
+                for section_name in GRID_PHASE_SECTIONS:
+                    section_values = submitted.pop(section_name, None)
+                    if isinstance(section_values, dict):
+                        submitted.update(section_values)
+            candidate = {**self._draft_input, **submitted}
+            # An entity selector cleared in Home Assistant is omitted from the
+            # submitted page.  An ordinary merge would resurrect the previous
+            # mapping, including an unavailable safety-critical current source.
+            # Persist None explicitly because reconfigure updates merge with
+            # the existing config-entry data instead of deleting old keys.
+            for key in self._PAGE_FIELDS[page]:
+                if not FIELD_SPECS_BY_KEY[key].required and key not in submitted:
+                    candidate[key] = None
             errors = self._validate_page(page, candidate)
             if not errors:
                 self._draft_input = candidate
@@ -495,8 +509,19 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             step_id=("reconfigure" if reconfigure and page == "site" else
                      f"reconfigure_{page}" if reconfigure else "user" if page == "site" else page),
             data_schema=self._page_schema(page, displayed),
-            errors=errors,
+            errors=self._page_display_errors(page, errors),
         )
+
+    @staticmethod
+    def _page_display_errors(page: str, errors: dict[str, str]) -> dict[str, str]:
+        """Attach nested grid-field failures to their visible phase section."""
+        if page != "grid":
+            return errors
+        for section_name, keys in GRID_PHASE_SECTIONS.items():
+            for key in keys:
+                if key in errors:
+                    return {section_name: errors[key]}
+        return errors
 
     @callback
     def _show_reconfigure_menu(self):
@@ -852,7 +877,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return self.async_show_form(
             step_id=(f"reconfigure_{page}" if reconfigure else page),
             data_schema=self._page_schema(page, self._draft_input),
-            errors=errors,
+            errors=self._page_display_errors(page, errors),
         )
 
     async def _async_finish_review(
@@ -2145,6 +2170,16 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if configured_phases and len(configured_phases) != len(phase_keys):
             return {"base": "incomplete_phase_grid_mapping"}
         if configured_phases:
+            for phase_keys in (
+                CONF_SITE_PHASE_POWER_ENTITIES,
+                CONF_SITE_PHASE_VOLTAGE_ENTITIES,
+            ):
+                mapped: set[str] = set()
+                for key in phase_keys:
+                    entity_id = str(data[key])
+                    if entity_id in mapped:
+                        return {key: "duplicate_phase_grid_mapping"}
+                    mapped.add(entity_id)
             for key in CONF_SITE_PHASE_POWER_ENTITIES:
                 state = self.hass.states.get(str(data[key]))
                 if state is not None:

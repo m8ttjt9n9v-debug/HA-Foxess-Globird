@@ -162,6 +162,9 @@ def ev_control_gate_status(
             return "smart_socket_limit_invalid"
     if site.phase_count is None:
         return "invalid_site_topology"
-    if site.phase_count > 1 and not site.grid_current_entity:
+    phase_pairs_mapped = all(site.phase_power_entities) and all(
+        site.phase_voltage_entities
+    )
+    if site.phase_count > 1 and not (site.grid_current_entity or phase_pairs_mapped):
         return "multiphase_current_mapping_required"
     return "ready" if adapter_connected else "adapter_not_connected"

@@ -183,7 +183,25 @@ class ControlConformanceSupervisor:
 
     def _ev_observation(self) -> SupervisionObservation:
         controller = getattr(self.coordinator, "ev_controller", None)
-        if controller is None or controller.gate_status != "ready":
+        if controller is None:
+            return SupervisionObservation(
+                None, "not_supervised", "not_supervised", False, "EV controller unavailable"
+            )
+        if (
+            controller.gate_status in {"ready", "safety_locked"}
+            and getattr(controller, "multiphase_feedback_unavailable", False)
+            and getattr(getattr(controller, "eligibility_route", None), "route", None)
+            == "eligible"
+            and controller.charge_switch_on is True
+        ):
+            return SupervisionObservation(
+                "ev_current_feedback_unavailable_charging",
+                "No charging without commissioned phase-current feedback",
+                f"Charge switch on; requested {controller.requested_current_a} A",
+                False,
+                "EV charging remains on while service-phase current is unavailable",
+            )
+        if controller.gate_status != "ready":
             return SupervisionObservation(
                 None,
                 "not_supervised",

@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.12.29rc15 — multiphase EV current-loss safety
+
+- Accept either a commissioned direct phase-current sensor or the complete
+  three-CT/three-voltage mapping at the EV runtime gate, matching the
+  configuration wizard's existing choice.
+- When multiphase current evidence disappears outside the free window, HEO
+  persists a stop obligation for a connected direct-EVSE car with a configured
+  zero baseline and an active charge. It makes no current increase; Safety
+  Lock still prevents writes. Physical stopping requires EV feedback.
+- Keep an unconfirmed zero-baseline stop alive across restarts and retry at
+  progressively slower intervals up to 30 minutes instead of abandoning it
+  after three attempts. Alert after a sustained current-loss/charging mismatch.
+- Recheck the live FoxESS write interlock between commands in a delayed plan,
+  so engaging Safety Lock before a forced-mode selection prevents that write.
+- Add focused and lifecycle regressions for an externally resumed charge,
+  six-source mapping, phase outage, stop retries, restart, free-window handoff,
+  alerting, and the in-flight Safety Lock transition.
+
 ## 0.12.29rc14 — clear three-phase FoxESS Modbus commissioning
 
 - Explain in setup, reconfiguration and the commissioning guides that the

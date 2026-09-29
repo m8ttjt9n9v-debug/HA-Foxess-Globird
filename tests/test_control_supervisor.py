@@ -132,3 +132,43 @@ async def test_ev_mismatch_opens_a_fresh_reconciliation_after_grace(
 
     repair = supervisor.coordinator.ev_controller.async_supervisory_repair
     repair.assert_awaited_once_with(NOW + timedelta(minutes=5))
+
+
+async def test_missing_phase_current_with_external_charge_alerts_without_repair(
+    hass: HomeAssistant, monkeypatch
+) -> None:
+    """An early EV return must not masquerade as healthy supervision."""
+    supervisor = _supervisor(hass)
+    events = []
+    hass.bus.async_listen(CONTROL_ISSUE_EVENT, events.append)
+    monkeypatch.setattr(
+        "custom_components.home_energy_orchestrator.control_supervisor."
+        "persistent_notification.async_create",
+        lambda *_args, **_kwargs: None,
+    )
+    monkeypatch.setattr(
+        supervisor,
+        "_battery_observation",
+        lambda: SupervisionObservation(None, "Self Use", "Self Use", False, "matched"),
+    )
+    ev = supervisor.coordinator.ev_controller
+    ev.gate_status = "ready"
+    ev.multiphase_feedback_unavailable = True
+    ev.eligibility_route = SimpleNamespace(route="eligible")
+    ev.charge_switch_on = True
+    ev.requested_current_a = 16
+    ev.target_current_a = 0
+    ev.policy_route = None
+
+    await supervisor.async_reconcile(NOW)
+    await supervisor.async_reconcile(NOW + timedelta(minutes=5))
+    await hass.async_block_till_done()
+
+    assert supervisor.status == "issue"
+    assert len(events) == 1
+    assert events[0].data["issue"] == "ev_current_feedback_unavailable_charging"
+    ev.async_supervisory_repair.assert_not_awaited()
+
+    ev.charge_switch_on = False
+    await supervisor.async_reconcile(NOW + timedelta(minutes=6))
+    assert supervisor.status != "issue"

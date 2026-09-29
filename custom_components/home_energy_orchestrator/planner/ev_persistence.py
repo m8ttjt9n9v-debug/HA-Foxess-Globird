@@ -11,7 +11,6 @@ from .ev import (
     DirectEvseReconciliationState,
     SmartSocketRecoveryState,
 )
-from .ev_daily_backfill import DAILY_BACKFILL_STOP_MAX_ATTEMPTS
 from .ev_learning import DrivingSnapshotState
 from .ev_outside_window import MeasuredSolarAdjustmentState, PreFreeSessionState
 from .learning import DemandHistory
@@ -364,7 +363,7 @@ def _daily_backfill(payload: object, now: datetime) -> DailyBackfillPersistenceS
         or frozen is not None
         and frozen.tzinfo is None
         or active != (frozen is not None)
-        or not 0 <= attempts <= DAILY_BACKFILL_STOP_MAX_ATTEMPTS
+        or not 0 <= attempts <= 1_000_000
         or last_stop is not None
         and (last_stop.tzinfo is None or last_stop > now)
     ):

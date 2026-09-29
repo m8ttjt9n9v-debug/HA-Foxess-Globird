@@ -501,6 +501,7 @@ class ManualTestController:
                     inverter.force_discharge_power_entity,
                 ),
                 allow_writes=True,
+                write_guard=lambda: self._restore_gate_reason() is None,
             )
         return self._adapter
 

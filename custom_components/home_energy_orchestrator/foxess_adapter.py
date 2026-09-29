@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Callable
 from dataclasses import dataclass
 
 from homeassistant.core import HomeAssistant
@@ -31,7 +32,12 @@ class FoxessServiceAdapter:
     """
 
     def __init__(
-        self, hass: HomeAssistant, entities: FoxessEntityMap, *, allow_writes: bool = False
+        self,
+        hass: HomeAssistant,
+        entities: FoxessEntityMap,
+        *,
+        allow_writes: bool = False,
+        write_guard: Callable[[], bool] | None = None,
     ) -> None:
         if any(
             not entity.strip()
@@ -45,6 +51,7 @@ class FoxessServiceAdapter:
         self.hass = hass
         self.entities = entities
         self.allow_writes = allow_writes
+        self.write_guard = write_guard
         self._lock = asyncio.Lock()
         self.last_executed: tuple[str, ...] = ()
 
@@ -58,6 +65,8 @@ class FoxessServiceAdapter:
             self.last_executed = ()
             executed: list[str] = []
             for command in plan.commands:
+                if self.write_guard is not None and not self.write_guard():
+                    raise FoxessWriteBlocked("FoxESS write gate closed during command plan")
                 await self._async_execute_command(command)
                 executed.append(command.action)
                 self.last_executed = tuple(executed)

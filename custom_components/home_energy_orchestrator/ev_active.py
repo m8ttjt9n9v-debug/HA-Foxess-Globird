@@ -186,7 +186,6 @@ from .planner.ev_candidates import (
     select_outside_stage_candidate,
 )
 from .planner.ev_daily_backfill import (
-    DAILY_BACKFILL_STOP_MAX_ATTEMPTS,
     DAILY_BACKFILL_STOP_RETRY_INTERVAL,
     DailyBackfillCycleState,
     DailyBackfillEnergyState,
@@ -330,6 +329,7 @@ class ActiveEvController:
         self.applied_limit_percent: float | None = None
         self.charge_switch_on: bool | None = None
         self.actual_current_a: float | None = None
+        self.multiphase_feedback_unavailable = False
         self.decision_phase = "inactive"
         self.allowance_phase = "not_evaluated"
         self.allowance_house_load_kw: float | None = None
@@ -439,6 +439,10 @@ class ActiveEvController:
             self.eligibility_route = None
             self.policy_route = None
             grid_current, grid_valid = self._grid_current_a()
+            self.multiphase_feedback_unavailable = (
+                self._float(CONF_SITE_PHASE_COUNT, DEFAULT_SITE_PHASE_COUNT) > 1
+                and not grid_valid
+            )
             ev_current, ev_valid = self._actual_ev_current_a()
             self.actual_current_a = ev_current if ev_valid else None
             observation = self._observation()
@@ -487,8 +491,10 @@ class ActiveEvController:
             if smart_reset.save_required:
                 # Preserve the pilot reset even when telemetry is unavailable.
                 await self._async_save(now)
-            if self._float(CONF_SITE_PHASE_COUNT, DEFAULT_SITE_PHASE_COUNT) > 1 and not grid_valid:
-                self.last_reason = "multiphase_current_feedback_unavailable"
+            if self.multiphase_feedback_unavailable:
+                await self._async_reconcile_missing_multiphase_current(
+                    now, observation, gate=gate, smart_path=smart_path
+                )
                 return
             connected, connection_reason = self._connected_at_home()
             in_window, elapsed_minutes, remaining_hours = self._free_window(now)
@@ -599,6 +605,13 @@ class ActiveEvController:
                 )
             )
             self._previous_policy_route = self.policy_route.route
+            if in_window and self.daily_backfill_stop_pending:
+                # ZEROCHARGE is a new authority epoch. An outside-window
+                # zero-baseline stop cannot overrule its fresh current plan
+                # once phase feedback recovers at the boundary.
+                self._apply_daily_backfill_stop_state(DailyBackfillStopState())
+                self.outside_stop_requested = False
+                await self._async_save(now)
             if self.policy_route.route == "general_limit":
                 await self._async_reconcile_general_limit_only(
                     now,
@@ -750,38 +763,7 @@ class ActiveEvController:
                 charge_to_full=charge_to_full_requested,
             )
             if self.outside_stop_requested:
-                stop = reconcile_daily_backfill_stop(
-                    DailyBackfillStopState(
-                        pending=self.daily_backfill_stop_pending,
-                        attempts=self.daily_backfill_stop_attempts,
-                        last_attempt_at=self.daily_backfill_last_stop_at,
-                        outside_control_active=self.outside_control_active,
-                    ),
-                    charge_switch_on=observation.charge_switch_on,
-                    now=now,
-                    maximum_attempts=DAILY_BACKFILL_STOP_MAX_ATTEMPTS,
-                    retry_interval=DAILY_BACKFILL_STOP_RETRY_INTERVAL,
-                )
-                self._apply_daily_backfill_stop_state(stop.state)
-                if stop.save_required:
-                    self.last_reason = stop.plan.reason
-                    await self._async_save(now)
-                    return
-                if not stop.plan.commands:
-                    self.last_reason = stop.plan.reason
-                    return
-                if gate == "safety_locked":
-                    self.last_actions = tuple(
-                        f"would_{command.action}" for command in stop.plan.commands
-                    )
-                    self.last_reason = "rehearsal_daily_backfill_complete"
-                    return
-                await self._async_execute_ev_plan(stop.plan, now)
-                if self.last_actions == ("stop_charging",):
-                    self._apply_daily_backfill_stop_state(
-                        record_daily_backfill_stop_attempt(stop.state, now)
-                    )
-                    await self._async_save(now)
+                await self._async_reconcile_outside_stop(now, observation, gate=gate)
                 return
             if gate == "safety_locked":
                 rehearsal_plan = plan_direct_evse_commands(
@@ -855,6 +837,99 @@ class ActiveEvController:
             self.writes_performed += len(self.last_actions)
             self.last_write_at = now
             self.last_reason = "ev_commands_sent_awaiting_feedback"
+            await self._async_save(now)
+
+    async def _async_reconcile_missing_multiphase_current(
+        self,
+        now: datetime,
+        observation: DirectEvseObservation | None,
+        *,
+        gate: str,
+        smart_path: bool,
+    ) -> None:
+        """Stop an unprotected direct charge without permitting current increases.
+
+        Missing phase feedback still prevents every normal EV current decision.
+        The narrow exception is the existing, persisted zero-baseline stop of a
+        connected car outside the free window.  It needs no grid measurement.
+        """
+        self.last_reason = "multiphase_current_feedback_unavailable"
+        self.decision_phase = "current_feedback_unavailable"
+        connected, connection_reason = self._connected_at_home()
+        in_window, _, _ = self._free_window(now)
+        self.eligibility_route = select_ev_eligibility_route(
+            connected=connected,
+            connection_reason=connection_reason,
+            observation_available=observation is not None,
+            smart_path=smart_path,
+            home_control_active=self._home_control_active(),
+        )
+        if (
+            not connected
+            or observation is None
+            or smart_path
+            or in_window
+            or self._charge_to_full_requested()
+            or self._float(CONF_EV_PROTECTED_BASELINE_A, DEFAULT_EV_PROTECTED_BASELINE_A)
+            > 0
+        ):
+            return
+        if not observation.charge_switch_on and not self.daily_backfill_stop_pending:
+            return
+        self.policy_route = EvCycleRoute(
+            "outside_window", "current_feedback_unavailable_stop"
+        )
+        self._previous_policy_route = self.policy_route.route
+        self.target_current_a = 0.0
+        self.outside_stop_requested = True
+        self.outside_control_active = True
+        if not self.daily_backfill_stop_pending:
+            self.daily_backfill_stop_pending = True
+            self.daily_backfill_stop_attempts = 0
+            self.daily_backfill_last_stop_at = None
+            # The obligation must survive a restart before a service call.
+            await self._async_save(now)
+        await self._async_reconcile_outside_stop(now, observation, gate=gate)
+
+    async def _async_reconcile_outside_stop(
+        self,
+        now: datetime,
+        observation: DirectEvseObservation,
+        *,
+        gate: str,
+    ) -> None:
+        """Reconcile the one persisted zero-baseline stop obligation."""
+        stop = reconcile_daily_backfill_stop(
+            DailyBackfillStopState(
+                pending=self.daily_backfill_stop_pending,
+                attempts=self.daily_backfill_stop_attempts,
+                last_attempt_at=self.daily_backfill_last_stop_at,
+                outside_control_active=self.outside_control_active,
+            ),
+            charge_switch_on=observation.charge_switch_on,
+            now=now,
+            retry_interval=DAILY_BACKFILL_STOP_RETRY_INTERVAL,
+        )
+        self._apply_daily_backfill_stop_state(stop.state)
+        if stop.save_required:
+            self.outside_stop_requested = False
+            self.last_reason = stop.plan.reason
+            await self._async_save(now)
+            return
+        if not stop.plan.commands:
+            self.last_reason = stop.plan.reason
+            return
+        if gate == "safety_locked":
+            self.last_actions = tuple(
+                f"would_{command.action}" for command in stop.plan.commands
+            )
+            self.last_reason = "rehearsal_daily_backfill_complete"
+            return
+        await self._async_execute_ev_plan(stop.plan, now)
+        if self.last_actions == ("stop_charging",):
+            self._apply_daily_backfill_stop_state(
+                record_daily_backfill_stop_attempt(stop.state, now)
+            )
             await self._async_save(now)
 
     async def _async_reconcile_general_limit_only(

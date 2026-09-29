@@ -10,10 +10,10 @@ from .ev import EvCommand, EvCommandPlan, estimate_vehicle_energy_to_target_kwh
 from .ev_power_constraints import inverter_backed_current_ceiling
 
 # This applies only to an explicit 0 A configured baseline, where HEO is
-# intentionally asking the EVSE to stop. It is distinct from direct-current
-# reconciliation, which never abandons a non-zero valid target.
-DAILY_BACKFILL_STOP_MAX_ATTEMPTS = 3
+# intentionally asking the EVSE to stop. A missing confirmation must not
+# permanently abandon the stop obligation; retries slow to a 30-minute cap.
 DAILY_BACKFILL_STOP_RETRY_INTERVAL = timedelta(seconds=30)
+DAILY_BACKFILL_STOP_MAX_RETRY_INTERVAL = timedelta(minutes=30)
 
 
 @dataclass(frozen=True, slots=True)
@@ -263,7 +263,6 @@ def reconcile_daily_backfill_stop(
     *,
     charge_switch_on: bool,
     now: datetime,
-    maximum_attempts: int,
     retry_interval: timedelta,
 ) -> DailyBackfillStopTransition:
     """Plan one bounded stop-feedback cycle without executing a command."""
@@ -273,14 +272,15 @@ def reconcile_daily_backfill_stop(
             EvCommandPlan((), "daily_backfill_stopped"),
             save_required=True,
         )
-    if state.attempts >= maximum_attempts:
-        return DailyBackfillStopTransition(
-            state,
-            EvCommandPlan((), "daily_backfill_stop_fault_maximum_attempts"),
-        )
+    # First retry after 30 seconds, then 1, 2, 4, 8, 16 and 30 minutes.
+    # The bounded interval, not an attempt count, limits Tessie write traffic.
+    wait = min(
+        retry_interval * (2 ** min(max(state.attempts - 1, 0), 6)),
+        DAILY_BACKFILL_STOP_MAX_RETRY_INTERVAL,
+    )
     if (
         state.last_attempt_at is not None
-        and now - state.last_attempt_at < retry_interval
+        and now - state.last_attempt_at < wait
     ):
         return DailyBackfillStopTransition(
             state,

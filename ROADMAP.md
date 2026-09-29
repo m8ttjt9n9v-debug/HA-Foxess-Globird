@@ -226,6 +226,22 @@ Status here describes behavioral parity, not merely the presence of code.
   grid CT power and grid voltage, without a vehicle/charger telemetry dependency.
   Existing direct-current and single-phase mappings remain unchanged; incomplete,
   stale, or implausible phase evidence blocks multiphase EV control.
+- [x] Make the three-phase commissioning page visibly group R, S, and T CT/voltage
+  pairs; allow an old optional current mapping to be cleared and stay cleared
+  through Review and Apply; reject any phase sensor reused for another phase.
+  Keep the direct-current and six-source methods explicit alternatives.
+- [ ] **HIGH PRIORITY — missing-current EV safety response.** Characterise an
+  externally started charge when multiphase current telemetry disappears.
+  The present early return blocks even the zero-baseline stop obligation;
+  design and test a bounded, ownership-gated safe response without allowing
+  current increases or bypassing Safety Lock. Cover outage, restoration,
+  free-window handoff, disconnected/away, and existing-charge scenarios.
+  The rc15 candidate now preserves and retries a zero-baseline direct-EVSE
+  stop during multiphase current loss, accepts complete six-source mapping at
+  runtime, and alerts on sustained current-loss charging. Focused and
+  setup/reload lifecycle regressions cover the external retained-current
+  case and the exact free-window current-recovery handoff. Keep this item open
+  until all-source restoration and live pilot acceptance are demonstrated.
 - [x] Configurable tariff, battery reserve, phase, service, inverter, EV, export,
   and timing inputs without site entity IDs in control code.
 - [x] Explicit FoxESS ownership: Observer, Local Modbus, or FoxCloud Scheduler.
@@ -261,7 +277,7 @@ Status here describes behavioral parity, not merely the presence of code.
   three-minute feedback primitive with coverage/source-validity evidence.
 - [x] Independent, default-off direct-EVSE runtime with matched sampling,
   allowance projection, ordered Tessie commands, feedback confirmation,
-  restart-persistent state, and a three-attempt anti-flapping latch.
+  restart-persistent state, and a rate-bounded reconciliation state machine.
 - [x] Safety-Lock rehearsal planning with visible ordered `would_*` actions,
   zero retry-state mutation, and an independently closed service adapter.
 - [x] Auto/Home/Away EV location policy with cable and charge-state evidence.
@@ -296,6 +312,13 @@ Status here describes behavioral parity, not merely the presence of code.
   integration/domain-aware matching, single-device cohort selection,
   ambiguity rejection, disabled-entity filtering, and stale-only reconfigure
   suggestions without inferred signs, limits, ownership, or write authority.
+- [ ] Extend conservative FoxESS Modbus discovery to suggest the complete
+  Grid CT R/S/T and matching Grid Voltage R/S/T mappings for a three-phase
+  site. Match one unambiguous inverter cohort using entity-registry provenance
+  and power/voltage semantics, not fixed entity IDs; never confuse grid CT
+  with EPS or inverter-output telemetry. Leave disabled, missing, or ambiguous
+  sensors for explicit commissioning, require human review of the CT sign, and
+  cover renamed entities, multiple inverters, and incomplete phase sets in tests.
 
 ## Confirmed bugs
 
@@ -334,8 +357,9 @@ Status here describes behavioral parity, not merely the presence of code.
   restart-safe progressive schedule of 30 seconds, 1, 2, 4, 8, 16 and then
   30 minutes. Each retry rechecks the normal safety/eligibility gates, and
   the 30-minute cap prevents rapid write flapping without abandoning recovery.
-  The separately configured explicit-0-A daily-backfill stop remains a bounded
-  stop operation; it is not part of the non-zero direct-current path.
+  The separately configured explicit-0-A stop remains a distinct persisted
+  operation; rc15 replaces its terminal three-attempt latch with progressively
+  slower retries capped at a 30-minute interval until off feedback arrives.
 
 - [x] Decouple EV driving and charge-limit learning from the live cable-
   connection gate. A disconnected vehicle currently causes the EV controller

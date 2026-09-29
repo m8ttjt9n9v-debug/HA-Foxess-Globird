@@ -815,6 +815,92 @@ async def test_evening_plugin_cannot_resume_retained_current_above_zero_baseline
     harness.close()
 
 
+@pytest.mark.freeze_time("2026-09-17 18:21:00+00:00")
+async def test_six_source_site_stops_retained_charge_during_phase_feedback_outage(
+    hass, monkeypatch
+) -> None:
+    """Replay plug-in, a partial CT outage, and a reload without a helper."""
+    harness = LifecycleHarness(hass)
+    _register_ev_services(harness, monkeypatch)
+    await _seed_foxess_states(harness, 93)
+    await _seed_ev_states(
+        harness,
+        soc=48,
+        actual_current=0,
+        requested_current=16,
+        stored_energy=28,
+        house_load=1.2,
+        site_current=0,
+    )
+    await harness.set_state("device_tracker.test_ev", "not_home")
+    await harness.set_state("binary_sensor.test_ev_cable", "off")
+    await harness.set_state("sensor.test_ev_charging", "disconnected")
+    await harness.set_state("switch.test_ev_charge", "off")
+    phase_mapping = {
+        f"site_grid_phase_{phase}_{kind}_entity": f"sensor.test_grid_{phase}_{kind}"
+        for phase in "rst"
+        for kind in ("power", "voltage")
+    }
+    for phase in "rst":
+        await harness.set_state(
+            f"sensor.test_grid_{phase}_power", "0", {"unit_of_measurement": "kW"}
+        )
+        await harness.set_state(
+            f"sensor.test_grid_{phase}_voltage", "240", {"unit_of_measurement": "V"}
+        )
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Six-source current outage replay",
+        version=6,
+        data=_ev_entry_data(
+            site_grid_current_entity=None,
+            ev_protected_baseline_a=0.0,
+            ev_daily_backfill_energy_kwh=0.0,
+            **phase_mapping,
+        ),
+    )
+    entry.add_to_hass(hass)
+    await harness.setup(entry)
+    assert entry.runtime_data.ev_controller.gate_status == "ready"
+    harness.clear_service_calls()
+
+    # One missing phase invalidates the entire derived service current. The
+    # car nevertheless resumes its retained setting as soon as it plugs in.
+    await harness.set_unavailable("sensor.test_grid_t_power")
+    await harness.set_state("device_tracker.test_ev", "home")
+    await harness.set_state("binary_sensor.test_ev_cable", "on")
+    await harness.set_state("sensor.test_ev_charging", "charging")
+    await harness.set_state(
+        "sensor.test_ev_actual_current", "16", {"unit_of_measurement": "A"}
+    )
+    await harness.set_state("switch.test_ev_charge", "on")
+    at = datetime(2026, 9, 17, 18, 21, tzinfo=UTC)
+    await entry.runtime_data.ev_controller.async_reconcile(at)
+    await hass.async_block_till_done()
+
+    assert [(call.domain, call.service) for call in harness.service_calls] == [
+        ("switch", "turn_off")
+    ]
+    controller = entry.runtime_data.ev_controller
+    assert controller.daily_backfill_stop_pending is True
+    assert controller.daily_backfill_stop_attempts == 1
+    assert controller.target_current_a == 0
+
+    harness.clear_service_calls()
+    await harness.reload(entry)
+    restored = entry.runtime_data.ev_controller
+    assert restored.gate_status == "ready"
+    assert restored.daily_backfill_stop_pending is True
+    assert restored.daily_backfill_stop_attempts == 1
+    assert harness.service_calls == ()
+
+    await harness.unload(entry)
+    hass.services.async_remove("number", "set_value")
+    hass.services.async_remove("switch", "turn_on")
+    hass.services.async_remove("switch", "turn_off")
+    harness.close()
+
+
 @pytest.mark.freeze_time("2026-09-17 12:00:00+00:00")
 async def test_zerocharge_entry_replaces_active_pre_free_current_immediately(
     hass, monkeypatch

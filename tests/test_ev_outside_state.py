@@ -242,6 +242,21 @@ def test_outside_ownership_preserves_stage_priority_and_stop_latches():
     assert retained_stop.outside_stop_requested is True
     assert retained_stop.outside_control_active is True
 
+    still_charging = reconcile_outside_ownership(
+        pending,
+        charge_to_full=False,
+        pre_free_active=False,
+        solar_current_a=0,
+        physical_minimum_a=1,
+        baseline_a=0,
+        configured_baseline_a=0,
+        charge_switch_on=True,
+        outside_control_active=True,
+    )
+    assert still_charging.daily_state is pending
+    assert still_charging.daily_state.stop_attempts == 2
+    assert still_charging.outside_stop_requested is True
+
     carried = reconcile_outside_ownership(
         DailyBackfillCycleState(),
         charge_to_full=False,

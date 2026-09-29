@@ -2035,16 +2035,20 @@ async def test_daily_policy_stop_feedback_retry_trace_is_bounded(
     assert stopped == ["switch.car_charge"]
 
     await controller.async_reconcile(start + timedelta(seconds=30))
-    await controller.async_reconcile(start + timedelta(seconds=60))
+    await controller.async_reconcile(start + timedelta(seconds=90))
     assert controller.daily_backfill_stop_attempts == 3
     assert stopped == ["switch.car_charge"] * 3
 
-    await controller.async_reconcile(start + timedelta(seconds=90))
-    assert controller.last_reason == "daily_backfill_stop_fault_maximum_attempts"
+    await controller.async_reconcile(start + timedelta(seconds=120))
+    assert controller.last_reason == "daily_backfill_stop_awaiting_feedback"
     assert stopped == ["switch.car_charge"] * 3
 
+    await controller.async_reconcile(start + timedelta(seconds=210))
+    assert controller.daily_backfill_stop_attempts == 4
+    assert stopped == ["switch.car_charge"] * 4
+
     hass.states.async_set("switch.car_charge", "off")
-    await controller.async_reconcile(start + timedelta(seconds=120))
+    await controller.async_reconcile(start + timedelta(seconds=240))
     assert controller.last_reason == "daily_backfill_stopped"
     assert controller.daily_backfill_stop_pending is False
     assert controller.daily_backfill_stop_attempts == 0
@@ -2452,6 +2456,201 @@ async def test_multiphase_runtime_blocks_when_mapped_current_is_unavailable(
     assert controller.writes_performed == 0
 
 
+async def test_multiphase_six_source_mapping_opens_ev_runtime_without_direct_helper(
+    hass: HomeAssistant,
+) -> None:
+    """The runtime must honor the alternative accepted by config flow."""
+    _set_ev_states(hass)
+    config = _controller_config(
+        site_phase_count=3,
+        **{
+            f"site_grid_phase_{phase}_{kind}_entity": f"sensor.grid_{phase}_{kind}"
+            for phase in "rst"
+            for kind in ("power", "voltage")
+        },
+    )
+    coordinator = _coordinator(config)
+    sample = NormalizedSample(
+        20.0,
+        "A",
+        (TelemetrySource("sensor.grid_r_power", 4.8, "kW", datetime(2026, 9, 7, 18, tzinfo=UTC)),),
+        "positive_import",
+        True,
+        True,
+        "derived_from_phase_grid_power_and_voltage",
+    )
+    coordinator.telemetry = replace(coordinator.telemetry, site_grid_current=sample)
+    controller = ActiveEvController(hass, coordinator)
+
+    assert controller.gate_status == "ready"
+    await controller.async_reconcile(datetime(2026, 9, 7, 18, tzinfo=UTC))
+    assert controller.last_reason != "multiphase_current_mapping_required"
+    assert controller.last_reason != "multiphase_current_feedback_unavailable"
+
+
+async def test_multiphase_current_loss_stops_external_zero_baseline_charge_and_persists(
+    hass: HomeAssistant,
+) -> None:
+    """Missing CT evidence must not let a retained 16 A setting drain a battery."""
+    _set_ev_states(hass)
+    hass.states.async_set("sensor.car_charging", "charging")
+    hass.states.async_set("sensor.car_actual_current", "16", {"unit_of_measurement": "A"})
+    hass.states.async_set("number.car_current", "16", {"min": 1, "max": 16, "step": 1})
+    hass.states.async_set("switch.car_charge", "on")
+    calls = []
+
+    async def stop(call):
+        calls.append(call.data["entity_id"])
+
+    hass.services.async_register("switch", "turn_off", stop)
+    coordinator = _coordinator(
+        _controller_config(
+            site_phase_count=3,
+            site_grid_current_entity="sensor.phase_current",
+            ev_protected_baseline_a=0,
+        )
+    )
+    controller = ActiveEvController(hass, coordinator)
+    at = datetime(2026, 9, 7, 18, tzinfo=UTC)
+
+    await controller.async_reconcile(at)
+
+    assert calls == ["switch.car_charge"]
+    assert controller.last_actions == ("stop_charging",)
+    assert controller.target_current_a == 0
+    assert controller.daily_backfill_stop_pending is True
+    assert controller.daily_backfill_stop_attempts == 1
+    assert controller.policy_route.route == "outside_window"
+    await controller.async_reconcile(at + timedelta(seconds=15))
+    assert calls == ["switch.car_charge"]
+    assert controller.daily_backfill_stop_attempts == 1
+
+    restored = ActiveEvController(hass, coordinator)
+    await restored._async_restore()  # noqa: SLF001
+    assert restored.daily_backfill_stop_pending is True
+    assert restored.daily_backfill_stop_attempts == 1
+    await restored.async_reconcile(at + timedelta(seconds=31))
+    assert calls == ["switch.car_charge", "switch.car_charge"]
+    assert restored.daily_backfill_stop_attempts == 2
+
+    hass.states.async_set("switch.car_charge", "off")
+    await restored.async_reconcile(at + timedelta(seconds=62))
+    assert restored.daily_backfill_stop_pending is False
+    assert restored.last_reason == "daily_backfill_stopped"
+
+
+async def test_multiphase_stop_yields_to_free_window_after_current_recovers(
+    hass: HomeAssistant,
+) -> None:
+    """An outside stop cannot become a fault inherited by ZEROCHARGE."""
+    _set_ev_states(hass)
+    hass.states.async_set("sensor.car_charging", "charging")
+    hass.states.async_set("sensor.car_actual_current", "16", {"unit_of_measurement": "A"})
+    hass.states.async_set("switch.car_charge", "on")
+    calls = []
+
+    async def stop(_call):
+        calls.append("stop")
+
+    async def accept_number(_call):
+        calls.append("number")
+
+    hass.services.async_register("switch", "turn_off", stop)
+    hass.services.async_register("number", "set_value", accept_number)
+    coordinator = _coordinator(
+        _controller_config(
+            site_phase_count=3,
+            site_grid_current_entity="sensor.phase_current",
+            ev_protected_baseline_a=0,
+        )
+    )
+    controller = ActiveEvController(hass, coordinator)
+    before = datetime(2026, 9, 7, 12, 0, tzinfo=UTC)
+    await controller.async_reconcile(before)
+    assert controller.daily_backfill_stop_pending is True
+    assert calls == ["stop"]
+
+    await controller.async_reconcile(before + timedelta(minutes=1))
+    assert calls == ["stop"]
+    assert controller.daily_backfill_stop_pending is True
+
+    source = TelemetrySource(
+        "sensor.phase_current", 2, "A", before + timedelta(minutes=1)
+    )
+    coordinator.telemetry = replace(
+        coordinator.telemetry,
+        site_grid_current=NormalizedSample(
+            2, "A", (source,), "positive_import", True, True, "ok"
+        ),
+    )
+    await controller.async_reconcile(before + timedelta(minutes=1, seconds=30))
+
+    assert controller.policy_route.route == "free_window"
+    assert controller.daily_backfill_stop_pending is False
+    assert controller.outside_stop_requested is False
+    assert calls.count("stop") == 1
+    assert controller.decision_phase != "current_feedback_unavailable"
+
+
+@pytest.mark.parametrize(
+    ("change", "expected_reason"),
+    [
+        ({"binary_sensor.car_cable": "off"}, "multiphase_current_feedback_unavailable"),
+        ({"device_tracker.car": "not_home"}, "multiphase_current_feedback_unavailable"),
+    ],
+)
+async def test_multiphase_current_loss_never_stops_unconfirmed_vehicle(
+    hass: HomeAssistant, change: dict[str, str], expected_reason: str
+) -> None:
+    _set_ev_states(hass)
+    hass.states.async_set("switch.car_charge", "on")
+    for entity_id, value in change.items():
+        hass.states.async_set(entity_id, value)
+    calls = []
+    hass.bus.async_listen(EVENT_CALL_SERVICE, calls.append)
+    controller = ActiveEvController(
+        hass,
+        _coordinator(
+            _controller_config(
+                site_phase_count=3,
+                site_grid_current_entity="sensor.phase_current",
+            )
+        ),
+    )
+
+    await controller.async_reconcile(datetime(2026, 9, 7, 18, tzinfo=UTC))
+
+    assert controller.last_reason == expected_reason
+    assert controller.daily_backfill_stop_pending is False
+    assert calls == []
+
+
+async def test_multiphase_current_loss_respects_safety_lock_and_free_window(
+    hass: HomeAssistant,
+) -> None:
+    _set_ev_states(hass)
+    hass.states.async_set("switch.car_charge", "on")
+    calls = []
+    hass.bus.async_listen(EVENT_CALL_SERVICE, calls.append)
+    coordinator = _coordinator(
+        _controller_config(
+            site_phase_count=3,
+            site_grid_current_entity="sensor.phase_current",
+            rehearsal_mode=True,
+        )
+    )
+    controller = ActiveEvController(hass, coordinator)
+
+    await controller.async_reconcile(datetime(2026, 9, 7, 18, tzinfo=UTC))
+    assert controller.gate_status == "safety_locked"
+    assert controller.daily_backfill_stop_pending is True
+    assert controller.last_actions == ("would_stop_charging",)
+    assert calls == []
+
+    await controller.async_reconcile(datetime(2026, 9, 8, 12, 30, tzinfo=UTC))
+    assert calls == []
+
+
 async def test_smart_socket_runtime_respects_connector_settle_time(
     hass: HomeAssistant,
 ) -> None:
@@ -2829,6 +3028,7 @@ async def test_free_window_entry_rearms_failed_same_current_baseline(
         await controller.async_reconcile(before_window + timedelta(seconds=offset))
     assert controller.reconciliation.phase == "awaiting_feedback"
     assert controller.reconciliation.attempts == 3
+    await hass.async_block_till_done()
     calls.clear()
 
     await controller.async_reconcile(datetime(2026, 9, 7, 12, 1, tzinfo=UTC))

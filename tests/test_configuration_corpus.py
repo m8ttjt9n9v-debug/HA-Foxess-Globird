@@ -7,7 +7,7 @@ from collections.abc import Mapping
 import pytest
 import voluptuous as vol
 from homeassistant.config_entries import SOURCE_USER
-from homeassistant.data_entry_flow import FlowResultType
+from homeassistant.data_entry_flow import FlowResultType, section
 
 from custom_components.home_energy_orchestrator.config_flow import ConfigFlow
 from custom_components.home_energy_orchestrator.configuration import (
@@ -142,13 +142,21 @@ def _displayed_values(
     *,
     site_name: str,
 ) -> dict[str, object]:
-    values: dict[str, object] = {}
-    for marker in result["data_schema"].schema:
-        key = marker.schema
-        if key in ENTRY_DATA:
-            values[key] = ENTRY_DATA[key]
-        elif marker.default is not vol.UNDEFINED:
-            values[key] = marker.default()
+    def schema_values(schema) -> dict[str, object]:
+        values: dict[str, object] = {}
+        for marker, validator in schema.schema.items():
+            key = marker.schema
+            if isinstance(validator, section):
+                values[key] = schema_values(validator.schema)
+            elif key in ENTRY_DATA:
+                values[key] = ENTRY_DATA[key]
+            elif marker.description and "suggested_value" in marker.description:
+                values[key] = marker.description["suggested_value"]
+            elif marker.default is not vol.UNDEFINED:
+                values[key] = marker.default()
+        return values
+
+    values = schema_values(result["data_schema"])
     if result["step_id"] == "user":
         values.update(
             {
@@ -207,7 +215,11 @@ async def test_invalid_page_retains_complete_multi_page_draft(
             }
             for key, value in invalid_values.items():
                 if key in markers:
-                    assert markers[key].default() == value
+                    marker = markers[key]
+                    if marker.default is not vol.UNDEFINED:
+                        assert marker.default() == value
+                    elif marker.description and "suggested_value" in marker.description:
+                        assert marker.description["suggested_value"] == value
             result = rejected
             invalid_submitted = True
         result = await hass.config_entries.flow.async_configure(

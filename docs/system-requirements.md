@@ -117,7 +117,13 @@ sensors plus their matching grid-voltage sensors (V). The latter calculation
 is performed inside HEO; it does not depend on vehicle or charger telemetry.
 The phase-power sign must be verified during commissioning. Every phase source
 must be fresh and every voltage plausible (180–300 V), or current feedback
-remains unavailable and EV actuation is blocked. Aggregate grid power is not
+remains unavailable and EV current increases are blocked. For a confirmed
+home-connected direct-EVSE car outside the free window with a configured
+zero-current baseline, HEO can still request a stop of an active charge; it
+does not need the missing grid reading to know that charging is unauthorised.
+That stop remains pending across restart, retries progressively up to a
+30-minute interval until charge-switch-off feedback arrives, and produces an
+alert if charging continues. Safety Lock still blocks the command. Aggregate grid power is not
 a substitute for per-phase evidence. Existing current-sensor mappings remain
 compatible; if both methods are configured, a valid direct sensor takes
 precedence and the six phase sources provide a fallback. For the FoxESS
@@ -138,9 +144,11 @@ optional when valid live capacity is available. If no live capacity is mapped,
 the operator must enter a credible commissioned fallback; HEO does not assume a
 default battery size.
 
-The retained pilot direct path never issues a stop or pause. The optional daily
-ready-by extension may stop only a session it started when its frozen wall-
-energy target, soft SoC limit, ready deadline, or safety condition is reached.
+The retained pilot direct path never pauses its nonzero protected baseline.
+With a configured zero baseline, HEO may stop a connected charge that has no
+authorised stage, including one the vehicle started itself. The optional daily
+ready-by extension may also stop its own session when its frozen wall-energy
+target, soft SoC limit, ready deadline, or safety condition is reached.
 It requires a configured daily allocation, ready time, inverter-output
 percentage, inverter discharge/output rating, and current house/available-
 energy ledger. It can operate with FoxCloud ownership because it writes Tessie

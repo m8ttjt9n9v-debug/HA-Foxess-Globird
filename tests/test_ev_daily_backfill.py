@@ -328,7 +328,6 @@ def test_daily_backfill_stop_transition_matches_bounded_feedback_trace():
         state,
         charge_switch_on=True,
         now=start,
-        maximum_attempts=3,
         retry_interval=timedelta(seconds=30),
     )
     assert tuple(item.action for item in command.plan.commands) == ("stop_charging",)
@@ -342,41 +341,46 @@ def test_daily_backfill_stop_transition_matches_bounded_feedback_trace():
         state,
         charge_switch_on=True,
         now=start + timedelta(seconds=29),
-        maximum_attempts=3,
         retry_interval=timedelta(seconds=30),
     )
     assert waiting.state is state
     assert waiting.plan.commands == ()
     assert waiting.plan.reason == "daily_backfill_stop_awaiting_feedback"
 
-    for attempt in (2, 3):
-        at = start + timedelta(seconds=30 * (attempt - 1))
+    for seconds in (30, 90, 210, 450, 930, 1890, 3690):
+        at = start + timedelta(seconds=seconds)
         retry = reconcile_daily_backfill_stop(
             state,
             charge_switch_on=True,
             now=at,
-            maximum_attempts=3,
             retry_interval=timedelta(seconds=30),
         )
         assert tuple(item.action for item in retry.plan.commands) == ("stop_charging",)
         state = record_daily_backfill_stop_attempt(retry.state, at)
 
-    fault = reconcile_daily_backfill_stop(
+    assert state.attempts == 8
+    slow_wait = reconcile_daily_backfill_stop(
         state,
         charge_switch_on=True,
-        now=start + timedelta(seconds=90),
-        maximum_attempts=3,
+        now=start + timedelta(seconds=5400),
         retry_interval=timedelta(seconds=30),
     )
-    assert fault.state is state
-    assert fault.plan.commands == ()
-    assert fault.plan.reason == "daily_backfill_stop_fault_maximum_attempts"
+    assert slow_wait.state is state
+    assert slow_wait.plan.commands == ()
+    assert slow_wait.plan.reason == "daily_backfill_stop_awaiting_feedback"
+
+    slow_retry = reconcile_daily_backfill_stop(
+        state,
+        charge_switch_on=True,
+        now=start + timedelta(seconds=5490),
+        retry_interval=timedelta(seconds=30),
+    )
+    assert tuple(item.action for item in slow_retry.plan.commands) == ("stop_charging",)
 
     stopped = reconcile_daily_backfill_stop(
         state,
         charge_switch_on=False,
-        now=start + timedelta(seconds=120),
-        maximum_attempts=3,
+        now=start + timedelta(seconds=5500),
         retry_interval=timedelta(seconds=30),
     )
     assert stopped.state == DailyBackfillStopState()

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import voluptuous as vol
 from homeassistant.config_entries import SOURCE_RECONFIGURE, SOURCE_USER
-from homeassistant.data_entry_flow import FlowResultType
+from homeassistant.data_entry_flow import FlowResultType, section
 from homeassistant.helpers import entity_registry as er
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
@@ -56,15 +56,26 @@ async def _open_reconfigure_page(hass, result, page: str):
     )
 
 
-async def _submit_page_defaults(hass, result):
-    """Submit values from the proven fixture, falling back to displayed defaults."""
+def _schema_values(schema):
+    """Submit fixture/default values, including Home Assistant form sections."""
     values = {}
-    for marker in result["data_schema"].schema:
+    for marker, validator in schema.schema.items():
         key = marker.schema
+        if isinstance(validator, section):
+            values[key] = _schema_values(validator.schema)
+            continue
         if key in ENTRY_DATA:
             values[key] = ENTRY_DATA[key]
+        elif marker.description and "suggested_value" in marker.description:
+            values[key] = marker.description["suggested_value"]
         elif marker.default is not vol.UNDEFINED:
             values[key] = marker.default()
+    return values
+
+
+async def _submit_page_defaults(hass, result):
+    """Submit values from the proven fixture, falling back to displayed defaults."""
+    values = _schema_values(result["data_schema"])
     return await hass.config_entries.flow.async_configure(result["flow_id"], user_input=values)
 
 
@@ -403,8 +414,10 @@ async def test_user_form_prefills_live_foxess_battery_capacity(hass):
         if hasattr(marker, "schema")
     }
 
-    assert markers["battery_capacity_entity"].default() == ("sensor.bms_kwh_remaining")
-    assert markers["battery_capacity_kwh"].default() == 40.32
+    assert markers["battery_capacity_entity"].description["suggested_value"] == (
+        "sensor.bms_kwh_remaining"
+    )
+    assert markers["battery_capacity_kwh"].description["suggested_value"] == 40.32
 
 
 async def test_user_form_has_no_invented_battery_capacity_default(hass):
@@ -893,6 +906,157 @@ async def test_three_phase_grid_mapping_is_portable_and_requires_all_six_inputs(
     }
 
 
+async def test_three_phase_grid_mapping_rejects_repeated_phase_sensors(hass):
+    """One CT or voltage copied into another phase is not a safe six-source map."""
+    phase_mapping = {
+        f"site_grid_phase_{phase}_{kind}_entity": f"sensor.grid_{phase}_{kind}"
+        for phase in "rst"
+        for kind in ("power", "voltage")
+    }
+    phase_mapping["site_grid_phase_s_power_entity"] = "sensor.grid_r_power"
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": SOURCE_USER},
+        data={"name": "Three-phase site", **ENTRY_DATA, **phase_mapping},
+    )
+
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"] == {
+        "site_grid_phase_s_power_entity": "duplicate_phase_grid_mapping"
+    }
+
+    phase_mapping["site_grid_phase_s_power_entity"] = "sensor.grid_s_power"
+    phase_mapping["site_grid_phase_t_voltage_entity"] = "sensor.grid_s_voltage"
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": SOURCE_USER},
+        data={"name": "Three-phase site", **ENTRY_DATA, **phase_mapping},
+    )
+    assert result["errors"] == {
+        "site_grid_phase_t_voltage_entity": "duplicate_phase_grid_mapping"
+    }
+
+
+async def test_reconfigure_clears_old_current_helper_and_keeps_phase_pairs(hass):
+    """Clearing an optional selector must survive page merge and entry update."""
+    phase_mapping = {
+        f"site_grid_phase_{phase}_{kind}_entity": f"sensor.grid_{phase}_{kind}"
+        for phase in "rst"
+        for kind in ("power", "voltage")
+    }
+    for phase in "rst":
+        hass.states.async_set(
+            f"sensor.grid_{phase}_power", "0.2", {"unit_of_measurement": "kW"}
+        )
+        hass.states.async_set(
+            f"sensor.grid_{phase}_voltage", "240", {"unit_of_measurement": "V"}
+        )
+    hass.states.async_set(
+        "sensor.old_current_helper", "unavailable", {"unit_of_measurement": "A"}
+    )
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Three-phase site",
+        data={
+            **ENTRY_DATA,
+            "site_phase_count": 3,
+            "service_import_limit_a": 80,
+            "site_grid_current_entity": "sensor.old_current_helper",
+            "site_grid_current_positive_direction": "positive_import",
+        },
+    )
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": SOURCE_RECONFIGURE, "entry_id": entry.entry_id},
+    )
+    result = await _open_reconfigure_page(hass, result, "grid")
+    values = _schema_values(result["data_schema"])
+    values.pop("site_grid_current_entity")
+    values["site_grid_current_positive_direction"] = "positive_export"
+    for phase in "rst":
+        values[f"phase_{phase}"] = {
+            f"site_grid_phase_{phase}_{kind}_entity": phase_mapping[
+                f"site_grid_phase_{phase}_{kind}_entity"
+            ]
+            for kind in ("power", "voltage")
+        }
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], user_input=values
+    )
+    assert result["step_id"] == "reconfigure"
+    assert entry.data["site_grid_current_entity"] == "sensor.old_current_helper"
+
+    result = await _open_reconfigure_page(hass, result, "grid")
+    markers = {marker.schema: marker for marker in result["data_schema"].schema}
+    assert markers["site_grid_current_entity"].default is vol.UNDEFINED
+    phase_s_section = result["data_schema"].schema[markers["phase_s"]]
+    phase_s_markers = {
+        marker.schema: marker for marker in phase_s_section.schema.schema
+    }
+    assert phase_s_markers["site_grid_phase_s_power_entity"].description[
+        "suggested_value"
+    ] == (
+        "sensor.grid_s_power"
+    )
+
+    saved_values = _schema_values(result["data_schema"])
+    saved_values["site_grid_current_positive_direction"] = "positive_export"
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], user_input=saved_values
+    )
+    result = await _open_reconfigure_page(hass, result, "review")
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        user_input={"sign_conventions_verified": True, "apply_configuration": True},
+    )
+    assert result["type"] is FlowResultType.ABORT
+    await hass.async_block_till_done()
+    assert entry.data["site_grid_current_entity"] is None
+    assert entry.data["site_grid_phase_s_power_entity"] == "sensor.grid_s_power"
+    assert entry.data["site_grid_current_positive_direction"] == "positive_export"
+
+    reopened = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": SOURCE_RECONFIGURE, "entry_id": entry.entry_id},
+    )
+    reopened = await _open_reconfigure_page(hass, reopened, "grid")
+    markers = {marker.schema: marker for marker in reopened["data_schema"].schema}
+    assert markers["site_grid_current_entity"].default is vol.UNDEFINED
+
+
+async def test_reconfigure_highlights_phase_with_repeated_ct(hass):
+    """A copied R selector must be visible as an error on the S group."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Three-phase site",
+        data={**ENTRY_DATA, "site_phase_count": 3},
+    )
+    entry.add_to_hass(hass)
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": SOURCE_RECONFIGURE, "entry_id": entry.entry_id},
+    )
+    result = await _open_reconfigure_page(hass, result, "grid")
+    values = _schema_values(result["data_schema"])
+    for phase in "rst":
+        values[f"phase_{phase}"] = {
+            f"site_grid_phase_{phase}_power_entity": f"sensor.grid_{phase}_power",
+            f"site_grid_phase_{phase}_voltage_entity": f"sensor.grid_{phase}_voltage",
+        }
+    values["phase_s"]["site_grid_phase_s_power_entity"] = "sensor.grid_r_power"
+
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], user_input=values
+    )
+
+    assert result["step_id"] == "reconfigure_grid"
+    assert result["errors"] == {"phase_s": "duplicate_phase_grid_mapping"}
+    assert entry.data.get("site_grid_phase_s_power_entity") is None
+
+
 async def test_current_mapping_allows_a_temporarily_unavailable_amp_sensor(hass):
     """A live telemetry gap must not make an otherwise valid site impossible to save."""
     hass.states.async_set(
@@ -1227,12 +1391,7 @@ async def test_reconfigure_reviews_direction_verification_after_source_change(ha
     assert "reconfigure_verification" not in result["menu_options"]
 
     result = await _open_reconfigure_page(hass, result, "grid")
-    values = {}
-    for marker in result["data_schema"].schema:
-        if marker.schema in ENTRY_DATA:
-            values[marker.schema] = ENTRY_DATA[marker.schema]
-        elif marker.default is not vol.UNDEFINED:
-            values[marker.schema] = marker.default()
+    values = _schema_values(result["data_schema"])
     values["grid_power_entity"] = "sensor.replacement_grid"
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"], user_input=values

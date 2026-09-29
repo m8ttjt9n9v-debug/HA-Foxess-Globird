@@ -125,7 +125,9 @@ layers around the proven algorithm, not replacement algorithms.
 - Direct-EVSE free-window Tessie current, charge-limit, and charge-start control
   is implemented. Default-off solar-spill and latest-start pre-free stages are
   also implemented for Local Modbus ownership. All three use the same bounded
-  feedback reconciliation; no direct path issues a stop or pause command. If
+  feedback reconciliation. The retained pilot's nonzero protected baseline
+  never issues a pause; the separate configured-zero-baseline policy may stop
+  a connected, unauthorised charge and requires off feedback. If
   the powered direct-path anti-pause guard is active, it retains its configured
   SoC headroom but is capped at 90% whenever Charge to Full is off, including
   after final actuator-step rounding. If that actuator cannot represent a
@@ -201,6 +203,11 @@ layers around the proven algorithm, not replacement algorithms.
   knowingly incorrect load.
 - FoxCloud ownership blocks all HEO Modbus writes for the entire day. HEO does
   not mix cloud scheduling and local Modbus automation.
+- A FoxESS multi-command plan rechecks live owner, master, Safety Lock, sign
+  verification and actuator mapping before each service call, including after
+  its deliberate settlement delay. If a gate closes mid-plan, the already
+  persisted session retains its recovery obligation; no later command in that
+  plan is sent. The same interlock applies to manual diagnostics.
 - FoxCloud inverter ownership does not block free-window Tessie control,
   because that path does not write FoxESS. It does block solar-spill and
   pre-free stages: both are explicitly Local-Modbus-only policies. The shared
@@ -223,6 +230,14 @@ layers around the proven algorithm, not replacement algorithms.
   configuration. Automatic sign calibration must use
   coherent physical evidence and the persisted diagnostic restoration path;
   it must not infer from entity names or enable an automatic-control request.
+- Optional mappings shown during commissioning are UI suggestions, not schema
+  defaults: clearing a selector must persist an explicit absent value after
+  Review and Apply, and reopening the section must not restore it. The
+  three-phase grid page groups each CT power with its matching voltage and
+  rejects a CT or voltage entity reused for another phase. A direct signed
+  current sensor is an alternative to, not a requirement in addition to, all
+  three phase pairs. Both methods share one configured positive direction;
+  when both are mapped they must have the same sign convention.
 - Paired battery charge/discharge magnitudes remain the canonical pilot source.
   When a steady inactive zero alone becomes stale, a separately mapped fresh
   signed battery-power sensor may recover the canonical value with explicit
@@ -237,7 +252,17 @@ layers around the proven algorithm, not replacement algorithms.
   this feedback from three grid CT phase powers and their corresponding grid
   voltages, with sign, unit, plausible-voltage and freshness checks. It never
   depends on an EV charger voltage or silently replaces an existing current
-  mapping. Missing evidence blocks EV control rather than assuming balance.
+  mapping. Missing evidence blocks EV current increases rather than assuming
+  balance. For a connected direct-EVSE car outside the free window with a
+  configured zero baseline and no explicit Charge to Full request, missing
+  multiphase current preserves the existing stop obligation: HEO may issue
+  only `stop_charging` while its EV write gates permit it. The stop is
+  persisted, requires charge-switch-off feedback, and retries with increasing
+  intervals capped at 30 minutes rather than a terminal attempt count. Safety
+  Lock and unconfirmed home/cable evidence still prohibit a stop command. A
+  sustained charging/current-loss mismatch is an alert, not a healthy state.
+  The complete six-source phase mapping is a runtime alternative to a direct
+  current entity, matching the configuration contract.
 - House-load topology is explicit. The retained pilot mapping already excludes
   EV power and remains the default. A whole-house mapping may opt into removing
   measured EV current converted with the commissioned voltage and EV phase

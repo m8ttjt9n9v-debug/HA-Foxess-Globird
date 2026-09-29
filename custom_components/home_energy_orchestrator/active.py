@@ -135,6 +135,13 @@ class ActiveFoxessController:
             else "blocked_incomplete_mapping"
         )
 
+    def _writes_still_authorized(self) -> bool:
+        """Recheck the live interlock between commands in a delayed plan."""
+        manual_test = getattr(self.coordinator, "manual_test", None)
+        return self.gate_status == "ready" and not bool(
+            manual_test is not None and manual_test.is_active
+        )
+
     async def async_start(self) -> None:
         """Start the bounded reconciliation timer and perform one evaluation."""
         await self._async_load_charge_session()
@@ -287,7 +294,10 @@ class ActiveFoxessController:
             return
         if self._adapter is None:
             self._adapter = FoxessServiceAdapter(
-                self.hass, entities, allow_writes=True
+                self.hass,
+                entities,
+                allow_writes=True,
+                write_guard=self._writes_still_authorized,
             )
         executed = await self._adapter.async_execute(plan)
         self.last_actions = executed
@@ -362,6 +372,7 @@ class ActiveFoxessController:
                     self.hass,
                     entities,
                     allow_writes=True,
+                    write_guard=self._writes_still_authorized,
                 )
             plan = apply_force_mode_command_delays(transition.plan)
             try:
@@ -525,6 +536,7 @@ class ActiveFoxessController:
                     self.hass,
                     entities,
                     allow_writes=True,
+                    write_guard=self._writes_still_authorized,
                 )
             plan = apply_force_mode_command_delays(transition.plan)
             try:
