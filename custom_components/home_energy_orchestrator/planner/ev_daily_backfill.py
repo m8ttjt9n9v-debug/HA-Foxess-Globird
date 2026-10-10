@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from math import isfinite
 
 from .ev import EvCommand, EvCommandPlan, estimate_vehicle_energy_to_target_kwh
@@ -38,6 +38,7 @@ class DailyBackfillInputs:
     charger_minimum_a: float
     charger_maximum_a: float
     planning_buffer_minutes: float = 0.0
+    use_all_discretionary_energy: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -66,6 +67,7 @@ class DailyBackfillPlanningEvidence:
     charger_minimum_a: float
     charger_maximum_a: float
     planning_buffer_minutes: float
+    use_all_discretionary_energy: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -193,6 +195,7 @@ def evaluate_daily_backfill_plan(
             charger_minimum_a=evidence.charger_minimum_a,
             charger_maximum_a=evidence.charger_maximum_a,
             planning_buffer_minutes=evidence.planning_buffer_minutes,
+            use_all_discretionary_energy=evidence.use_all_discretionary_energy,
         )
     )
 
@@ -215,16 +218,7 @@ def advance_daily_backfill_session(
         or plan.phase in _DAILY_BACKFILL_COMPLETION_PHASES
         or plan.planned_energy_kwh <= 0
     ):
-        next_state = replace(
-            state,
-            active=False,
-            session_target_kwh=0.0,
-            session_start_delivered_kwh=0.0,
-            frozen_start=None,
-            stop_pending=True,
-            stop_attempts=0,
-            last_stop_at=None,
-        )
+        next_state = end_daily_backfill_session(state)
     elif not state.active and plan.phase == "charge_now" and plan.planned_energy_kwh > 0:
         next_state = replace(
             state,
@@ -256,6 +250,24 @@ def advance_daily_backfill_session(
         ),
     )
     return DailyBackfillSessionTransition(next_state, plan.current_ceiling_a)
+
+
+def end_daily_backfill_session(
+    state: DailyBackfillCycleState,
+) -> DailyBackfillCycleState:
+    """End an active session and retain its existing stop-feedback obligation."""
+    if not state.active:
+        return state
+    return replace(
+        state,
+        active=False,
+        session_target_kwh=0.0,
+        session_start_delivered_kwh=0.0,
+        frozen_start=None,
+        stop_pending=True,
+        stop_attempts=0,
+        last_stop_at=None,
+    )
 
 
 def reconcile_daily_backfill_stop(
@@ -339,15 +351,20 @@ def integrate_daily_backfill_energy(
     delivered_kwh = state.delivered_kwh
     previous_at = state.last_sample_at
     previous_current = state.last_actual_current_a
+    elapsed = (
+        now.astimezone(UTC) - previous_at.astimezone(UTC)
+        if previous_at is not None
+        else None
+    )
     if (
         active
         and actual_current_a is not None
         and previous_at is not None
         and previous_current is not None
-        and now >= previous_at
-        and now - previous_at <= timedelta(seconds=maximum_sample_age_seconds)
+        and elapsed is not None
+        and timedelta(0) <= elapsed <= timedelta(seconds=maximum_sample_age_seconds)
     ):
-        hours = (now - previous_at).total_seconds() / 3600
+        hours = elapsed.total_seconds() / 3600
         average_current = (previous_current + actual_current_a) / 2
         delivered_kwh += average_current * voltage_v * phase_count / 1000 * hours
     return DailyBackfillEnergyState(
@@ -361,11 +378,25 @@ def calculate_daily_backfill_plan(inputs: DailyBackfillInputs) -> DailyBackfillP
     """Plan wall energy without assuming who controlled the inverter earlier.
 
     The protected allocation is considered first. Any energy beyond it is a
-    time-proportional share of the remaining discretionary battery energy. The
-    current is bounded by a configured percentage of inverter output and then
-    rounded down to an actuator-supported step.
+    time-proportional share of the remaining discretionary battery energy by
+    default. The optional full-surplus mode uses all currently discretionary
+    energy while retaining the live house, export and vehicle bounds. Current
+    is bounded by a configured percentage of inverter output and then rounded
+    down to an actuator-supported step.
     """
     _validate(inputs)
+    now = inputs.now
+    ready_at = inputs.ready_at
+    planning_window_start = inputs.planning_window_start
+    next_free_start = inputs.next_free_start
+    if inputs.use_all_discretionary_energy:
+        # Charging duration is physical elapsed time, including a skipped or
+        # repeated local-clock hour. Retain the legacy planner's wall-clock
+        # arithmetic when this separately configured extension is disabled.
+        now = now.astimezone(UTC)
+        ready_at = ready_at.astimezone(UTC)
+        planning_window_start = planning_window_start.astimezone(UTC)
+        next_free_start = next_free_start.astimezone(UTC)
     remaining = max(
         inputs.protected_ev_allocation_kwh - inputs.delivered_this_cycle_kwh,
         0.0,
@@ -375,16 +406,19 @@ def calculate_daily_backfill_plan(inputs: DailyBackfillInputs) -> DailyBackfillP
         0.0,
     )
     discretionary = max(after_house - remaining, 0.0)
-    hours_to_ready = max((inputs.ready_at - inputs.now).total_seconds() / 3600, 0.0)
-    hours_to_free = max((inputs.next_free_start - inputs.now).total_seconds() / 3600, 0.0)
+    hours_to_ready = max((ready_at - now).total_seconds() / 3600, 0.0)
+    hours_to_free = max((next_free_start - now).total_seconds() / 3600, 0.0)
     share = min(hours_to_ready / hours_to_free, 1.0) if hours_to_free > 0 else 0.0
     proportional = discretionary * share
+    discretionary_contribution = (
+        discretionary if inputs.use_all_discretionary_energy else proportional
+    )
     # A ready-by allocation may reserve energy from an earlier export, but it
     # must never manufacture a new charging budget.  The pilot's pre-free
     # controller only spends energy which the live ZEROHERO export ledger still
     # regards as genuinely sellable.  Keep that same boundary here.
     requested = min(
-        remaining + proportional,
+        remaining + discretionary_contribution,
         after_house,
         inputs.sellable_energy_kwh,
         inputs.vehicle_wall_room_kwh,
@@ -405,21 +439,24 @@ def calculate_daily_backfill_plan(inputs: DailyBackfillInputs) -> DailyBackfillP
     shortfall = max(remaining - min(after_house, inputs.vehicle_wall_room_kwh), 0.0)
     duration = requested / power_kw * 60 if requested > 0 and power_kw > 0 else 0.0
     latest = (
-        inputs.ready_at
+        ready_at
         - timedelta(minutes=duration + inputs.planning_buffer_minutes)
         if duration > 0
         else None
     )
-    achievable = shortfall <= 0 and (
-        latest is None or latest >= inputs.planning_window_start
+    earliest_start = (
+        max(planning_window_start, now)
+        if inputs.use_all_discretionary_energy
+        else planning_window_start
     )
-    planned_start = max(latest, inputs.planning_window_start) if latest is not None else None
+    achievable = shortfall <= 0 and (latest is None or latest >= earliest_start)
+    planned_start = max(latest, planning_window_start) if latest is not None else None
 
-    if inputs.now >= inputs.ready_at:
+    if now >= ready_at:
         phase = "ready_time_passed"
-    elif inputs.now < inputs.planning_window_start:
+    elif now < planning_window_start:
         phase = "before_planning_window"
-    elif remaining <= 0:
+    elif remaining <= 0 and not inputs.use_all_discretionary_energy:
         phase = "allocation_complete"
     elif inputs.vehicle_wall_room_kwh <= 0:
         phase = "vehicle_target_reached"
@@ -429,10 +466,13 @@ def calculate_daily_backfill_plan(inputs: DailyBackfillInputs) -> DailyBackfillP
         phase = "protected_energy_unavailable"
     elif current_a <= 0:
         phase = "outside_power_ceiling_too_low"
-    elif planned_start is not None and inputs.now >= planned_start:
+    elif planned_start is not None and now >= planned_start:
         phase = "charge_now"
     else:
         phase = "waiting_latest_start"
+
+    if inputs.use_all_discretionary_energy and planned_start is not None:
+        planned_start = planned_start.astimezone(inputs.ready_at.tzinfo)
 
     return DailyBackfillPlan(
         round(remaining, 3),
@@ -473,7 +513,17 @@ def _validate(inputs: DailyBackfillInputs) -> None:
         for value in (inputs.ready_at, inputs.planning_window_start, inputs.next_free_start)
     ):
         raise ValueError("daily backfill datetimes must be timezone-aware")
-    if not inputs.planning_window_start <= inputs.ready_at <= inputs.next_free_start:
+    planning_window_start, ready_at, next_free_start = (
+        inputs.planning_window_start,
+        inputs.ready_at,
+        inputs.next_free_start,
+    )
+    if inputs.use_all_discretionary_energy:
+        planning_window_start, ready_at, next_free_start = (
+            value.astimezone(UTC)
+            for value in (planning_window_start, ready_at, next_free_start)
+        )
+    if not planning_window_start <= ready_at <= next_free_start:
         raise ValueError("ready time must fall inside the pre-free planning interval")
     if inputs.phase_count < 1 or inputs.voltage_v <= 0 or inputs.current_step_a <= 0:
         raise ValueError("electrical topology must be commissioned")

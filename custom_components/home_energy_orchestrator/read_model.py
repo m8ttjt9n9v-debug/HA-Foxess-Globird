@@ -1073,7 +1073,7 @@ def _build_ev_read_model(
             if controller.daily_backfill_active
             else daily_plan.phase
             if daily_plan is not None
-            else "disabled"
+            else getattr(controller, "daily_backfill_hold_reason", None) or "disabled"
         ),
         daily_backfill_remaining_kwh=(
             None if daily_plan is None else daily_plan.remaining_allocation_kwh

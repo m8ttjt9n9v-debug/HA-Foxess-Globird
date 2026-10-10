@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 
+import pytest
 import voluptuous as vol
 from homeassistant.data_entry_flow import section
 
@@ -93,3 +94,19 @@ def test_grid_phase_fields_are_grouped_in_visible_matching_pairs() -> None:
             f"site_grid_phase_{phase}_power_entity",
             f"site_grid_phase_{phase}_voltage_entity",
         )
+
+
+def test_backfill_timing_selector_defaults_to_ready_by_and_rejects_other_choices() -> None:
+    schema = build_page_schema("ev_policies", {})
+    marker, validator = next(
+        (marker, validator)
+        for marker, validator in schema.schema.items()
+        if marker.schema == "ev_pre_free_backfill_timing"
+    )
+    assert marker.default() == "ready_by"
+    assert validator.config["options"] == ["conservative", "ready_by"]
+    assert validator.config["translation_key"] == "ev_pre_free_backfill_timing"
+    assert validator("conservative") == "conservative"
+    assert validator("ready_by") == "ready_by"
+    with pytest.raises(vol.Invalid):
+        validator("unsupported")

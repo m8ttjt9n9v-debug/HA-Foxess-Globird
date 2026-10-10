@@ -56,6 +56,7 @@ def _controller_config(**changes):
         "ev_charge_switch_entity": "switch.car_charge",
         "ev_location_mode": "auto",
         "ev_free_window_priority": "ev",
+        "ev_pre_free_backfill_timing": "conservative",
         "ev_free_window_charge_limit_percent": 90,
         "ev_free_window_minimum_current_a": 1,
         "ev_free_window_settle_minutes": 5,

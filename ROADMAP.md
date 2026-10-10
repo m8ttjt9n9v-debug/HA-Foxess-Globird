@@ -132,37 +132,40 @@ Status here describes behavioral parity, not merely the presence of code.
 
 ## High-priority feature — opportunistic EV surplus before departure
 
-- [ ] Add a separate opt-in **opportunistic before-departure EV surplus**
-  policy. This is not the existing fixed-kWh daily ready-by allocation and
-  must not change that feature's semantics. It must not reserve a future EV
-  allocation from the preceding evening's automatic export.
+- [x] Implement the narrow **Backfill timing: Ready by** configuration
+  extension. Ready by is now the default timing for new entries and existing
+  entries without a saved choice; explicit **Conservative** choices are
+  preserved. The EV master and pre-free enable requests keep their saved state.
+  Invalid legacy ready deadlines or missing power limits hold Ready by inactive rather
+  than falling back to conservative charging. Ready by reuses the existing
+  daily planner, session and persisted ready-cycle ledger to offer the full
+  currently safe discretionary battery budget, with no fixed kWh allocation
+  required and no new reservation from the previous evening's export. A fixed
+  daily allocation retains its existing protection and is counted once.
 
-  Instead, derive a declining battery-energy safety envelope from the existing
-  protected house-demand budget, battery floor, fixed reserve, and the time
-  remaining until the next free-power window. At each coherent evaluation,
-  compare current usable battery energy with the required energy at that point
-  on the envelope. Only the positive difference is discretionary EV energy.
-  An eligible home-connected vehicle may receive that genuinely surplus energy
-  before a configured departure time; higher-than-expected remaining battery
-  energy after low household use must therefore be usable rather than stranded.
+  Local Modbus ownership, fresh coherent grid/battery evidence, fresh mapped
+  house demand, the existing house/reserve protection, live discretionary/export
+  cap, vehicle room, outside inverter percentage and normal charge-limit policy
+  remain mandatory. The existing ready time must fall strictly after midnight
+  and before free power; latest-start charging may begin overnight and uses
+  elapsed time across daylight-saving transitions. Lost energy authority or
+  import above the commissioned zero-import threshold curtails through existing
+  bounded reconciliation. Ready by suppresses the old conservative pre-free
+  stage after the deadline as well, so eligible morning-solar/free-window
+  policies can take over. Charge to Full and free-window charging do not enter
+  ready-cycle delivery. See the
+  [timing and fixed-allocation contract](docs/ev-daily-ready-backfill.md).
 
-  The policy must continuously re-evaluate and curtail immediately for grid
-  import, loss of protected reserve, unexpected house load, stale or
-  contradictory telemetry, disconnection, vehicle limit, Safety Lock, or any
-  other gate failure. It must never create paid-grid charging, drain below the
-  dynamic house-safe envelope, weaken ordinary automatic-export protection, or
-  retain an unearned morning allocation from the previous evening. Show the
-  live safe-energy requirement, currently available discretionary surplus,
-  departure deadline, and current policy phase so the decision is auditable.
-
-  Define explicit priority and handover rules with solar spill, pre-free
-  backfill, daily fixed-allocation ready-by backfill, free-window charging,
-  automatic export, reload/restart, and an unplug/replug. Add deterministic
-  lifecycle replays for low and high overnight house use, a departure before
-  the free window, a battery above/below the envelope, a sharp load increase,
-  telemetry loss, a changing calculated surplus, and the exact departure and
-  free-window boundaries. This is a high-priority feature but remains subject
-  to the lifecycle-and-incident harness prerequisite above.
+- [ ] Complete the broader generated full-system lifecycle and incident
+  harness, full-day replay corpus, and live acceptance for opportunistic surplus.
+  Automated regression coverage does not close this gate or claim a live
+  deployment. Cover low and high overnight house use, a departure before the
+  free window, battery energy above/below protection, a sharp house-load increase,
+  telemetry loss/recovery, changing surplus, unplug/replug, owner/Safety Lock
+  changes, reload/restart, daylight-saving changes, and exact ready/free-window
+  boundaries. Verify observable energy protection, command ordering and every
+  handover with fixed allocation, measured solar, export and paid Charge to Full
+  through the complete system, not only individual planner calculations.
 
 ## Optimisation and maintainability programme
 

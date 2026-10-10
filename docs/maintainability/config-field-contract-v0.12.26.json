@@ -1,6 +1,6 @@
 {
   "config_entry_version": 6,
-  "field_count": 134,
+  "field_count": 135,
   "fields": [
     {
       "default": "Home Energy",
@@ -493,6 +493,27 @@
       "setup_label": "Use spare home-battery energy for EV before free power"
     },
     {
+      "default": "ready_by",
+      "has_default": true,
+      "input_config": {
+        "custom_value": false,
+        "multiple": false,
+        "options": [
+          "conservative",
+          "ready_by"
+        ],
+        "sort": false,
+        "translation_key": "ev_pre_free_backfill_timing"
+      },
+      "input_kind": "select",
+      "key": "ev_pre_free_backfill_timing",
+      "order": 19,
+      "page": "ev_policies",
+      "reconfigure_label": "Backfill timing",
+      "required": true,
+      "setup_label": "Backfill timing"
+    },
+    {
       "default": 0.0,
       "has_default": true,
       "input_config": {
@@ -500,11 +521,11 @@
       },
       "input_kind": "number",
       "key": "ev_daily_backfill_energy_kwh",
-      "order": 19,
+      "order": 20,
       "page": "ev_policies",
-      "reconfigure_label": "EV energy for daily ready-by charging (kWh; 0 disables)",
+      "reconfigure_label": "Reserved EV energy for ready-by (kWh; 0 means none)",
       "required": true,
-      "setup_label": "EV energy for daily ready-by charging (kWh; 0 disables)"
+      "setup_label": "Reserved EV energy for ready-by (kWh; 0 means none)"
     },
     {
       "default": "08:00:00",
@@ -512,7 +533,7 @@
       "input_config": null,
       "input_kind": "time",
       "key": "ev_daily_ready_time",
-      "order": 20,
+      "order": 21,
       "page": "ev_policies",
       "reconfigure_label": "Daily EV ready-by time",
       "required": true,
@@ -526,7 +547,7 @@
       },
       "input_kind": "number",
       "key": "ev_outside_inverter_percent",
-      "order": 21,
+      "order": 22,
       "page": "ev_policies",
       "reconfigure_label": "Max EV power outside free window (% of inverter output)",
       "required": true,
@@ -540,7 +561,7 @@
       },
       "input_kind": "number",
       "key": "ev_outside_battery_reserve_percent",
-      "order": 22,
+      "order": 23,
       "page": "ev_policies",
       "reconfigure_label": "Home battery minimum for EV charging outside free window (%)",
       "required": true,
@@ -554,7 +575,7 @@
       },
       "input_kind": "number",
       "key": "ev_protected_baseline_a",
-      "order": 23,
+      "order": 24,
       "page": "ev_policies",
       "reconfigure_label": "EV keep-alive current outside free window (A; 0 disables keep-alive)",
       "required": true,
@@ -568,7 +589,7 @@
       },
       "input_kind": "number",
       "key": "ev_backfill_buffer_minutes",
-      "order": 24,
+      "order": 25,
       "page": "ev_policies",
       "reconfigure_label": "Ready-by planning buffer (minutes)",
       "required": true,
@@ -582,7 +603,7 @@
       },
       "input_kind": "number",
       "key": "ev_telemetry_max_age_seconds",
-      "order": 25,
+      "order": 26,
       "page": "ev_policies",
       "reconfigure_label": "Maximum age for outside-window power telemetry (seconds)",
       "required": true,
@@ -596,7 +617,7 @@
       },
       "input_kind": "number",
       "key": "ev_telemetry_max_skew_seconds",
-      "order": 26,
+      "order": 27,
       "page": "ev_policies",
       "reconfigure_label": "Maximum timestamp skew between outside-window power sensors (seconds)",
       "required": true,
@@ -608,7 +629,7 @@
       "input_config": null,
       "input_kind": "boolean",
       "key": "ev_before_export_enabled",
-      "order": 27,
+      "order": 28,
       "page": "ev_policies",
       "reconfigure_label": "Prioritise EV before automatic export",
       "required": true,
@@ -622,7 +643,7 @@
       },
       "input_kind": "number",
       "key": "ev_before_export_soc_target_percent",
-      "order": 28,
+      "order": 29,
       "page": "ev_policies",
       "reconfigure_label": "Withhold export while EV SoC is below (%)",
       "required": true,

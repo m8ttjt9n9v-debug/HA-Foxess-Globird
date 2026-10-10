@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import pytest
 import voluptuous as vol
 from homeassistant.config_entries import SOURCE_RECONFIGURE, SOURCE_USER
 from homeassistant.data_entry_flow import FlowResultType, section
@@ -14,6 +15,7 @@ from custom_components.home_energy_orchestrator.const import (
     CONF_EV_BEFORE_EXPORT_ENABLED,
     CONF_EV_BEFORE_EXPORT_SOC_TARGET,
     CONF_EV_HOUSE_BATTERY_TAPER_SOC,
+    CONF_EV_PRE_FREE_BACKFILL_TIMING,
     CONF_FORCE_DISCHARGE_OFFSET_MINUTES,
     CONF_FOXESS_CONTROL_OWNER,
     CONF_FREE_CHARGE_SCHEDULE_CONFIRMED,
@@ -24,6 +26,7 @@ from custom_components.home_energy_orchestrator.const import (
     DEFAULT_EV_BEFORE_EXPORT_ENABLED,
     DEFAULT_EV_BEFORE_EXPORT_SOC_TARGET,
     DEFAULT_EV_HOUSE_BATTERY_TAPER_SOC,
+    DEFAULT_EV_PRE_FREE_BACKFILL_TIMING,
     DEFAULT_FORCE_DISCHARGE_OFFSET_MINUTES,
     DEFAULT_FOXESS_CONTROL_OWNER,
     DEFAULT_OFFPEAK_EXPORT_RATE,
@@ -271,6 +274,7 @@ async def test_user_flow_creates_a_config_entry(hass):
         "ev_morning_solar_reserve_soc_percent": 20.0,
         "ev_outside_battery_reserve_percent": 20.0,
         CONF_EV_HOUSE_BATTERY_TAPER_SOC: DEFAULT_EV_HOUSE_BATTERY_TAPER_SOC,
+        CONF_EV_PRE_FREE_BACKFILL_TIMING: DEFAULT_EV_PRE_FREE_BACKFILL_TIMING,
         "offpeak_export_rate_per_kwh": 0.0,
         "force_discharge_offset_minutes": 1.0,
     }
@@ -565,6 +569,253 @@ async def test_daily_backfill_is_allowed_with_foxcloud_when_fully_configured(has
     )
 
     assert result["type"] is FlowResultType.CREATE_ENTRY
+
+
+async def test_old_entries_default_to_ready_by_without_enabling_backfill(hass):
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": SOURCE_USER},
+        data={"name": "Legacy backfill site", **ENTRY_DATA},
+    )
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["data"][CONF_EV_PRE_FREE_BACKFILL_TIMING] == (
+        DEFAULT_EV_PRE_FREE_BACKFILL_TIMING
+    )
+    assert result["data"][CONF_EV_PRE_FREE_BACKFILL_TIMING] == "ready_by"
+    assert result["data"]["ev_pre_free_backfill_enabled"] is False
+    assert result["data"][CONF_EV_AUTOMATIC_CONTROL_ENABLED] is False
+
+
+async def test_ready_by_surplus_backfill_allows_zero_fixed_daily_allocation(hass):
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": SOURCE_USER},
+        data={
+            "name": "Ready by surplus site",
+            **ENTRY_DATA,
+            "configure_ev": True,
+            "foxess_control_owner": "local_modbus",
+            "ev_pre_free_backfill_enabled": True,
+            CONF_EV_PRE_FREE_BACKFILL_TIMING: "ready_by",
+            "ev_daily_backfill_energy_kwh": 0,
+            "ev_daily_ready_time": "07:15:00",
+            "ev_outside_inverter_percent": 30,
+            "inverter_discharge_limit_kw": 15,
+        },
+    )
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY, result
+    assert result["data"][CONF_EV_PRE_FREE_BACKFILL_TIMING] == "ready_by"
+    assert result["data"]["ev_daily_backfill_energy_kwh"] == 0
+    assert result["data"]["ev_daily_ready_time"] == "07:15:00"
+
+
+async def test_enabled_legacy_backfill_adopts_ready_by_when_choice_is_missing(hass):
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": SOURCE_USER},
+        data={
+            "name": "Legacy enabled backfill site",
+            **ENTRY_DATA,
+            "configure_ev": True,
+            "foxess_control_owner": "local_modbus",
+            "ev_pre_free_backfill_enabled": True,
+            "ev_daily_backfill_energy_kwh": 0,
+            "ev_daily_ready_time": "07:15:00",
+            "ev_outside_inverter_percent": 30,
+            "inverter_discharge_limit_kw": 15,
+        },
+    )
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY, result
+    assert result["data"][CONF_EV_PRE_FREE_BACKFILL_TIMING] == "ready_by"
+    assert result["data"]["ev_pre_free_backfill_enabled"] is True
+    assert result["data"][CONF_EV_AUTOMATIC_CONTROL_ENABLED] is False
+
+
+async def test_legacy_invalid_ready_time_is_rejected_after_adopting_ready_by(hass):
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": SOURCE_USER},
+        data={
+            "name": "Legacy invalid deadline site",
+            **ENTRY_DATA,
+            "configure_ev": True,
+            "foxess_control_owner": "local_modbus",
+            "ev_pre_free_backfill_enabled": True,
+            "ev_daily_ready_time": "00:00:00",
+            "ev_outside_inverter_percent": 30,
+            "inverter_discharge_limit_kw": 15,
+        },
+    )
+
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"] == {"base": "invalid_ready_by_ev_backfill"}
+
+
+async def test_legacy_conservative_backfill_keeps_its_existing_validation(hass):
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": SOURCE_USER},
+        data={
+            "name": "Legacy conservative site",
+            **ENTRY_DATA,
+            "configure_ev": True,
+            "foxess_control_owner": "local_modbus",
+            "ev_pre_free_backfill_enabled": True,
+            CONF_EV_PRE_FREE_BACKFILL_TIMING: "conservative",
+            "ev_daily_ready_time": "00:00:00",
+            "ev_daily_backfill_energy_kwh": 0,
+            "ev_outside_inverter_percent": 0,
+            "inverter_discharge_limit_kw": 0,
+        },
+    )
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY, result
+    assert result["data"][CONF_EV_PRE_FREE_BACKFILL_TIMING] == "conservative"
+
+
+async def test_pre_free_backfill_rejects_unknown_timing_choice(hass):
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": SOURCE_USER},
+        data={
+            "name": "Invalid backfill site",
+            **ENTRY_DATA,
+            CONF_EV_PRE_FREE_BACKFILL_TIMING: "unsupported",
+        },
+    )
+
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"] == {
+        CONF_EV_PRE_FREE_BACKFILL_TIMING: "invalid_ev_backfill_timing"
+    }
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"ev_outside_inverter_percent": 0},
+        {"inverter_discharge_limit_kw": 0},
+        {"ev_daily_ready_time": "00:00:00"},
+        {"ev_daily_ready_time": "12:01:00"},
+        {"ev_daily_ready_time": "13:00:00"},
+    ],
+)
+async def test_ready_by_surplus_backfill_requires_same_morning_deadline_and_power(
+    hass, overrides
+):
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": SOURCE_USER},
+        data={
+            "name": "Invalid ready by site",
+            **ENTRY_DATA,
+            "configure_ev": True,
+            "foxess_control_owner": "local_modbus",
+            "ev_pre_free_backfill_enabled": True,
+            CONF_EV_PRE_FREE_BACKFILL_TIMING: "ready_by",
+            "ev_daily_backfill_energy_kwh": 0,
+            "ev_outside_inverter_percent": 30,
+            "inverter_discharge_limit_kw": 15,
+            **overrides,
+        },
+    )
+
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"] == {"base": "invalid_ready_by_ev_backfill"}
+
+
+async def test_reconfigure_retains_backfill_timing_until_review_and_after_reopen(hass):
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Backfill site",
+        version=6,
+        data={
+            **ENTRY_DATA,
+            "configure_ev": True,
+            "foxess_control_owner": "local_modbus",
+            "inverter_discharge_limit_kw": 15,
+            CONF_EV_PRE_FREE_BACKFILL_TIMING: "conservative",
+        },
+    )
+    entry.add_to_hass(hass)
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": SOURCE_RECONFIGURE, "entry_id": entry.entry_id},
+    )
+    result = await _open_reconfigure_page(hass, result, "ev_policies")
+    markers = {marker.schema: marker for marker in result["data_schema"].schema}
+    assert markers[CONF_EV_PRE_FREE_BACKFILL_TIMING].default() == "conservative"
+    values = {
+        **_schema_values(result["data_schema"]),
+        "ev_pre_free_backfill_enabled": True,
+        CONF_EV_PRE_FREE_BACKFILL_TIMING: "ready_by",
+        "ev_daily_backfill_energy_kwh": 0,
+        "ev_daily_ready_time": "07:15:00",
+        "ev_outside_inverter_percent": 30,
+    }
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], user_input=values
+    )
+    assert result["step_id"] == "reconfigure"
+    assert entry.data[CONF_EV_PRE_FREE_BACKFILL_TIMING] == "conservative"
+    assert entry.data["ev_pre_free_backfill_enabled"] is False
+
+    result = await _open_reconfigure_page(hass, result, "ev_policies")
+    markers = {marker.schema: marker for marker in result["data_schema"].schema}
+    assert markers[CONF_EV_PRE_FREE_BACKFILL_TIMING].default() == "ready_by"
+    assert markers["ev_daily_ready_time"].default() == "07:15:00"
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], user_input=values
+    )
+    result = await _open_reconfigure_page(hass, result, "review")
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        user_input={"sign_conventions_verified": False, "apply_configuration": True},
+    )
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "reconfigure_successful"
+    await hass.async_block_till_done()
+    assert entry.data[CONF_EV_PRE_FREE_BACKFILL_TIMING] == "ready_by"
+    assert entry.data["ev_daily_backfill_energy_kwh"] == 0
+    assert entry.data["ev_daily_ready_time"] == "07:15:00"
+
+    reopened = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": SOURCE_RECONFIGURE, "entry_id": entry.entry_id},
+    )
+    reopened = await _open_reconfigure_page(hass, reopened, "ev_policies")
+    markers = {marker.schema: marker for marker in reopened["data_schema"].schema}
+    assert markers[CONF_EV_PRE_FREE_BACKFILL_TIMING].default() == "ready_by"
+    assert markers["ev_daily_ready_time"].default() == "07:15:00"
+    assert await hass.config_entries.async_unload(entry.entry_id)
+
+
+async def test_reconfigure_preserves_explicit_conservative_timing(hass):
+    data = {
+        **ENTRY_DATA,
+        "configure_ev": True,
+        "foxess_control_owner": "local_modbus",
+        "ev_pre_free_backfill_enabled": True,
+        CONF_EV_PRE_FREE_BACKFILL_TIMING: "conservative",
+    }
+    entry = MockConfigEntry(domain=DOMAIN, title="Conservative site", data=data, version=6)
+    entry.add_to_hass(hass)
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": SOURCE_RECONFIGURE, "entry_id": entry.entry_id},
+        data={"name": "Conservative site", **data},
+    )
+
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "reconfigure_successful"
+    await hass.async_block_till_done()
+    assert entry.data[CONF_EV_PRE_FREE_BACKFILL_TIMING] == "conservative"
+    assert entry.data["ev_pre_free_backfill_enabled"] is True
+    assert entry.data[CONF_EV_AUTOMATIC_CONTROL_ENABLED] is False
+    assert await hass.config_entries.async_unload(entry.entry_id)
 
 
 async def test_daily_backfill_fails_closed_without_an_outside_power_cap(hass):
@@ -1307,6 +1558,7 @@ async def test_reconfigure_updates_and_reloads_an_entry(hass):
         "ev_morning_solar_reserve_soc_percent": 20.0,
         "ev_outside_battery_reserve_percent": 20.0,
         CONF_EV_HOUSE_BATTERY_TAPER_SOC: DEFAULT_EV_HOUSE_BATTERY_TAPER_SOC,
+        CONF_EV_PRE_FREE_BACKFILL_TIMING: DEFAULT_EV_PRE_FREE_BACKFILL_TIMING,
         "offpeak_export_rate_per_kwh": 0.0,
         "force_discharge_offset_minutes": 1.0,
     }

@@ -174,6 +174,13 @@ views:
             heading: Solar Spill and Pre-Free Backfill
             heading_style: title
             icon: mdi:solar-power-variant
+          - type: markdown
+            content: >-
+              Ready by is the default Backfill timing in EV Charging policies;
+              it uses available battery surplus before departure and appears in
+              the ready-by cards below. An explicitly saved Conservative choice
+              still finishes before free power. Changing the timing default
+              does not turn on backfill or automatic EV control.
           - type: tile
             entity: switch.home_energy_ev_morning_solar
             name: Morning solar EV charging
@@ -205,17 +212,26 @@ views:
         column_span: 2
         cards:
           - type: heading
-            heading: Daily EV Ready-By Backfill
+            heading: EV Ready-By Backfill
             heading_style: title
             icon: mdi:car-clock
           - type: markdown
             content: >-
-              The configured wall-energy allocation is protected from HEO
-              export and scheduled backwards from the ready time. With
-              FoxCloud ownership, HEO cannot guarantee that prior cloud export
-              preserved it; the live battery/house ledger determines what is
-              still achievable. Charge to full is a separate paid-grid
-              override and remains bounded by connector and service limits.
+              A fixed daily wall-energy allocation protects energy from HEO
+              export; FoxCloud cannot guarantee that prior export preserved
+              it. Default Ready by timing uses currently safe battery surplus
+              after protecting the home, requires Local Modbus, and works with
+              the fixed allocation at zero. It adds no new evening reservation.
+              Both use the shared ready time and ledger. Ready by may start
+              overnight after midnight, retains the battery reserve and power
+              limits, and ends at the ready deadline before free power. The
+              conservative pre-free stage stays suspended; eligible morning
+              solar and free-window charging may take over. The allocation
+              remaining and shortfall cards describe the fixed quota, while
+              planned wall energy includes eligible surplus. Charge to full
+              is a separate paid-grid override, bounded by connector/service
+              limits; its energy and free-window charging are excluded from
+              ready-cycle delivery.
           - type: tile
             entity: sensor.home_energy_ev_daily_backfill_status
             name: Ready-by decision

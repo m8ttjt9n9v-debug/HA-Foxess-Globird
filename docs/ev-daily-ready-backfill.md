@@ -1,8 +1,16 @@
-# Daily EV ready-by backfill
+# EV backfill timing and daily ready-by allocation
 
-This optional policy extends the Working Single Phase Pilot Site's proven
-latest-start EV backfill. It does not replace the original Local-Modbus-only
-pre-free policy.
+HEO retains the Working Single Phase Pilot Site's proven latest-start EV
+backfill as the explicit **Conservative** choice. **Ready by** is the default
+timing and uses currently available battery surplus before departure through the
+existing daily ready-by planner and session. It works with no fixed daily EV
+allocation. Both timing choices require the pre-free backfill policy to be
+enabled and Local Modbus ownership.
+
+The fixed daily ready-by allocation remains a separate operator choice. Its
+existing energy protection, proportional surplus calculation, and FoxCloud
+compatibility are retained when Conservative timing is selected. Ready by is a
+configuration extension, not a claim that the pilot already had this behavior.
 
 ## Proven source retained
 
@@ -14,18 +22,51 @@ pre-free policy.
 | Calculate duration and latest start | `configuration_v1.4.24.yaml:4250-4308` | Discrete power determines duration; scheduling works backwards from the configured ready time. |
 | Freeze an active phase across restart | `configuration_v1.4.24.yaml:686-692,4273-4295` | Cycle, delivered energy, session target and frozen start are stored in Home Assistant storage. |
 
-## Separately configured extension
+## Configuration
+
+In **EV Charging policies**, select **Backfill timing**:
+
+- **Conservative — finish before free power** retains the original late
+  pre-free session when explicitly selected.
+- **Ready by — use available surplus before departure** schedules currently
+  discretionary battery energy toward the existing daily ready-by time.
+  Charging may start overnight after midnight. It does not need a fixed daily
+  kWh allocation and adds no new protection to the previous evening's export.
+  This is the default for new entries and existing entries without a saved
+  timing choice.
+
+Upgrade preserves an explicitly saved Conservative choice. It changes only
+the missing timing selection: neither Automatic EV Control nor the pre-free
+backfill enable switch is turned on if it was off. An already enabled
+pre-free policy without a saved timing choice adopts Ready by.
+
+Enable **Use spare home-battery energy for EV before free power** to use either
+choice. Ready by requires a ready time strictly after midnight and before the
+configured free-power start, a positive commissioned inverter output/discharge
+limit, and a positive maximum outside-window inverter percentage. The deadline
+is not silently moved to the next day to make an invalid configuration fit.
+An old invalid ready time or missing power limit holds Ready by inactive;
+runtime does not fall back to conservative charging or spend an unproven
+budget. Reconfiguration rejects the invalid enabled Ready by setting until the
+operator corrects it or explicitly selects Conservative.
+
+The optional fixed daily wall-energy allocation uses the same ready-by time,
+inverter percentage, and planning buffer. Setting its kWh value to zero
+disables only the fixed allocation; Ready by surplus charging can still run.
+
+## Fixed daily allocation retained
 
 The extension adds four site inputs: daily protected EV wall energy, ready-by
 time, maximum outside-window EV power as a percentage of commissioned inverter
-output, and an optional planning buffer. Zero protected energy disables it.
+output, and an optional planning buffer. Zero protected energy disables the
+fixed allocation.
 
 The accounting cycle runs from one ready deadline to the next, not midnight.
 This matters when HEO owns Local Modbus export: an evening export must retain
 energy intended for the following morning. Charging itself is restricted to
 midnight through the ready deadline.
 
-At each decision:
+With Conservative timing, the fixed-allocation planner retains these decisions:
 
 1. Remaining allocation is configured allocation minus confirmed wall energy
    delivered by this policy in the current ready cycle.
@@ -42,24 +83,74 @@ At each decision:
 8. Duration determines the latest start. A plan that would have needed to start
    before midnight reports an explicit shortfall/unachievable state.
 
+## Ready by uses the current safe surplus
+
+Ready by reuses that planner with the full currently discretionary energy
+budget instead of its proportional share. Battery energy above the floor and
+fixed reserve is converted to wall energy, the remaining house-demand budget is
+protected once, and the remaining fixed EV allocation is accounted for once.
+The resulting total is capped by the live ZEROHERO discretionary/export plan
+and the vehicle's room to its normal charge target. Energy withheld from an
+earlier export is not automatically spendable and no future surplus is assumed.
+
+If a fixed daily allocation is also configured, its existing export protection
+is retained. Ready by adds no second reservation, target, or energy counter:
+confirmed ready-by wall energy reduces the same ready-cycle allocation. With
+the allocation at zero, only currently safe surplus is offered.
+
+The planning window runs from midnight to that morning's ready deadline.
+Current remains bounded by the outside-window inverter percentage, connector
+rating, actuator step and service headroom. The configured outside-window
+house-battery reserve, which defaults to 20%, and the normal EV charge-limit
+policy still apply; direct-EVSE commands remain capped at 90% while Charge to
+Full is off. The existing duration and planning-buffer arithmetic determines
+the latest start. Ready by uses elapsed time across daylight-saving changes
+and displays the resulting start in the configured local time zone.
+
+Ready by requires fresh, coherent grid and effective battery-power evidence,
+fresh mapped house-load evidence, valid battery energy and house protection,
+and no competing HEO export session or export window. Grid import above the
+commissioned ZEROHERO zero-import threshold curtails extra EV charging.
+Unavailable or invalid energy inputs, lost reserve, disconnection, vehicle
+limit, or a closed control gate end the surplus session through the existing
+stop or protected-baseline reconciliation.
+
+While Ready by is selected, the original conservative pre-free stage is
+suppressed throughout the cycle, including after the ready deadline. It cannot
+start a second battery-backed session between departure and free power.
+Eligible measured morning-solar charging and free-window charging retain their
+own authority after the ready-by session ends.
+
+## Shared session and restart behavior
+
 Only the start time is frozen. The energy authority remains live and may only
 shrink: loss of genuinely sellable energy stops the session immediately. The
 active session also stops at its remaining target, the EV soft limit, the
-ready deadline, the configured house-battery floor, or disconnect. A configured
+ready deadline, the outside-window house-battery reserve or hard floor, or
+disconnect. A configured
 0 A protected baseline means stop, not Tessie's minimum current. Only confirmed Tessie
 actual current is integrated into delivered wall energy; gaps beyond the
-configured telemetry age are not guessed.
+configured telemetry age are not guessed. Both ready-by uses share the same
+persisted ready-cycle ledger, session target, delivered energy and bounded
+stop-retry obligation across reload and restart. A nonzero protected baseline
+is reconciled instead of stopping the connector. Free-window charging and paid
+Charge to Full charging do not count as ready-by delivery.
 
 ## Ownership
 
-This policy writes Tessie only, so it can operate with FoxCloud Scheduler as the
-inverter owner. It never writes a FoxESS entity. With FoxCloud ownership the
+The fixed daily allocation writes Tessie only, so it can operate with FoxCloud
+Scheduler as the inverter owner. It never writes a FoxESS entity. With FoxCloud ownership the
 allocation is opportunistic: prior cloud-controlled export may already have
 spent it, and the live post-midnight energy ledger decides what remains.
 
 With Local Modbus ownership, HEO's ZEROHERO export calculation additionally
 protects the remaining allocation for the next ready deadline. That prospective
 guarantee is unavailable when another controller owns inverter discharge.
+
+Ready by surplus timing requires Local Modbus ownership even though its
+commands also go only to Tessie. It relies on the existing protected
+discretionary/export plan. Selecting it does not grant inverter write authority
+or prove the absence of a VPP or another external writer.
 
 Safety Lock, EV commissioning, sign verification, explicit mappings, service
 limits and bounded reconciliation remain mandatory.
@@ -71,3 +162,11 @@ starts charging outside the free window and bypasses the daily energy and
 inverter-percentage caps, but never the commissioned connector or service
 limits. It clears at 100%, after disconnect once started, or after its configured
 maximum duration. The dashboard should make the paid-import possibility clear.
+It takes over from a ready-by surplus session, which stops accumulating
+ready-cycle delivery until eligible ready-by charging resumes.
+
+## Verification boundary
+
+Implementation and automated regression coverage do not establish live-site
+acceptance. The broader generated full-system lifecycle and incident harness
+remains outstanding.

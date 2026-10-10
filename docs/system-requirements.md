@@ -147,12 +147,39 @@ default battery size.
 The retained pilot direct path never pauses its nonzero protected baseline.
 With a configured zero baseline, HEO may stop a connected charge that has no
 authorised stage, including one the vehicle started itself. The optional daily
-ready-by extension may also stop its own session when its frozen wall-energy
-target, soft SoC limit, ready deadline, or safety condition is reached.
-It requires a configured daily allocation, ready time, inverter-output
+ready-by session may also stop when its wall-energy target, soft SoC limit,
+ready deadline, or safety condition is reached. The fixed daily allocation
+requires positive configured wall energy, a ready time, inverter-output
 percentage, inverter discharge/output rating, and current house/available-
-energy ledger. It can operate with FoxCloud ownership because it writes Tessie
-only; that mode cannot reserve energy against earlier cloud export.
+energy ledger. Its existing path can operate with FoxCloud ownership because
+it writes Tessie only; that mode cannot reserve energy against earlier cloud
+export.
+
+The separate **Backfill timing: Ready by** choice requires enabled pre-free
+backfill and Local Modbus ownership. It works with the fixed daily allocation
+at zero and adds no new previous-evening export protection. Its ready time must
+be strictly after midnight and before the configured free-power start, with a
+positive outside-window inverter percentage and commissioned discharge/output
+rating. It uses the full current discretionary budget from the existing house-
+protected ledger, capped by the live discretionary/export plan and vehicle
+room, and may start overnight. Fresh coherent grid/effective-battery power,
+fresh mapped house load and valid energy protection are required. Import above
+the commissioned ZEROHERO zero-import threshold or lost energy authority
+curtails extra charging through the existing stop or protected baseline.
+The outside-window house-battery reserve (20% default), electrical limits and
+normal charge-limit policy remain in force, including the direct-EVSE 90% cap
+unless Charge to Full is on. Ready by shares the existing session and restart
+ledger; paid Charge to Full and free-window charging are excluded from its
+delivery accounting. Conservative pre-free charging stays suppressed after
+the ready deadline, leaving eligible morning-solar/free-window control to take
+over. **Ready by** is the default for new entries and old entries missing the
+timing key, while an explicit saved **Conservative** choice is preserved.
+Neither Automatic EV Control nor pre-free backfill is enabled by this default
+change. Invalid old deadlines or missing power limits keep Ready by inactive;
+the controller does not silently fall back to conservative charging. See
+[EV backfill timing and allocation](ev-daily-ready-backfill.md). Automated
+regression coverage does not establish live-site acceptance; the generated
+full-system lifecycle and incident harness remains outstanding.
 
 The smart-socket path additionally
 requires a mapped on/off outlet, its commissioned physical current ceiling,

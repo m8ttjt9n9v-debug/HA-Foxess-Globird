@@ -181,6 +181,8 @@ def _displayed_values(
         values["ev_soc_entity"] = "sensor.retained_ev_soc"
     if result["step_id"] == "ev_policies":
         values["ev_pre_free_backfill_enabled"] = True
+        # This retained-draft corpus characterizes the original pre-free policy.
+        values["ev_pre_free_backfill_timing"] = "conservative"
     if result["step_id"] == "automation":
         values["foxess_control_owner"] = "local_modbus"
     return values
@@ -235,4 +237,5 @@ async def test_invalid_page_retains_complete_multi_page_draft(
     assert created["data"]["battery_floor_percent"] == 13.0
     assert created["data"]["solar_power_entity"] == "sensor.retained_solar_power"
     assert created["data"]["ev_soc_entity"] == "sensor.retained_ev_soc"
+    assert created["data"]["ev_pre_free_backfill_timing"] == "conservative"
     assert created["data"]["sign_conventions_verified"] is False

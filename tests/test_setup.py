@@ -1318,6 +1318,7 @@ async def test_forecast_assumes_credit_and_75_percent_of_planned_export(hass):
     assert measured.state == "2.04"
 
 
+@pytest.mark.freeze_time("2026-09-03T00:00:00+00:00", real_asyncio=True)
 async def test_learning_history_is_persisted_and_exposed(hass):
     hass.states.async_set("sensor.test_battery_soc", "60", {"unit_of_measurement": "%"})
     hass.states.async_set("sensor.test_grid_power", "0", {"unit_of_measurement": "kW"})
@@ -1349,6 +1350,7 @@ async def test_learning_history_is_persisted_and_exposed(hass):
     assert hass.states.get(samples).state == "7"
 
 
+@pytest.mark.freeze_time("2026-09-03T00:00:00+00:00", real_asyncio=True)
 async def test_separate_heater_history_is_persisted_and_combined_only_when_mature(hass):
     hass.states.async_set("sensor.test_battery_soc", "60", {"unit_of_measurement": "%"})
     hass.states.async_set("sensor.test_grid_power", "0", {"unit_of_measurement": "kW"})

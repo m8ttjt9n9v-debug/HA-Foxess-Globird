@@ -11,7 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from math import ceil, floor, isfinite
-from typing import Literal, cast
+from typing import Literal
 
 # The direct-path anti-pause guard may keep a fault-prone powered connector
 # accepting its protected baseline, but it is never authority to charge above
@@ -237,9 +237,10 @@ def evaluate_ev_decision_cadence(
         if evidence.charge_to_full_requested
         else evidence.configured_policy_limit_percent
     )
-    current_vehicle_soc = cast(float, evidence.vehicle_soc_percent)
+    current_vehicle_soc = evidence.vehicle_soc_percent
     soc_remains_below_policy = (
         previous_vehicle_soc is not None
+        and current_vehicle_soc is not None
         and previous_vehicle_soc < policy_limit
         and current_vehicle_soc < policy_limit
     )

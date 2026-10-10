@@ -63,6 +63,7 @@
     "ev_outside_inverter_percent",
     "ev_phase_count",
     "ev_pre_free_backfill_enabled",
+    "ev_pre_free_backfill_timing",
     "ev_protected_baseline_a",
     "ev_smart_recovery_charging_confirm_seconds",
     "ev_smart_recovery_current_confirm_seconds",
@@ -151,7 +152,7 @@
     "free_charge_schedule_confirmed",
     "grid_import_positive"
   ],
-  "page_field_count": 134,
+  "page_field_count": 135,
   "pages": {
     "automation": [
       "foxess_control_owner",
@@ -219,6 +220,7 @@
       "ev_morning_solar_enabled",
       "ev_morning_solar_reserve_soc_percent",
       "ev_pre_free_backfill_enabled",
+      "ev_pre_free_backfill_timing",
       "ev_daily_backfill_energy_kwh",
       "ev_daily_ready_time",
       "ev_outside_inverter_percent",
@@ -316,5 +318,5 @@
   },
   "release_baseline": "0.12.26",
   "schema_version": 1,
-  "unique_page_field_count": 134
+  "unique_page_field_count": 135
 }

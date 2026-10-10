@@ -60,6 +60,7 @@ from .const import (
     CONF_EV_MORNING_SOLAR_RESERVE_SOC,
     CONF_EV_OUTSIDE_BATTERY_RESERVE_PERCENT,
     CONF_EV_PHASE_COUNT,
+    CONF_EV_PRE_FREE_BACKFILL_TIMING,
     CONF_EV_PRE_FREE_ENABLED,
     CONF_EV_PROTECTED_BASELINE_A,
     CONF_EV_SMART_SOCKET,
@@ -143,6 +144,7 @@ from .const import (
     DEFAULT_EV_LOCATION_MODE,
     DEFAULT_EV_MORNING_SOLAR_ENABLED,
     DEFAULT_EV_PHASE_COUNT,
+    DEFAULT_EV_PRE_FREE_BACKFILL_TIMING,
     DEFAULT_EV_PRE_FREE_ENABLED,
     DEFAULT_EV_PROTECTED_BASELINE_A,
     DEFAULT_EV_SMART_SOCKET_CURRENT_LIMIT,
@@ -337,6 +339,7 @@ class EvPolicySettings:
     solar_spill_enabled: bool
     morning_solar_enabled: bool
     pre_free_enabled: bool
+    pre_free_backfill_timing: str
     smart_socket_power_switching: bool
     smart_socket_current_limit_a: float | None
 
@@ -987,6 +990,13 @@ class RuntimeConfiguration:
                         CONF_EV_PRE_FREE_ENABLED,
                         DEFAULT_EV_PRE_FREE_ENABLED,
                     )
+                ),
+                pre_free_backfill_timing=cast(
+                    str,
+                    data.get(
+                        CONF_EV_PRE_FREE_BACKFILL_TIMING,
+                        DEFAULT_EV_PRE_FREE_BACKFILL_TIMING,
+                    ),
                 ),
                 smart_socket_power_switching=bool(
                     data.get(

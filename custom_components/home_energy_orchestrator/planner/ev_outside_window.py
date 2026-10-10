@@ -105,11 +105,7 @@ def rate_limit_measured_solar_current(
     if requested_current_a < charger_minimum_a:
         return MeasuredSolarAdjustment(0.0, MeasuredSolarAdjustmentState(), "inactive")
 
-    if (
-        state.phase != policy_phase
-        or state.target_current_a is None
-        or state.changed_at is None
-    ):
+    if state.phase != policy_phase or state.target_current_a is None or state.changed_at is None:
         accepted = MeasuredSolarAdjustmentState(
             phase=policy_phase,
             target_current_a=requested_current_a,
@@ -244,10 +240,7 @@ def evaluate_pre_free_plan(
     evidence: PreFreePlanningEvidence,
 ) -> PreFreePlanningEvaluation:
     """Compose vehicle room and protected export into the retained plan."""
-    if (
-        evidence.planned_export_energy_kwh is None
-        or evidence.stored_vehicle_energy_kwh is None
-    ):
+    if evidence.planned_export_energy_kwh is None or evidence.stored_vehicle_energy_kwh is None:
         return PreFreePlanningEvaluation(None, 0.0, None)
     vehicle_room = estimate_vehicle_energy_to_target_kwh(
         stored_energy_kwh=evidence.stored_vehicle_energy_kwh,
@@ -258,9 +251,7 @@ def evaluate_pre_free_plan(
     plan = calculate_pre_free_plan(
         PreFreePlanInputs(
             discretionary_ac_kwh=(
-                evidence.planned_export_energy_kwh
-                if evidence.in_pre_free_window
-                else 0.0
+                evidence.planned_export_energy_kwh if evidence.in_pre_free_window else 0.0
             ),
             vehicle_wall_room_kwh=vehicle_room,
             baseline_a=evidence.baseline_a,
@@ -389,17 +380,11 @@ def evaluate_outside_current_envelope(
 ) -> OutsideCurrentEnvelope:
     """Compose the retained outside-window baseline and pre-free ceiling."""
     configured_baseline = max(evidence.configured_baseline_a, 0.0)
-    protected_baseline = (
-        0.0
-        if configured_baseline <= 0
-        else min(
-            max(
-                configured_baseline,
-                evidence.physical_minimum_a,
-                evidence.current_step_a,
-            ),
-            evidence.physical_ceiling_a,
-        )
+    protected_baseline = protected_baseline_current_a(
+        configured_baseline_a=configured_baseline,
+        physical_minimum_a=evidence.physical_minimum_a,
+        current_step_a=evidence.current_step_a,
+        physical_ceiling_a=evidence.physical_ceiling_a,
     )
     return OutsideCurrentEnvelope(
         configured_baseline_a=configured_baseline,
@@ -408,9 +393,29 @@ def evaluate_outside_current_envelope(
             min(evidence.service_ceiling_a, evidence.inverter_ceiling_a),
             protected_baseline,
         ),
-        service_supports_charging=(
-            evidence.service_ceiling_a >= evidence.physical_minimum_a
-        ),
+        service_supports_charging=(evidence.service_ceiling_a >= evidence.physical_minimum_a),
+    )
+
+
+def protected_baseline_current_a(
+    *,
+    configured_baseline_a: float,
+    physical_minimum_a: float,
+    current_step_a: float,
+    physical_ceiling_a: float,
+) -> float:
+    """Use the same representable keepalive bound during normal and fault control."""
+    return (
+        0.0
+        if configured_baseline_a <= 0
+        else min(
+            max(
+                configured_baseline_a,
+                physical_minimum_a,
+                current_step_a,
+            ),
+            physical_ceiling_a,
+        )
     )
 
 
@@ -447,10 +452,7 @@ def evaluate_solar_spill_telemetry(
     return SolarSpillTelemetryEvaluation(
         telemetry_valid=coherent,
         ev_power_kw=(
-            evidence.actual_ev_current_a
-            * evidence.voltage_v
-            * evidence.phase_count
-            / 1000
+            evidence.actual_ev_current_a * evidence.voltage_v * evidence.phase_count / 1000
         ),
         # Export is positive and import is negative.  Retaining the signed
         # contribution is essential when an existing EV request is being
@@ -504,9 +506,7 @@ def _plan_measured_solar_current(
     _validate_solar_spill(inputs)
     surplus = round(
         max(
-            inputs.ev_power_kw
-            + inputs.net_grid_export_kw
-            + inputs.battery_charge_kw,
+            inputs.ev_power_kw + inputs.net_grid_export_kw + inputs.battery_charge_kw,
             0.0,
         ),
         3,

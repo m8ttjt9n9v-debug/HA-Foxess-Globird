@@ -54,6 +54,7 @@ from custom_components.home_energy_orchestrator.const import (
     CONF_EV_MAX_CURRENT,
     CONF_EV_MIN_CURRENT,
     CONF_EV_PHASE_COUNT,
+    CONF_EV_PRE_FREE_BACKFILL_TIMING,
     CONF_EV_PRE_FREE_ENABLED,
     CONF_EV_PROTECTED_BASELINE_A,
     CONF_EV_SMART_SOCKET,
@@ -113,6 +114,7 @@ from custom_components.home_energy_orchestrator.const import (
     DEFAULT_EV_FREE_WINDOW_PRIORITY,
     DEFAULT_EV_LOCATION_MODE,
     DEFAULT_EV_PHASE_COUNT,
+    DEFAULT_EV_PRE_FREE_BACKFILL_TIMING,
     DEFAULT_EV_PRE_FREE_ENABLED,
     DEFAULT_EV_PROTECTED_BASELINE_A,
     DEFAULT_EV_SMART_SOCKET_CURRENT_LIMIT,
@@ -240,6 +242,10 @@ def test_runtime_configuration_uses_established_defaults() -> None:
     )
     assert parsed.ev_policy.solar_spill_enabled is DEFAULT_EV_SOLAR_SPILL_ENABLED
     assert parsed.ev_policy.pre_free_enabled is DEFAULT_EV_PRE_FREE_ENABLED
+    assert (
+        parsed.ev_policy.pre_free_backfill_timing
+        == DEFAULT_EV_PRE_FREE_BACKFILL_TIMING
+    )
     assert (
         parsed.ev_policy.smart_socket_power_switching
         is DEFAULT_EV_SMART_SOCKET_POWER_SWITCHING
@@ -868,6 +874,31 @@ def test_ev_policy_snapshot_preserves_enum_and_truthiness_semantics(
         policy.pre_free_enabled,
         policy.smart_socket_power_switching,
     ) == expected
+
+
+@pytest.mark.parametrize(
+    ("data", "expected"),
+    [
+        ({}, "ready_by"),
+        ({CONF_EV_PRE_FREE_ENABLED: True}, "ready_by"),
+        ({CONF_EV_PRE_FREE_BACKFILL_TIMING: "conservative"}, "conservative"),
+        ({CONF_EV_PRE_FREE_BACKFILL_TIMING: "ready_by"}, "ready_by"),
+        ({CONF_EV_PRE_FREE_BACKFILL_TIMING: "unsupported"}, "unsupported"),
+    ],
+)
+def test_pre_free_backfill_timing_defaults_legacy_entries_without_changing_choice(
+    data: dict[str, object], expected: str
+) -> None:
+    """Missing choices adopt Ready by; explicit saved choices survive reload."""
+    assert RuntimeConfiguration.from_mapping(data).ev_policy.pre_free_backfill_timing == expected
+
+
+def test_ready_by_default_does_not_enable_ev_or_pre_free_backfill_requests() -> None:
+    """A timing default cannot turn either independent behavior request on."""
+    runtime = RuntimeConfiguration.from_mapping({})
+    assert runtime.ev_policy.pre_free_backfill_timing == "ready_by"
+    assert runtime.ev_policy.pre_free_enabled is False
+    assert runtime.automation.ev_control_enabled is False
 
 
 @pytest.mark.parametrize(

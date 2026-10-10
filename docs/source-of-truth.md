@@ -93,6 +93,32 @@ layers around the proven algorithm, not replacement algorithms.
   stops when genuinely sellable energy disappears. The ready-to-ready ledger,
   confirmed wall-energy accumulator, shrinking active-session target and start
   latch survive restart.
+- **Backfill timing** now has two configuration choices. **Ready by** is the
+  default for new entries and existing entries with no saved timing choice.
+  An explicit **Conservative** choice preserves late pre-free charging plus
+  the existing fixed daily allocation's proportional-surplus semantics.
+  Upgrade changes only the missing timing selection; Automatic EV Control and
+  pre-free enable requests retain their saved state. Ready by uses
+  the full currently safe discretionary battery budget through the same
+  ready-by planner, session and persisted ledger. It works with a zero fixed
+  allocation, adds no new previous-evening export reservation, and requires
+  Local Modbus ownership. Charging is scheduled backwards from the existing
+  ready deadline within midnight-to-ready; the deadline must be after midnight
+  and before free power starts. It may therefore begin overnight.
+  Invalid legacy deadlines or missing power limits hold the policy inactive
+  and cannot silently fall back to conservative pre-free charging.
+  House protection, the live discretionary/export cap, vehicle room, the
+  outside-window battery reserve and inverter percentage, service limits and
+  normal charge-limit policy remain binding. Fresh coherent grid/battery
+  evidence and fresh mapped house demand are required; excessive grid import,
+  invalid energy inputs or lost reserve curtail through the existing stop or
+  protected-baseline reconciliation. Ready by suppresses the conservative
+  pre-free stage even after its deadline, allowing eligible morning-solar and
+  free-window policies to take over. Paid Charge to Full and free-window
+  charging do not count as ready-cycle delivery. Elapsed-time scheduling handles
+  daylight-saving transitions. Automated regression coverage does not establish
+  live-site acceptance or a completed generated full-system harness. See
+  [`ev-daily-ready-backfill.md`](ev-daily-ready-backfill.md).
 - Bounded, explicitly submitted FoxESS diagnostics remain available behind
   their guards. They are not schedules. Test ownership, timing and restoration
   attempts persist across reload/restart. An interrupted test immediately
@@ -152,7 +178,7 @@ layers around the proven algorithm, not replacement algorithms.
 - Solar spill reconstructs only measured surplus from EV power, signed grid
   flow (export positive and import negative), and signed battery flow. This
   prevents a carried-over high EV request from treating grid import as free
-  solar. Pre-free backfill consumes no more than the local
+  solar. Conservative pre-free backfill consumes no more than the local
   protected export plan and the vehicle's wall-energy room, starts as late as
   possible, and persists only its active phase and frozen start.
 - Morning measured-solar EV capture is a separate default-off policy before

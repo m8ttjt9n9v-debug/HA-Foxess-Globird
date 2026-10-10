@@ -77,6 +77,7 @@ from .const import (
     CONF_EV_OUTSIDE_BATTERY_RESERVE_PERCENT,
     CONF_EV_OUTSIDE_INVERTER_PERCENT,
     CONF_EV_PHASE_COUNT,
+    CONF_EV_PRE_FREE_BACKFILL_TIMING,
     CONF_EV_PRE_FREE_ENABLED,
     CONF_EV_PROTECTED_BASELINE_A,
     CONF_EV_SMART_RECOVERY_CHARGING_CONFIRM_SECONDS,
@@ -195,6 +196,7 @@ from .const import (
     DEFAULT_EV_OUTSIDE_BATTERY_RESERVE_PERCENT,
     DEFAULT_EV_OUTSIDE_INVERTER_PERCENT,
     DEFAULT_EV_PHASE_COUNT,
+    DEFAULT_EV_PRE_FREE_BACKFILL_TIMING,
     DEFAULT_EV_PRE_FREE_ENABLED,
     DEFAULT_EV_PROTECTED_BASELINE_A,
     DEFAULT_EV_SMART_RECOVERY_CHARGING_CONFIRM_SECONDS,
@@ -258,6 +260,8 @@ from .const import (
     EV_CHARGE_PATHS,
     EV_FREE_WINDOW_PRIORITIES,
     EV_LOCATION_MODES,
+    EV_PRE_FREE_BACKFILL_TIMING_READY_BY,
+    EV_PRE_FREE_BACKFILL_TIMINGS,
     FOXESS_CONTROL_OWNER_MODBUS,
     FOXESS_CONTROL_OWNERS,
     GRID_POSITIVE_EXPORT,
@@ -577,6 +581,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             "incomplete_phase_grid_mapping": "grid",
             "invalid_schedule": "tariff",
             "invalid_daily_ev_backfill": "ev_policies",
+            "invalid_ready_by_ev_backfill": "ev_policies",
             "solar_spill_battery_power_mapping_required": "ev_policies",
             "outside_ev_policy_requires_local_modbus": "automation",
         }.get(errors.get(key))
@@ -861,6 +866,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 "incomplete_phase_grid_mapping": "grid",
                 "invalid_schedule": "tariff",
                 "invalid_daily_ev_backfill": "ev_policies",
+                "invalid_ready_by_ev_backfill": "ev_policies",
                 "solar_spill_battery_power_mapping_required": "battery",
                 "outside_ev_policy_requires_local_modbus": "automation",
             }.get(error)
@@ -1577,6 +1583,18 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     default=defaults.get(CONF_EV_PRE_FREE_ENABLED, DEFAULT_EV_PRE_FREE_ENABLED),
                 ): selector.BooleanSelector(),
                 vol.Required(
+                    CONF_EV_PRE_FREE_BACKFILL_TIMING,
+                    default=defaults.get(
+                        CONF_EV_PRE_FREE_BACKFILL_TIMING,
+                        DEFAULT_EV_PRE_FREE_BACKFILL_TIMING,
+                    ),
+                ): selector.SelectSelector(
+                    selector.SelectSelectorConfig(
+                        options=list(EV_PRE_FREE_BACKFILL_TIMINGS),
+                        translation_key=CONF_EV_PRE_FREE_BACKFILL_TIMING,
+                    )
+                ),
+                vol.Required(
                     CONF_EV_DAILY_BACKFILL_ENERGY,
                     default=defaults.get(
                         CONF_EV_DAILY_BACKFILL_ENERGY,
@@ -1999,6 +2017,10 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             CONF_EV_PRE_FREE_ENABLED: data.get(
                 CONF_EV_PRE_FREE_ENABLED, DEFAULT_EV_PRE_FREE_ENABLED
             ),
+            CONF_EV_PRE_FREE_BACKFILL_TIMING: data.get(
+                CONF_EV_PRE_FREE_BACKFILL_TIMING,
+                DEFAULT_EV_PRE_FREE_BACKFILL_TIMING,
+            ),
             CONF_EV_DAILY_BACKFILL_ENERGY: data.get(
                 CONF_EV_DAILY_BACKFILL_ENERGY,
                 DEFAULT_EV_DAILY_BACKFILL_ENERGY,
@@ -2243,6 +2265,8 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             return {CONF_EV_FREE_WINDOW_PRIORITY: "invalid_ev_priority"}
         if data.get(CONF_EV_CHARGE_PATH) not in EV_CHARGE_PATHS:
             return {CONF_EV_CHARGE_PATH: "invalid_ev_charge_path"}
+        if data.get(CONF_EV_PRE_FREE_BACKFILL_TIMING) not in EV_PRE_FREE_BACKFILL_TIMINGS:
+            return {CONF_EV_PRE_FREE_BACKFILL_TIMING: "invalid_ev_backfill_timing"}
         try:
             capacity = (
                 float(data[CONF_BATTERY_CAPACITY])
@@ -2500,6 +2524,18 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             outside_inverter_percent <= 0 or inverter_discharge_limit <= 0 or daily_ready >= start
         ):
             return {"base": "invalid_daily_ev_backfill"}
+        if (
+            data.get(CONF_EV_PRE_FREE_ENABLED)
+            and data.get(CONF_EV_PRE_FREE_BACKFILL_TIMING)
+            == EV_PRE_FREE_BACKFILL_TIMING_READY_BY
+            and (
+                outside_inverter_percent <= 0
+                or inverter_discharge_limit <= 0
+                or daily_ready <= time(0)
+                or daily_ready >= start
+            )
+        ):
+            return {"base": "invalid_ready_by_ev_backfill"}
         if (
             data.get(CONF_EV_CONTROL_COMMISSIONED)
             and site_phase_count > 1

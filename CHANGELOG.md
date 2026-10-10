@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.12.29rc16 — Ready-by EV surplus backfill
+
+- Add **Backfill timing** to EV charging policies. **Ready by** is the new
+  default, including upgrades with pre-free backfill already enabled; an
+  explicitly saved **Conservative** choice preserves the previous timing.
+  Existing automatic-control and backfill-enable switches remain unchanged.
+- Use currently safe battery surplus before the daily EV ready-by time, even
+  with reserved EV energy at 0 kWh. Reuse the existing planner and persistent
+  delivery/session state without adding another previous-evening reservation.
+  Charging may start overnight after midnight. A missed deadline waits for the
+  next ready cycle; measured morning solar and free-window charging remain
+  independently available.
+- Retain house-energy protection, configured battery cutoff, outside-window
+  inverter/current limits and the normal 90% direct-EVSE cap. Require a valid
+  ready time before free power, Local Modbus ownership and fresh coherent
+  electrical/house evidence. Invalid legacy settings withhold Ready by until
+  corrected or Conservative is explicitly selected.
+- Curtail on grid import or lost energy authority, then replan after recovery.
+  Preserve bounded stop/keepalive retries through restart and respect actuator
+  minimum/step values. Cover missing SoC, partial actuator/phase feedback,
+  late plug-in, quota coexistence, paid-override and free-window handovers, and
+  elapsed charging duration through daylight-saving changes.
+- Known separate issue: the conformance notification checker can mistake a
+  retained idle current setting for an active charge request. This release
+  does not correct that false-alarm check.
+
 ## 0.12.29rc15 — multiphase EV current-loss safety
 
 - Accept either a commissioned direct phase-current sensor or the complete

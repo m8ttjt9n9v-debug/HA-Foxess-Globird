@@ -934,6 +934,7 @@ async def test_zerocharge_entry_replaces_active_pre_free_current_immediately(
         data=_ev_entry_data(
             foxess_control_owner="local_modbus",
             ev_pre_free_backfill_enabled=True,
+            ev_pre_free_backfill_timing="conservative",
             ev_free_window_priority="house_battery",
             ev_free_window_settle_minutes=5.0,
         ),
