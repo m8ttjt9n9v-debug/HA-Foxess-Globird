@@ -2,6 +2,17 @@
 
 Status here describes behavioral parity, not merely the presence of code.
 
+## Optional one-off trip charging
+
+- [x] Package the existing native-HA wrapper for a selected 1–100% target and
+  departure time. Reuse HEO's capacity/max-power projections and existing paid
+  Full override; preserve restorable ownership, cancellation, target-change,
+  missing-input and restart safeguards. Keep device commands with HEO.
+- [ ] Complete separately approved installation and live acceptance. HACS
+  bundling and weekly repetition remain future work; the package/card require
+  explicit installation and commissioning. See
+  [trip charging](docs/trip-charge-wrapper.md).
+
 ## Optional price export extension
 
 - [x] Add a default-off observer of exact current actual AEMO DispatchIS prices,
@@ -18,6 +29,15 @@ Status here describes behavioral parity, not merely the presence of code.
   explicit append-only extensions.
 - [ ] Publish and perform controlled pilot acceptance before any remote rollout.
   No retailer reward claim or critical-event buy control is included.
+
+## Planned price-triggered buying
+
+- [ ] Extend the existing battery-charge controller with verified current
+  DispatchIS evidence after a separate design for import thresholds, energy
+  limits, SoC targets and retailer-payment assumptions. Keep the request off
+  by default and retain the existing inverter owner, journal and write gates.
+  The earlier separate event runtime is not the planned implementation path;
+  buying remains planned work, with no automatic import control added here.
 
 ## Operator extension — Fleet manual export
 

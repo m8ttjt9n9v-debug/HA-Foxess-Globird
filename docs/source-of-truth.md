@@ -34,6 +34,22 @@ layers around the proven algorithm, not replacement algorithms.
 
 ## Current software truth
 
+- An optional native Home Assistant package schedules the existing HEO Charge
+  to Full override for one departure date/time and selected integer SoC from
+  1% to 100%. It calculates latest start from HEO's capacity, SoC and configured
+  maximum power, and retains restorable departure, target and ownership tickets.
+  Completion or cancellation withdraws only its owned override; normal HEO
+  policy resumes, so the target is not a permanent SoC ceiling. Target edits
+  during charging cancel rather than extend the trip, and invalid SoC withdraws
+  owned Full. An unreadable Full entity preserves the cleanup obligation.
+  The wrapper adds no Tessie or inverter writer. Commission its explicit
+  location/cable mappings and keep helper efficiency/timeout values aligned
+  with HEO. Competing Full automations are unsupported, and native helper steps
+  do not provide an atomic lock against every outside caller. The package/card
+  require separate installation; HACS does not install them automatically.
+  Timing and reported target completion are estimates, with live acceptance
+  separate from repository tests. See [trip charging](trip-charge-wrapper.md).
+
 - A separately commissioned, default-off price request adds admission to the
   existing protected export controller, not another inverter writer. Only a
   current actual regional DispatchIS price above the configured threshold can

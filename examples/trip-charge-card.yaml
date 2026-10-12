@@ -1,0 +1,36 @@
+# Optional card for the native trip-charge helpers.
+type: vertical-stack
+cards:
+- type: entities
+  title: Trip charge — ready at your chosen SoC
+  show_header_toggle: false
+  entities:
+  - entity: input_datetime.heo_trip_ready_by
+    name: Departure date and time
+  - entity: input_select.heo_trip_target_soc
+    name: Desired car SoC
+  - entity: input_boolean.heo_trip_charge_scheduled
+    name: Schedule this trip / cancel
+  - type: simple-entity
+    entity: input_select.heo_trip_charge_status
+    name: Schedule status
+  - entity: sensor.heo_trip_charge_start
+    name: Calculated start
+  - entity: sensor.heo_trip_charge_duration
+    name: Estimated charge hours
+  - entity: sensor.home_energy_ev_soc
+    name: Car SoC now
+  - entity: sensor.home_energy_ev_actual_current
+    name: Actual charging current
+- type: markdown
+  content: 'Set your departure date/time, then enable the schedule. Start time updates
+    until charging begins. This uses HEO''s existing paid Charge to Full override:
+    the normal house-battery reserve does not stop it. At your chosen SoC the trip
+    override ends; normal HEO policies resume, including keepalive. This is not a
+    permanent car charge ceiling.
+
+
+    The estimate uses HEO''s capacity and maximum configured power; it cannot promise
+    the exact finishing minute or predict battery taper. Cancelling returns control
+    to normal HEO policy, including its keepalive. Changing the date or target after
+    charging starts cancels that trip. If charging is interrupted, re-arm deliberately.'

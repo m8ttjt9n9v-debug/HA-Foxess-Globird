@@ -83,6 +83,13 @@ current. See the [commissioning checklist](docs/commissioning.md).
 
 ## Current capabilities
 
+- Optional [one-off trip charging](docs/trip-charge-wrapper.md) schedules the
+  existing HEO Charge to Full override for a departure and selected 1–100% SoC.
+  It ends only its owned override at the reported target, then normal HEO
+  policies resume. Install and commission the native helper package and card
+  separately; HACS does not install them automatically. The target is not a
+  permanent charge ceiling or a guarantee of an exact finishing time.
+
 - Optional [automatic export during high wholesale prices](docs/price-triggered-export.md).
   A default-off AEMO observer supplies actual current regional prices; a
   separate default-off request uses the existing Sellable Energy, shared

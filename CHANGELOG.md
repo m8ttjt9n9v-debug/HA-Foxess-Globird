@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased — Optional trip-charge helper package
+
+- Package the existing native Home Assistant trip-charge helpers, automation
+  and card with their generator and regression tests. Schedule the existing
+  HEO Full override for one departure and selected 1–100% reported SoC; retain
+  ownership, restart and cancellation behavior without adding another device
+  writer or changing HEO's controller logic.
+- Document explicit commissioning and separate installation. HACS does not
+  install the package/card automatically. Normal policies resume after the
+  owned Full request ends; the selected target is not a permanent charge
+  ceiling or an exact-time/physical-percentage guarantee.
+
 ## Unreleased — Protected wholesale price export
 
 - Add default-off monitoring of current actual AEMO DispatchIS prices, explicit
