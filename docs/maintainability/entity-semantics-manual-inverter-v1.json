@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "extension": "manual_inverter_v1",
+  "entity_count": 0,
+  "entities": [],
+  "attribute_profiles": {},
+  "attribute_profile_additions": {
+    "fleet_summary_v1": {
+      "manual_inverter_command_confirmed": "Whether current mapped mode and force-power feedback confirm the operator target; command confirmation does not establish actual grid export or absence of competing writers.",
+      "manual_inverter_hold": "Whether the operator handoff currently suppresses HEO inverter reconciliation, including while its journal save is pending; unknown or untrusted handoff storage holds control closed.",
+      "manual_inverter_power_kw": "Requested manual force power in kW; maximum export is capped by the configured inverter ceiling and mapped native bounds, Self Use or automatic-resume cleanup uses zero, and an unvalidated power target is null.",
+      "manual_inverter_status": "Current manual admission, feedback or blocking reason, independent of the electrical ledger and hub transport acknowledgement.",
+      "manual_inverter_target": "Retained operator target: automatic, export_max or self_use; target intent is separate from measured inverter feedback."
+    },
+    "orchestrator_status_v1": {
+      "manual_inverter_command_confirmed": "Whether current mapped mode and force-power feedback confirm the operator target; command confirmation does not establish actual grid export or absence of competing writers.",
+      "manual_inverter_hold": "Whether the operator handoff currently suppresses HEO inverter reconciliation, including while its journal save is pending; unknown or untrusted handoff storage holds control closed.",
+      "manual_inverter_power_kw": "Requested manual force power in kW; maximum export is capped by the configured inverter ceiling and mapped native bounds, Self Use or automatic-resume cleanup uses zero, and an unvalidated power target is null.",
+      "manual_inverter_status": "Current manual admission, feedback or blocking reason, independent of the electrical ledger and hub transport acknowledgement.",
+      "manual_inverter_target": "Retained operator target: automatic, export_max or self_use; target intent is separate from measured inverter feedback."
+    }
+  }
+}

@@ -99,6 +99,7 @@ def _coordinator(**config):
         _free_window_hours_remaining=free_window_hours_remaining,
         learning_remaining_kwh=4.0,
         zerohero_export=SimpleNamespace(imported_kwh=0.0),
+        async_update_listeners=lambda: None,
     )
 
 

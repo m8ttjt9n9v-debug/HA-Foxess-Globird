@@ -23,6 +23,12 @@ BASELINE_PATH = (
     / "maintainability"
     / "entity-attribute-contract-v0.12.26.json"
 )
+MANUAL_ADDITIONS_PATH = (
+    REPOSITORY_ROOT
+    / "docs"
+    / "maintainability"
+    / "entity-attribute-additions-manual-inverter-v1.json"
+)
 
 _TELEMETRY_KEYS = (
     "battery_power",
@@ -48,13 +54,21 @@ def _method(tree: ast.Module, class_name: str, name: str) -> ast.FunctionDef:
     raise ValueError(f"{class_name}.{name} was not found")
 
 
-def _dict_return_keys(function: ast.FunctionDef) -> list[frozenset[str]]:
+def _dict_return_keys(
+    function: ast.FunctionDef,
+    inherited_attributes: dict[str, frozenset[str]] | None = None,
+) -> list[frozenset[str]]:
     results: list[frozenset[str]] = []
     for node in ast.walk(function):
         if not isinstance(node, ast.Return) or not isinstance(node.value, ast.Dict):
             continue
         keys: list[str] = []
-        for key in node.value.keys:
+        for key, value in zip(node.value.keys, node.value.values, strict=True):
+            if key is None and inherited_attributes is not None:
+                inherited = inherited_attributes.get(ast.unparse(value))
+                if inherited is not None:
+                    keys.extend(inherited)
+                    continue
             if not isinstance(key, ast.Constant) or not isinstance(key.value, str):
                 raise ValueError(
                     f"{function.name} contains a non-literal public attribute key"
@@ -165,6 +179,59 @@ def rendered_contract() -> str:
     return json.dumps(build_entity_attribute_contract(), indent=2, sort_keys=True) + "\n"
 
 
+def validate_against_release_baseline() -> None:
+    """Retain frozen attribute records and admit only explicit additions."""
+    baseline = json.loads(BASELINE_PATH.read_text(encoding="utf-8"))
+    additions = [
+        json.loads(path.read_text(encoding="utf-8"))
+        for path in (MANUAL_ADDITIONS_PATH,)
+    ]
+    for extension in additions:
+        if extension.get("schema_version") != baseline.get("schema_version"):
+            raise ValueError("attribute addition schema does not match the baseline")
+        if extension.get("entity_count") != len(extension["entities"]):
+            raise ValueError("attribute addition count does not match its records")
+    current = build_entity_attribute_contract()
+    if (
+        baseline["entity_count"] + sum(item["entity_count"] for item in additions)
+        != current["entity_count"]
+    ):
+        raise ValueError("custom attribute entity count differs from baseline plus additions")
+    old = {record["entity_key"]: record for record in baseline["entities"]}
+    added = {
+        record["entity_key"]: record for extension in additions for record in extension["entities"]
+    }
+    if len(added) != sum(len(item["entities"]) for item in additions):
+        raise ValueError("attribute additions contain duplicate identities")
+    expected = {**old, **added}
+    for extension in additions:
+        attribute_additions = extension.get("attribute_additions", [])
+        if extension.get("attribute_addition_count", 0) != len(attribute_additions):
+            raise ValueError("attribute addition count does not match its records")
+        for record in attribute_additions:
+            key = record["entity_key"]
+            if key not in expected:
+                raise ValueError("attribute additions must identify a retained entity")
+            retained = expected[key]
+            attributes = record["custom_attributes"]
+            if record["default_entity_id"] != retained["default_entity_id"]:
+                raise ValueError("attribute additions cannot change an entity identity")
+            if len(attributes) != len(set(attributes)) or set(attributes) & set(
+                retained["custom_attributes"]
+            ):
+                raise ValueError("attribute additions cannot replace reviewed public keys")
+            expected[key] = {
+                **retained,
+                "custom_attributes": sorted(retained["custom_attributes"] + attributes),
+            }
+    actual = {record["entity_key"]: record for record in current["entities"]}
+    if old.keys() & added.keys() or old.keys() | added.keys() != actual.keys():
+        raise ValueError("custom attribute identities differ from baseline plus additions")
+    for key, record in expected.items():
+        if actual[key] != record:
+            raise ValueError(f"custom public attributes changed for {key!r}")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--write", action="store_true")
@@ -172,14 +239,14 @@ def main() -> int:
     args = parser.parse_args()
     rendered = rendered_contract()
     if args.write:
-        BASELINE_PATH.write_text(rendered, encoding="utf-8")
+        raise SystemExit(
+            "The release attribute baseline is frozen; review versioned additions instead"
+        )
     if args.check:
-        if not BASELINE_PATH.is_file() or BASELINE_PATH.read_text(
-            encoding="utf-8"
-        ) != rendered:
-            raise SystemExit(
-                "Entity attribute contract changed; review compatibility and regenerate explicitly"
-            )
+        try:
+            validate_against_release_baseline()
+        except ValueError as error:
+            raise SystemExit(str(error)) from error
     if not args.write and not args.check:
         print(rendered, end="")
     return 0

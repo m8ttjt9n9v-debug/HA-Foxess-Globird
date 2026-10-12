@@ -1,0 +1,218 @@
+# Reusable three-site Fleet dashboard; all site data is placeholder monitoring data.
+# Install fleet-command-package.yaml separately. Insert the first full-width section into
+# an existing sections view without replacing its site cards. Secrets stay on the hub.
+title: HEO Fleet
+views:
+- title: Fleet
+  path: overview
+  icon: mdi:home-group
+  type: sections
+  max_columns: 3
+  sections:
+  - type: grid
+    column_span: 3
+    cards:
+    - type: horizontal-stack
+      grid_options:
+        columns: full
+      cards:
+      - type: button
+        name: Export all at maximum
+        icon: mdi:transmission-tower-export
+        show_state: false
+        tap_action:
+          action: perform-action
+          perform_action: script.turn_on
+          target:
+            entity_id: script.heo_fleet_command
+          data:
+            variables:
+              command: manual_export_max
+        hold_action:
+          action: none
+      - type: button
+        name: Stop all · Self Use
+        icon: mdi:stop-circle
+        show_state: false
+        tap_action:
+          action: perform-action
+          perform_action: script.turn_on
+          target:
+            entity_id: script.heo_fleet_command
+          data:
+            variables:
+              command: manual_self_use
+        hold_action:
+          action: none
+    - type: entities
+      title: Fleet command results
+      show_header_toggle: false
+      grid_options:
+        columns: full
+      entities:
+      - entity: input_boolean.heo_fleet_local_control_confirmed
+      - entity: input_text.heo_fleet_local_result
+        name: Local site
+      - entity: input_text.heo_fleet_bravo_result
+        name: Remote site 1
+      - entity: input_text.heo_fleet_charlie_result
+        name: Remote site 2
+    - type: markdown
+      grid_options:
+        columns: full
+      content: Export continues until Stop, subject to each inverter's own protections. Stop selects Self
+        Use and keeps HEO inverter automation held. Command confirmation describes native mode/power feedback;
+        check measured grid flow to confirm physical export. Unknown results need a site check; the hub
+        does not retry Export.
+    - type: button
+      name: Resume automatic control
+      icon: mdi:play-circle-outline
+      show_state: false
+      tap_action:
+        action: perform-action
+        perform_action: script.turn_on
+        target:
+          entity_id: script.heo_fleet_command
+        data:
+          variables:
+            command: manual_resume_automatic
+        confirmation:
+          text: Release the manual hold on every site. Existing enabled HEO policies may then resume;
+            competing inverter writers must remain disabled.
+      hold_action:
+        action: none
+      grid_options:
+        columns: full
+        rows: 1
+  - type: grid
+    cards:
+    - type: markdown
+      title: Local site
+      content: |
+        {% set p = 'sensor.fleet_site_alpha_' %}
+        {% set e = p ~ 'summary' %}
+        {% set online = states(e) not in ['unknown', 'unavailable', 'none'] %}
+        {% macro a(name) -%}
+          {%- set v = state_attr(e, name) -%}
+          {{- v if v is not none else '—' -}}
+        {%- endmacro %}
+        {% macro r(name, unit='') -%}
+          {%- set v = states(p ~ name) -%}
+          {{- v ~ unit if v not in ['unknown', 'unavailable', 'none'] else '—' -}}
+        {%- endmacro %}
+        {% macro m(name) -%}
+          {%- set v = states(p ~ name) | float(none) -%}
+          {{- ('$%.2f' | format(v)) if v is not none else '—' -}}
+        {%- endmacro %}
+        {% set cable = states(p ~ 'ev_cable') %}
+        {% set location = states(p ~ 'ev_location') %}
+        {% set plug = 'Plugged in' if cable in ['on', 'connected', 'plugged_in'] else
+                      'Unplugged' if cable in ['off', 'disconnected', 'unplugged'] else '—' %}
+        {% set place = 'Home' if location in ['home', 'on'] else
+                       'Away' if location in ['away', 'not_home', 'off'] else '—' %}
+        ## {{ '🟢 Online' if online else '🔴 Unavailable' }} · {{ states(e) }}
+
+        | | |
+        |---|---:|
+        | Battery | **{{ a('battery_soc') }}%** · {{ a('battery_power_kw') }} kW |
+        | Grid / Solar | {{ a('grid_power_kw') }} / {{ a('solar_power_kw') }} kW |
+        | House / EV load | {{ r('house_load', ' kW') }} / {{ r('ev_load', ' kW') }} |
+        | Free import today | **{{ r('free_import_today', ' kWh') }}** |
+        | Solar today | **{{ r('solar_today', ' kWh') }}** |
+        | EV battery | **{{ r('ev_soc', '%') }}** |
+        | EV plug / location | {{ plug }} · {{ place }} |
+        | GloBird billing period cost | **{{ m('globird_billing_period_cost') }}** |
+        | GloBird expected monthly cost | **{{ m('globird_expected_monthly_cost') }}** |
+        | GloBird balance | **{{ m('globird_balance') }}** |
+        | Charge / Export | {{ a('charging_status') }} / {{ a('export_status') }} |
+        | Forecast / measured | {{ a('forecast_cost') }} / {{ a('measured_cost') }} |
+
+        _Last update: {{ a('last_update') }}_
+  - type: grid
+    cards:
+    - type: markdown
+      title: Remote site 1
+      content: |
+        {% set p = 'sensor.fleet_site_bravo_' %}
+        {% set e = p ~ 'summary' %}
+        {% set online = states(e) not in ['unknown', 'unavailable', 'none'] %}
+        {% macro a(name) -%}
+          {%- set v = state_attr(e, name) -%}
+          {{- v if v is not none else '—' -}}
+        {%- endmacro %}
+        {% macro r(name, unit='') -%}
+          {%- set v = states(p ~ name) -%}
+          {{- v ~ unit if v not in ['unknown', 'unavailable', 'none'] else '—' -}}
+        {%- endmacro %}
+        {% macro m(name) -%}
+          {%- set v = states(p ~ name) | float(none) -%}
+          {{- ('$%.2f' | format(v)) if v is not none else '—' -}}
+        {%- endmacro %}
+        {% set cable = states(p ~ 'ev_cable') %}
+        {% set location = states(p ~ 'ev_location') %}
+        {% set plug = 'Plugged in' if cable in ['on', 'connected', 'plugged_in'] else
+                      'Unplugged' if cable in ['off', 'disconnected', 'unplugged'] else '—' %}
+        {% set place = 'Home' if location in ['home', 'on'] else
+                       'Away' if location in ['away', 'not_home', 'off'] else '—' %}
+        ## {{ '🟢 Online' if online else '🔴 Unavailable' }} · {{ states(e) }}
+
+        | | |
+        |---|---:|
+        | Battery | **{{ a('battery_soc') }}%** · {{ a('battery_power_kw') }} kW |
+        | Grid / Solar | {{ a('grid_power_kw') }} / {{ a('solar_power_kw') }} kW |
+        | House / EV load | {{ r('house_load', ' kW') }} / {{ r('ev_load', ' kW') }} |
+        | Free import today | **{{ r('free_import_today', ' kWh') }}** |
+        | Solar today | **{{ r('solar_today', ' kWh') }}** |
+        | EV battery | **{{ r('ev_soc', '%') }}** |
+        | EV plug / location | {{ plug }} · {{ place }} |
+        | GloBird billing period cost | **{{ m('globird_billing_period_cost') }}** |
+        | GloBird expected monthly cost | **{{ m('globird_expected_monthly_cost') }}** |
+        | GloBird balance | **{{ m('globird_balance') }}** |
+        | Charge / Export | {{ a('charging_status') }} / {{ a('export_status') }} |
+        | Forecast / measured | {{ a('forecast_cost') }} / {{ a('measured_cost') }} |
+
+        _Last update: {{ a('last_update') }}_
+  - type: grid
+    cards:
+    - type: markdown
+      title: Remote site 2
+      content: |
+        {% set p = 'sensor.fleet_site_charlie_' %}
+        {% set e = p ~ 'summary' %}
+        {% set online = states(e) not in ['unknown', 'unavailable', 'none'] %}
+        {% macro a(name) -%}
+          {%- set v = state_attr(e, name) -%}
+          {{- v if v is not none else '—' -}}
+        {%- endmacro %}
+        {% macro r(name, unit='') -%}
+          {%- set v = states(p ~ name) -%}
+          {{- v ~ unit if v not in ['unknown', 'unavailable', 'none'] else '—' -}}
+        {%- endmacro %}
+        {% macro m(name) -%}
+          {%- set v = states(p ~ name) | float(none) -%}
+          {{- ('$%.2f' | format(v)) if v is not none else '—' -}}
+        {%- endmacro %}
+        {% set cable = states(p ~ 'ev_cable') %}
+        {% set location = states(p ~ 'ev_location') %}
+        {% set plug = 'Plugged in' if cable in ['on', 'connected', 'plugged_in'] else
+                      'Unplugged' if cable in ['off', 'disconnected', 'unplugged'] else '—' %}
+        {% set place = 'Home' if location in ['home', 'on'] else
+                       'Away' if location in ['away', 'not_home', 'off'] else '—' %}
+        ## {{ '🟢 Online' if online else '🔴 Unavailable' }} · {{ states(e) }}
+
+        | | |
+        |---|---:|
+        | Battery | **{{ a('battery_soc') }}%** · {{ a('battery_power_kw') }} kW |
+        | Grid / Solar | {{ a('grid_power_kw') }} / {{ a('solar_power_kw') }} kW |
+        | House / EV load | {{ r('house_load', ' kW') }} / {{ r('ev_load', ' kW') }} |
+        | Free import today | **{{ r('free_import_today', ' kWh') }}** |
+        | Solar today | **{{ r('solar_today', ' kWh') }}** |
+        | EV battery | **{{ r('ev_soc', '%') }}** |
+        | EV plug / location | {{ plug }} · {{ place }} |
+        | GloBird billing period cost | **{{ m('globird_billing_period_cost') }}** |
+        | GloBird expected monthly cost | **{{ m('globird_expected_monthly_cost') }}** |
+        | GloBird balance | **{{ m('globird_balance') }}** |
+        | Charge / Export | {{ a('charging_status') }} / {{ a('export_status') }} |
+        | Forecast / measured | {{ a('forecast_cost') }} / {{ a('measured_cost') }} |
+
+        _Last update: {{ a('last_update') }}_

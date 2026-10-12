@@ -15,6 +15,9 @@ BASELINE_PATH = (
     / "maintainability"
     / "persistence-contract-v0.12.26.json"
 )
+MANUAL_ADDITIONS_PATH = (
+    REPOSITORY_ROOT / "docs" / "maintainability" / "persistence-additions-manual-inverter-v1.json"
+)
 
 
 def _assigned_name(node: ast.AnnAssign | ast.Assign) -> str:
@@ -93,6 +96,34 @@ def rendered_contract() -> str:
     return json.dumps(build_persistence_contract(), indent=2, sort_keys=True) + "\n"
 
 
+def validate_against_release_baseline() -> None:
+    """Permit explicit extension stores, preserving all old obligations."""
+    baseline = json.loads(BASELINE_PATH.read_text(encoding="utf-8"))
+    additions = [
+        json.loads(path.read_text(encoding="utf-8"))
+        for path in (MANUAL_ADDITIONS_PATH,)
+    ]
+    for extension in additions:
+        if extension.get("schema_version") != baseline.get("schema_version"):
+            raise ValueError("storage addition schema does not match the baseline")
+        if extension.get("store_count") != len(extension["stores"]):
+            raise ValueError("storage addition count does not match its records")
+    current = build_persistence_contract()
+    expected_stores = sorted(
+        baseline["stores"] + [store for extension in additions for store in extension["stores"]],
+        key=lambda item: (item["source"], item["attribute"]),
+    )
+    identities = [(item["source"], item["attribute"]) for item in expected_stores]
+    if len(identities) != len(set(identities)):
+        raise ValueError("storage addition overlaps an existing obligation")
+    if current != {
+        **baseline,
+        "store_count": baseline["store_count"] + sum(item["store_count"] for item in additions),
+        "stores": expected_stores,
+    }:
+        raise ValueError("Persistence contract changed beyond the reviewed extensions")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--write", action="store_true")
@@ -100,14 +131,12 @@ def main() -> int:
     args = parser.parse_args()
     rendered = rendered_contract()
     if args.write:
-        BASELINE_PATH.write_text(rendered, encoding="utf-8")
+        parser.error("The release baseline is frozen; review additions in their own contract")
     if args.check:
-        if not BASELINE_PATH.is_file() or BASELINE_PATH.read_text(
-            encoding="utf-8"
-        ) != rendered:
-            raise SystemExit(
-                "Persistence contract changed; review migration and compatibility impact"
-            )
+        try:
+            validate_against_release_baseline()
+        except ValueError as error:
+            raise SystemExit(str(error)) from error
     if not args.write and not args.check:
         print(rendered, end="")
     return 0

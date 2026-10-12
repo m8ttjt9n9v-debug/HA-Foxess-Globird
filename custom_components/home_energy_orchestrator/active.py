@@ -8,6 +8,7 @@ complete FoxESS actuator mapping.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from dataclasses import replace
 from datetime import datetime, time, timedelta
@@ -22,11 +23,12 @@ from .const import (
 )
 from .coordinator import EnergyCoordinator
 from .ev_observation_adapter import capture_ev_entity_feedback
-from .foxess_adapter import FoxessEntityMap, FoxessServiceAdapter
+from .foxess_adapter import FoxessEntityMap, FoxessServiceAdapter, FoxessWriteBlocked
 from .foxess_observation_adapter import (
     FoxessFeedbackSnapshot,
     capture_foxess_feedback,
 )
+from .manual_inverter import ManualInverterController
 from .persistence import create_typed_value_repository
 from .planner.charge_session import ChargeSessionState, advance_charge_session
 from .planner.control_windows import (
@@ -78,6 +80,8 @@ class ActiveFoxessController:
         self.coordinator = coordinator
         self._unsub_interval: CALLBACK_TYPE | None = None
         self._adapter: FoxessServiceAdapter | None = None
+        self._reconcile_lock = asyncio.Lock()
+        self._reconcile_stopped = False
         self.writes_performed = 0
         self.last_reason = "automatic_control_disabled"
         self.last_actions: tuple[str, ...] = ()
@@ -113,6 +117,7 @@ class ActiveFoxessController:
             decode=ChargeSessionState.from_payload,
             encode=ChargeSessionState.to_payload,
         )
+        self.manual = ManualInverterController(hass, coordinator, self)
 
     @property
     def gate_status(self) -> str:
@@ -138,12 +143,27 @@ class ActiveFoxessController:
     def _writes_still_authorized(self) -> bool:
         """Recheck the live interlock between commands in a delayed plan."""
         manual_test = getattr(self.coordinator, "manual_test", None)
-        return self.gate_status == "ready" and not bool(
-            manual_test is not None and manual_test.is_active
+        if self._reconcile_stopped:
+            return False
+        runtime = self.coordinator.runtime_config
+        if isinstance(
+            self._adapter, FoxessServiceAdapter
+        ) and self._adapter.entities != FoxessEntityMap(
+            runtime.inverter.work_mode_entity,
+            runtime.inverter.force_charge_power_entity,
+            runtime.inverter.force_discharge_power_entity,
+        ):
+            return False
+        return (
+            self.gate_status == "ready"
+            and not bool(manual_test is not None and manual_test.is_active)
+            and not self.manual.is_active
         )
 
     async def async_start(self) -> None:
         """Start the bounded reconciliation timer and perform one evaluation."""
+        self._reconcile_stopped = False
+        await self.manual.async_restore_handoff()
         await self._async_load_charge_session()
         await self._async_load_export_session()
         if self._unsub_interval is None:
@@ -156,9 +176,14 @@ class ActiveFoxessController:
 
     async def async_stop(self) -> None:
         """Stop the timer without changing inverter state."""
+        self._reconcile_stopped = True
+        await self.manual.async_unload()
         if self._unsub_interval is not None:
             self._unsub_interval()
             self._unsub_interval = None
+        async with self._reconcile_lock:
+            pass
+
 
     async def _async_tick(self, _now) -> None:
         await self.coordinator.async_request_refresh()
@@ -168,6 +193,18 @@ class ActiveFoxessController:
 
     async def async_reconcile(self) -> None:
         """Evaluate and, only after every gate passes, execute one plan."""
+        await self.manual.async_restore_handoff()
+        async with self._reconcile_lock:
+            await self._async_reconcile_locked()
+
+    async def _async_reconcile_locked(self) -> None:
+        if self._reconcile_stopped:
+            return
+        if await self.manual.async_reconcile_locked():
+            self.last_reason = self.manual.status
+            self.last_actions = ()
+            self.export_effective_enabled = False
+            return
         manual_test = getattr(self.coordinator, "manual_test", None)
         runtime = self.coordinator.runtime_config
         gate = evaluate_foxess_gate(
@@ -239,6 +276,32 @@ class ActiveFoxessController:
 
     async def async_supervisory_repair(self, expected_mode: str) -> None:
         """Re-arm one proven HEO intent after a persistent feedback mismatch."""
+        await self.manual.async_restore_handoff()
+        async with self._reconcile_lock:
+            if self.manual.is_active:
+                await self._async_reconcile_locked()
+                return
+            await self._async_supervisory_repair_locked(expected_mode)
+
+    async def async_relinquish_for_manual(self, entities: FoxessEntityMap) -> None:
+        """Transfer HEO obligations under the common lock without a restore write."""
+        if self._adapter is not None and self._adapter.entities != entities:
+            raise FoxessWriteBlocked("resolve changed automatic actuator mapping before handoff")
+        manual_test = getattr(self.coordinator, "manual_test", None)
+        if manual_test is not None:
+            await manual_test.async_relinquish_for_manual()
+        self.charge_session = ChargeSessionState()
+        self.export_session = ExportSessionState()
+        self.charge_power_target_kw = None
+        self.export_plan = None
+        self.export_planned_start = None
+        self.export_effective_enabled = False
+        self.last_actions = ()
+        await self._charge_repository.async_save(self.charge_session)
+        await self._export_repository.async_save(self.export_session)
+        self._charge_storage_status = self._export_storage_status = "valid"
+
+    async def _async_supervisory_repair_locked(self, expected_mode: str) -> None:
         if self.gate_status != "ready":
             return
         runtime = self.coordinator.runtime_config
@@ -262,7 +325,7 @@ class ActiveFoxessController:
                 last_command_at=None,
             )
             await self._charge_repository.async_save(self.charge_session)
-            await self.async_reconcile()
+            await self._async_reconcile_locked()
             return
         if expected_mode == "Force Discharge" and self.export_session.phase in {
             "starting",
@@ -276,7 +339,7 @@ class ActiveFoxessController:
                 last_command_at=None,
             )
             await self._export_repository.async_save(self.export_session)
-            await self.async_reconcile()
+            await self._async_reconcile_locked()
             return
         if expected_mode != "Self Use":
             return

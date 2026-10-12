@@ -168,6 +168,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: EnergyConfigEntry) -> bo
     entry.runtime_data = coordinator
     active = ActiveFoxessController(hass, coordinator)
     coordinator.active_controller = active
+    await active.manual.async_restore_handoff()
     ev_controller = ActiveEvController(hass, coordinator)
     coordinator.ev_controller = ev_controller
     supervisor = ControlConformanceSupervisor(hass, coordinator)

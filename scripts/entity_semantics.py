@@ -17,6 +17,9 @@ SEMANTICS_PATH = (
     / "maintainability"
     / "entity-semantics-v0.12.26.json"
 )
+MANUAL_EXTENSIONS_PATH = (
+    REPOSITORY_ROOT / "docs" / "maintainability" / "entity-semantics-manual-inverter-v1.json"
+)
 
 _REQUIRED_FIELDS = {
     "key",
@@ -54,8 +57,49 @@ _EQUIVALENT_KEYS = {"foxess", "globird", "tessie"}
 
 
 def load_semantic_contract() -> dict[str, Any]:
-    """Load the worksheet without modifying or normalising human-reviewed text."""
-    return json.loads(SEMANTICS_PATH.read_text(encoding="utf-8"))
+    """Merge explicit additions while preserving every reviewed baseline record."""
+    baseline = json.loads(SEMANTICS_PATH.read_text(encoding="utf-8"))
+    records = list(baseline["entities"])
+    merged_profiles = dict(baseline["attribute_profiles"])
+    known_keys = {record["key"] for record in records}
+    for path in (MANUAL_EXTENSIONS_PATH,):
+        extension = json.loads(path.read_text(encoding="utf-8"))
+        if extension.get("schema_version") != baseline.get("schema_version"):
+            raise ValueError("semantic extension schema does not match the baseline")
+        entities = extension.get("entities")
+        profiles = extension.get("attribute_profiles")
+        if not isinstance(entities, list) or not isinstance(profiles, dict):
+            raise ValueError("semantic extension needs entities and attribute_profiles")
+        if extension.get("entity_count") != len(entities):
+            raise ValueError("semantic extension entity_count does not match its records")
+        if any(record["key"] in known_keys for record in entities):
+            raise ValueError("semantic extensions cannot replace reviewed baseline records")
+        if merged_profiles.keys() & profiles.keys():
+            raise ValueError("semantic extensions cannot replace reviewed attribute profiles")
+        records.extend(entities)
+        known_keys.update(record["key"] for record in entities)
+        merged_profiles.update(profiles)
+        profile_additions = extension.get("attribute_profile_additions", {})
+        if not isinstance(profile_additions, dict):
+            raise ValueError("semantic attribute profile additions must be an object")
+        for name, attributes in profile_additions.items():
+            if name not in merged_profiles or not isinstance(attributes, dict) or not attributes:
+                raise ValueError("semantic additions need a retained profile and new attributes")
+            retained = merged_profiles[name]
+            if retained["attributes"].keys() & attributes.keys():
+                raise ValueError("semantic additions cannot replace reviewed public keys")
+            merged_profiles[name] = {
+                **retained,
+                "attributes": {**retained["attributes"], **attributes},
+            }
+    added_count = len(records) - len(baseline["entities"])
+    return {
+        **baseline,
+        "entities": records,
+        "attribute_profiles": merged_profiles,
+        "reviewed_entity_count": baseline["reviewed_entity_count"] + added_count,
+        "total_entity_count": baseline["total_entity_count"] + added_count,
+    }
 
 
 def entities_awaiting_review(contract: dict[str, Any] | None = None) -> list[str]:

@@ -2,6 +2,20 @@
 
 Status here describes behavioral parity, not merely the presence of code.
 
+## Operator extension — Fleet manual export
+
+- [x] Add persistent manual Export maximum, Stop/Self Use and Resume services
+  within the existing inverter owner. Retain all commissioned gates and
+  serialize automatic/diagnostic handoffs; preserve EV settings and control.
+- [x] Provide a reusable native-HA three-site dispatcher/dashboard, backend-only
+  authorization, parallel partial-failure reporting, no startup replay, and
+  generation-ordered Stop supersession. Cover storage failure, restart,
+  cancellation, stale requests, capability changes and diagnostic timer races.
+- [ ] Complete controlled pilot then remote-site acceptance from the published
+  candidate. Installing the controls must not start an export. Confirm physical
+  behaviour only through a separately authorised operator action; mapped mode
+  confirmation alone is insufficient.
+
 ## Next priority — lifecycle and incident regression harness
 
 - [ ] **Build this before further controller expansion.** Add a permanent

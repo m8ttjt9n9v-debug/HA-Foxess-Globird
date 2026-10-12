@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from datetime import date, datetime
 from typing import TYPE_CHECKING
@@ -45,6 +46,7 @@ def effective_export_plan(coordinator: EnergyCoordinator) -> ExportPlan | None:
     controller = coordinator.active_controller
     if (
         controller is None
+        or bool(getattr(getattr(controller, "manual", None), "is_active", False))
         or not controller.export_effective_enabled
         or controller.export_plan is None
     ):
@@ -57,6 +59,9 @@ def export_status(coordinator: EnergyCoordinator) -> str:
     controller = coordinator.active_controller
     if controller is None:
         return "unavailable"
+    handoff = getattr(controller, "manual", None)
+    if handoff is not None and handoff.is_active:
+        return handoff.status
     if not coordinator.runtime_config.automation.battery_export_enabled:
         return "disabled"
     decision = controller.ev_before_export_decision
@@ -710,6 +715,7 @@ class SiteReadModel:
     learning: LearningReadModel
     zerohero_status: str
     latest_zerohero_status: str | None
+    manual_inverter_attributes_json: str = "{}"
 
     @property
     def ledger_status(self) -> str:
@@ -761,6 +767,7 @@ class SiteReadModel:
             **self.ev.sensor_values(),
         }
 
+
     def fleet_attributes(self, updated_at: datetime) -> dict[str, object]:
         """Project the stable Fleet Summary schema version 1 payload."""
         return {
@@ -789,7 +796,26 @@ class SiteReadModel:
             "ledger_status": self.ledger_status,
             "tariff_status": self.tariff_status,
             "last_update": updated_at.isoformat(),
+            "manual_inverter_hold": self.manual_inverter_attributes().get(
+                "manual_inverter_hold", False
+            ),
+            "manual_inverter_target": self.manual_inverter_attributes().get(
+                "manual_inverter_target", "automatic"
+            ),
+            "manual_inverter_status": self.manual_inverter_attributes().get(
+                "manual_inverter_status", "automatic"
+            ),
+            "manual_inverter_power_kw": self.manual_inverter_attributes().get(
+                "manual_inverter_power_kw"
+            ),
+            "manual_inverter_command_confirmed": self.manual_inverter_attributes().get(
+                "manual_inverter_command_confirmed", False
+            ),
         }
+
+    def manual_inverter_attributes(self) -> dict[str, object]:
+        """Detach durable manual intent from the immutable presentation snapshot."""
+        return json.loads(self.manual_inverter_attributes_json)
 
     def forecast_diagnostics(self) -> dict[str, object]:
         """Project the existing redacted forecast support payload."""
@@ -828,9 +854,7 @@ class SiteReadModel:
             "writes_performed": control.writes_performed,
             "automatic_control_enabled": control.automatic_control_enabled,
             "automatic_charge_enabled": control.automatic_charge_enabled,
-            "free_charge_schedule_confirmed": (
-                control.free_charge_schedule_confirmed
-            ),
+            "free_charge_schedule_confirmed": (control.free_charge_schedule_confirmed),
             "sign_conventions_verified": control.sign_conventions_verified,
             "foxess_modbus_control_effective": control.foxess_gate == "ready",
             "foxess_control_owner": control.foxess_control_owner,
@@ -852,18 +876,12 @@ class SiteReadModel:
             "ev_last_write_at": self.ev.last_write_at,
             "ev_driving_learning_mode": self.ev.learning_status,
             "ev_driving_learning_samples": self.ev.learning_samples,
-            "ev_learned_general_limit_percent": (
-                self.ev.learned_charge_limit_percent
-            ),
+            "ev_learned_general_limit_percent": (self.ev.learned_charge_limit_percent),
             "export_session_phase": control.export_session_phase,
             "charge_session_phase": control.charge_session_phase,
             "charge_power_target_kw": control.charge_power_target_kw,
-            "export_allowance_remaining_kwh": (
-                control.automatic_export_remaining_kwh
-            ),
-            "automatic_export_remaining_kwh": (
-                control.automatic_export_remaining_kwh
-            ),
+            "export_allowance_remaining_kwh": (control.automatic_export_remaining_kwh),
+            "automatic_export_remaining_kwh": (control.automatic_export_remaining_kwh),
             "export_protected_ev_kwh": control.export_protected_ev_kwh,
             "rehearsal_mode": control.rehearsal_mode,
             "integration": DOMAIN,
@@ -875,6 +893,21 @@ class SiteReadModel:
             "learning_max_age_days": control.learning_max_age_days,
             "learning_sample_limit": control.learning_sample_limit,
             "learning_sampler_enabled": control.learning_sampler_enabled,
+            "manual_inverter_hold": self.manual_inverter_attributes().get(
+                "manual_inverter_hold", False
+            ),
+            "manual_inverter_target": self.manual_inverter_attributes().get(
+                "manual_inverter_target", "automatic"
+            ),
+            "manual_inverter_status": self.manual_inverter_attributes().get(
+                "manual_inverter_status", "automatic"
+            ),
+            "manual_inverter_power_kw": self.manual_inverter_attributes().get(
+                "manual_inverter_power_kw"
+            ),
+            "manual_inverter_command_confirmed": self.manual_inverter_attributes().get(
+                "manual_inverter_command_confirmed", False
+            ),
         }
 
     def actuator_diagnostics(self) -> dict[str, object]:
@@ -1249,9 +1282,7 @@ def build_site_read_model(
     )
     control_model = ControlReadModel(
         foxess_gate=foxess_gate,
-        last_control_reason=(
-            "unavailable" if controller is None else controller.last_reason
-        ),
+        last_control_reason=("unavailable" if controller is None else controller.last_reason),
         last_control_actions=() if controller is None else controller.last_actions,
         writes_performed=0 if controller is None else controller.writes_performed,
         automatic_control_enabled=automation.master_enabled,
@@ -1261,18 +1292,17 @@ def build_site_read_model(
         foxess_control_owner=automation.control_owner,
         automatic_export_enabled=automation.battery_export_enabled,
         automatic_export_effective=(
-            False if controller is None else controller.export_effective_enabled
+            False
+            if controller is None
+            or bool(getattr(getattr(controller, "manual", None), "is_active", False))
+            else controller.export_effective_enabled
         ),
-        ev_before_export_enabled=(
-            coordinator.runtime_config.ev_preferences.before_export_enabled
-        ),
+        ev_before_export_enabled=(coordinator.runtime_config.ev_preferences.before_export_enabled),
         ev_before_export_soc_target_percent=(
             coordinator.runtime_config.ev_preferences.before_export_soc_target
         ),
         ev_before_export_status=(
-            "unavailable"
-            if controller is None
-            else controller.ev_before_export_decision.reason
+            "unavailable" if controller is None else controller.ev_before_export_decision.reason
         ),
         ev_automatic_control_enabled=automation.ev_control_enabled,
         ev_gate=ev_gate,
@@ -1282,13 +1312,9 @@ def build_site_read_model(
         charge_session_phase=(
             "unavailable" if controller is None else controller.charge_session.phase
         ),
-        charge_power_target_kw=(
-            None if controller is None else controller.charge_power_target_kw
-        ),
+        charge_power_target_kw=(None if controller is None else controller.charge_power_target_kw),
         automatic_export_remaining_kwh=(
-            None
-            if controller is None
-            else controller.automatic_export_remaining_kwh
+            None if controller is None else controller.automatic_export_remaining_kwh
         ),
         export_protected_ev_kwh=(
             None if controller is None else controller.export_protected_ev_kwh
@@ -1348,18 +1374,14 @@ def build_site_read_model(
     return SiteReadModel(
         orchestrator_status=control_mode(coordinator),
         battery_soc=None if snapshot is None else snapshot.battery_soc,
-        battery_power_kw=(
-            None if telemetry is None else telemetry.battery_power.value
-        ),
+        battery_power_kw=(None if telemetry is None else telemetry.battery_power.value),
         grid_power_kw=None if telemetry is None else telemetry.grid_power.value,
         solar_power_kw=None if telemetry is None else telemetry.solar_power.value,
         house_load_kw=None if snapshot is None else snapshot.house_load_kw,
         sellable_energy_kwh=(
             None if candidate_plan is None else candidate_plan.sellable_energy_kwh
         ),
-        planned_export_kwh=(
-            None if plan is None else plan.planned_export_energy_kwh
-        ),
+        planned_export_kwh=(None if plan is None else plan.planned_export_energy_kwh),
         planned_export_duration_minutes=(
             None if plan is None else round(plan.planned_duration_h * 60, 1)
         ),
@@ -1376,7 +1398,11 @@ def build_site_read_model(
         scorecard=scorecard_model,
         learning=learning_model,
         zerohero_status=ledger.zerohero_credit_status,
-        latest_zerohero_status=(
-            None if scorecard is None else scorecard.retailer_zerohero_status
+        latest_zerohero_status=(None if scorecard is None else scorecard.retailer_zerohero_status),
+        manual_inverter_attributes_json=json.dumps(
+            {}
+            if controller is None or not hasattr(controller, "manual")
+            else controller.manual.attributes(),
+            sort_keys=True,
         ),
     )

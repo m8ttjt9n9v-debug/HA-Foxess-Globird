@@ -393,6 +393,11 @@ def test_site_read_model_projects_existing_sensor_and_fleet_values() -> None:
         "ledger_status": "ready",
         "tariff_status": "ready",
         "last_update": "2026-09-17T10:25:00+00:00",
+        "manual_inverter_hold": False,
+        "manual_inverter_target": "automatic",
+        "manual_inverter_status": "automatic",
+        "manual_inverter_power_kw": None,
+        "manual_inverter_command_confirmed": False,
     }
     assert model.cost.sensor_attributes() == {
         "gross_cost": 3.456,
@@ -696,6 +701,11 @@ def test_status_attributes_preserve_existing_public_values() -> None:
         "learning_max_age_days": 35,
         "learning_sample_limit": 28,
         "learning_sampler_enabled": True,
+        "manual_inverter_hold": False,
+        "manual_inverter_target": "automatic",
+        "manual_inverter_status": "automatic",
+        "manual_inverter_power_kw": None,
+        "manual_inverter_command_confirmed": False,
     }
 
 

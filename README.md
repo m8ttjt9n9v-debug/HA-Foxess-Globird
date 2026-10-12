@@ -83,6 +83,13 @@ current. See the [commissioning checklist](docs/commissioning.md).
 
 ## Current capabilities
 
+- Optional [Fleet manual export controls](docs/fleet-command-controls.md):
+  single-click maximum-rate export and Stop/Self Use across a configured hub
+  and two remote sites. Both leave automatic battery control under a persistent
+  manual hold until explicit Resume; EV policies are unchanged. Disable all
+  competing inverter writers before use. HACS supplies the node services; the
+  optional native-HA command package/dashboard is installed separately.
+
 - Assisted FoxESS Modbus and Tessie entity discovery during setup and
   reconfiguration. Only one unambiguous device cohort is suggested; existing
   valid mappings win, and electrical limits, signs, ownership and write gates

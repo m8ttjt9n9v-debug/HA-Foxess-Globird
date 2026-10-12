@@ -1,3 +1,65 @@
+manual_export_max:
+  name: Export at maximum inverter power
+  description: Hold manual battery control and request the lesser of the commissioned and native discharge maxima until explicitly stopped. Disable competing VPP control first. This is inverter output, not guaranteed grid export.
+  fields:
+    local_control_confirmed:
+      name: Competing cloud/VPP control disabled
+      required: true
+      selector:
+        boolean:
+    entry_id:
+      name: Config entry
+      selector:
+        text:
+    request_id:
+      name: Fleet request identifier
+      selector:
+        text:
+    issued_at:
+      name: Request time (ISO8601 with timezone)
+      selector:
+        text:
+manual_self_use:
+  name: Stop forced export and hold Self Use
+  description: Select Self Use, clear both forced targets and keep automatic battery control paused. EV control is unchanged. Safety Lock and ownership still apply.
+  fields:
+    local_control_confirmed:
+      name: Competing cloud/VPP control disabled
+      selector:
+        boolean:
+    entry_id:
+      name: Config entry
+      selector:
+        text:
+    request_id:
+      name: Fleet request identifier
+      selector:
+        text:
+    issued_at:
+      name: Request time (ISO8601 with timezone)
+      selector:
+        text:
+manual_resume_automatic:
+  name: Resume automatic battery control
+  description: Confirm Self Use with zero forced targets before releasing the manual hold. Restore eligibility of the user's unchanged charge/export requests; no automatic switch is enabled by this action.
+  fields:
+    local_control_confirmed:
+      name: Competing cloud/VPP control disabled
+      required: true
+      selector:
+        boolean:
+    entry_id:
+      name: Config entry
+      selector:
+        text:
+    request_id:
+      name: Fleet request identifier
+      selector:
+        text:
+    issued_at:
+      name: Request time (ISO8601 with timezone)
+      selector:
+        text:
 test_force_charge:
   name: Start force-charge test
   description: Start a bounded force-charge commissioning test. The integration refuses this outside the free-charge window.

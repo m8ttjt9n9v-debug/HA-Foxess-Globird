@@ -100,6 +100,15 @@ class ControlConformanceSupervisor:
     def _battery_observation(self) -> SupervisionObservation:
         controller = getattr(self.coordinator, "active_controller", None)
         manual = getattr(self.coordinator, "manual_test", None)
+        handoff = getattr(controller, "manual", None)
+        if handoff is not None and handoff.is_active:
+            return SupervisionObservation(
+                None,
+                handoff.target,
+                handoff.status,
+                False,
+                "Manual battery control owns the inverter; automatic repair is paused",
+            )
         if (
             controller is None
             or controller.gate_status != "ready"

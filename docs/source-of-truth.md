@@ -34,6 +34,27 @@ layers around the proven algorithm, not replacement algorithms.
 
 ## Current software truth
 
+- Explicit manual battery services can take a persistent operator hold from
+  HEO's automatic and diagnostic inverter controllers. Export requests the
+  smaller commissioned/native discharge maximum until Stop, subject to native
+  inverter/BMS protections. It does not reserve the
+  ordinary house/EV budget. Stop selects Self Use and clears both forced
+  targets, retaining the hold until a separate Resume confirms Self Use and
+  releases it. Saved automatic switches and EV control remain unchanged.
+  Safety Lock, commissioned Local Modbus ownership, sign verification and
+  actuator gates are never bypassed. New/reasserted positive export additionally
+  requires current battery-power telemetry and valid SoC above the configured
+  floor. This is an admission gate, not a software cutoff for an already
+  accepted indefinite export. Reducing cleanup does not
+  require a working energy ledger. A private versioned journal, per-command
+  generation and shared inverter lock prevent stale starts/restores from
+  superseding Stop. An unreadable journal fails closed. The optional native-HA
+  Fleet package dispatches these services in parallel using fixed authenticated
+  backend origins, with no startup replay. Its default-off operator
+  acknowledgement is not proof that an external writer is disabled. Mapped
+  command feedback is not a physical-export or payment guarantee. See
+  [Fleet command controls](fleet-command-controls.md).
+
 - Persisted energy meters immediately checkpoint a positive-flow-to-zero
   transition. Energy-delta write thresholds may reduce routine storage writes,
   but must never leave a positive import/export anchor behind after the

@@ -3,6 +3,14 @@
 HACS installs HEO code only. It does not install device integrations, create a
 dashboard, commission electrical limits, or migrate personal entity mappings.
 
+The optional [Fleet command package](fleet-command-controls.md) needs a tested
+manual-control HEO version on every target, commissioned exclusive Local
+Modbus ownership, and a native-HA hub with backend Authorization secrets for
+its fixed remote origins. It sends no commands during installation. Existing
+VPP/cloud or other inverter writers must be disabled before operator use;
+acknowledgement cannot verify or disable them. Home Assistant restarts for code
+installation require the deployment-specific safe-session checks.
+
 ## Required for the retained feature set
 
 - A supported Home Assistant installation and HACS custom-repository access.

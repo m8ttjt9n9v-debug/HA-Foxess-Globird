@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.12.29rc17 — Fleet manual export controls
+
+- Add operator services for maximum-rate export, Self Use, and explicit resume
+  of automatic battery control. Export uses the smaller commissioned/native
+  discharge maximum and continues until Stop, subject to inverter protections.
+  Export and Stop persist a manual hold across restart; Stop clears both forced
+  targets. Resume does not enable any previously disabled automatic policy.
+- Serialize manual, automatic and diagnostic inverter writes. Persist command
+  generations and remote request ordering so Stop supersedes delayed Export;
+  reject stale positive requests. Preserve Safety Lock, local ownership,
+  commissioning, battery-floor, telemetry and actuator capability gates.
+- Add an optional native-HA Fleet package and three-site dashboard example
+  with single-click Export all and Stop all controls, parallel per-site
+  dispatch, correlated results, and a separate Resume utility. Credentials
+  remain backend-only. A default-off acknowledgement requires competing VPP
+  and other inverter writers disabled; installation sends no device command.
+- EV control and settings are unchanged. Native command confirmation is not
+  proof of physical grid export or retailer payment. See the Fleet guide for
+  failure handling and the required safe downgrade procedure.
+- This candidate contains only Fleet manual-control work; the independent
+  critical-event and trip-scheduling work remains unreleased.
+
 ## 0.12.29rc16 — Ready-by EV surplus backfill
 
 - Add **Backfill timing** to EV charging policies. **Ready by** is the new

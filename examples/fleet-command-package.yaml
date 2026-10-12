@@ -1,0 +1,297 @@
+# Optional native Home Assistant Fleet command package.
+# Requires the HEO manual-control services on every target; HACS does not install this package.
+# Replace the two fixed .invalid origins and !secret references privately on the hub.
+# Secret values are complete Authorization header values (Bearer plus token).
+# See docs/fleet-command-controls.md before installing. No device commands run on startup.
+input_boolean:
+  heo_fleet_local_control_confirmed:
+    name: Competing inverter writers disabled on every Fleet site
+    icon: mdi:shield-check
+    initial: false
+input_text:
+  heo_fleet_request_id:
+    name: Fleet current request
+    max: 100
+    initial: ''
+  heo_fleet_local_result:
+    name: Local site command result
+    max: 255
+    initial: No command in this hub session
+  heo_fleet_bravo_result:
+    name: Remote site 1 command result
+    max: 255
+    initial: No command in this hub session
+  heo_fleet_charlie_result:
+    name: Remote site 2 command result
+    max: 255
+    initial: No command in this hub session
+rest_command:
+  heo_fleet_bravo:
+    url: http://site-bravo.invalid:8123/api/services/home_energy_orchestrator/{{ operation if operation
+      in ['manual_export_max', 'manual_self_use', 'manual_resume_automatic'] else 'unsupported_command'
+      }}?return_response
+    method: post
+    headers:
+      Authorization: !secret 'fleet_site_bravo_authorization'
+    content_type: application/json
+    payload: |
+      {% set payload = {'local_control_confirmed': local_control_confirmed,
+                        'request_id': request_id, 'issued_at': issued_at} %}
+      {% if entry_id %}{% set payload = dict(payload, entry_id=entry_id) %}{% endif %}
+      {{ payload | to_json }}
+    timeout: 15
+  heo_fleet_charlie:
+    url: http://site-charlie.invalid:8123/api/services/home_energy_orchestrator/{{ operation if operation
+      in ['manual_export_max', 'manual_self_use', 'manual_resume_automatic'] else 'unsupported_command'
+      }}?return_response
+    method: post
+    headers:
+      Authorization: !secret 'fleet_site_charlie_authorization'
+    content_type: application/json
+    payload: |
+      {% set payload = {'local_control_confirmed': local_control_confirmed,
+                        'request_id': request_id, 'issued_at': issued_at} %}
+      {% if entry_id %}{% set payload = dict(payload, entry_id=entry_id) %}{% endif %}
+      {{ payload | to_json }}
+    timeout: 15
+script:
+  heo_fleet_command:
+    alias: HEO Fleet command
+    description: One request per site; Stop supersedes the previous hub dispatch.
+    mode: restart
+    fields:
+      command:
+        name: Command
+        required: true
+        selector:
+          select:
+            options:
+            - manual_export_max
+            - manual_self_use
+            - manual_resume_automatic
+    sequence:
+    - condition: template
+      value_template: '{{ command in [''manual_export_max'', ''manual_self_use'', ''manual_resume_automatic'']
+        }}'
+    - variables:
+        issued_at: '{{ now().isoformat() }}'
+        request_id: '{{ issued_at ~ ''-'' ~ context.id }}'
+        expected_target: '{{ {''manual_export_max'': ''export_max'', ''manual_self_use'': ''self_use'',
+          ''manual_resume_automatic'': ''automatic''}[command] }}'
+        local_control_confirmed: '{{ is_state(''input_boolean.heo_fleet_local_control_confirmed'', ''on'')
+          }}'
+    - action: input_text.set_value
+      target:
+        entity_id: input_text.heo_fleet_request_id
+      data:
+        value: '{{ request_id }}'
+    - parallel:
+      - sequence:
+        - variables:
+            reply: {}
+        - if:
+          - condition: template
+            value_template: '{{ command == ''manual_self_use'' or local_control_confirmed }}'
+          then:
+          - condition: template
+            value_template: '{{ states(''input_text.heo_fleet_request_id'') == request_id }}'
+          - action: input_text.set_value
+            target:
+              entity_id: input_text.heo_fleet_local_result
+            data:
+              value: '{{ ''Sending: '' ~ expected_target }}'
+            continue_on_error: true
+          - action: home_energy_orchestrator.{{ command }}
+            data:
+              local_control_confirmed: '{{ local_control_confirmed }}'
+              request_id: '{{ request_id }}'
+              issued_at: '{{ issued_at }}'
+            response_variable: reply
+            continue_on_error: true
+          - variables:
+              message: |
+                {% set response = reply %}
+                {% if response is not mapping or response.get('accepted') is not boolean
+                      or response.get('command_confirmed') is not boolean
+                      or response.get('hold') is not boolean or response.get('generation') is not integer
+                      or response.get('status') is not string or response.get('target') is not string
+                      or 'power_kw' not in response
+                      or (response.get('power_kw') is not none and response.get('power_kw') is not number) %}
+                  Unknown: no valid HEO response; check site before retrying Export
+                {% elif response.get('request_id') != request_id %}
+                  Unknown: response request mismatch; check site before retrying Export
+                {% elif not response.get('accepted') %}
+                  Rejected: {{ response.get('status') }}
+                {% elif response.get('target') != expected_target %}
+                  Unknown: response target mismatch; check site before retrying Export
+                {% elif response.get('command_confirmed') %}
+                  Command confirmed: {{ response.get('status') }}{% if response.get('power_kw') is not none %}
+                  · {{ response.get('power_kw') }} kW{% endif %} · generation {{ response.get('generation') }}
+                {% else %}
+                  Pending/blocked: {{ response.get('status') }} · generation {{ response.get('generation') }}
+                {% endif %}
+          - condition: template
+            value_template: '{{ states(''input_text.heo_fleet_request_id'') == request_id }}'
+          - action: input_text.set_value
+            target:
+              entity_id: input_text.heo_fleet_local_result
+            data:
+              value: |-
+                {{ (message | trim | replace('
+                ', ' '))[:255] }}
+            continue_on_error: true
+          else:
+          - condition: template
+            value_template: '{{ states(''input_text.heo_fleet_request_id'') == request_id }}'
+          - action: input_text.set_value
+            target:
+              entity_id: input_text.heo_fleet_local_result
+            data:
+              value: 'Rejected: confirm competing inverter writers are disabled'
+            continue_on_error: true
+      - sequence:
+        - variables:
+            reply: {}
+        - if:
+          - condition: template
+            value_template: '{{ command == ''manual_self_use'' or local_control_confirmed }}'
+          then:
+          - condition: template
+            value_template: '{{ states(''input_text.heo_fleet_request_id'') == request_id }}'
+          - action: input_text.set_value
+            target:
+              entity_id: input_text.heo_fleet_bravo_result
+            data:
+              value: '{{ ''Sending: '' ~ expected_target }}'
+            continue_on_error: true
+          - action: rest_command.heo_fleet_bravo
+            data:
+              local_control_confirmed: '{{ local_control_confirmed }}'
+              request_id: '{{ request_id }}'
+              issued_at: '{{ issued_at }}'
+              operation: '{{ command }}'
+              entry_id: ''
+            response_variable: reply
+            continue_on_error: true
+          - variables:
+              message: |
+                {% if reply is not mapping or reply.get('status') != 200 %}
+                  {{ 'Unknown: HTTP ' ~ reply.get('status') ~ '; check site before retrying Export'
+                     if reply is mapping and reply.get('status') else
+                     'Unknown: no API response; check site before retrying Export' }}
+                {% elif reply.get('content') is not mapping %}
+                  Unknown: invalid API response; check site before retrying Export
+                {% else %}
+                {% set response = reply.get('content', {}).get('service_response') %}
+                {% if response is not mapping or response.get('accepted') is not boolean
+                      or response.get('command_confirmed') is not boolean
+                      or response.get('hold') is not boolean or response.get('generation') is not integer
+                      or response.get('status') is not string or response.get('target') is not string
+                      or 'power_kw' not in response
+                      or (response.get('power_kw') is not none and response.get('power_kw') is not number) %}
+                  Unknown: no valid HEO response; check site before retrying Export
+                {% elif response.get('request_id') != request_id %}
+                  Unknown: response request mismatch; check site before retrying Export
+                {% elif not response.get('accepted') %}
+                  Rejected: {{ response.get('status') }}
+                {% elif response.get('target') != expected_target %}
+                  Unknown: response target mismatch; check site before retrying Export
+                {% elif response.get('command_confirmed') %}
+                  Command confirmed: {{ response.get('status') }}{% if response.get('power_kw') is not none %}
+                  · {{ response.get('power_kw') }} kW{% endif %} · generation {{ response.get('generation') }}
+                {% else %}
+                  Pending/blocked: {{ response.get('status') }} · generation {{ response.get('generation') }}
+                {% endif %}
+                {% endif %}
+          - condition: template
+            value_template: '{{ states(''input_text.heo_fleet_request_id'') == request_id }}'
+          - action: input_text.set_value
+            target:
+              entity_id: input_text.heo_fleet_bravo_result
+            data:
+              value: |-
+                {{ (message | trim | replace('
+                ', ' '))[:255] }}
+            continue_on_error: true
+          else:
+          - condition: template
+            value_template: '{{ states(''input_text.heo_fleet_request_id'') == request_id }}'
+          - action: input_text.set_value
+            target:
+              entity_id: input_text.heo_fleet_bravo_result
+            data:
+              value: 'Rejected: confirm competing inverter writers are disabled'
+            continue_on_error: true
+      - sequence:
+        - variables:
+            reply: {}
+        - if:
+          - condition: template
+            value_template: '{{ command == ''manual_self_use'' or local_control_confirmed }}'
+          then:
+          - condition: template
+            value_template: '{{ states(''input_text.heo_fleet_request_id'') == request_id }}'
+          - action: input_text.set_value
+            target:
+              entity_id: input_text.heo_fleet_charlie_result
+            data:
+              value: '{{ ''Sending: '' ~ expected_target }}'
+            continue_on_error: true
+          - action: rest_command.heo_fleet_charlie
+            data:
+              local_control_confirmed: '{{ local_control_confirmed }}'
+              request_id: '{{ request_id }}'
+              issued_at: '{{ issued_at }}'
+              operation: '{{ command }}'
+              entry_id: ''
+            response_variable: reply
+            continue_on_error: true
+          - variables:
+              message: |
+                {% if reply is not mapping or reply.get('status') != 200 %}
+                  {{ 'Unknown: HTTP ' ~ reply.get('status') ~ '; check site before retrying Export'
+                     if reply is mapping and reply.get('status') else
+                     'Unknown: no API response; check site before retrying Export' }}
+                {% elif reply.get('content') is not mapping %}
+                  Unknown: invalid API response; check site before retrying Export
+                {% else %}
+                {% set response = reply.get('content', {}).get('service_response') %}
+                {% if response is not mapping or response.get('accepted') is not boolean
+                      or response.get('command_confirmed') is not boolean
+                      or response.get('hold') is not boolean or response.get('generation') is not integer
+                      or response.get('status') is not string or response.get('target') is not string
+                      or 'power_kw' not in response
+                      or (response.get('power_kw') is not none and response.get('power_kw') is not number) %}
+                  Unknown: no valid HEO response; check site before retrying Export
+                {% elif response.get('request_id') != request_id %}
+                  Unknown: response request mismatch; check site before retrying Export
+                {% elif not response.get('accepted') %}
+                  Rejected: {{ response.get('status') }}
+                {% elif response.get('target') != expected_target %}
+                  Unknown: response target mismatch; check site before retrying Export
+                {% elif response.get('command_confirmed') %}
+                  Command confirmed: {{ response.get('status') }}{% if response.get('power_kw') is not none %}
+                  · {{ response.get('power_kw') }} kW{% endif %} · generation {{ response.get('generation') }}
+                {% else %}
+                  Pending/blocked: {{ response.get('status') }} · generation {{ response.get('generation') }}
+                {% endif %}
+                {% endif %}
+          - condition: template
+            value_template: '{{ states(''input_text.heo_fleet_request_id'') == request_id }}'
+          - action: input_text.set_value
+            target:
+              entity_id: input_text.heo_fleet_charlie_result
+            data:
+              value: |-
+                {{ (message | trim | replace('
+                ', ' '))[:255] }}
+            continue_on_error: true
+          else:
+          - condition: template
+            value_template: '{{ states(''input_text.heo_fleet_request_id'') == request_id }}'
+          - action: input_text.set_value
+            target:
+              entity_id: input_text.heo_fleet_charlie_result
+            data:
+              value: 'Rejected: confirm competing inverter writers are disabled'
+            continue_on_error: true

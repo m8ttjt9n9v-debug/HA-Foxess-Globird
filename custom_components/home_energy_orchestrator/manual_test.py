@@ -8,7 +8,9 @@ always restores Self Use when the timer expires or the integration unloads.
 
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime, timedelta
+from functools import partial
 from math import isfinite
 
 from homeassistant.core import HomeAssistant
@@ -78,6 +80,10 @@ class ManualTestController:
         self._cancel_timer = None
         self._cancel_restore = None
         self._adapter: FoxessServiceAdapter | None = None
+        self._generation = 0
+        self._write_generation: int | None = None
+        self._hardware_lock = asyncio.Lock()
+        self._save_lock = asyncio.Lock()
         self._store: Store[dict[str, object]] = Store(
             hass,
             1,
@@ -240,6 +246,8 @@ class ManualTestController:
             charge_power_max_kw=self._limit(CONF_INVERTER_CHARGE_LIMIT_KW),
             discharge_power_max_kw=self._limit(CONF_INVERTER_DISCHARGE_LIMIT_KW),
         )
+        self._generation += 1
+        generation = self._generation
         self.active_kind = kind
         self.phase = "starting"
         self.started_at = now
@@ -247,21 +255,68 @@ class ManualTestController:
         self.restore_attempts = 0
         self.last_restore_at = None
         self.last_reason = f"starting_{kind}"
-        await self._async_save()
         try:
-            await adapter.async_execute(plan)
+            await self._async_save()
+            async with self._shared_hardware_lock():
+                if generation != self._generation or not self.is_active:
+                    return
+                self._write_generation = generation
+                await adapter.async_execute(plan)
+            if generation != self._generation or not self.is_active:
+                return
+            self.phase = "running"
+            self.last_reason = f"started_{kind}"
+            await self._async_save()
+            if generation != self._generation or not self.is_active:
+                return
+            self._cancel_timer = async_call_later(
+                self.hass,
+                duration * 60,
+                partial(self._async_expire, generation=generation),
+            )
+            self.coordinator.async_update_listeners()
+        except asyncio.CancelledError:
+            await self._async_cancel_start(generation)
+            raise
         except Exception:
+            if generation != self._generation:
+                return
             # Latch the test so the automatic controller cannot race a
             # partially accepted request; the stop action remains available.
             self.last_reason = f"start_{kind}_failed"
             self.coordinator.async_update_listeners()
             raise
-        self.phase = "running"
-        self.last_reason = f"started_{kind}"
-        await self._async_save()
-        self._cancel_timer = async_call_later(
-            self.hass, duration * 60, self._async_expire
-        )
+
+    async def _async_cancel_start(self, generation: int) -> None:
+        """Retain reducing cleanup after cancellation, without reviving old intent."""
+        if generation != self._generation or not self.is_active:
+            return
+        self._generation += 1
+        cleanup_generation = self._generation
+        self._cancel_callbacks()
+        self.phase = "stopping"
+        self.last_reason = "cancelled_start_restore_pending"
+        checkpoint = asyncio.create_task(self._async_save())
+        while not checkpoint.done():
+            try:
+                # wait() shields the child from caller cancellation without
+                # creating a cancelled shield future that logs a later I/O
+                # exception before the cleanup path can consume it.
+                await asyncio.wait({checkpoint})
+            except asyncio.CancelledError:
+                # A repeated cancellation cannot erase the accepted command's
+                # cleanup ticket or let a previous snapshot finish after it.
+                continue
+            except Exception:
+                break
+        try:
+            checkpoint.result()
+        except Exception:
+            if cleanup_generation == self._generation and self.is_active:
+                self.last_reason = "cancelled_start_restore_storage_failed"
+        if cleanup_generation != self._generation or not self.is_active:
+            return
+        self._schedule_restore("cancelled_start", generation=cleanup_generation)
         self.coordinator.async_update_listeners()
 
     async def async_stop(self, reason: str = "stopped_by_user") -> None:
@@ -270,6 +325,7 @@ class ManualTestController:
             self.last_reason = reason
             self.coordinator.async_update_listeners()
             return
+        self._generation += 1
         if self.phase == "restore_failed":
             self.restore_attempts = 0
             self.last_restore_at = None
@@ -281,19 +337,20 @@ class ManualTestController:
         await self._async_save()
         await self._async_reconcile_restore(reason)
 
-    async def _async_reconcile_restore(
-        self, reason: str, *, schedule_retry: bool = True
-    ) -> None:
+    async def _async_reconcile_restore(self, reason: str, *, schedule_retry: bool = True) -> None:
         """Confirm restoration or issue one bounded retry."""
         if not self.is_active:
             return
+        generation = self._generation
         if blocked_reason := self._restore_gate_reason():
             self.phase = "stopping"
             self.last_reason = blocked_reason
             await self._async_save()
+            if generation != self._generation or not self.is_active:
+                return
             self.coordinator.async_update_listeners()
             if schedule_retry:
-                self._schedule_restore(reason)
+                self._schedule_restore(reason, generation=generation)
             return
         try:
             observation = self._observation()
@@ -321,7 +378,8 @@ class ManualTestController:
                 ),
             )
             if not plan.commands:
-                await self._async_clear(reason)
+                if generation == self._generation:
+                    await self._async_clear(reason)
                 return
         if self.restore_attempts >= self.MAX_RESTORE_ATTEMPTS:
             self.phase = "restore_failed"
@@ -335,17 +393,27 @@ class ManualTestController:
         self.last_reason = f"{reason}_attempt_{self.restore_attempts}"
         await self._async_save()
         try:
-            await self._get_adapter().async_execute(plan)
+            async with self._shared_hardware_lock():
+                if generation != self._generation or not self.is_active:
+                    return
+                self._write_generation = generation
+                await self._get_adapter().async_execute(plan)
         except Exception:
+            if generation != self._generation:
+                return
             self.last_reason = f"{reason}_attempt_failed"
             await self._async_save()
+            if generation != self._generation or not self.is_active:
+                return
             self.coordinator.async_update_listeners()
             if schedule_retry:
-                self._schedule_restore(reason)
+                self._schedule_restore(reason, generation=generation)
             raise
+        if generation != self._generation:
+            return
         self.coordinator.async_update_listeners()
         if schedule_retry:
-            self._schedule_restore(reason)
+            self._schedule_restore(reason, generation=generation)
 
     async def _async_clear(self, reason: str) -> None:
         self._cancel_callbacks()
@@ -359,16 +427,23 @@ class ManualTestController:
         await self._async_save()
         self.coordinator.async_update_listeners()
 
-    def _schedule_restore(self, reason: str) -> None:
+    def _schedule_restore(self, reason: str, *, generation: int | None = None) -> None:
+        generation = self._generation if generation is None else generation
+        if generation != self._generation or not self.is_active:
+            return
         if self._cancel_restore is not None:
             self._cancel_restore()
         self._cancel_restore = async_call_later(
             self.hass,
             self.RESTORE_RETRY_SECONDS,
-            lambda _now: self._async_retry_restore(reason),
+            partial(self._async_retry_restore, reason, generation=generation),
         )
 
-    async def _async_retry_restore(self, reason: str) -> None:
+    async def _async_retry_restore(
+        self, reason: str, _now=None, *, generation: int | None = None
+    ) -> None:
+        if generation is not None and generation != self._generation:
+            return
         self._cancel_restore = None
         try:
             await self._async_reconcile_restore(reason)
@@ -383,7 +458,9 @@ class ManualTestController:
             self._cancel_restore()
             self._cancel_restore = None
 
-    async def _async_expire(self, _now) -> None:
+    async def _async_expire(self, _now, *, generation: int | None = None) -> None:
+        if generation is not None and generation != self._generation:
+            return
         try:
             await self.async_stop("timer_expired")
         except Exception:  # pragma: no cover - surfaced in HA logs
@@ -417,16 +494,52 @@ class ManualTestController:
         self.storage_status = "valid"
 
     async def _async_save(self) -> None:
-        await self._repository.async_save(
-            ManualTestPersistenceState(
-                active_kind=self.active_kind,
-                phase=self.phase,
-                started_at=self.started_at,
-                ends_at=self.ends_at,
-                restore_attempts=self.restore_attempts,
-                last_restore_at=self.last_restore_at,
+        async with self._save_lock:
+            checkpoint = asyncio.create_task(
+                self._repository.async_save(
+                    ManualTestPersistenceState(
+                        active_kind=self.active_kind,
+                        phase=self.phase,
+                        started_at=self.started_at,
+                        ends_at=self.ends_at,
+                        restore_attempts=self.restore_attempts,
+                        last_restore_at=self.last_restore_at,
+                    )
+                )
             )
-        )
+            cancelled = False
+            while not checkpoint.done():
+                try:
+                    # wait() never propagates waiter cancellation into the
+                    # underlying Store task; keep the lock until it finishes.
+                    await asyncio.wait({checkpoint})
+                except asyncio.CancelledError:
+                    # Keep serialization until the underlying storage write
+                    # finishes; a cleanup/handoff must be the later snapshot.
+                    cancelled = True
+            try:
+                checkpoint.result()
+            except Exception as error:
+                if cancelled:
+                    raise asyncio.CancelledError from error
+                raise
+            if cancelled:
+                raise asyncio.CancelledError
+
+    def _shared_hardware_lock(self):
+        automatic = getattr(self.coordinator, "active_controller", None)
+        return getattr(automatic, "_reconcile_lock", self._hardware_lock)
+
+    async def async_relinquish_for_manual(self) -> None:
+        """Cancel diagnostic intent under an operator hold, without any restore write."""
+        self._generation += 1
+        self._cancel_callbacks()
+        self.active_kind = None
+        self.phase = "idle"
+        self.started_at = self.ends_at = self.last_restore_at = None
+        self.restore_attempts = 0
+        self.last_reason = "manual_inverter_handoff"
+        await self._async_save()
 
     def _require_gate(self) -> None:
         runtime = self.coordinator.runtime_config
@@ -441,6 +554,9 @@ class ManualTestController:
         if self.coordinator.snapshot is None or self.coordinator.data is None:
             raise ManualTestError("live telemetry is unavailable")
         automatic = getattr(self.coordinator, "active_controller", None)
+        handoff = getattr(automatic, "manual", None)
+        if handoff is not None and handoff.is_active:
+            raise ManualTestError("resume automatic battery control before a diagnostic test")
         if automatic is not None and any(
             session.phase != "idle"
             for session in (automatic.charge_session, automatic.export_session)
@@ -452,6 +568,10 @@ class ManualTestController:
     def _restore_gate_reason(self) -> str | None:
         """Return the no-write reason for a persisted restoration obligation."""
         runtime = self.coordinator.runtime_config
+        automatic = getattr(self.coordinator, "active_controller", None)
+        handoff = getattr(automatic, "manual", None)
+        if handoff is not None and handoff.is_active:
+            return "restore_blocked_manual_inverter_hold"
         if runtime.automation.control_owner != FOXESS_CONTROL_OWNER_MODBUS:
             return "restore_blocked_control_owner"
         if runtime.automation.safety_lock:
@@ -501,9 +621,21 @@ class ManualTestController:
                     inverter.force_discharge_power_entity,
                 ),
                 allow_writes=True,
-                write_guard=lambda: self._restore_gate_reason() is None,
+                write_guard=self._diagnostic_write_authorized,
             )
         return self._adapter
+
+    def _diagnostic_write_authorized(self) -> bool:
+        if not self.is_active or self._write_generation != self._generation:
+            return False
+        if self._restore_gate_reason() is not None:
+            return False
+        inverter = self.coordinator.runtime_config.inverter
+        return self._adapter is not None and self._adapter.entities == FoxessEntityMap(
+            str(inverter.work_mode_entity),
+            str(inverter.force_charge_power_entity),
+            str(inverter.force_discharge_power_entity),
+        )
 
     def _observation(self) -> FoxessObservation:
         inverter = self.coordinator.runtime_config.inverter

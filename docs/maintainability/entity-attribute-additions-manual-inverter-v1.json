@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "extension": "manual_inverter_v1",
+  "entity_count": 0,
+  "entities": [],
+  "attribute_addition_count": 2,
+  "attribute_additions": [
+    {
+      "entity_key": "fleet_summary",
+      "default_entity_id": "sensor.home_energy_fleet_summary",
+      "custom_attributes": [
+        "manual_inverter_command_confirmed",
+        "manual_inverter_hold",
+        "manual_inverter_power_kw",
+        "manual_inverter_status",
+        "manual_inverter_target"
+      ]
+    },
+    {
+      "entity_key": "status",
+      "default_entity_id": "sensor.home_energy_status",
+      "custom_attributes": [
+        "manual_inverter_command_confirmed",
+        "manual_inverter_hold",
+        "manual_inverter_power_kw",
+        "manual_inverter_status",
+        "manual_inverter_target"
+      ]
+    }
+  ]
+}
