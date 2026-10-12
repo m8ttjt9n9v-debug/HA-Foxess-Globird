@@ -369,6 +369,8 @@ def test_site_read_model_projects_existing_sensor_and_fleet_values() -> None:
     }
     assert model.fleet_attributes(updated_at) == {
         "summary_schema_version": 1,
+        "export_authority_source": "zerohero",
+        "export_price_deadline": None,
         "battery_soc": 61.23,
         "battery_power_kw": -3.457,
         "grid_power_kw": -1.235,
@@ -668,6 +670,9 @@ def test_status_attributes_preserve_existing_public_values() -> None:
         "foxess_control_owner": "local_modbus",
         "automatic_export_enabled": True,
         "automatic_export_effective": True,
+        "price_triggered_export_enabled": False,
+        "export_authority_source": "zerohero",
+        "export_price_deadline": None,
         "ev_before_export_status": "target_met",
         "ev_automatic_control_enabled": False,
         "ev_control_gate": "ready",

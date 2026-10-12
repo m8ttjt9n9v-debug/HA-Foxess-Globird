@@ -9,6 +9,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from . import EnergyConfigEntry
+from .aemo_monitor_controls import AemoRegionSelect
 from .const import (
     CONF_HOUSE_OCCUPANCY_MODE,
     HOUSE_OCCUPANCY_MODES,
@@ -23,7 +24,12 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Expose the persistent Auto/Home/Away policy from the pilot."""
-    async_add_entities((HouseOccupancyModeSelect(entry.runtime_data, entry),))
+    async_add_entities(
+        (
+            HouseOccupancyModeSelect(entry.runtime_data, entry),
+            AemoRegionSelect(entry.runtime_data, entry),
+        )
+    )
 
 
 class HouseOccupancyModeSelect(CoordinatorEntity[EnergyCoordinator], SelectEntity):

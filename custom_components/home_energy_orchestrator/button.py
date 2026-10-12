@@ -9,6 +9,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from . import EnergyConfigEntry
+from .aemo_monitor_controls import AemoClearImportThresholdButton
 from .coordinator import EnergyCoordinator
 from .entity_catalogue import BUTTON_DESCRIPTIONS as DESCRIPTIONS
 
@@ -20,6 +21,7 @@ async def async_setup_entry(
     async_add_entities(
         TestButton(entry.runtime_data, entry, description) for description in DESCRIPTIONS
     )
+    async_add_entities((AemoClearImportThresholdButton(entry.runtime_data, entry),))
 
 
 class TestButton(CoordinatorEntity[EnergyCoordinator], ButtonEntity):

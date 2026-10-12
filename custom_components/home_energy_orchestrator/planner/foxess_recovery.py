@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 
 from .charge_session import ChargeSessionState
@@ -42,11 +42,10 @@ def mark_foxess_source_unavailable(
     )
     save_export = export_session.phase != "idle"
     next_export = (
-        ExportSessionState(
-            "recovering",
-            export_session.requested_power_kw,
-            export_session.attempts,
-            export_session.last_command_at or now,
+        replace(
+            export_session,
+            phase="recovering",
+            last_command_at=export_session.last_command_at or now,
         )
         if save_export
         else export_session

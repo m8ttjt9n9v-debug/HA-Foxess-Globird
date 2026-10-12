@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "extension": "price_export_v1",
+  "entity_count": 1,
+  "entities": [
+    {
+      "default_entity_id": "switch.home_energy_critical_event_sell",
+      "device_class": null,
+      "enabled_by_default": true,
+      "entity_category": "config",
+      "key": "critical_event_sell",
+      "name": "Automatic price-triggered export",
+      "platform": "switch",
+      "state_class": null,
+      "translation_key": null,
+      "unique_id_template": "{config_entry_id}_critical_event_sell",
+      "unit": null
+    }
+  ]
+}

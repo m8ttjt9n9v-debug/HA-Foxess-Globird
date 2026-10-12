@@ -2,6 +2,23 @@
 
 Status here describes behavioral parity, not merely the presence of code.
 
+## Optional price export extension
+
+- [x] Add a default-off observer of exact current actual AEMO DispatchIS prices,
+  explicit region and configurable export threshold; keep price observation
+  distinct from a retailer event declaration or payment confirmation.
+- [x] Add a separate default-off request around the existing export controller
+  and protected Sellable calculation. Share the measured all-day export budget,
+  persist source/deadline/original-actuator authority in the existing session,
+  and preserve ordinary ZEROHERO latch semantics and manual priority.
+- [x] Cover price expiry during command staging, protected-energy/cap loss,
+  partial feedback failure, progressive cleanup, Store failure, cancellation,
+  stale deadline callbacks, startup/reload, changed mapping and manual Stop.
+  Keep the frozen legacy identity and persistence contracts unchanged through
+  explicit append-only extensions.
+- [ ] Publish and perform controlled pilot acceptance before any remote rollout.
+  No retailer reward claim or critical-event buy control is included.
+
 ## Operator extension — Fleet manual export
 
 - [x] Add persistent manual Export maximum, Stop/Self Use and Resume services

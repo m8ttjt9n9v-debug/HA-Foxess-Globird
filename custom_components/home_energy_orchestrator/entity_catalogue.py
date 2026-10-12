@@ -7,7 +7,7 @@ from typing import Literal
 
 from homeassistant.components.binary_sensor import BinarySensorEntityDescription
 from homeassistant.components.button import ButtonEntityDescription
-from homeassistant.components.number import NumberEntityDescription
+from homeassistant.components.number import NumberEntityDescription, NumberMode
 from homeassistant.components.select import SelectEntityDescription
 from homeassistant.components.sensor import SensorEntityDescription
 from homeassistant.components.switch import SwitchEntityDescription
@@ -28,7 +28,13 @@ EntityPlatform = Literal[
     "sensor",
     "switch",
 ]
-AvailabilityRule = Literal["coordinator", "coordinator_and_projection"]
+AvailabilityRule = Literal[
+    "coordinator",
+    "coordinator_and_projection",
+    "monitor_status",
+    "current_market_price",
+    "market_configuration",
+]
 
 
 @dataclass(frozen=True, slots=True)
@@ -745,6 +751,82 @@ SIGN_CONVENTIONS_DESCRIPTION = BinarySensorEntityDescription(
     entity_category=EntityCategory.DIAGNOSTIC,
 )
 
+AEMO_SENSOR_DESCRIPTIONS = (
+    SensorEntityDescription(
+        key="aemo_market_status",
+        name="AEMO Price Monitor",
+        icon="mdi:chart-timeline-variant",
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    SensorEntityDescription(
+        key="aemo_spot_price",
+        name="AEMO Current Wholesale Price",
+        native_unit_of_measurement="AUD/kWh",
+        suggested_display_precision=4,
+        icon="mdi:currency-usd",
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+)
+AEMO_SWITCH_DESCRIPTION = SwitchEntityDescription(
+    key="aemo_monitor",
+    name="AEMO Price Monitoring",
+    icon="mdi:chart-timeline-variant",
+    entity_category=EntityCategory.CONFIG,
+)
+AEMO_REGION_DESCRIPTION = SelectEntityDescription(
+    key="aemo_region",
+    name="AEMO Market Region",
+    icon="mdi:map-marker-outline",
+    options=["Not configured", "NSW1", "QLD1", "VIC1", "SA1", "TAS1"],
+    entity_category=EntityCategory.CONFIG,
+)
+AEMO_THRESHOLD_DESCRIPTIONS = (
+    NumberEntityDescription(
+        key="aemo_export_threshold",
+        name="AEMO Export Price Threshold",
+        icon="mdi:transmission-tower-export",
+        native_unit_of_measurement="AUD/kWh",
+        native_min_value=0.001,
+        native_max_value=100.0,
+        native_step=0.001,
+        mode=NumberMode.BOX,
+        entity_category=EntityCategory.CONFIG,
+    ),
+    NumberEntityDescription(
+        key="aemo_import_threshold",
+        name="AEMO Consumption Observation Threshold",
+        icon="mdi:transmission-tower-import",
+        native_unit_of_measurement="AUD/kWh",
+        native_min_value=-100.0,
+        native_max_value=100.0,
+        native_step=0.001,
+        mode=NumberMode.BOX,
+        entity_category=EntityCategory.CONFIG,
+    ),
+)
+AEMO_CLEAR_IMPORT_DESCRIPTION = ButtonEntityDescription(
+    key="aemo_clear_import_threshold",
+    name="Clear AEMO Consumption Threshold",
+    icon="mdi:eraser",
+    entity_category=EntityCategory.CONFIG,
+)
+PRICE_TRIGGERED_EXPORT_DESCRIPTION = SwitchEntityDescription(
+    key="critical_event_sell",
+    name="Automatic price-triggered export",
+    icon="mdi:transmission-tower-export",
+    entity_category=EntityCategory.CONFIG,
+)
+_AEMO_CONFIGURATION_KEYS = frozenset(
+    {
+        "aemo_monitor",
+        "aemo_region",
+        "aemo_export_threshold",
+        "aemo_import_threshold",
+        "aemo_clear_import_threshold",
+    }
+)
+
+
 _NON_SENSOR_PROJECTIONS = {
     "test_force_charge": "TestButton.async_press",
     "test_force_discharge": "TestButton.async_press",
@@ -763,21 +845,44 @@ _NON_SENSOR_PROJECTIONS = {
     "ev_morning_solar": "EvMorningSolarSwitch.is_on",
     "ev_charge_to_full": "EvChargeToFullSwitch.is_on",
     "sign_conventions_verified": "SignConventionsVerifiedBinarySensor.is_on",
+    "aemo_monitor": "AemoMonitorSwitch.is_on",
+    "aemo_region": "AemoRegionSelect.current_option",
+    "aemo_export_threshold": "AemoThresholdNumber.native_value",
+    "aemo_import_threshold": "AemoThresholdNumber.native_value",
+    "aemo_clear_import_threshold": "AemoClearImportThresholdButton.async_press",
+    "critical_event_sell": "PriceTriggeredExportSwitch.is_on",
 }
 
 
 def _entity_spec(platform: EntityPlatform, description: EntityDescription) -> EntitySpec:
     if platform == "sensor":
-        projection = f"EnergySensor.native_value[{description.key!r}]"
-        availability: AvailabilityRule = "coordinator_and_projection"
+        sensor_class = (
+            "AemoMonitorSensor" if description in AEMO_SENSOR_DESCRIPTIONS else "EnergySensor"
+        )
+        projection = f"{sensor_class}.native_value[{description.key!r}]"
+        availability: AvailabilityRule = (
+            "monitor_status"
+            if description.key == "aemo_market_status"
+            else "current_market_price"
+            if description.key == "aemo_spot_price"
+            else "coordinator_and_projection"
+        )
     else:
         projection = _NON_SENSOR_PROJECTIONS[description.key]
-        availability = "coordinator"
+        availability = (
+            "market_configuration" if description.key in _AEMO_CONFIGURATION_KEYS else "coordinator"
+        )
     return EntitySpec(platform, description, projection, availability)
 
 
 ENTITY_SPECS = (
     *(_entity_spec("sensor", description) for description in SENSOR_DESCRIPTIONS),
+    *(_entity_spec("sensor", description) for description in AEMO_SENSOR_DESCRIPTIONS),
+    _entity_spec("switch", AEMO_SWITCH_DESCRIPTION),
+    _entity_spec("select", AEMO_REGION_DESCRIPTION),
+    *(_entity_spec("number", description) for description in AEMO_THRESHOLD_DESCRIPTIONS),
+    _entity_spec("button", AEMO_CLEAR_IMPORT_DESCRIPTION),
+    _entity_spec("switch", PRICE_TRIGGERED_EXPORT_DESCRIPTION),
     *(_entity_spec("button", description) for description in BUTTON_DESCRIPTIONS),
     *(_entity_spec("number", description) for description in NUMBER_DESCRIPTIONS),
     _entity_spec("number", EV_BEFORE_EXPORT_TARGET_DESCRIPTION),

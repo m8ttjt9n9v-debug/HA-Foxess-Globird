@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "extension": "price_export_v1",
+  "store": "export_session",
+  "retained_fields": ["phase", "requested_power_kw", "attempts", "last_command_at"],
+  "additional_fields": ["authority_source", "price_deadline", "price_actuator_entities"],
+  "legacy_defaults": {
+    "authority_source": "zerohero",
+    "price_deadline": null,
+    "price_actuator_entities": null
+  },
+  "ordinary_zerohero_payload_unchanged": true,
+  "price_authority_values": ["zerohero", "price"],
+  "price_deadline_encoding": "aware ISO timestamp",
+  "price_actuator_entities_encoding": "Three original mapped entity IDs as a JSON list",
+  "new_store_required": false
+}

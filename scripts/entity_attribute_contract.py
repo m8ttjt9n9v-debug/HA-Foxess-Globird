@@ -29,6 +29,15 @@ MANUAL_ADDITIONS_PATH = (
     / "maintainability"
     / "entity-attribute-additions-manual-inverter-v1.json"
 )
+AEMO_ADDITIONS_PATH = (
+    REPOSITORY_ROOT / "docs" / "maintainability" / "entity-attribute-additions-aemo-monitor-v1.json"
+)
+PRICE_ADDITIONS_PATH = (
+    REPOSITORY_ROOT / "docs" / "maintainability" / "entity-attribute-additions-price-export-v1.json"
+)
+AEMO_MONITOR_SOURCE = (
+    REPOSITORY_ROOT / "custom_components" / "home_energy_orchestrator" / "aemo_monitor.py"
+)
 
 _TELEMETRY_KEYS = (
     "battery_power",
@@ -154,6 +163,19 @@ def build_entity_attribute_contract() -> dict[str, Any]:
             _record("status", status),
         )
     )
+    monitor_tree = ast.parse(AEMO_MONITOR_SOURCE.read_text(encoding="utf-8"))
+    observations = _dict_return_keys(_method(monitor_tree, "AemoMonitorResult", "attributes"))
+    if len(observations) != 1:
+        raise ValueError("AEMO observations must have one literal attribute mapping")
+    monitor_groups = _dict_return_keys(
+        _method(monitor_tree, "AemoMarketMonitor", "result_attributes"),
+        {"self.current_result.attributes()": observations[0]},
+    )
+    if len(monitor_groups) != 1:
+        raise ValueError("AEMO monitor must have one expanded attribute mapping")
+    records.extend(
+        _record(key, monitor_groups[0]) for key in ("aemo_market_status", "aemo_spot_price")
+    )
     records.sort(key=lambda item: item["entity_key"])
 
     known_entities = {
@@ -184,7 +206,7 @@ def validate_against_release_baseline() -> None:
     baseline = json.loads(BASELINE_PATH.read_text(encoding="utf-8"))
     additions = [
         json.loads(path.read_text(encoding="utf-8"))
-        for path in (MANUAL_ADDITIONS_PATH,)
+        for path in (MANUAL_ADDITIONS_PATH, AEMO_ADDITIONS_PATH, PRICE_ADDITIONS_PATH)
     ]
     for extension in additions:
         if extension.get("schema_version") != baseline.get("schema_version"):

@@ -1,0 +1,98 @@
+{
+  "schema_version": 1,
+  "extension": "aemo_monitor_v1",
+  "entity_count": 7,
+  "entities": [
+    {
+      "default_entity_id": "button.home_energy_aemo_clear_import_threshold",
+      "device_class": null,
+      "enabled_by_default": true,
+      "entity_category": "config",
+      "key": "aemo_clear_import_threshold",
+      "name": "Clear AEMO Consumption Threshold",
+      "platform": "button",
+      "state_class": null,
+      "translation_key": null,
+      "unique_id_template": "{config_entry_id}_aemo_clear_import_threshold",
+      "unit": null
+    },
+    {
+      "default_entity_id": "number.home_energy_aemo_export_threshold",
+      "device_class": null,
+      "enabled_by_default": true,
+      "entity_category": "config",
+      "key": "aemo_export_threshold",
+      "name": "AEMO Export Price Threshold",
+      "platform": "number",
+      "state_class": null,
+      "translation_key": null,
+      "unique_id_template": "{config_entry_id}_aemo_export_threshold",
+      "unit": "AUD/kWh"
+    },
+    {
+      "default_entity_id": "number.home_energy_aemo_import_threshold",
+      "device_class": null,
+      "enabled_by_default": true,
+      "entity_category": "config",
+      "key": "aemo_import_threshold",
+      "name": "AEMO Consumption Observation Threshold",
+      "platform": "number",
+      "state_class": null,
+      "translation_key": null,
+      "unique_id_template": "{config_entry_id}_aemo_import_threshold",
+      "unit": "AUD/kWh"
+    },
+    {
+      "default_entity_id": "select.home_energy_aemo_region",
+      "device_class": null,
+      "enabled_by_default": true,
+      "entity_category": "config",
+      "key": "aemo_region",
+      "name": "AEMO Market Region",
+      "platform": "select",
+      "state_class": null,
+      "translation_key": null,
+      "unique_id_template": "{config_entry_id}_aemo_region",
+      "unit": null
+    },
+    {
+      "default_entity_id": "sensor.home_energy_aemo_market_status",
+      "device_class": null,
+      "enabled_by_default": true,
+      "entity_category": "diagnostic",
+      "key": "aemo_market_status",
+      "name": "AEMO Price Monitor",
+      "platform": "sensor",
+      "state_class": null,
+      "translation_key": null,
+      "unique_id_template": "{config_entry_id}_aemo_market_status",
+      "unit": null
+    },
+    {
+      "default_entity_id": "sensor.home_energy_aemo_spot_price",
+      "device_class": null,
+      "enabled_by_default": true,
+      "entity_category": "diagnostic",
+      "key": "aemo_spot_price",
+      "name": "AEMO Current Wholesale Price",
+      "platform": "sensor",
+      "state_class": null,
+      "translation_key": null,
+      "unique_id_template": "{config_entry_id}_aemo_spot_price",
+      "unit": "AUD/kWh"
+    },
+    {
+      "default_entity_id": "switch.home_energy_aemo_monitor",
+      "device_class": null,
+      "enabled_by_default": true,
+      "entity_category": "config",
+      "key": "aemo_monitor",
+      "name": "AEMO Price Monitoring",
+      "platform": "switch",
+      "state_class": null,
+      "translation_key": null,
+      "unique_id_template": "{config_entry_id}_aemo_monitor",
+      "unit": null
+    }
+  ]
+}

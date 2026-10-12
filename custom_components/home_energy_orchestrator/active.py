@@ -12,9 +12,10 @@ import asyncio
 import logging
 from dataclasses import replace
 from datetime import datetime, time, timedelta
+from math import isfinite
 
 from homeassistant.core import CALLBACK_TYPE, HomeAssistant
-from homeassistant.helpers.event import async_track_time_interval
+from homeassistant.helpers.event import async_track_point_in_utc_time, async_track_time_interval
 from homeassistant.util import dt as dt_util
 
 from .const import (
@@ -29,6 +30,7 @@ from .foxess_observation_adapter import (
     capture_foxess_feedback,
 )
 from .manual_inverter import ManualInverterController
+from .models import SiteSnapshot
 from .persistence import create_typed_value_repository
 from .planner.charge_session import ChargeSessionState, advance_charge_session
 from .planner.control_windows import (
@@ -47,6 +49,8 @@ from .planner.export import ExportPlan
 from .planner.export_session import ExportSessionState, advance_export_session
 from .planner.foxess import (
     ControlDecision,
+    FoxessCommand,
+    FoxessCommandPlan,
     FoxessObservation,
     apply_force_mode_command_delays,
     plan_foxess_commands,
@@ -56,11 +60,8 @@ from .planner.foxess_charge_policy import (
     evaluate_foxess_charge_policy,
 )
 from .planner.foxess_export_policy import (
-    FoxessExportPolicyBaseContext,
     FoxessExportPolicyContext,
-    evaluate_automatic_export_remaining,
     evaluate_foxess_export_policy,
-    evaluate_foxess_export_policy_base,
 )
 from .planner.foxess_gate import FoxessGateContext, evaluate_foxess_gate
 from .planner.foxess_ownership import (
@@ -68,6 +69,8 @@ from .planner.foxess_ownership import (
     evaluate_foxess_ownership,
 )
 from .planner.foxess_recovery import mark_foxess_source_unavailable
+from .planner.ledger import calculate_ledger
+from .telemetry_adapter import capture_telemetry_source
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -82,6 +85,13 @@ class ActiveFoxessController:
         self._adapter: FoxessServiceAdapter | None = None
         self._reconcile_lock = asyncio.Lock()
         self._reconcile_stopped = False
+        self._price_unsub = None
+        self._price_task = None
+        self._price_reconcile_requested = False
+        self._price_deadline_unsub = None
+        self._price_deadline_token = 0
+        self._price_write_deadline = None
+        self._price_write_signature = None
         self.writes_performed = 0
         self.last_reason = "automatic_control_disabled"
         self.last_actions: tuple[str, ...] = ()
@@ -146,6 +156,8 @@ class ActiveFoxessController:
         if self._reconcile_stopped:
             return False
         runtime = self.coordinator.runtime_config
+        if not self._price_mapping_matches():
+            return False
         if isinstance(
             self._adapter, FoxessServiceAdapter
         ) and self._adapter.entities != FoxessEntityMap(
@@ -154,10 +166,64 @@ class ActiveFoxessController:
             runtime.inverter.force_discharge_power_entity,
         ):
             return False
-        return (
+        allowed = (
             self.gate_status == "ready"
             and not bool(manual_test is not None and manual_test.is_active)
             and not self.manual.is_active
+        )
+        if not allowed or self._price_write_deadline is None:
+            return allowed
+        now = dt_util.now()
+        if now >= self._price_write_deadline:
+            return False
+        window = self._price_window(now)
+        if window is None or self._price_signature(window) != self._price_write_signature:
+            return False
+        feedback = capture_foxess_feedback(self.hass, self._adapter.entities)
+        try:
+            current = evaluate_foxess_export_policy(self._export_context(feedback, now))
+        except (TypeError, ValueError):
+            return False
+        return (
+            current.eligible
+            and not current.finish_requested
+            and current.price_deadline is not None
+            and self._price_write_deadline <= current.price_deadline
+            and self.export_session.requested_power_kw <= current.discharge_max_kw
+        )
+
+    def _price_mapping_matches(self) -> bool:
+        if self.export_session.authority_source != "price" or self.export_session.phase == "idle":
+            return True
+        inverter = self.coordinator.runtime_config.inverter
+        return self.export_session.price_actuator_entities == (
+            inverter.work_mode_entity,
+            inverter.force_charge_power_entity,
+            inverter.force_discharge_power_entity,
+        )
+
+    def _price_physical_feedback_fresh(self, now: datetime) -> bool:
+        telemetry = getattr(self.coordinator, "telemetry", None)
+        for name in ("grid_power", "battery_power"):
+            sample = getattr(telemetry, name, None)
+            at = getattr(sample, "updated_at", None)
+            if (
+                sample is None
+                or not sample.valid
+                or not sample.fresh
+                or at is None
+                or not 0
+                <= (now - at).total_seconds()
+                <= self.coordinator.runtime_config.telemetry.max_age_seconds
+            ):
+                return False
+        return True
+
+    def _price_cleanup_capable(self, feedback: FoxessFeedbackSnapshot) -> bool:
+        return (
+            "Self Use" in feedback.mode_options
+            and self._price_mapping_matches()
+            and feedback.zero_power_writable
         )
 
     async def async_start(self) -> None:
@@ -166,6 +232,9 @@ class ActiveFoxessController:
         await self.manual.async_restore_handoff()
         await self._async_load_charge_session()
         await self._async_load_export_session()
+        monitor = getattr(self.coordinator, "market_monitor", None)
+        if monitor is not None and self._price_unsub is None:
+            self._price_unsub = monitor.async_add_listener(self._price_changed)
         if self._unsub_interval is None:
             self._unsub_interval = async_track_time_interval(
                 self.hass, self._async_tick, timedelta(seconds=30)
@@ -177,19 +246,250 @@ class ActiveFoxessController:
     async def async_stop(self) -> None:
         """Stop the timer without changing inverter state."""
         self._reconcile_stopped = True
+        if self._price_unsub is not None:
+            self._price_unsub()
+            self._price_unsub = None
+        self._cancel_price_deadline()
         await self.manual.async_unload()
         if self._unsub_interval is not None:
             self._unsub_interval()
             self._unsub_interval = None
         async with self._reconcile_lock:
             pass
-
+        if self._price_task is not None and not self._price_task.done():
+            self._price_task.cancel()
 
     async def _async_tick(self, _now) -> None:
         await self.coordinator.async_request_refresh()
         await self.async_reconcile()
         await self.coordinator.async_update_forecast()
         self.coordinator.async_update_listeners()
+
+    def _price_changed(self) -> None:
+        """Ask the same controller to reconcile; the observer never writes."""
+        if self._reconcile_stopped:
+            return
+        if not self.coordinator.runtime_config.export.price_triggered_enabled and (
+            self.export_session.authority_source != "price" or self.export_session.phase == "idle"
+        ):
+            return
+        self._price_reconcile_requested = True
+        if self._price_task is None or self._price_task.done():
+            self._price_task = self.hass.async_create_background_task(
+                self._async_price_reconcile(), "HEO price export reconciliation"
+            )
+
+    async def _async_price_reconcile(self) -> None:
+        blocked_followup_used = False
+        while self._price_reconcile_requested and not self._reconcile_stopped:
+            self._price_reconcile_requested = False
+            await self.coordinator.async_request_refresh()
+            try:
+                await self.async_reconcile()
+            except FoxessWriteBlocked:
+                # A price can expire during command staging. The persisted
+                # export session retains cleanup; never retry a positive plan.
+                # A persistent gate block must yield to the ordinary timer,
+                # rather than spin a second controller loop.
+                if blocked_followup_used:
+                    break
+                blocked_followup_used = True
+                self._price_reconcile_requested = True
+            self.coordinator.async_update_listeners()
+
+    def _cancel_price_deadline(self) -> None:
+        self._price_deadline_token += 1
+        if self._price_deadline_unsub is not None:
+            self._price_deadline_unsub()
+            self._price_deadline_unsub = None
+
+    def _schedule_price_deadline(self) -> None:
+        self._cancel_price_deadline()
+        deadline = self.export_session.price_deadline
+        if (
+            self.export_session.authority_source != "price"
+            or self.export_session.phase in {"idle", "stopping"}
+            or deadline is None
+            or deadline <= dt_util.now()
+        ):
+            return
+        token = self._price_deadline_token
+
+        async def expire(_now):
+            if token == self._price_deadline_token and not self._reconcile_stopped:
+                self._price_deadline_unsub = None
+                self._price_changed()
+
+        self._price_deadline_unsub = async_track_point_in_utc_time(self.hass, expire, deadline)
+
+    def _price_window(self, now: datetime) -> tuple[datetime, datetime] | None:
+        runtime = self.coordinator.runtime_config
+        monitor = getattr(self.coordinator, "market_monitor", None)
+        if not runtime.export.price_triggered_enabled or monitor is None:
+            return None
+        config, result = runtime.aemo_monitor, monitor.current_result
+        if (
+            not config.enabled
+            or result.region != config.region
+            or not result.price_trigger_valid
+            or result.price_per_kwh is None
+            or not result.price_per_kwh > config.export_threshold_per_kwh
+            or result.interval_start is None
+            or result.interval_end is None
+            or not result.interval_start <= now < result.interval_end
+        ):
+            return None
+        # Price export cannot replace ordinary free charging or a paid trip.
+        if self.coordinator._free_window_hours_remaining(now) > 0:
+            return None
+        ev = getattr(self.coordinator, "ev_controller", None)
+        preference = runtime.ev_preferences
+        legacy = (
+            capture_ev_entity_feedback(self.hass, preference.legacy_charge_to_full_entity)
+            if (
+                preference.legacy_charge_to_full_entity and not preference.charge_to_full_configured
+            )
+            else None
+        )
+        if (
+            preference.charge_to_full_enabled
+            or (ev is not None and getattr(ev, "charge_to_full_started_at", None) is not None)
+            or (legacy is not None and legacy.available_state == "on")
+        ):
+            return None
+        feedback = capture_foxess_feedback(
+            self.hass,
+            FoxessEntityMap(
+                runtime.inverter.work_mode_entity,
+                runtime.inverter.force_charge_power_entity,
+                runtime.inverter.force_discharge_power_entity,
+            ),
+        )
+        if feedback.native_power_units != ("kW", "kW"):
+            return None
+        next_free = now + timedelta(
+            hours=hours_until_next_window(now, start=runtime.windows.effective_free_charge_start)
+        )
+        return result.interval_start, min(result.interval_end, next_free)
+
+    def _price_signature(self, window) -> tuple[object, ...]:
+        runtime = self.coordinator.runtime_config
+        return (
+            *window,
+            runtime.aemo_monitor.region,
+            runtime.aemo_monitor.export_threshold_per_kwh,
+            runtime.export.price_triggered_enabled,
+        )
+
+    def _price_available_energy(self, now: datetime, maximum_kw: float) -> float | None:
+        """Use the same ledger with current evidence and an execution margin."""
+        runtime = self.coordinator.runtime_config
+        telemetry = getattr(self.coordinator, "telemetry", None)
+        snapshot, ledger = self.coordinator.snapshot, self.coordinator.data
+        if snapshot is None or ledger is None or telemetry is None or maximum_kw <= 0:
+            return None
+        ages = []
+        for name in ("grid_power", "battery_power", "house_load"):
+            sample = getattr(telemetry, name, None)
+            if sample is None or not sample.valid or not sample.fresh or sample.value is None:
+                return None
+            at = sample.updated_at
+            if at is None or not isfinite(sample.value):
+                return None
+            age = (now - at).total_seconds()
+            if not 0 <= age <= runtime.telemetry.max_age_seconds:
+                return None
+            ages.append(age)
+        source = capture_telemetry_source(self.hass, runtime.battery.soc_entity)
+        if source is None or source.updated_at is None:
+            return None
+        age = (now - source.updated_at).total_seconds()
+        if not 0 <= age <= runtime.telemetry.max_age_seconds:
+            return None
+        ages.append(age)
+        try:
+            soc = float(source.raw_value)
+            if not isfinite(soc) or not 0 <= soc <= 100:
+                return None
+            fresh = calculate_ledger(
+                SiteSnapshot(
+                    battery_soc=soc,
+                    battery_capacity_kwh=snapshot.battery_capacity_kwh,
+                    battery_floor_percent=snapshot.battery_floor_percent,
+                    reserve_kwh=snapshot.reserve_kwh,
+                    grid_power_kw=telemetry.grid_power.value,
+                    house_load_kw=telemetry.house_load.value,
+                )
+            ).available_after_reserve_kwh
+            cached = ledger.available_after_reserve_kwh
+            if fresh is None or cached is None or not isfinite(cached):
+                return None
+            return max(min(fresh, cached) - maximum_kw * (max(ages) + 5) / 3600, 0)
+        except (TypeError, ValueError):
+            return None
+
+    def _export_context(self, feedback, now: datetime) -> FoxessExportPolicyContext:
+        """One protected export calculation for ordinary and price admission."""
+        runtime = self.coordinator.runtime_config
+        start_at, finish_at = self._export_bounds(now)
+        window = self._price_window(now)
+        price_owned = (
+            self.export_session.authority_source == "price" and self.export_session.phase != "idle"
+        )
+        if not feedback.export_source_available:
+            window = None
+        protected_ev = self._protected_keepalive_energy_kwh(self._hours_until_next_free(now))
+        ev = getattr(self.coordinator, "ev_controller", None)
+        protected_ev = compose_protected_ev_energy_kwh(
+            keepalive_kwh=protected_ev,
+            daily_backfill_kwh=ev.daily_backfill_protection_kwh(now)
+            if protected_ev is not None and ev
+            else None,
+        )
+        ledger = self.coordinator.data
+        available = getattr(ledger, "available_after_reserve_kwh", None)
+        # The existing all-day meter counts earlier spikes as well as normal
+        # exports. It is not reset by a new price interval or switch toggle.
+        exported = getattr(ledger, "daily_export_kwh", None)
+        if exported is None and window is None and self.export_session.authority_source != "price":
+            exported = getattr(
+                getattr(self.coordinator, "zerohero_export", None), "imported_kwh", None
+            )
+        price_path = self.export_session.authority_source == "price" or (
+            window is not None and self.export_session.phase == "idle"
+        )
+        if price_path:
+            available = self._price_available_energy(
+                now, min(runtime.inverter.discharge_limit_kw, feedback.discharge_power_max_kw)
+            )
+        return FoxessExportPolicyContext(
+            requested_enabled=runtime.automation.battery_export_enabled,
+            before_export_enabled=runtime.ev_preferences.before_export_enabled,
+            ev_soc_percent=getattr(self.coordinator.snapshot, "ev_soc", None),
+            before_export_target_percent=runtime.ev_preferences.before_export_soc_target,
+            now=now,
+            start_at=start_at,
+            finish_at=finish_at,
+            source_capability_available=(
+                self._price_cleanup_capable(feedback)
+                if price_owned and (window is None or available is None)
+                else feedback.export_source_available
+            ),
+            configured_max_kw=runtime.inverter.discharge_limit_kw,
+            observed_max_kw=feedback.discharge_power_max_kw,
+            exported_kwh=exported,
+            automatic_limit_kwh=runtime.export.automatic_limit_kwh,
+            protected_house_kwh=getattr(self.coordinator, "learning_remaining_kwh", None),
+            protected_ev_kwh=protected_ev,
+            available_after_reserve_kwh=available,
+            discharge_efficiency_percent=runtime.export.discharge_efficiency_percent,
+            session=self.export_session,
+            previous_automatic_remaining_kwh=self.automatic_export_remaining_kwh,
+            previous_protected_ev_kwh=self.export_protected_ev_kwh,
+            price_export_enabled=runtime.export.price_triggered_enabled,
+            price_interval_start=window[0] if window else None,
+            price_interval_end=window[1] if window else None,
+        )
 
     async def async_reconcile(self) -> None:
         """Evaluate and, only after every gate passes, execute one plan."""
@@ -218,8 +518,11 @@ class ActiveFoxessController:
                 electrical_verified=runtime.electrical.verified,
                 actuator_mapping_complete=runtime.inverter.actuator_mapping_complete,
                 telemetry_available=(
-                    self.coordinator.snapshot is not None
-                    and self.coordinator.data is not None
+                    (self.coordinator.snapshot is not None and self.coordinator.data is not None)
+                    or (
+                        self.export_session.authority_source == "price"
+                        and self.export_session.phase != "idle"
+                    )
                 ),
             )
         )
@@ -231,6 +534,10 @@ class ActiveFoxessController:
             if gate.warn_incomplete_mapping:
                 _LOGGER.warning("Automatic control held: FoxESS mapping is incomplete")
             return
+        if not self._price_mapping_matches():
+            self.last_reason = "export_price_mapping_changed"
+            self.last_actions = ()
+            return
         assert runtime.inverter.work_mode_entity is not None
         assert runtime.inverter.force_charge_power_entity is not None
         assert runtime.inverter.force_discharge_power_entity is not None
@@ -239,16 +546,23 @@ class ActiveFoxessController:
             runtime.inverter.force_charge_power_entity,
             runtime.inverter.force_discharge_power_entity,
         )
-        assert self.coordinator.snapshot is not None
-        assert self.coordinator.data is not None
         feedback = capture_foxess_feedback(self.hass, entities)
         now = dt_util.now()
         if feedback.observation is None:
+            if (
+                self.export_session.authority_source == "price"
+                and self.export_session.phase != "idle"
+            ):
+                await self._async_price_unknown_feedback_cleanup(entities, feedback, now)
+                return
             await self._async_mark_sessions_source_unavailable(now)
             self.last_reason = "foxess_feedback_unavailable"
             return
         observation = feedback.observation
         if await self._async_hold_unverified_ownership(observation):
+            return
+        if self.export_session.authority_source == "price" and self.export_session.phase != "idle":
+            await self._async_reconcile_export(observation, entities, feedback, now)
             return
         # Finish a latched policy before considering another direction. With
         # ordinary non-overlapping windows this also guarantees that Self Use
@@ -287,6 +601,9 @@ class ActiveFoxessController:
         """Transfer HEO obligations under the common lock without a restore write."""
         if self._adapter is not None and self._adapter.entities != entities:
             raise FoxessWriteBlocked("resolve changed automatic actuator mapping before handoff")
+        if not self._price_mapping_matches():
+            raise FoxessWriteBlocked("restore the owned price-export mapping before manual handoff")
+        self._cancel_price_deadline()
         manual_test = getattr(self.coordinator, "manual_test", None)
         if manual_test is not None:
             await manual_test.async_relinquish_for_manual()
@@ -458,162 +775,149 @@ class ActiveFoxessController:
         feedback: FoxessFeedbackSnapshot,
         now: datetime,
     ) -> bool:
-        """Run the ported pilot-site ZEROHERO session, when it owns this tick."""
-        runtime = self.coordinator.runtime_config
-        enabled = runtime.automation.battery_export_enabled
-        start_at, finish_at = self._export_bounds(now)
-        base = evaluate_foxess_export_policy_base(
-            FoxessExportPolicyBaseContext(
-                requested_enabled=enabled,
-                before_export_enabled=runtime.ev_preferences.before_export_enabled,
-                ev_soc_percent=getattr(self.coordinator.snapshot, "ev_soc", None),
-                before_export_target_percent=(
-                    runtime.ev_preferences.before_export_soc_target
-                ),
-                now=now,
-                start_at=start_at,
-                finish_at=finish_at,
-                source_capability_available=feedback.export_source_available,
-                configured_max_kw=runtime.inverter.discharge_limit_kw,
-                observed_max_kw=feedback.discharge_power_max_kw,
-                session=self.export_session,
-            )
-        )
-        self.ev_before_export_decision = base.before_export_decision
-        self.export_effective_enabled = base.effective_enabled
-        source_available = base.source_available
-        discharge_max = base.discharge_max_kw
-        # Energy and time limits govern how long the session runs.  Requesting
-        # the maximum available inverter discharge preserves headroom for
-        # simultaneous house load and minimises the risk of a brief grid import
-        # invalidating the ZEROHERO credit. The inverter enforces its own grid
-        # export limit; that limit must not reduce this battery-side request.
-        requested = base.requested_power_kw
-        eligible = False
-        should_advance = base.should_advance
-        session_window_active = base.session_window_active
-        finish_requested = base.finish_requested
-        self.export_plan = None
-        self.export_planned_start = None
-        exported = getattr(
-            getattr(self.coordinator, "zerohero_export", None), "imported_kwh", None
-        )
-        try:
-            remaining = evaluate_automatic_export_remaining(
-                exported_kwh=exported,
-                automatic_limit_kwh=runtime.export.automatic_limit_kwh,
-                previous_remaining_kwh=self.automatic_export_remaining_kwh,
-            )
-            self.automatic_export_remaining_kwh = remaining.remaining_kwh
-            if not remaining.valid:
-                raise ValueError
-            protected_house = getattr(
-                self.coordinator, "learning_remaining_kwh", None
-            )
-            protected_ev = self._protected_keepalive_energy_kwh(
-                self._hours_until_next_free(now)
-            )
-            ev_controller = getattr(self.coordinator, "ev_controller", None)
-            daily_backfill = (
-                ev_controller.daily_backfill_protection_kwh(now)
-                if protected_ev is not None and ev_controller is not None
-                else None
-            )
-            protected_ev = compose_protected_ev_energy_kwh(
-                keepalive_kwh=protected_ev,
-                daily_backfill_kwh=daily_backfill,
-            )
-            self.export_protected_ev_kwh = protected_ev
-            available = self.coordinator.data.available_after_reserve_kwh
-            policy = evaluate_foxess_export_policy(
-                FoxessExportPolicyContext(
-                    requested_enabled=enabled,
-                    before_export_enabled=(
-                        runtime.ev_preferences.before_export_enabled
-                    ),
-                    ev_soc_percent=getattr(self.coordinator.snapshot, "ev_soc", None),
-                    before_export_target_percent=(
-                        runtime.ev_preferences.before_export_soc_target
-                    ),
-                    now=now,
-                    start_at=start_at,
-                    finish_at=finish_at,
-                    source_capability_available=source_available,
-                    configured_max_kw=(
-                        self.coordinator.runtime_config.inverter.discharge_limit_kw
-                    ),
-                    observed_max_kw=feedback.discharge_power_max_kw,
-                    exported_kwh=exported,
-                    automatic_limit_kwh=runtime.export.automatic_limit_kwh,
-                    protected_house_kwh=protected_house,
-                    protected_ev_kwh=protected_ev,
-                    available_after_reserve_kwh=available,
-                    discharge_efficiency_percent=(
-                        runtime.export.discharge_efficiency_percent
-                    ),
-                    session=self.export_session,
-                    previous_automatic_remaining_kwh=(
-                        self.automatic_export_remaining_kwh
-                    ),
-                    previous_protected_ev_kwh=self.export_protected_ev_kwh,
-                )
-            )
-            self.ev_before_export_decision = policy.before_export_decision
-            self.export_effective_enabled = policy.effective_enabled
-            source_available = policy.source_available
-            discharge_max = policy.discharge_max_kw
-            requested = policy.requested_power_kw
-            self.automatic_export_remaining_kwh = policy.automatic_remaining_kwh
-            self.export_protected_ev_kwh = policy.protected_ev_kwh
-            self.export_plan = policy.export_plan
-            self.export_planned_start = policy.planned_start
-            eligible = policy.eligible
-            should_advance = policy.should_advance
-            session_window_active = policy.session_window_active
-            finish_requested = policy.finish_requested
-        except (TypeError, ValueError):
-            self.export_plan = None
-
-        if not should_advance:
+        """Apply either permission through the same protected export session."""
+        context = self._export_context(feedback, now)
+        policy = evaluate_foxess_export_policy(context)
+        self.ev_before_export_decision = policy.before_export_decision
+        self.export_effective_enabled = policy.effective_enabled
+        self.automatic_export_remaining_kwh = policy.automatic_remaining_kwh
+        self.export_protected_ev_kwh = policy.protected_ev_kwh
+        self.export_plan = policy.export_plan
+        self.export_planned_start = policy.planned_start
+        if not policy.should_advance:
+            if self.export_session.phase == "idle":
+                self._cancel_price_deadline()
             return False
-        previous_state = self.export_session
+        previous = self.export_session
         transition = advance_export_session(
-            previous_state,
+            previous,
             observation,
             now=now,
-            source_available=source_available,
-            window_active=session_window_active,
-            eligible=eligible,
-            requested_discharge_power_kw=requested,
-            discharge_power_max_kw=discharge_max,
-            finish_requested=finish_requested,
+            source_available=policy.source_available,
+            window_active=policy.session_window_active,
+            eligible=policy.eligible,
+            requested_discharge_power_kw=policy.requested_power_kw,
+            discharge_power_max_kw=policy.discharge_max_kw,
+            finish_requested=policy.finish_requested,
+            authority_source=policy.authority_source,
+            price_deadline=policy.price_deadline,
+        )
+        if transition.state.authority_source == "price" and previous.phase == "idle":
+            transition = replace(
+                transition,
+                state=replace(
+                    transition.state,
+                    price_actuator_entities=(
+                        entities.work_mode_entity,
+                        entities.force_charge_power_entity,
+                        entities.force_discharge_power_entity,
+                    ),
+                ),
+            )
+        if (
+            previous.authority_source == "price"
+            and previous.phase != "idle"
+            and transition.state.phase == "idle"
+            and not self._price_physical_feedback_fresh(now)
+        ):
+            transition = replace(
+                transition,
+                state=replace(previous, phase="stopping"),
+                reason="price_cleanup_feedback_unconfirmed",
+            )
+        positive = any(
+            command.action == "select_mode"
+            and command.value == "Force Discharge"
+            or command.action == "set_discharge_power"
+            and float(command.value) > 0
+            for command in transition.plan.commands
         )
         self.export_session = transition.state
-        if self.export_session != previous_state:
-            await self._export_repository.async_save(self.export_session)
+        if self.export_session != previous:
+            try:
+                await self._export_repository.async_save(self.export_session)
+            except (OSError, ValueError):
+                if previous.authority_source != "price" or previous.phase == "idle" or positive:
+                    self.export_session = previous
+                    raise
+                if transition.state.phase == "idle":
+                    self.export_session = previous
+            else:
+                self._export_storage_status = "valid"
+        self._schedule_price_deadline()
         self.last_reason = f"export_{transition.reason}"
         self.last_actions = ()
         if transition.plan.commands:
-            if self._adapter is None:
-                self._adapter = FoxessServiceAdapter(
-                    self.hass,
-                    entities,
-                    allow_writes=True,
-                    write_guard=self._writes_still_authorized,
-                )
-            plan = apply_force_mode_command_delays(transition.plan)
+            if positive and transition.state.authority_source == "price":
+                self._price_write_deadline = transition.state.price_deadline
+                window = self._price_window(now)
+                self._price_write_signature = self._price_signature(window) if window else None
             try:
-                executed = await self._adapter.async_execute(plan)
-            except Exception:
-                executed = self._adapter.last_executed
-                self.last_actions = executed
-                self.writes_performed += len(executed)
-                raise
-            self.last_actions = executed
-            self.writes_performed += len(executed)
-            if executed:
-                _LOGGER.info("FoxESS ZEROHERO export plan executed: %s", executed)
+                await self._async_execute_export_plan(transition.plan, entities)
+            finally:
+                self._price_write_deadline = self._price_write_signature = None
         return True
+
+    async def _async_execute_export_plan(self, plan, entities) -> None:
+        if self._adapter is None:
+            self._adapter = FoxessServiceAdapter(
+                self.hass,
+                entities,
+                allow_writes=True,
+                write_guard=self._writes_still_authorized,
+            )
+        try:
+            executed = await self._adapter.async_execute(apply_force_mode_command_delays(plan))
+        except Exception:
+            self.last_actions = self._adapter.last_executed
+            self.writes_performed += len(self.last_actions)
+            raise
+        self.last_actions = executed
+        self.writes_performed += len(executed)
+        if executed:
+            _LOGGER.info(
+                "FoxESS %s export plan executed: %s",
+                "price" if self.export_session.authority_source == "price" else "ZEROHERO",
+                executed,
+            )
+
+    async def _async_price_unknown_feedback_cleanup(self, entities, feedback, now) -> None:
+        """An owned journal permits only reducing cleanup with valid metadata."""
+        state = self.export_session
+        self.export_effective_enabled = False
+        self.export_plan = None
+        self.export_planned_start = None
+        self.last_actions = ()
+        self.last_reason = "export_price_cleanup_feedback_unavailable"
+        if not self._price_cleanup_capable(feedback):
+            return
+        delay = min(30 * 2 ** min(max(state.attempts - 1, 0), 4), 300)
+        if (
+            state.phase == "stopping"
+            and state.last_command_at is not None
+            and state.last_command_at <= now
+            and (now - state.last_command_at).total_seconds() < delay
+        ):
+            return
+        self.export_session = replace(
+            state, phase="stopping", attempts=state.attempts + 1, last_command_at=now
+        )
+        try:
+            await self._export_repository.async_save(self.export_session)
+        except (OSError, ValueError):
+            pass  # Previous durable ownership still authorises only reducing cleanup.
+        self._cancel_price_deadline()
+        await self._async_execute_export_plan(
+            FoxessCommandPlan(
+                (
+                    FoxessCommand("select_mode", "Self Use"),
+                    FoxessCommand("set_charge_power", 0),
+                    FoxessCommand("set_discharge_power", 0),
+                ),
+                "price_feedback_unavailable",
+            ),
+            entities,
+        )
 
     async def _async_mark_sessions_source_unavailable(self, now: datetime) -> None:
         recovery = mark_foxess_source_unavailable(

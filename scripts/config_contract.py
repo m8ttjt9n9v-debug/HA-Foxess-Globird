@@ -11,17 +11,36 @@ from custom_components.home_energy_orchestrator.config_flow import ConfigFlow
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 BASELINE_PATH = REPOSITORY_ROOT / "docs" / "maintainability" / "config-contract-v0.12.26.json"
+# The read-only monitor is a reviewed additive extension after this baseline.
+# Exclude only its exact keys from the historical comparison; current-surface
+# tests request the full contract so unrelated additions remain visible.
+AEMO_CONFIG_KEYS = frozenset(
+    {
+        const.CONF_AEMO_MONITOR_ENABLED,
+        const.CONF_AEMO_REGION,
+        const.CONF_AEMO_EXPORT_THRESHOLD,
+        const.CONF_AEMO_IMPORT_THRESHOLD,
+    }
+)
+PRICE_EXPORT_CONFIG_KEYS = frozenset({const.CONF_CRITICAL_EVENT_SELL_ENABLED})
+ADDITIVE_CONFIG_KEYS = AEMO_CONFIG_KEYS | PRICE_EXPORT_CONFIG_KEYS
 
 
-def build_config_contract() -> dict[str, object]:
+def build_config_contract(*, include_extensions: bool = False) -> dict[str, object]:
     """Return page order plus declared persisted-key vocabulary."""
-    pages = {page: list(fields) for page, fields in ConfigFlow._PAGE_FIELDS.items()}
+    pages = {
+        page: [key for key in fields if include_extensions or key not in ADDITIVE_CONFIG_KEYS]
+        for page, fields in ConfigFlow._PAGE_FIELDS.items()
+    }
+    pages = {page: fields for page, fields in pages.items() if fields}
     page_keys = [key for fields in pages.values() for key in fields]
     declared_keys = sorted(
         {
             value
             for name, value in vars(const).items()
-            if name.startswith("CONF_") and isinstance(value, str)
+            if name.startswith("CONF_")
+            and isinstance(value, str)
+            and (include_extensions or value not in ADDITIVE_CONFIG_KEYS)
         }
     )
     return {
@@ -47,7 +66,7 @@ def main() -> int:
     args = parser.parse_args()
     rendered = rendered_contract()
     if args.write:
-        BASELINE_PATH.write_text(rendered, encoding="utf-8")
+        parser.error("The release baseline is frozen; review additive configuration separately")
     if args.check:
         if not BASELINE_PATH.is_file() or BASELINE_PATH.read_text(encoding="utf-8") != rendered:
             raise SystemExit(

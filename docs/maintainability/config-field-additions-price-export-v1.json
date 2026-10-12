@@ -1,0 +1,82 @@
+{
+  "schema_version": 1,
+  "extension": "price_export_v1",
+  "field_count": 5,
+  "fields": [
+    {
+      "default": false,
+      "has_default": true,
+      "input_config": null,
+      "input_kind": "boolean",
+      "key": "aemo_monitor_enabled",
+      "order": 1,
+      "page": "aemo_monitor",
+      "reconfigure_label": "AEMO price monitoring",
+      "required": true,
+      "setup_label": "AEMO price monitoring"
+    },
+    {
+      "default": null,
+      "has_default": false,
+      "input_config": {
+        "custom_value": false,
+        "multiple": false,
+        "options": [
+          "NSW1",
+          "QLD1",
+          "VIC1",
+          "SA1",
+          "TAS1"
+        ],
+        "sort": false
+      },
+      "input_kind": "select",
+      "key": "aemo_region",
+      "order": 2,
+      "page": "aemo_monitor",
+      "reconfigure_label": "AEMO market region",
+      "required": false,
+      "setup_label": "AEMO market region"
+    },
+    {
+      "default": 3,
+      "has_default": true,
+      "input_config": {
+        "coerce": "float"
+      },
+      "input_kind": "number",
+      "key": "aemo_export_threshold_per_kwh",
+      "order": 3,
+      "page": "aemo_monitor",
+      "reconfigure_label": "Export price threshold ($/kWh)",
+      "required": true,
+      "setup_label": "Export price threshold ($/kWh)"
+    },
+    {
+      "default": null,
+      "has_default": false,
+      "input_config": {
+        "coerce": "float"
+      },
+      "input_kind": "number",
+      "key": "aemo_import_threshold_per_kwh",
+      "order": 4,
+      "page": "aemo_monitor",
+      "reconfigure_label": "Consumption observation threshold ($/kWh)",
+      "required": false,
+      "setup_label": "Consumption observation threshold ($/kWh)"
+    },
+    {
+      "default": false,
+      "has_default": true,
+      "input_config": null,
+      "input_kind": "boolean",
+      "key": "critical_event_sell_enabled",
+      "order": 5,
+      "page": "aemo_monitor",
+      "reconfigure_label": "Automatic price-triggered export",
+      "required": true,
+      "setup_label": "Automatic price-triggered export"
+    }
+  ]
+}

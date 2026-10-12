@@ -13,9 +13,12 @@ from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import selector
 
 from .config_page_schema import GRID_PHASE_SECTIONS, build_page_schema
+from .configuration import AemoMonitorConfiguration
 from .const import (
     BATTERY_POSITIVE_DISCHARGE,
     BATTERY_POWER_DIRECTIONS,
+    CONF_AEMO_EXPORT_THRESHOLD,
+    CONF_AEMO_MONITOR_ENABLED,
     CONF_AUTOMATIC_CHARGE_ENABLED,
     CONF_AUTOMATIC_CONTROL_ENABLED,
     CONF_AUTOMATIC_EXPORT_ENABLED,
@@ -35,6 +38,7 @@ from .const import (
     CONF_BONUS_WINDOW_START,
     CONF_CONFIGURE_EV,
     CONF_CONFIGURE_SOLAR,
+    CONF_CRITICAL_EVENT_SELL_ENABLED,
     CONF_DAILY_CHARGE,
     CONF_DAILY_FREE_ALLOWANCE_KWH,
     CONF_DAILY_IMPORT_ENTITY,
@@ -153,6 +157,8 @@ from .const import (
     CONF_ZERO_IMPORT_CONFIRM_MINUTES,
     CONF_ZERO_IMPORT_THRESHOLD_KW,
     CONF_ZEROHERO_DAILY_CREDIT,
+    DEFAULT_AEMO_EXPORT_THRESHOLD,
+    DEFAULT_AEMO_MONITOR_ENABLED,
     DEFAULT_AUTOMATIC_CHARGE_ENABLED,
     DEFAULT_AUTOMATIC_CONTROL_ENABLED,
     DEFAULT_AUTOMATIC_EXPORT_ENABLED,
@@ -164,6 +170,7 @@ from .const import (
     DEFAULT_BATTERY_POWER_DIRECTION,
     DEFAULT_BONUS_WINDOW_END,
     DEFAULT_BONUS_WINDOW_START,
+    DEFAULT_CRITICAL_EVENT_SELL_ENABLED,
     DEFAULT_DAILY_CHARGE,
     DEFAULT_DAILY_FREE_ALLOWANCE_KWH,
     DEFAULT_DISCHARGE_EFFICIENCY_PERCENT,
@@ -545,7 +552,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     "reconfigure_ev_policies", "reconfigure_recovery",
                 )
             )
-        options.extend(("reconfigure_automation", "reconfigure_review"))
+        options.extend(("reconfigure_aemo_monitor", "reconfigure_automation", "reconfigure_review"))
         return self.async_show_menu(step_id="reconfigure", menu_options=options)
 
     def _next_page(self, page: str) -> str:
@@ -561,6 +568,8 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     def _validate_page(self, page: str, data: dict[str, object]) -> dict[str, str]:
         """Return only validation failures belonging to the page being submitted."""
         candidate = self._capability_safe_data(self._apply_defaults(data))
+        if page == "aemo_monitor":
+            return self._validate_aemo_monitor(candidate)
         limit_error = self._page_limit_error(page, candidate)
         if limit_error:
             return limit_error
@@ -1004,6 +1013,9 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     async def async_step_reconfigure_automation(self, user_input=None):
         return await self._async_page("automation", user_input, reconfigure=True)
+
+    async def async_step_reconfigure_aemo_monitor(self, user_input=None):
+        return await self._async_page("aemo_monitor", user_input, reconfigure=True)
 
     async def async_step_confirm_schedule(self, user_input: dict[str, object] | None = None):
         """Require explicit review of the exact 24-hour free-power window."""
@@ -1800,6 +1812,15 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         cleaned = {key: value for key, value in data.items() if key not in removed}
         result = {
             **cleaned,
+            CONF_AEMO_MONITOR_ENABLED: data.get(
+                CONF_AEMO_MONITOR_ENABLED, DEFAULT_AEMO_MONITOR_ENABLED
+            ),
+            CONF_AEMO_EXPORT_THRESHOLD: data.get(
+                CONF_AEMO_EXPORT_THRESHOLD, DEFAULT_AEMO_EXPORT_THRESHOLD
+            ),
+            CONF_CRITICAL_EVENT_SELL_ENABLED: data.get(
+                CONF_CRITICAL_EVENT_SELL_ENABLED, DEFAULT_CRITICAL_EVENT_SELL_ENABLED
+            ),
             CONF_FREE_CHARGE_START: data.get(CONF_FREE_CHARGE_START, DEFAULT_FREE_CHARGE_START),
             CONF_BATTERY_POWER_DIRECTION: data.get(
                 CONF_BATTERY_POWER_DIRECTION,
@@ -2122,12 +2143,28 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             result[CONF_EV_LIFETIME_ENERGY] = data[CONF_EV_LIFETIME_ENERGY]
         return result
 
+    @staticmethod
+    def _validate_aemo_monitor(data: dict[str, object]) -> dict[str, str]:
+        errors = AemoMonitorConfiguration.validate_mapping(data)
+        if errors:
+            return errors
+        enabled = data.get(CONF_CRITICAL_EVENT_SELL_ENABLED, False)
+        if type(enabled) is not bool:
+            return {CONF_CRITICAL_EVENT_SELL_ENABLED: "invalid_price_export_enabled"}
+        if enabled and data.get(CONF_AEMO_MONITOR_ENABLED) is not True:
+            return {CONF_CRITICAL_EVENT_SELL_ENABLED: "price_export_requires_monitor"}
+        if enabled and data.get(CONF_FOXESS_CONTROL_OWNER) != FOXESS_CONTROL_OWNER_MODBUS:
+            return {CONF_CRITICAL_EVENT_SELL_ENABLED: "price_export_requires_local_modbus"}
+        return {}
+
     def _validate_input(self, data: dict[str, object]) -> dict[str, str]:
         """Reject malformed IDs and unsafe physical limits before saving them."""
         if not str(data.get(CONF_NAME, "")).strip():
             return {CONF_NAME: "invalid_name"}
         if data.get(CONF_FOXESS_CONTROL_OWNER) not in FOXESS_CONTROL_OWNERS:
             return {CONF_FOXESS_CONTROL_OWNER: "invalid_foxess_control_owner"}
+        if market_errors := self._validate_aemo_monitor(data):
+            return market_errors
         if data.get(CONF_GRID_POWER_DIRECTION) not in GRID_POWER_DIRECTIONS:
             return {CONF_GRID_POWER_DIRECTION: "invalid_power_direction"}
         if data.get(CONF_BATTERY_POWER_DIRECTION) not in BATTERY_POWER_DIRECTIONS:

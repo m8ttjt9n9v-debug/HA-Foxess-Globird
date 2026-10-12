@@ -277,6 +277,9 @@ async def test_user_flow_creates_a_config_entry(hass):
         CONF_EV_PRE_FREE_BACKFILL_TIMING: DEFAULT_EV_PRE_FREE_BACKFILL_TIMING,
         "offpeak_export_rate_per_kwh": 0.0,
         "force_discharge_offset_minutes": 1.0,
+        "aemo_monitor_enabled": False,
+        "aemo_export_threshold_per_kwh": 3.0,
+        "critical_event_sell_enabled": False,
     }
 
 
@@ -1561,6 +1564,9 @@ async def test_reconfigure_updates_and_reloads_an_entry(hass):
         CONF_EV_PRE_FREE_BACKFILL_TIMING: DEFAULT_EV_PRE_FREE_BACKFILL_TIMING,
         "offpeak_export_rate_per_kwh": 0.0,
         "force_discharge_offset_minutes": 1.0,
+        "aemo_monitor_enabled": False,
+        "aemo_export_threshold_per_kwh": 3.0,
+        "critical_event_sell_enabled": False,
     }
     assert await hass.config_entries.async_unload(entry.entry_id)
 

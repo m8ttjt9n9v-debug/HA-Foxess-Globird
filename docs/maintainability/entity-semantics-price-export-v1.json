@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "extension": "price_export_v1",
+  "entity_count": 1,
+  "entities": [
+    {
+      "key": "critical_event_sell",
+      "definition": "Default-off operator request to admit eligible export during a current qualifying AEMO price interval through the existing automatic export owner and protection policy. This request does not establish retailer event provenance or payment.",
+      "producer": "EnergyCoordinator.runtime_config.export.price_triggered_enabled via PriceTriggeredExportSwitch.is_on; saved integration configuration",
+      "role": "configuration",
+      "unit_and_sign": "No unit; on requests eligible price-triggered export and off withdraws it",
+      "time_basis": "Current saved configuration; admission requires a fresh matching price interval",
+      "availability": "Configuration remains available independently of monitor and electrical feedback; normal commissioning, ownership and Safety Lock gates remain binding on hardware commands",
+      "state_vocabulary": "on or off",
+      "audience": "advanced",
+      "equivalents": {"foxess": null, "globird": null, "tessie": null},
+      "consumers": ["Automatic export admission", "Market controls dashboard"],
+      "decision": "retain",
+      "review_status": "engineering_draft"
+    }
+  ],
+  "attribute_profiles": {},
+  "attribute_profile_additions": {
+    "fleet_summary_v1": {
+      "export_authority_source": "Export-session authority: zerohero for the retained scheduled policy or price for the current persisted price interval; this does not identify an external VPP writer.",
+      "export_price_deadline": "Aware ISO timestamp of the retained price interval deadline, or null for ordinary ZEROHERO authority; software enforcement requires Home Assistant and actuator liveness."
+    },
+    "orchestrator_status_v1": {
+      "export_authority_source": "Export-session authority: zerohero for the retained scheduled policy or price for the current persisted price interval; this does not identify an external VPP writer.",
+      "export_price_deadline": "Aware ISO timestamp of the retained price interval deadline, or null for ordinary ZEROHERO authority; software enforcement requires Home Assistant and actuator liveness.",
+      "price_triggered_export_enabled": "Saved default-off eligibility request for price-triggered export; true does not by itself authorize a hardware command."
+    }
+  }
+}

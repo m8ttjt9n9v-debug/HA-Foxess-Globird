@@ -11,8 +11,13 @@ from typing import cast
 
 from . import const as config_const
 from .const import (
+    AEMO_REGIONS,
     BATTERY_POSITIVE_CHARGE,
     BATTERY_POSITIVE_DISCHARGE,
+    CONF_AEMO_EXPORT_THRESHOLD,
+    CONF_AEMO_IMPORT_THRESHOLD,
+    CONF_AEMO_MONITOR_ENABLED,
+    CONF_AEMO_REGION,
     CONF_AUTOMATIC_CHARGE_ENABLED,
     CONF_AUTOMATIC_CONTROL_ENABLED,
     CONF_AUTOMATIC_EXPORT_ENABLED,
@@ -31,6 +36,7 @@ from .const import (
     CONF_BONUS_WINDOW_START,
     CONF_CONFIGURE_EV,
     CONF_CONFIGURE_SOLAR,
+    CONF_CRITICAL_EVENT_SELL_ENABLED,
     CONF_DAILY_CHARGE,
     CONF_DAILY_FREE_ALLOWANCE_KWH,
     CONF_DAILY_IMPORT_ENTITY,
@@ -121,6 +127,8 @@ from .const import (
     CONF_ZERO_IMPORT_CONFIRM_MINUTES,
     CONF_ZERO_IMPORT_THRESHOLD_KW,
     CONF_ZEROHERO_DAILY_CREDIT,
+    DEFAULT_AEMO_EXPORT_THRESHOLD,
+    DEFAULT_AEMO_MONITOR_ENABLED,
     DEFAULT_AUTOMATIC_CHARGE_ENABLED,
     DEFAULT_AUTOMATIC_CONTROL_ENABLED,
     DEFAULT_AUTOMATIC_EXPORT_ENABLED,
@@ -248,6 +256,64 @@ def _optional_time(
 
 def _entity_id(value: object) -> str | None:
     return value if isinstance(value, str) and value else None
+
+
+@dataclass(frozen=True, slots=True)
+class AemoMonitorConfiguration:
+    """Market observation settings; retailer event/payment claims are absent."""
+
+    enabled: bool
+    region: str | None
+    export_threshold_per_kwh: float
+    import_threshold_per_kwh: float | None
+
+    @staticmethod
+    def validate_mapping(data: Mapping[str, object]) -> dict[str, str]:
+        enabled = data.get(CONF_AEMO_MONITOR_ENABLED, DEFAULT_AEMO_MONITOR_ENABLED)
+        if type(enabled) is not bool:
+            return {CONF_AEMO_MONITOR_ENABLED: "invalid_aemo_enabled"}
+        region = data.get(CONF_AEMO_REGION)
+        if (region is not None and region not in AEMO_REGIONS) or (
+            enabled and region not in AEMO_REGIONS
+        ):
+            return {CONF_AEMO_REGION: "invalid_aemo_region"}
+        values = {CONF_AEMO_EXPORT_THRESHOLD: DEFAULT_AEMO_EXPORT_THRESHOLD, **data}
+        export = (
+            None
+            if isinstance(values[CONF_AEMO_EXPORT_THRESHOLD], bool)
+            else (_required_number(values, CONF_AEMO_EXPORT_THRESHOLD))
+        )
+        if export is None or export <= 0:
+            return {CONF_AEMO_EXPORT_THRESHOLD: "invalid_aemo_export_threshold"}
+        raw_import = data.get(CONF_AEMO_IMPORT_THRESHOLD)
+        if raw_import is not None:
+            imported = (
+                None
+                if isinstance(raw_import, bool)
+                else (_required_number(data, CONF_AEMO_IMPORT_THRESHOLD))
+            )
+            if imported is None or imported >= export:
+                return {CONF_AEMO_IMPORT_THRESHOLD: "invalid_aemo_import_threshold"}
+        return {}
+
+    @classmethod
+    def from_mapping(cls, data: Mapping[str, object]) -> AemoMonitorConfiguration:
+        valid = not cls.validate_mapping(data)
+        raw_region = data.get(CONF_AEMO_REGION)
+        region = raw_region if isinstance(raw_region, str) and raw_region in AEMO_REGIONS else None
+        export = _required_number(
+            {CONF_AEMO_EXPORT_THRESHOLD: DEFAULT_AEMO_EXPORT_THRESHOLD, **data},
+            CONF_AEMO_EXPORT_THRESHOLD,
+        )
+        imported = _required_number(data, CONF_AEMO_IMPORT_THRESHOLD)
+        return cls(
+            enabled=valid and region is not None and data.get(CONF_AEMO_MONITOR_ENABLED) is True,
+            region=region,
+            export_threshold_per_kwh=export
+            if valid and export is not None
+            else (DEFAULT_AEMO_EXPORT_THRESHOLD),
+            import_threshold_per_kwh=imported if valid else None,
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -535,6 +601,7 @@ class ExportSettings:
     discharge_efficiency_percent: float
     force_discharge_offset_minutes: float
     force_discharge_offset_configured: bool
+    price_triggered_enabled: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -721,6 +788,7 @@ class RuntimeConfiguration:
     electrical: ElectricalSettings
     tariff: TariffSettings
     inverter: InverterSettings
+    aemo_monitor: AemoMonitorConfiguration
 
     @property
     def ev_required_mapping_complete(self) -> bool:
@@ -810,6 +878,7 @@ class RuntimeConfiguration:
         if not isfinite(max_telemetry_age) or max_telemetry_age <= 0:
             max_telemetry_age = DEFAULT_TELEMETRY_MAX_AGE_SECONDS
         return cls(
+            aemo_monitor=AemoMonitorConfiguration.from_mapping(data),
             automation=AutomationSettings(
                 master_enabled=bool(
                     data.get(
@@ -1152,6 +1221,7 @@ class RuntimeConfiguration:
                 configured_reserve_kwh=_required_number(data, CONF_RESERVE),
             ),
             export=ExportSettings(
+                price_triggered_enabled=data.get(CONF_CRITICAL_EVENT_SELL_ENABLED, False) is True,
                 automatic_limit_kwh=max(
                     _number(
                         data,

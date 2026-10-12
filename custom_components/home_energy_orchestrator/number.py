@@ -9,12 +9,14 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from . import EnergyConfigEntry
+from .aemo_monitor_controls import AemoThresholdNumber
 from .const import (
     CONF_EV_BEFORE_EXPORT_SOC_TARGET,
     CONF_EV_MORNING_SOLAR_RESERVE_SOC,
 )
 from .coordinator import EnergyCoordinator
 from .entity_catalogue import (
+    AEMO_THRESHOLD_DESCRIPTIONS,
     EV_BEFORE_EXPORT_TARGET_DESCRIPTION,
     EV_MORNING_SOLAR_RESERVE_DESCRIPTION,
 )
@@ -30,6 +32,10 @@ async def async_setup_entry(
     async_add_entities(
         (
             *(TestNumber(entry.runtime_data, entry, description) for description in DESCRIPTIONS),
+            *(
+                AemoThresholdNumber(entry.runtime_data, entry, description)
+                for description in AEMO_THRESHOLD_DESCRIPTIONS
+            ),
             EvBeforeExportTargetNumber(
                 entry.runtime_data,
                 entry,

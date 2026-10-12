@@ -17,7 +17,7 @@ AUDIT_PATH = (
     REPOSITORY_ROOT
     / "docs"
     / "maintainability"
-    / "clean-install-usability-audit-v0.12.26.md"
+    / "clean-install-usability-audit-price-export-v1.md"
 )
 
 
@@ -99,7 +99,7 @@ def rendered_audit() -> str:
     """Render the evidence as a stable human-reviewable report."""
     audit = build_usability_audit()
     lines = [
-        "# Clean-install usability audit — v0.12.26 baseline",
+        "# Clean-install usability audit — retained baseline and price-export additions",
         "",
         "This generated report identifies remaining presentation gaps and records",
         "the owner-approved display-name changes. Category and dashboard decisions",

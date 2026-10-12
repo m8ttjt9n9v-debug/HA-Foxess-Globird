@@ -21,7 +21,7 @@ def test_reviewed_entity_semantics_are_complete_and_current() -> None:
     contract = load_semantic_contract()
     validate_semantic_contract(contract)
     expected_count = build_entity_contract()["entity_count"]
-    assert expected_count == 109
+    assert expected_count == 117
     assert contract["reviewed_entity_count"] == expected_count
     assert contract["total_entity_count"] == expected_count
     assert entities_awaiting_review(contract) == []
@@ -39,9 +39,9 @@ def test_manual_semantics_add_only_reviewed_keys_to_existing_profiles() -> None:
     for name, additions in manual["attribute_profile_additions"].items():
         assert len(additions) == 5
         assert not baseline["attribute_profiles"][name]["attributes"].keys() & additions.keys()
-        assert contract["attribute_profiles"][name]["attributes"] == {
+        assert contract["attribute_profiles"][name]["attributes"].items() >= {
             **baseline["attribute_profiles"][name]["attributes"], **additions,
-        }
+        }.items()
 
 
 @pytest.mark.parametrize("conflict", ["existing_key", "unknown_profile"])

@@ -15,7 +15,7 @@ REFERENCE_PATH = (
     REPOSITORY_ROOT
     / "docs"
     / "maintainability"
-    / "entity-reference-v0.12.26.md"
+    / "entity-reference-price-export-v1.md"
 )
 
 
@@ -33,7 +33,7 @@ def rendered_reference() -> str:
     validate_semantic_contract(semantic_contract)
     semantics = {item["key"]: item for item in semantic_contract["entities"]}
     lines = [
-        "# Entity reference — v0.12.26 compatibility baseline",
+        "# Entity reference — retained baseline and price-export additions",
         "",
         "This generated engineering reference joins the runtime entity catalogue",
         "to the reviewed semantic worksheet. It records the current names, including",

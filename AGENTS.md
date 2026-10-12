@@ -51,3 +51,9 @@ state is evidence to collect and diagnose, not permission to fix forward.
 - Current automatic scope is the verified ZEROHERO export port, the separately
   identified default-off Local Modbus free-charge extension, and independently
   gated Tessie direct/smart-socket paths.
+- The optional price-export extension uses the same protected export controller
+  and session journal. Preserve independent source/deadline authority, original
+  actuator binding, shared daily cap, fail-closed fresh evidence and reducing
+  cleanup. A price threshold is not proof of a retailer event or payment. Do not
+  revive an expired price session through the normal ZEROHERO latch or add a
+  competing market-price writer.

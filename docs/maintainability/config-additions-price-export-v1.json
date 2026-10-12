@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "extension": "price_export_v1",
+  "config_entry_version": 6,
+  "additional_config_keys": [
+    "aemo_export_threshold_per_kwh",
+    "aemo_import_threshold_per_kwh",
+    "aemo_monitor_enabled",
+    "aemo_region",
+    "critical_event_sell_enabled"
+  ],
+  "new_control_defaults": {
+    "aemo_monitor_enabled": false,
+    "critical_event_sell_enabled": false
+  },
+  "automatic_import_control_added": false,
+  "event_credit_accounting_added": false
+}

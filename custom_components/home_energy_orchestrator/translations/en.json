@@ -141,7 +141,12 @@
           "ev_before_export_enabled": "Prioritise EV before automatic export",
           "ev_before_export_soc_target_percent": "Withhold export while EV SoC is below (%)",
           "ev_automatic_control_enabled": "Request automatic EV control (independent of FoxESS ownership)",
-          "rehearsal_mode": "Safety Lock (ON = no hardware writes)"
+          "rehearsal_mode": "Safety Lock (ON = no hardware writes)",
+          "aemo_monitor_enabled": "AEMO price monitoring",
+          "aemo_region": "AEMO market region",
+          "aemo_export_threshold_per_kwh": "Export price threshold ($/kWh)",
+          "aemo_import_threshold_per_kwh": "Consumption observation threshold ($/kWh)",
+          "critical_event_sell_enabled": "Automatic price-triggered export"
         }
       },
       "reconfigure": {
@@ -161,7 +166,8 @@
           "reconfigure_recovery": "EV connection recovery",
           "reconfigure_verification": "Verify electrical directions",
           "reconfigure_automation": "Automation and safety",
-          "reconfigure_review": "Review and apply"
+          "reconfigure_review": "Review and apply",
+          "reconfigure_aemo_monitor": "AEMO prices and export"
         },
         "data": {
           "name": "Site name",
@@ -300,7 +306,12 @@
           "ev_before_export_enabled": "Prioritise EV before automatic export",
           "ev_before_export_soc_target_percent": "Withhold export while EV SoC is below (%)",
           "ev_automatic_control_enabled": "Request automatic EV control (independent of FoxESS ownership)",
-          "rehearsal_mode": "Safety Lock (ON = no hardware writes)"
+          "rehearsal_mode": "Safety Lock (ON = no hardware writes)",
+          "aemo_monitor_enabled": "AEMO price monitoring",
+          "aemo_region": "AEMO market region",
+          "aemo_export_threshold_per_kwh": "Export price threshold ($/kWh)",
+          "aemo_import_threshold_per_kwh": "Consumption observation threshold ($/kWh)",
+          "critical_event_sell_enabled": "Automatic price-triggered export"
         }
       },
       "site": {
@@ -868,6 +879,24 @@
           "confirm_schedule": "I confirm that these exact 24-hour start and end times match this account",
           "confirm_overnight": "I explicitly intend this battery charging window to cross midnight"
         }
+      },
+      "reconfigure_aemo_monitor": {
+        "title": "AEMO prices and export",
+        "description": "Observe AEMO prices independently of battery control. Automatic price-triggered export is a separate default-off request using the existing sellable-energy budget and inverter owner. Prices do not confirm retailer events or payments.",
+        "data": {
+          "aemo_monitor_enabled": "AEMO price monitoring",
+          "aemo_region": "AEMO market region",
+          "aemo_export_threshold_per_kwh": "Export price threshold ($/kWh)",
+          "aemo_import_threshold_per_kwh": "Consumption observation threshold ($/kWh)",
+          "critical_event_sell_enabled": "Automatic price-triggered export"
+        },
+        "data_description": {
+          "aemo_monitor_enabled": "Observe official actual five-minute prices. Monitoring alone sends no device commands and does not confirm a retailer event or payment.",
+          "aemo_region": "Choose the site's NEM region explicitly; no region is assumed.",
+          "aemo_export_threshold_per_kwh": "The price must be strictly above this operating threshold. The default $3/kWh is a chosen rule, not a verified retailer trigger.",
+          "aemo_import_threshold_per_kwh": "Optional read-only consumption observation. No automatic buying is added and no surplus trigger is assumed; clear this value to disable the hint.",
+          "critical_event_sell_enabled": "Default off. Use the existing Sellable Energy and shared automatic-export budget outside the ordinary export window while a current actual price exceeds the threshold. Local Modbus, commissioning, master and Safety Lock gates still apply."
+        }
       }
     },
     "error": {
@@ -900,7 +929,14 @@
       "incomplete_split_battery_mapping": "Map both battery charge and discharge magnitude sensors, or leave both blank.",
       "schedule_confirmation_required": "Confirm the exact 24-hour schedule before saving.",
       "overnight_confirmation_required": "An overnight charging window requires the separate crossing-midnight confirmation.",
-      "apply_confirmation_required": "Tick Apply configuration after reviewing the complete site summary."
+      "apply_confirmation_required": "Tick Apply configuration after reviewing the complete site summary.",
+      "invalid_aemo_enabled": "Choose monitoring on or off.",
+      "invalid_aemo_region": "Choose a supported NEM region before enabling monitoring.",
+      "invalid_aemo_export_threshold": "Use a finite positive export threshold.",
+      "invalid_aemo_import_threshold": "Use a finite consumption threshold lower than the export threshold.",
+      "invalid_price_export_enabled": "Choose automatic price-triggered export on or off.",
+      "price_export_requires_monitor": "Enable AEMO monitoring with an explicit region first.",
+      "price_export_requires_local_modbus": "Choose commissioned Local Modbus inverter ownership first."
     },
     "abort": {
       "schedule_confirmation_expired": "The pending schedule confirmation expired. Reopen configuration and review the times again."
@@ -968,6 +1004,42 @@
       "options": {
         "conservative": "Conservative — finish before free power",
         "ready_by": "Ready by — use available surplus before departure"
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "aemo_market_status": {
+        "name": "AEMO Price Monitor"
+      },
+      "aemo_spot_price": {
+        "name": "AEMO Current Wholesale Price"
+      }
+    },
+    "switch": {
+      "aemo_monitor": {
+        "name": "AEMO Price Monitoring"
+      },
+      "critical_event_sell": {
+        "name": "Automatic price-triggered export"
+      }
+    },
+    "select": {
+      "aemo_region": {
+        "name": "AEMO Market Region"
+      }
+    },
+    "number": {
+      "aemo_export_threshold": {
+        "name": "AEMO Export Price Threshold"
+      },
+      "aemo_import_threshold": {
+        "name": "AEMO Consumption Observation Threshold"
+      }
+    },
+    "button": {
+      "aemo_clear_import_threshold": {
+        "name": "Clear AEMO Consumption Threshold"
       }
     }
   }

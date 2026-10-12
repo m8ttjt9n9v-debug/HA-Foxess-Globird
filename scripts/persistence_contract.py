@@ -18,6 +18,9 @@ BASELINE_PATH = (
 MANUAL_ADDITIONS_PATH = (
     REPOSITORY_ROOT / "docs" / "maintainability" / "persistence-additions-manual-inverter-v1.json"
 )
+AEMO_ADDITIONS_PATH = (
+    REPOSITORY_ROOT / "docs" / "maintainability" / "persistence-additions-aemo-monitor-v1.json"
+)
 
 
 def _assigned_name(node: ast.AnnAssign | ast.Assign) -> str:
@@ -101,7 +104,7 @@ def validate_against_release_baseline() -> None:
     baseline = json.loads(BASELINE_PATH.read_text(encoding="utf-8"))
     additions = [
         json.loads(path.read_text(encoding="utf-8"))
-        for path in (MANUAL_ADDITIONS_PATH,)
+        for path in (MANUAL_ADDITIONS_PATH, AEMO_ADDITIONS_PATH)
     ]
     for extension in additions:
         if extension.get("schema_version") != baseline.get("schema_version"):

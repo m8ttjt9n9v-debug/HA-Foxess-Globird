@@ -34,6 +34,22 @@ layers around the proven algorithm, not replacement algorithms.
 
 ## Current software truth
 
+- A separately commissioned, default-off price request adds admission to the
+  existing protected export controller, not another inverter writer. Only a
+  current actual regional DispatchIS price above the configured threshold can
+  grant permission. The operator threshold is not a retailer critical-event
+  declaration or payment guarantee. Price admission reuses protected house/EV
+  energy, battery floor/reserve, and the shared all-day measured export cap.
+  Its existing session journal additionally binds price ownership to a
+  non-extendable deadline and original actuators. Lost permission or Sellable
+  requests Self Use and cleared targets; reducing cleanup survives missing
+  ledger/numeric command feedback when original metadata and write gates are
+  valid. Consecutive blocks restore before fresh admission. Normal ZEROHERO
+  latch semantics remain separate. Free charging, paid EV Full, and manual
+  holds take priority. No automatic market-price buying, new event journal,
+  reward accounting, or forecast credit is added. See the
+  [price export policy](price-triggered-export.md), including safe downgrade.
+
 - Explicit manual battery services can take a persistent operator hold from
   HEO's automatic and diagnostic inverter controllers. Export requests the
   smaller commissioned/native discharge maximum until Stop, subject to native

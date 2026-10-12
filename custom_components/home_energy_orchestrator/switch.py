@@ -10,15 +10,18 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from . import EnergyConfigEntry
+from .aemo_monitor_controls import AemoMonitorSwitch
 from .const import (
     CONF_AUTOMATIC_CHARGE_ENABLED,
     CONF_AUTOMATIC_EXPORT_ENABLED,
+    CONF_CRITICAL_EVENT_SELL_ENABLED,
     CONF_EV_AUTOMATIC_CONTROL_ENABLED,
     CONF_EV_BEFORE_EXPORT_ENABLED,
     CONF_EV_CHARGE_TO_FULL,
     CONF_EV_CHARGE_TO_FULL_ENABLED,
     CONF_EV_MORNING_SOLAR_ENABLED,
     CONF_REHEARSAL_MODE,
+    FOXESS_CONTROL_OWNER_MODBUS,
 )
 from .coordinator import EnergyCoordinator
 from .entity_catalogue import (
@@ -28,6 +31,7 @@ from .entity_catalogue import (
     EV_DESCRIPTION,
     EV_MORNING_SOLAR_DESCRIPTION,
     EXPORT_DESCRIPTION,
+    PRICE_TRIGGERED_EXPORT_DESCRIPTION,
     SAFETY_DESCRIPTION,
 )
 
@@ -41,6 +45,10 @@ async def async_setup_entry(
             SafetyLockSwitch(entry.runtime_data, entry, SAFETY_DESCRIPTION),
             AutomaticChargeSwitch(entry.runtime_data, entry, CHARGE_DESCRIPTION),
             AutomaticExportSwitch(entry.runtime_data, entry, EXPORT_DESCRIPTION),
+            PriceTriggeredExportSwitch(
+                entry.runtime_data, entry, PRICE_TRIGGERED_EXPORT_DESCRIPTION
+            ),
+            AemoMonitorSwitch(entry.runtime_data, entry),
             AutomaticEvControlSwitch(entry.runtime_data, entry, EV_DESCRIPTION),
             EvBeforeExportSwitch(
                 entry.runtime_data,
@@ -136,6 +144,35 @@ class AutomaticExportSwitch(CoordinatorEntity[EnergyCoordinator], SwitchEntity):
         controller = self.coordinator.active_controller
         if controller is not None:
             await controller.async_reconcile()
+        self.coordinator.async_update_listeners()
+
+
+class PriceTriggeredExportSwitch(AutomaticExportSwitch):
+    """Reuse shared sellable energy outside the ordinary export window."""
+
+    @property
+    def is_on(self) -> bool:
+        return self.coordinator.runtime_config.export.price_triggered_enabled
+
+    async def _set_enabled(self, enabled: bool) -> None:
+        runtime = self.coordinator.runtime_config
+        if enabled and (
+            not runtime.aemo_monitor.enabled
+            or runtime.automation.control_owner != FOXESS_CONTROL_OWNER_MODBUS
+        ):
+            raise HomeAssistantError(
+                "Configure Local Modbus ownership and enable an explicit AEMO market region first"
+            )
+        key = CONF_CRITICAL_EVENT_SELL_ENABLED
+        self.hass.config_entries.async_update_entry(
+            self._entry,
+            data={**self._entry.data, key: enabled},
+            options={name: value for name, value in self._entry.options.items() if name != key},
+        )
+        self.coordinator.update_config_value(key, enabled)
+        self.async_write_ha_state()
+        if self.coordinator.active_controller is not None:
+            await self.coordinator.active_controller.async_reconcile()
         self.coordinator.async_update_listeners()
 
 

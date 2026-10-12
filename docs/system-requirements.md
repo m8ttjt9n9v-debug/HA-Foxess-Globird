@@ -11,6 +11,15 @@ VPP/cloud or other inverter writers must be disabled before operator use;
 acknowledgement cannot verify or disable them. Home Assistant restarts for code
 installation require the deployment-specific safe-session checks.
 
+Optional [price-triggered export](price-triggered-export.md) needs outbound
+HTTPS access to AEMO's current DispatchIS report index and ZIP reports, an
+explicit NEM region, fresh commissioned electrical/house/SoC telemetry, and
+native force-power number entities in kW. It needs no third-party price
+integration. Observation and automatic export are separate default-off
+requests. Exclusive Local Modbus ownership and the existing control gates
+remain mandatory; a price reading cannot prove a VPP is disabled or that a
+retailer payment applies.
+
 ## Required for the retained feature set
 
 - A supported Home Assistant installation and HACS custom-repository access.

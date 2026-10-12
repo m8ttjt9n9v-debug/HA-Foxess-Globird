@@ -27,6 +27,8 @@ class FoxessFeedbackSnapshot:
     charge_power_max_kw: float
     discharge_power_max_kw: float
     mapped_entities_available: bool
+    native_power_units: tuple[str | None, str | None] = (None, None)
+    zero_power_writable: bool = False
 
     @property
     def manual_observation(self) -> FoxessObservation | None:
@@ -85,7 +87,27 @@ def capture_foxess_feedback(
         mapped_entities_available=all(
             state is not None for state in (mode_state, charge_state, discharge_state)
         ),
+        native_power_units=tuple(
+            state.attributes.get("unit_of_measurement") if state else None
+            for state in (charge_state, discharge_state)
+        ),
+        zero_power_writable=all(
+            _zero_power_writable(state) for state in (charge_state, discharge_state)
+        ),
     )
+
+
+def _zero_power_writable(state: State | None) -> bool:
+    """Qualify reducing writes from metadata even while numeric feedback is lost."""
+    if state is None or state.attributes.get("unit_of_measurement") not in {"W", "kW"}:
+        return False
+    try:
+        minimum = float(state.attributes["min"])
+        maximum = float(state.attributes["max"])
+        step = float(state.attributes["step"])
+    except (KeyError, TypeError, ValueError):
+        return False
+    return minimum == 0 and isfinite(maximum) and maximum >= 0 and isfinite(step) and step > 0
 
 
 def _available_state(state: State | None) -> str | None:

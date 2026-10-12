@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 from datetime import datetime, timedelta
+from math import isfinite
 
 from .foxess import (
     ControlDecision,
@@ -27,6 +28,9 @@ class ExportSessionState:
     requested_power_kw: float = 0.0
     attempts: int = 0
     last_command_at: datetime | None = None
+    authority_source: str = "zerohero"
+    price_deadline: datetime | None = None
+    price_actuator_entities: tuple[str, str, str] | None = None
 
     @classmethod
     def from_payload(cls, payload: dict[str, object] | None) -> ExportSessionState:
@@ -38,15 +42,32 @@ class ExportSessionState:
         attempts = int(payload["attempts"])
         last_raw = payload.get("last_command_at")
         last_at = datetime.fromisoformat(str(last_raw)) if last_raw else None
+        authority = str(payload.get("authority_source", "zerohero"))
+        deadline_raw = payload.get("price_deadline")
+        deadline = datetime.fromisoformat(str(deadline_raw)) if deadline_raw else None
+        mapping = _price_mapping(payload.get("price_actuator_entities"))
         if phase not in {"idle", "starting", "active", "stopping", "recovering"}:
             raise ValueError("invalid export session phase")
         if power < 0 or attempts < 0:
             raise ValueError("invalid export session counter")
-        return cls(phase, power, attempts, last_at)
+        _validate_authority(authority, deadline, phase=phase)
+        if authority == "price" and (not isfinite(power) or power <= 0):
+            raise ValueError("price-owned power must be positive and finite")
+        if authority == "price" and (
+            type(payload["attempts"]) is not int
+            or last_at is not None and (last_at.tzinfo is None or last_at.utcoffset() is None)
+            or phase in {"starting", "active"} and last_at is not None and last_at > deadline
+        ):
+            raise ValueError("invalid price command timing or retry counter")
+        if authority == "price" and mapping is None:
+            raise ValueError("price-owned journal must bind its original actuators")
+        if authority == "zerohero" and mapping is not None:
+            raise ValueError("ordinary journal cannot inherit price actuators")
+        return cls(phase, power, attempts, last_at, authority, deadline, mapping)
 
     def to_payload(self) -> dict[str, object]:
         """Return the unchanged Store payload."""
-        return {
+        payload = {
             "phase": self.phase,
             "requested_power_kw": self.requested_power_kw,
             "attempts": self.attempts,
@@ -54,6 +75,15 @@ class ExportSessionState:
                 self.last_command_at.isoformat() if self.last_command_at else None
             ),
         }
+        if self.authority_source != "zerohero" or self.price_deadline is not None:
+            if self.price_actuator_entities is None:
+                raise ValueError("price persistence requires original actuator mappings")
+            payload["authority_source"] = self.authority_source
+            payload["price_deadline"] = (
+                self.price_deadline.isoformat() if self.price_deadline else None
+            )
+            payload["price_actuator_entities"] = list(self.price_actuator_entities)
+        return payload
 
 
 @dataclass(frozen=True, slots=True)
@@ -80,6 +110,8 @@ def advance_export_session(
     retry_after: timedelta = timedelta(seconds=30),
     max_attempts: int = 3,
     tolerance_kw: float = 0.01,
+    authority_source: str = "zerohero",
+    price_deadline: datetime | None = None,
 ) -> ExportSessionTransition:
     """Advance a latched session with bounded writes and restart recovery."""
     _validate_inputs(
@@ -91,6 +123,27 @@ def advance_export_session(
         retry_after,
         max_attempts,
     )
+    if state.authority_source == "price" or (
+        authority_source == "price" and state.phase == "idle"
+    ):
+        return _advance_price_session(
+            state,
+            observation,
+            now=now,
+            source_available=source_available,
+            window_active=window_active,
+            eligible=eligible,
+            requested_discharge_power_kw=requested_discharge_power_kw,
+            discharge_power_max_kw=discharge_power_max_kw,
+            finish_requested=finish_requested,
+            acceptance_timeout=acceptance_timeout,
+            retry_after=retry_after,
+            max_attempts=max_attempts,
+            tolerance_kw=tolerance_kw,
+            authority_source=authority_source,
+            price_deadline=price_deadline,
+        )
+    _validate_authority(authority_source, price_deadline)
     new_session_desired = (
         source_available
         and window_active
@@ -215,6 +268,79 @@ def advance_export_session(
     raise ValueError(f"unsupported export session phase: {state.phase}")
 
 
+def _advance_price_session(state, observation, **kwargs):
+    """Apply current price permission around the retained session transitions."""
+    now = kwargs["now"]
+    authority = kwargs.pop("authority_source")
+    proposed_deadline = kwargs.pop("price_deadline")
+    _validate_authority(authority, proposed_deadline)
+    latched = state.phase != "idle" and state.authority_source == "price"
+    deadline = state.price_deadline if latched else proposed_deadline
+    if latched and proposed_deadline is not None:
+        deadline = min(deadline, proposed_deadline)
+    plain = replace(
+        state, authority_source="zerohero", price_deadline=None, price_actuator_entities=None
+    )
+    permitted = (
+        authority == "price" and deadline is not None and now < deadline
+        and kwargs["window_active"] and kwargs["eligible"]
+        and not kwargs["finish_requested"]
+    )
+    if latched and state.last_command_at is not None and now < state.last_command_at:
+        permitted = False
+    if not kwargs["source_available"]:
+        transition = advance_export_session(plain, observation, **kwargs)
+    elif latched and (state.phase == "stopping" or not permitted):
+        decision = ControlDecision("restore_self_use", 0, "price_export_finished")
+        if foxess_response_matches(decision, observation, tolerance_kw=kwargs["tolerance_kw"]):
+            return _idle("restored_self_use")
+        if state.phase == "stopping":
+            interval = timedelta(
+                seconds=min(30 * 2 ** min(max(state.attempts - 1, 0), 4), 300)
+            )
+            if (
+                state.last_command_at is not None and now >= state.last_command_at
+                and _within_retry(state, now, interval)
+            ):
+                transition = ExportSessionTransition(
+                    plain, FoxessCommandPlan((), "awaiting_feedback"), "awaiting_feedback"
+                )
+            else:
+                transition = _stop(plain, observation, now, kwargs["tolerance_kw"])
+        else:
+            transition = _stop(
+                replace(plain, attempts=0, last_command_at=None),
+                observation, now, kwargs["tolerance_kw"],
+            )
+    elif not latched and not permitted:
+        return _idle("not_eligible")
+    elif not latched and observation.mode != "Self Use":
+        return _idle("price_external_owner")
+    else:
+        if latched:
+            # A commissioned reduction may curtail a price-owned target, but
+            # fresh intervals cannot increase its latched inverter power.
+            plain = replace(
+                plain,
+                requested_power_kw=min(
+                    state.requested_power_kw,
+                    kwargs["requested_discharge_power_kw"],
+                    kwargs["discharge_power_max_kw"],
+                ),
+            )
+        transition = advance_export_session(plain, observation, **kwargs)
+    if transition.state.phase == "idle":
+        return transition
+    assert deadline is not None
+    return replace(
+        transition,
+        state=replace(
+            transition.state, authority_source="price", price_deadline=deadline,
+            price_actuator_entities=state.price_actuator_entities,
+        ),
+    )
+
+
 def _start(state, observation, now, requested, maximum, tolerance):
     decision = ControlDecision("force_discharge", requested, "export_window_ready")
     if foxess_response_matches(decision, observation, tolerance_kw=tolerance):
@@ -230,7 +356,12 @@ def _start(state, observation, now, requested, maximum, tolerance):
         discharge_power_max_kw=maximum,
     )
     return ExportSessionTransition(
-        ExportSessionState("starting", requested, state.attempts + 1, now), plan, "start_requested"
+        ExportSessionState(
+            "starting", requested, state.attempts + 1, now,
+            state.authority_source, state.price_deadline,
+            state.price_actuator_entities,
+        ),
+        plan, "start_requested",
     )
 
 
@@ -245,7 +376,11 @@ def _stop(state, observation, now, tolerance):
         discharge_power_max_kw=max(state.requested_power_kw, 0.0),
     )
     return ExportSessionTransition(
-        ExportSessionState("stopping", state.requested_power_kw, state.attempts + 1, now),
+        ExportSessionState(
+            "stopping", state.requested_power_kw, state.attempts + 1, now,
+            state.authority_source, state.price_deadline,
+            state.price_actuator_entities,
+        ),
         plan,
         "stop_requested",
     )
@@ -274,3 +409,36 @@ def _validate_inputs(state, now, requested, maximum, acceptance_timeout, retry_a
         raise ValueError("timeouts must be non-negative")
     if max_attempts < 1:
         raise ValueError("max_attempts must be at least 1")
+    _validate_authority(state.authority_source, state.price_deadline, phase=state.phase)
+    if state.authority_source == "price" and (
+        not isfinite(state.requested_power_kw) or state.requested_power_kw <= 0
+        or not isfinite(requested) or not isfinite(maximum)
+    ):
+        raise ValueError("invalid price export power")
+
+
+def _validate_authority(authority, deadline, *, phase=None):
+    if authority not in {"zerohero", "price"}:
+        raise ValueError("unknown export authority")
+    if deadline is not None and (
+        deadline.tzinfo is None or deadline.utcoffset() is None
+    ):
+        raise ValueError("price deadline must be timezone-aware")
+    if authority == "zerohero" and deadline is not None:
+        raise ValueError("ordinary export cannot inherit a price deadline")
+    if authority == "price" and (
+        deadline is None or phase == "idle"
+    ):
+        raise ValueError("price-owned state must retain its deadline until idle")
+
+
+def _price_mapping(raw):
+    if raw is None:
+        return None
+    if (
+        not isinstance(raw, (list, tuple)) or len(raw) != 3
+        or any(not isinstance(value, str) or not value.strip() for value in raw)
+        or len(set(raw)) != 3
+    ):
+        raise ValueError("invalid original price actuator mapping")
+    return tuple(raw)

@@ -22,7 +22,7 @@ def test_persistence_contract_matches_reviewed_release_baseline() -> None:
 def test_baseline_and_extension_stores_remain_private_and_version_one() -> None:
     contract = build_persistence_contract()
     stores = contract["stores"]
-    assert contract["store_count"] == 14
+    assert contract["store_count"] == 15
     baseline = json.loads(BASELINE_PATH.read_text(encoding="utf-8"))
     assert baseline["store_count"] == 13
     assert all(record in stores for record in baseline["stores"])

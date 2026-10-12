@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from custom_components.home_energy_orchestrator import const
+from scripts.config_contract import ADDITIVE_CONFIG_KEYS
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 SOURCE_ROOT = REPOSITORY_ROOT / "custom_components" / "home_energy_orchestrator"
@@ -19,6 +20,9 @@ BASELINE_PATH = (
     / "maintainability"
     / "config-usage-contract-v0.12.26.json"
 )
+ADDITIONS_PATH = (
+    REPOSITORY_ROOT / "docs" / "maintainability" / "config-usage-additions-price-export-v1.json"
+)
 _CONFIG_ACCESS_METHODS = {
     "get",
     "pop",
@@ -26,7 +30,12 @@ _CONFIG_ACCESS_METHODS = {
     "update_config_value",
     "update_persisted_config_value",
 }
-_BOUNDARY_FILES = {"__init__.py", "config_flow.py", "configuration.py"}
+_BOUNDARY_FILES = {
+    "__init__.py",
+    "config_flow.py",
+    "configuration.py",
+    "aemo_monitor_controls.py",
+}
 _RUNTIME_CONFIG_RECEIVERS = {"self.config", "self.coordinator.config"}
 
 
@@ -161,7 +170,7 @@ class _UsageVisitor(ast.NodeVisitor):
         self.generic_visit(node)
 
 
-def build_config_usage_contract() -> dict[str, Any]:
+def build_config_usage_contract(*, include_extensions: bool = False) -> dict[str, Any]:
     """Return a deterministic AST inventory of direct config-key access."""
     constants = {
         name: value
@@ -174,6 +183,17 @@ def build_config_usage_contract() -> dict[str, Any]:
         visitor = _UsageVisitor(source, constants)
         visitor.visit(tree)
         records.extend(visitor.records)
+    if not include_extensions:
+        # Preserve the fixed baseline while auditing the exact monitor extension
+        # separately. No unknown or unrelated key is exempt from comparison.
+        records = [item for item in records if item["key"] not in ADDITIVE_CONFIG_KEYS]
+        extension = json.loads(ADDITIONS_PATH.read_text(encoding="utf-8"))
+        if extension.get("access_count") != len(extension["accesses"]):
+            raise ValueError("configuration usage addition count does not match its records")
+        for reviewed in extension["accesses"]:
+            if reviewed not in records:
+                raise ValueError("reviewed configuration usage addition is missing")
+            records.remove(reviewed)
     records.sort(
         key=lambda item: (
             item["source"],

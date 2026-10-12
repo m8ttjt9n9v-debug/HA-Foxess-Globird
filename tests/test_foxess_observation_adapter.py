@@ -188,3 +188,29 @@ def test_snapshot_freezes_legacy_controller_read_results(hass) -> None:
     assert result.discharge_power_max_kw == 12.0
     assert result.charge_source_available is True
     assert result.export_source_available is True
+
+
+@pytest.mark.parametrize("unit", ["W", "kW"])
+def test_reducing_metadata_survives_unknown_numeric_feedback(hass, unit):
+    hass.states.async_set(ENTITIES.work_mode_entity, "unknown", {"options": ["Self Use"]})
+    for entity in (ENTITIES.force_charge_power_entity, ENTITIES.force_discharge_power_entity):
+        hass.states.async_set(entity, "unavailable", {
+            "unit_of_measurement": unit, "min": 0, "max": 10, "step": 0.1,
+        })
+    feedback = capture_foxess_feedback(hass, ENTITIES)
+    assert feedback.observation is None
+    assert feedback.native_power_units == (unit, unit)
+    assert feedback.zero_power_writable
+
+
+@pytest.mark.parametrize("changes", [
+    {"unit_of_measurement": "A"}, {"min": 1}, {"max": "nan"},
+    {"max": -1}, {"step": 0}, {"step": "inf"}, {"step": "nan"},
+])
+def test_reducing_metadata_rejects_unsafe_zero_target(hass, changes):
+    for entity in (ENTITIES.force_charge_power_entity, ENTITIES.force_discharge_power_entity):
+        hass.states.async_set(entity, "unavailable", {
+            "unit_of_measurement": "kW", "min": 0, "max": 10, "step": 0.1,
+            **(changes if entity == ENTITIES.force_discharge_power_entity else {}),
+        })
+    assert not capture_foxess_feedback(hass, ENTITIES).zero_power_writable

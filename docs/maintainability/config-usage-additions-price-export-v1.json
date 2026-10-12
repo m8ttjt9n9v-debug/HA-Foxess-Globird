@@ -1,0 +1,17 @@
+{
+  "schema_version": 4,
+  "extension": "price_export_v1",
+  "access_count": 1,
+  "accesses": [
+    {
+      "access": "get",
+      "constant": "CONF_FOXESS_CONTROL_OWNER",
+      "key": "foxess_control_owner",
+      "kind": "raw_mapping",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._validate_aemo_monitor",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    }
+  ]
+}

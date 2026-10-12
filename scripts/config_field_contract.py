@@ -30,6 +30,9 @@ TRANSLATION_PATH = (
     / "translations"
     / "en.json"
 )
+ADDITIONS_PATH = (
+    REPOSITORY_ROOT / "docs" / "maintainability" / "config-field-additions-price-export-v1.json"
+)
 
 
 def _json_value(value: Any) -> Any:
@@ -118,6 +121,32 @@ def rendered_contract() -> str:
     return json.dumps(build_config_field_contract(), indent=2, sort_keys=True) + "\n"
 
 
+def validate_against_release_baseline() -> None:
+    """Preserve frozen field records and admit only reviewed additional fields."""
+    baseline = json.loads(BASELINE_PATH.read_text(encoding="utf-8"))
+    extension = json.loads(ADDITIONS_PATH.read_text(encoding="utf-8"))
+    if extension.get("schema_version") != baseline["schema_version"]:
+        raise ValueError("field addition schema does not match the baseline")
+    if extension.get("field_count") != len(extension["fields"]):
+        raise ValueError("field addition count does not match its records")
+    retained = {field["key"]: field for field in baseline["fields"]}
+    added = {field["key"]: field for field in extension["fields"]}
+    if len(added) != len(extension["fields"]) or retained.keys() & added.keys():
+        raise ValueError("field additions cannot replace frozen fields")
+    current = build_config_field_contract()
+    actual = {field["key"]: field for field in current["fields"]}
+    if current["config_entry_version"] != baseline["config_entry_version"]:
+        raise ValueError("configuration entry version changed")
+    if current["field_count"] != baseline["field_count"] + len(added):
+        raise ValueError("field count differs from baseline plus reviewed additions")
+    expected = retained | added
+    if actual.keys() != expected.keys():
+        raise ValueError("configuration field identities changed beyond reviewed additions")
+    for key, record in expected.items():
+        if actual[key] != record:
+            raise ValueError(f"configuration field changed beyond reviewed additions: {key}")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--write", action="store_true")
@@ -125,14 +154,12 @@ def main() -> int:
     args = parser.parse_args()
     rendered = rendered_contract()
     if args.write:
-        BASELINE_PATH.write_text(rendered, encoding="utf-8")
+        parser.error("The release field baseline is frozen; review additions separately")
     if args.check:
-        if not BASELINE_PATH.is_file() or BASELINE_PATH.read_text(
-            encoding="utf-8"
-        ) != rendered:
-            raise SystemExit(
-                "Configuration field contract changed; review compatibility and regenerate"
-            )
+        try:
+            validate_against_release_baseline()
+        except ValueError as error:
+            raise SystemExit(str(error)) from error
     if not args.write and not args.check:
         print(rendered, end="")
     return 0

@@ -83,6 +83,13 @@ current. See the [commissioning checklist](docs/commissioning.md).
 
 ## Current capabilities
 
+- Optional [automatic export during high wholesale prices](docs/price-triggered-export.md).
+  A default-off AEMO observer supplies actual current regional prices; a
+  separate default-off request uses the existing Sellable Energy, shared
+  daily cap, controller and session journal. Expired price permission cannot
+  inherit the ordinary ZEROHERO latch. A threshold is not confirmation of a
+  retailer event or payment, and this feature does not automate buying.
+
 - Optional [Fleet manual export controls](docs/fleet-command-controls.md):
   single-click maximum-rate export and Stop/Self Use across a configured hub
   and two remote sites. Both leave automatic battery control under a persistent
@@ -172,6 +179,10 @@ The integration exposes `switch.home_energy_safety_lock`: ON means no hardware
 writes. Turning it OFF does not enable automation. Automatic export additionally
 requires Local Modbus ownership, the FoxESS automatic gate, and
 `switch.home_energy_automatic_export`.
+Price-triggered export instead uses the independent default-off
+`switch.home_energy_critical_event_sell` request and current AEMO evidence under
+the same Local Modbus/master/safety gates. Turn that request off separately if
+you want to disable both automatic export policies.
 Automatic battery charging uses the same ownership/master/safety gates plus
 `switch.home_energy_automatic_charge`; its power is the commissioned inverter
 charge limit bounded by the mapped FoxESS entity.

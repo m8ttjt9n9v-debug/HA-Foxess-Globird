@@ -11,8 +11,10 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util
 
 from . import EnergyConfigEntry
+from .aemo_monitor import AemoMarketMonitor
 from .const import DOMAIN
 from .coordinator import EnergyCoordinator
+from .entity_catalogue import AEMO_SENSOR_DESCRIPTIONS
 from .entity_catalogue import SENSOR_DESCRIPTIONS as DESCRIPTIONS
 from .read_model import (
     build_site_read_model,
@@ -28,6 +30,10 @@ async def async_setup_entry(
     """Add observer entities."""
     async_add_entities(
         EnergySensor(entry.runtime_data, entry, description) for description in DESCRIPTIONS
+    )
+    async_add_entities(
+        AemoMonitorSensor(entry.runtime_data.market_monitor, entry, description)
+        for description in AEMO_SENSOR_DESCRIPTIONS
     )
 
 
@@ -105,3 +111,39 @@ class EnergySensor(CoordinatorEntity[EnergyCoordinator], SensorEntity):
         if self.entity_description.key != "status":
             return None
         return read_model.status_attributes()
+
+
+class AemoMonitorSensor(CoordinatorEntity[AemoMarketMonitor], SensorEntity):
+    """Expose market observations without depending on electrical telemetry."""
+
+    def __init__(
+        self,
+        coordinator: AemoMarketMonitor,
+        entry: ConfigEntry,
+        description: SensorEntityDescription,
+    ) -> None:
+        super().__init__(coordinator)
+        self.entity_description = description
+        self._attr_unique_id = f"{entry.entry_id}_{description.key}"
+        self.entity_id = f"sensor.home_energy_{description.key}"
+        self._attr_has_entity_name = True
+        self._attr_device_info = DeviceInfo(identifiers={(DOMAIN, entry.entry_id)})
+
+    @property
+    def available(self) -> bool:
+        """Keep the reason visible; never expose an expired numeric price."""
+        if self.entity_description.key == "aemo_market_status":
+            return True
+        return self.coordinator.current_result.price_per_kwh is not None
+
+    @property
+    def native_value(self):
+        observation = self.coordinator.current_result
+        return {
+            "aemo_market_status": observation.status,
+            "aemo_spot_price": observation.price_per_kwh,
+        }[self.entity_description.key]
+
+    @property
+    def extra_state_attributes(self):
+        return self.coordinator.result_attributes

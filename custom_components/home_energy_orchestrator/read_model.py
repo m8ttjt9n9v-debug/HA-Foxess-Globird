@@ -62,7 +62,14 @@ def export_status(coordinator: EnergyCoordinator) -> str:
     handoff = getattr(controller, "manual", None)
     if handoff is not None and handoff.is_active:
         return handoff.status
+    if (
+        getattr(controller.export_session, "authority_source", "zerohero") == "price"
+        and controller.export_session.phase != "idle"
+    ):
+        return f"price_{controller.export_session.phase}"
     if not coordinator.runtime_config.automation.battery_export_enabled:
+        if coordinator.runtime_config.export.price_triggered_enabled:
+            return "waiting_price"
         return "disabled"
     decision = controller.ev_before_export_decision
     if not decision.export_allowed:
@@ -716,6 +723,9 @@ class SiteReadModel:
     zerohero_status: str
     latest_zerohero_status: str | None
     manual_inverter_attributes_json: str = "{}"
+    export_authority_source: str = "zerohero"
+    export_price_deadline: str | None = None
+    price_triggered_export_enabled: bool = False
 
     @property
     def ledger_status(self) -> str:
@@ -767,7 +777,6 @@ class SiteReadModel:
             **self.ev.sensor_values(),
         }
 
-
     def fleet_attributes(self, updated_at: datetime) -> dict[str, object]:
         """Project the stable Fleet Summary schema version 1 payload."""
         return {
@@ -796,6 +805,8 @@ class SiteReadModel:
             "ledger_status": self.ledger_status,
             "tariff_status": self.tariff_status,
             "last_update": updated_at.isoformat(),
+            "export_authority_source": self.export_authority_source,
+            "export_price_deadline": self.export_price_deadline,
             "manual_inverter_hold": self.manual_inverter_attributes().get(
                 "manual_inverter_hold", False
             ),
@@ -860,6 +871,9 @@ class SiteReadModel:
             "foxess_control_owner": control.foxess_control_owner,
             "automatic_export_enabled": control.automatic_export_enabled,
             "automatic_export_effective": control.automatic_export_effective,
+            "price_triggered_export_enabled": self.price_triggered_export_enabled,
+            "export_authority_source": self.export_authority_source,
+            "export_price_deadline": self.export_price_deadline,
             "ev_before_export_status": control.ev_before_export_status,
             "ev_automatic_control_enabled": control.ev_automatic_control_enabled,
             "ev_control_gate": control.ev_gate,
@@ -1405,4 +1419,16 @@ def build_site_read_model(
             else controller.manual.attributes(),
             sort_keys=True,
         ),
+        export_authority_source=(
+            "zerohero"
+            if controller is None
+            else getattr(controller.export_session, "authority_source", "zerohero")
+        ),
+        export_price_deadline=(
+            None
+            if controller is None
+            or getattr(controller.export_session, "price_deadline", None) is None
+            else controller.export_session.price_deadline.isoformat()
+        ),
+        price_triggered_export_enabled=coordinator.runtime_config.export.price_triggered_enabled,
     )

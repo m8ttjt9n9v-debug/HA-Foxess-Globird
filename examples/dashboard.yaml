@@ -521,6 +521,49 @@ views:
               tariff windows, ownership, charging policy, reserve, and export
               settings. The shared dashboard never embeds one site's values.
       - type: grid
+        column_span: 2
+        cards:
+          - type: heading
+            heading: Market Price and Automatic Export
+            heading_style: title
+            icon: mdi:chart-line
+          - type: entities
+            title: Current price and eligibility
+            show_header_toggle: false
+            entities:
+              - entity: sensor.home_energy_aemo_spot_price
+                name: Current wholesale price
+              - entity: sensor.home_energy_aemo_market_status
+                name: Price observation status
+              - type: attribute
+                entity: sensor.home_energy_aemo_market_status
+                attribute: interval_end
+                name: Price interval expires
+              - entity: switch.home_energy_aemo_monitor
+                name: Observe current AEMO prices
+              - entity: select.home_energy_aemo_region
+                name: Explicit market region
+              - entity: number.home_energy_aemo_export_threshold
+                name: Export threshold (AUD/kWh)
+              - entity: switch.home_energy_critical_event_sell
+                name: Automatic price-triggered export
+              - type: attribute
+                entity: sensor.home_energy_status
+                attribute: export_authority_source
+                name: Current export authority
+              - type: attribute
+                entity: sensor.home_energy_status
+                attribute: export_price_deadline
+                name: Retained price deadline
+          - type: markdown
+            content: >-
+              Monitoring and price-triggered export start OFF. A qualifying
+              current interval may admit export through the existing protected
+              export policy and commissioned write gates. Missing or expired
+              price data cannot authorize new export. Price observations do not
+              establish a retailer event or payment. A software deadline needs
+              Home Assistant and actuator services to remain available.
+      - type: grid
         cards:
           - type: heading
             heading: Free-Window Charging

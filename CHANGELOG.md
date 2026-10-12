@@ -1,5 +1,26 @@
 # Changelog
 
+## Unreleased — Protected wholesale price export
+
+- Add default-off monitoring of current actual AEMO DispatchIS prices, explicit
+  NEM region and configurable export threshold. Cached summaries, forecasts,
+  intervention, administered/suspended pricing and expired intervals cannot
+  grant export permission. A price trigger is not a retailer event declaration
+  or guarantee of payment.
+- Reuse the existing inverter controller, Sellable Energy and protected house/EV
+  calculation for a separate default-off automatic price-export request. Share
+  the measured all-day export budget, including earlier solar/manual export;
+  do not reset it for another spike or toggle.
+- Extend the existing session journal with source, fixed deadline and original
+  actuator binding. Stop on lost price/Sellable, retain progressively retried
+  reducing cleanup through outages/restart, and recheck authority between
+  staged commands. Preserve ordinary ZEROHERO latching, Safety Lock, local
+  ownership, manual Stop and free-window/paid-Full priorities.
+- Add dashboard controls, append-only compatibility contracts and fault/lifecycle
+  regressions. No price-triggered buying, event reward accounting, or change to
+  retailer scorecard assumptions is included. See the price-export guide for
+  operation and the required safe downgrade procedure.
+
 ## 0.12.29rc17 — Fleet manual export controls
 
 - Add operator services for maximum-rate export, Self Use, and explicit resume

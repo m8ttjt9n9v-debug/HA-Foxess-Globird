@@ -12,6 +12,10 @@ from custom_components.home_energy_orchestrator.entity_catalogue import ENTITY_S
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 BASELINE_PATH = REPOSITORY_ROOT / "docs" / "maintainability" / "entity-contract-v0.12.26.json"
+ADDITIONS_PATH = REPOSITORY_ROOT / "docs" / "maintainability" / "entity-additions-aemo-monitor.json"
+PRICE_ADDITIONS_PATH = (
+    REPOSITORY_ROOT / "docs" / "maintainability" / "entity-additions-price-export-v1.json"
+)
 
 APPROVED_DISPLAY_NAMES = {
     "automatic_export": "Automatic Battery Export",
@@ -75,10 +79,22 @@ def rendered_contract() -> str:
 
 
 def validate_against_release_baseline() -> None:
-    """Allow only owner-approved display-name deltas from v0.12.26."""
+    """Preserve every baseline identity plus explicitly reviewed additions."""
     baseline = json.loads(BASELINE_PATH.read_text(encoding="utf-8"))
+    additions = [
+        json.loads(path.read_text(encoding="utf-8"))
+        for path in (ADDITIONS_PATH, PRICE_ADDITIONS_PATH)
+    ]
+    for extension in additions:
+        if extension.get("schema_version") != baseline.get("schema_version"):
+            raise ValueError("entity addition schema does not match the baseline")
+        if extension.get("entity_count") != len(extension["entities"]):
+            raise ValueError("entity addition count does not match its records")
     current = build_entity_contract()
-    if baseline["entity_count"] != current["entity_count"]:
+    if (
+        baseline["entity_count"] + sum(item["entity_count"] for item in additions)
+        != current["entity_count"]
+    ):
         raise ValueError("entity count changed from the frozen release baseline")
     baseline_records = {
         (item["platform"], item["key"]): item for item in baseline["entities"]
@@ -86,8 +102,21 @@ def validate_against_release_baseline() -> None:
     current_records = {
         (item["platform"], item["key"]): item for item in current["entities"]
     }
-    if baseline_records.keys() != current_records.keys():
+    added_records = {
+        (item["platform"], item["key"]): item
+        for extension in additions
+        for item in extension["entities"]
+    }
+    if len(added_records) != sum(len(item["entities"]) for item in additions):
+        raise ValueError("entity additions contain duplicate identities")
+    if (
+        baseline_records.keys() & added_records.keys()
+        or baseline_records.keys() | added_records.keys() != current_records.keys()
+    ):
         raise ValueError("entity identity changed from the frozen release baseline")
+    for identity, expected in added_records.items():
+        if current_records[identity] != expected:
+            raise ValueError(f"unreviewed entity addition changed: {identity!r}")
     for identity, old in baseline_records.items():
         new = current_records[identity]
         expected_name = APPROVED_DISPLAY_NAMES.get(old["key"], old["name"])
@@ -107,7 +136,7 @@ def main() -> int:
     args = parser.parse_args()
     rendered = rendered_contract()
     if args.write:
-        BASELINE_PATH.write_text(rendered, encoding="utf-8")
+        parser.error("The release baseline is frozen; review additions in their own contract")
     if args.check:
         try:
             validate_against_release_baseline()

@@ -20,6 +20,9 @@ CATALOGUE_PATH = (
     / "home_energy_orchestrator"
     / "field_catalogue.py"
 )
+ADDITIONS_PATH = (
+    REPOSITORY_ROOT / "docs" / "maintainability" / "config-field-additions-price-export-v1.json"
+)
 
 _EV_PAGES = {"car", "charger", "ev_policies", "recovery"}
 
@@ -78,6 +81,10 @@ def _field_line(field: dict[str, Any]) -> str:
 def rendered_catalogue() -> str:
     """Return deterministic Python source for every frozen wizard field."""
     contract = json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
+    additions = json.loads(ADDITIONS_PATH.read_text(encoding="utf-8"))
+    if additions["field_count"] != len(additions["fields"]):
+        raise ValueError("field catalogue additions have an invalid count")
+    contract["fields"] = contract["fields"] + additions["fields"]
     lines = [
         "# ruff: noqa: E501\n",
         '"""Generated immutable configuration field catalogue.\n',

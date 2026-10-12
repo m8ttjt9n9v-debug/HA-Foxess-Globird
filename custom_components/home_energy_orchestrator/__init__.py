@@ -9,6 +9,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
 
 from .active import ActiveFoxessController
+from .aemo_monitor import AemoMarketMonitor
 from .const import (
     BATTERY_POSITIVE_CHARGE,
     BATTERY_POSITIVE_DISCHARGE,
@@ -173,6 +174,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: EnergyConfigEntry) -> bo
     coordinator.ev_controller = ev_controller
     supervisor = ControlConformanceSupervisor(hass, coordinator)
     coordinator.control_supervisor = supervisor
+    market = AemoMarketMonitor(hass, entry.entry_id, coordinator.runtime_config.aemo_monitor)
+    coordinator.market_monitor = market
+    await market.async_restore_history()
     # Platform entities read controller diagnostics during their first state
     # write, so attach both controllers before forwarding setup.
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
@@ -180,6 +184,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: EnergyConfigEntry) -> bo
     await active.async_start()
     await ev_controller.async_start()
     await supervisor.async_start()
+    await market.async_start()
     hass.data.setdefault("home_energy_orchestrator", {})[entry.entry_id] = {
         "coordinator": coordinator,
         "manual_test": coordinator.manual_test,
@@ -190,6 +195,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: EnergyConfigEntry) -> bo
 
 async def async_unload_entry(hass: HomeAssistant, entry: EnergyConfigEntry) -> bool:
     """Unload all observer entities."""
+    market = getattr(entry.runtime_data, "market_monitor", None)
+    if market is not None:
+        await market.async_stop()
     active = getattr(entry.runtime_data, "active_controller", None)
     if active is not None:
         await active.async_stop()

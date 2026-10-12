@@ -35,13 +35,13 @@ def test_entity_contract_matches_reviewed_release_baseline() -> None:
     assert {
         key: new_names[key]
         for key in new_names
-        if new_names[key] != old_names[key]
+        if key in old_names and new_names[key] != old_names[key]
     }.items() <= APPROVED_DISPLAY_NAMES.items()
 
 
-def test_entity_contract_contains_one_hundred_and_nine_unique_entities() -> None:
+def test_entity_contract_contains_frozen_and_reviewed_additive_entities() -> None:
     contract = build_entity_contract()
-    assert contract["entity_count"] == 109
+    assert contract["entity_count"] == 117
     unique_ids = [item["unique_id_template"] for item in contract["entities"]]
     entity_ids = [item["default_entity_id"] for item in contract["entities"]]
     assert len(unique_ids) == len(set(unique_ids))
@@ -60,13 +60,16 @@ def test_entity_catalogue_is_complete_and_unique() -> None:
         for spec in ENTITY_SPECS
     }
 
-    assert len(ENTITY_SPECS) == 109
+    assert len(ENTITY_SPECS) == 117
     assert len(catalogued) == len(ENTITY_SPECS)
     assert catalogued == contracted
     assert all(spec.value_projection for spec in ENTITY_SPECS)
     assert {
         spec.availability for spec in ENTITY_SPECS
-    } == {"coordinator", "coordinator_and_projection"}
+    } == {
+        "coordinator", "coordinator_and_projection", "monitor_status",
+        "current_market_price", "market_configuration",
+    }
     assert not any(spec.deprecated for spec in ENTITY_SPECS)
 
 
@@ -99,6 +102,21 @@ def test_sensor_specs_match_native_value_projection_keys() -> None:
         == "read_model.sensor_values()[self.entity_description.key]"
     )
     projected_keys: set[str] = set()
+    monitor_sensor = next(
+        node for node in sensor_tree.body
+        if isinstance(node, ast.ClassDef) and node.name == "AemoMonitorSensor"
+    )
+    monitor_value = next(
+        node for node in monitor_sensor.body
+        if isinstance(node, ast.FunctionDef) and node.name == "native_value"
+    )
+    monitor_returns = [
+        node for node in ast.walk(monitor_value)
+        if isinstance(node, ast.Return) and isinstance(node.value, ast.Subscript)
+        and isinstance(node.value.value, ast.Dict)
+    ]
+    assert len(monitor_returns) == 1
+    projected_keys.update(ast.literal_eval(key) for key in monitor_returns[0].value.value.keys)
     read_model_projections: list[ast.Dict] = []
     for node in ast.walk(read_model_tree):
         if not isinstance(node, ast.FunctionDef) or node.name != "sensor_values":
