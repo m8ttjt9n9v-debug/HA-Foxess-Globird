@@ -78,6 +78,33 @@ BASE = FreeWindowCurrentInputs(
     ev_priority=False,
 )
 
+
+@pytest.mark.parametrize("phase_count", [1, 3])
+@pytest.mark.parametrize("ev_priority", [False, True])
+def test_invalid_rolling_average_characterizes_priority_dependency(
+    phase_count: int, ev_priority: bool,
+) -> None:
+    """Characterize priority ordering when rolling-average coverage is invalid.
+
+    This pure input is separate from raw phase-feedback availability. The
+    multiphase runtime gates ordinary current decisions before this planner
+    when raw feedback is missing; these cases do not bypass that safety gate.
+    """
+    decision = plan_free_window_current(
+        replace(
+            BASE,
+            site_phase_count=phase_count,
+            grid_average_a=0,
+            grid_average_valid=False,
+            ev_priority=ev_priority,
+        )
+    )
+    assert decision.current_a == (BASE.ceiling_a if ev_priority else BASE.effective_minimum_a)
+    assert decision.phase == (
+        "ev_priority_maximum" if ev_priority else "telemetry_fallback_minimum"
+    )
+
+
 FREE_WINDOW_TARGET = FreeWindowTargetEvidence(
     ceiling_a=16,
     physical_minimum_a=1,

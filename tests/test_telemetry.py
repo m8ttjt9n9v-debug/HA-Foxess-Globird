@@ -124,6 +124,86 @@ def test_multiphase_current_fails_closed_on_bad_phase_evidence(
     assert current.reason == reason
 
 
+@pytest.mark.parametrize("kind", ("power", "voltage"))
+@pytest.mark.parametrize("phase_index", (0, 1, 2))
+def test_multiphase_current_rejects_each_stale_phase_source(
+    kind: str, phase_index: int
+) -> None:
+    """A still-numeric phase cannot be hidden by fresher peers."""
+    powers, voltages = _phase_sources()
+    selected = list(powers if kind == "power" else voltages)
+    source = selected[phase_index]
+    selected[phase_index] = TelemetrySource(
+        source.entity_id, source.raw_value, source.raw_unit,
+        NOW - timedelta(seconds=91),
+    )
+    if kind == "power":
+        powers = tuple(selected)
+    else:
+        voltages = tuple(selected)
+    current = most_loaded_phase_current(
+        powers, voltages, now=NOW, max_age_seconds=90,
+        power_positive_direction="positive_export",
+    )
+    assert current.value is None
+    assert current.reason == "phase_stale"
+
+
+@pytest.mark.parametrize("kind", ("power", "voltage"))
+@pytest.mark.parametrize("phase_index", (0, 1, 2))
+def test_multiphase_current_rejects_each_wrong_unit(
+    kind: str, phase_index: int
+) -> None:
+    powers, voltages = _phase_sources()
+    selected = list(powers if kind == "power" else voltages)
+    source = selected[phase_index]
+    selected[phase_index] = TelemetrySource(
+        source.entity_id, source.raw_value,
+        "A" if kind == "power" else "kW", source.updated_at,
+    )
+    if kind == "power":
+        powers = tuple(selected)
+    else:
+        voltages = tuple(selected)
+    current = most_loaded_phase_current(
+        powers, voltages, now=NOW, max_age_seconds=90,
+        power_positive_direction="positive_export",
+    )
+    assert current.value is None
+    assert current.reason == (
+        "phase_invalid_value_or_unit"
+        if kind == "power" else "phase_non_finite_value"
+    )
+
+
+@pytest.mark.parametrize("kind", ("power", "voltage"))
+@pytest.mark.parametrize("phase_index", (0, 1, 2))
+@pytest.mark.parametrize(
+    ("raw_value", "expected_reason"),
+    (("unavailable", "phase_source_unavailable"),
+     ("fault", "phase_invalid_value_or_unit")),
+)
+def test_multiphase_current_rejects_each_missing_or_malformed_phase(
+    kind: str, phase_index: int, raw_value: str, expected_reason: str
+) -> None:
+    powers, voltages = _phase_sources()
+    selected = list(powers if kind == "power" else voltages)
+    source = selected[phase_index]
+    selected[phase_index] = TelemetrySource(
+        source.entity_id, raw_value, source.raw_unit, source.updated_at,
+    )
+    if kind == "power":
+        powers = tuple(selected)
+    else:
+        voltages = tuple(selected)
+    current = most_loaded_phase_current(
+        powers, voltages, now=NOW, max_age_seconds=90,
+        power_positive_direction="positive_export",
+    )
+    assert current.value is None
+    assert current.reason == expected_reason
+
+
 def test_multiphase_telemetry_can_recover_from_unavailable_direct_helper() -> None:
     powers, voltages = _phase_sources()
     telemetry = normalize_site_telemetry(
