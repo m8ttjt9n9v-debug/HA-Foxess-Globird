@@ -3,7 +3,8 @@
 HEO retains the Working Single Phase Pilot Site's proven latest-start EV
 backfill as the explicit **Conservative** choice. **Ready by** is the default
 timing and uses currently available battery surplus before departure through the
-existing daily ready-by planner and session. It works with no fixed daily EV
+existing daily ready-by planner and session, then retains the original late
+pre-free opportunity. It works with no fixed daily EV
 allocation. Both timing choices require the pre-free backfill policy to be
 enabled and Local Modbus ownership.
 
@@ -32,6 +33,8 @@ In **EV Charging policies**, select **Backfill timing**:
   discretionary battery energy toward the existing daily ready-by time.
   Charging may start overnight after midnight. It does not need a fixed daily
   kWh allocation and adds no new protection to the previous evening's export.
+  After that deadline, remaining safe surplus can still use the original
+  latest-start backfill before free power; it is an additional opportunity.
   This is the default for new entries and existing entries without a saved
   timing choice.
 
@@ -115,11 +118,30 @@ Unavailable or invalid energy inputs, lost reserve, disconnection, vehicle
 limit, or a closed control gate end the surplus session through the existing
 stop or protected-baseline reconciliation.
 
-While Ready by is selected, the original conservative pre-free stage is
-suppressed throughout the cycle, including after the ready deadline. It cannot
-start a second battery-backed session between departure and free power.
-Eligible measured morning-solar charging and free-window charging retain their
-own authority after the ready-by session ends.
+## Handoff after the ready time
+
+Ready by is an earlier opportunity, not a replacement for pre-free backfill.
+Before the ready deadline, it owns battery-backed backfill. At that deadline
+the daily session ends and the original latest-start pre-free planner becomes
+eligible again. It calculates against the upcoming free-power start, not
+tomorrow's ready time. This does not mean charging starts immediately: with a
+small remaining budget it may still wait until nearer free power.
+
+Late backfill uses only the current safe budget. Earlier EV charging and house
+use do not leave another copy of the earlier allocation to spend. The existing
+live house protection, reserve, export cap and next ready-cycle fixed allocation
+remain binding. The Ready by evidence checks also continue after its deadline;
+invalid timing or missing/stale inputs cannot grant fallback permission.
+
+Eligible measured morning solar can charge while late backfill is waiting.
+Once late backfill starts, it has exclusive current ownership; solar adjustments
+cannot modulate it. Free-window charging then takes over independently at its
+configured start. Charge to Full retains its separate paid override.
+
+Both opportunities use the existing controller and session state. A pending
+daily stop cannot interrupt an authorised successor, but remains effective if
+extra charging loses authority. Without an eligible successor, the configured
+protected baseline applies: a nonzero keep-alive is retained; zero means stop.
 
 ## Shared session and restart behavior
 
@@ -134,7 +156,8 @@ configured telemetry age are not guessed. Both ready-by uses share the same
 persisted ready-cycle ledger, session target, delivered energy and bounded
 stop-retry obligation across reload and restart. A nonzero protected baseline
 is reconciled instead of stopping the connector. Free-window charging and paid
-Charge to Full charging do not count as ready-by delivery.
+Charge to Full charging do not count as ready-by delivery. Late pre-free
+charging also does not consume tomorrow's fixed ready-by allocation ledger.
 
 ## Ownership
 

@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.12.30 — Ready-by and pre-free EV handoff
+
+- Correct Ready by timing to provide an additional earlier charging opportunity,
+  not disable the original latest-start pre-free backfill after departure time.
+  Reassess the current protected energy budget against the upcoming free-power window; earlier
+  charging or house use cannot revive the earlier budget.
+- Retain house protection, the configured battery cutoff, normal EV charge cap,
+  outside inverter/service limits, coherent telemetry, restart state and bounded
+  stop obligations. Morning solar may run while backfill waits; active backfill
+  is exclusive and free-window charging takes over independently.
+- Reuse the existing planners and controller without new settings, counters,
+  timers or storage migrations. Explicit Conservative timing is unchanged.
+- Update setup/reconfigure explanations and add handoff, fixed-allocation,
+  restart, one/three-phase and time-boundary regressions. Automated coverage
+  does not substitute for live pilot acceptance.
+- This is a policy correction only; no automatic price-triggered buying or
+  other pending feature is included.
+
 ## 0.12.29 — Protected export, Fleet controls and trip helpers
 
 - Promote the functionality-frozen rc18 runtime to stable. This promotion

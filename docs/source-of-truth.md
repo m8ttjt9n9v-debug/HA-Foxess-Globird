@@ -165,10 +165,15 @@ layers around the proven algorithm, not replacement algorithms.
   normal charge-limit policy remain binding. Fresh coherent grid/battery
   evidence and fresh mapped house demand are required; excessive grid import,
   invalid energy inputs or lost reserve curtail through the existing stop or
-  protected-baseline reconciliation. Ready by suppresses the conservative
-  pre-free stage even after its deadline, allowing eligible morning-solar and
-  free-window policies to take over. Paid Charge to Full and free-window
-  charging do not count as ready-cycle delivery. Elapsed-time scheduling handles
+  protected-baseline reconciliation. The v0.12.30 policy-handoff correction
+  makes Ready by an additional earlier opportunity: after its deadline, the
+  original pre-free planner is eligible against the upcoming free boundary.
+  Its energy is capped by the current protected budget, never the earlier
+  allocation. Morning solar can run while it waits; active pre-free owns current
+  exclusively. Invalid Ready by evidence still fails closed, not into a less
+  protected fallback. Pending stops cannot overrule an authorised successor.
+  Late pre-free, paid Charge to Full and free-window charging do not count as
+  next-ready-cycle delivery. Elapsed-time ready-by scheduling handles
   daylight-saving transitions. Automated regression coverage does not establish
   live-site acceptance or a completed generated full-system harness. See
   [`ev-daily-ready-backfill.md`](ev-daily-ready-backfill.md).

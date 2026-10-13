@@ -1880,22 +1880,33 @@ class ActiveEvController:
 
         self.pre_free_plan = None
         self.pre_free_current_a = baseline
+        pre_free_hold = self._pre_free_backfill_hold(now, free_start)
         if (
             self.coordinator.runtime_config.ev_policy.pre_free_enabled
-            and not self._ready_by_backfill_selected()
+            and pre_free_hold is None
         ):
             active_controller = getattr(self.coordinator, "active_controller", None)
             export_plan = getattr(active_controller, "export_plan", None)
+            planned_export_energy = (
+                export_plan.planned_export_energy_kwh if export_plan is not None else None
+            )
+            if (
+                self._ready_by_backfill_selected()
+                and self.daily_backfill_plan is not None
+                and planned_export_energy is not None
+            ):
+                # Carry only the current protected ENERGY authority across the
+                # handoff, never the ready planner's tomorrow-based schedule.
+                # Earlier charging/house use cannot revive a retained budget.
+                planned_export_energy = min(
+                    planned_export_energy, self.daily_backfill_plan.planned_energy_kwh
+                )
             stored_energy = self._mapped_energy(
                 self.coordinator.runtime_config.ev_telemetry.stored_energy_entity
             )
             planning = evaluate_pre_free_plan(
                 PreFreePlanningEvidence(
-                    planned_export_energy_kwh=(
-                        export_plan.planned_export_energy_kwh
-                        if export_plan is not None
-                        else None
-                    ),
+                    planned_export_energy_kwh=planned_export_energy,
                     stored_vehicle_energy_kwh=stored_energy,
                     vehicle_soc_percent=vehicle_soc,
                     vehicle_target_soc_percent=soft_limit,
@@ -1960,7 +1971,9 @@ class ActiveEvController:
         else:
             self.pre_free_session = PreFreeSessionState()
             self.pre_free_phase = (
-                "ready_by_selected" if self._ready_by_backfill_selected() else "disabled"
+                pre_free_hold
+                if self.coordinator.runtime_config.ev_policy.pre_free_enabled
+                else "disabled"
             )
 
         if self.pre_free_session.active or self.daily_backfill_active:
@@ -2237,6 +2250,24 @@ class ActiveEvController:
             policy.pre_free_enabled
             and policy.pre_free_backfill_timing == EV_PRE_FREE_BACKFILL_TIMING_READY_BY
         )
+
+    def _pre_free_backfill_hold(self, now: datetime, free_start: datetime) -> str | None:
+        """Ready-by is an earlier opportunity, not a replacement for pre-free."""
+        if not self._ready_by_backfill_selected():
+            return None
+        # The daily planner has already rechecked timing, telemetry, ownership
+        # and live protected energy. Invalid input is not a fallback permission.
+        if self.daily_backfill_plan is None:
+            return self.daily_backfill_hold_reason or "ready_by_inputs_unavailable"
+        ready_time = self.coordinator._configured_time(  # noqa: SLF001
+            CONF_EV_DAILY_READY_TIME, DEFAULT_EV_DAILY_READY_TIME
+        )
+        # The ready-cycle ledger rolls to tomorrow at its deadline. Anchor this
+        # handoff to the upcoming free window instead, including before midnight.
+        ready_at = datetime.combine(free_start.date(), ready_time, tzinfo=free_start.tzinfo)
+        if self.daily_backfill_active or not ready_at <= now < free_start:
+            return "ready_by_selected"
+        return None
 
     def _ready_by_backfill_hold(self, now: datetime) -> str | None:
         """Recheck live energy authority before offering discretionary charging."""

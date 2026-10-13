@@ -187,10 +187,15 @@ The outside-window house-battery reserve (20% default), electrical limits and
 normal charge-limit policy remain in force, including the direct-EVSE 90% cap
 unless Charge to Full is on. Ready by shares the existing session and restart
 ledger; paid Charge to Full and free-window charging are excluded from its
-delivery accounting. Conservative pre-free charging stays suppressed after
-the ready deadline, leaving eligible morning-solar/free-window control to take
-over. **Ready by** is the default for new entries and old entries missing the
-timing key, while an explicit saved **Conservative** choice is preserved.
+delivery accounting. With the v0.12.30 handoff correction, Ready by ends at
+its deadline and the original pre-free planner becomes eligible again, using
+only current protected energy and the upcoming free-window boundary. Morning
+solar may run while pre-free waits; active pre-free owns current exclusively.
+The same Ready by freshness/authority checks remain required after the deadline,
+and late charging does not count toward tomorrow's fixed allocation. Free power
+retains independent takeover. **Ready by** is the default for new entries and
+old entries missing the timing key, while an explicit saved **Conservative**
+choice is preserved.
 Neither Automatic EV Control nor pre-free backfill is enabled by this default
 change. Invalid old deadlines or missing power limits keep Ready by inactive;
 the controller does not silently fall back to conservative charging. See

@@ -3,6 +3,7 @@
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
+from zoneinfo import ZoneInfo
 
 import pytest
 from homeassistant.core import HomeAssistant
@@ -188,24 +189,288 @@ async def test_observer_upgrade_preserves_disabled_session_state_without_writing
     assert calls == []
 
 
-async def test_ready_deadline_stops_and_never_falls_back_to_late_pre_free(hass):
+@pytest.mark.parametrize("baseline", [0, 1])
+async def test_ready_deadline_hands_off_to_remaining_pre_free_budget(hass, baseline):
     calls = _services(hass)
-    coordinator, controller = _site(hass)
+    coordinator, controller = _site(hass, ev_protected_baseline_a=baseline)
     await controller.async_reconcile(_at())
     _charging(hass)
+    # A decision one second before the deadline must not delay the handoff.
+    _fresh(coordinator, _at(7, 59, 59), current_a=8)
+    await controller.async_reconcile(_at(7, 59, 59))
+    assert controller.daily_backfill_active
+    # Earlier EV/house use has reduced the live budget, not created another 19 kWh.
+    coordinator.data.available_after_reserve_kwh = 12
+    coordinator.active_controller.export_plan = ExportPlan(7, 7, 1, "ready")
     _fresh(coordinator, _at(8), current_a=8)
     await controller.async_reconcile(_at(8))
     assert not controller.daily_backfill_active
     assert not controller.pre_free_session.active
-    assert controller.target_current_a == 0
-    assert calls[-1][:2] == ("switch", "turn_off")
+    assert controller.pre_free_phase == "waiting_latest_start"
+    assert controller.pre_free_plan.planned_energy_kwh == 7
+    assert controller.target_current_a == baseline
+    if baseline == 0:
+        assert calls[-1][:2] == ("switch", "turn_off")
+        hass.states.async_set("switch.car_charge", "off")
+        hass.states.async_set("sensor.car_charging", "stopped")
+        hass.states.async_set("sensor.car_actual_current", "0", {"unit_of_measurement": "A"})
+    else:
+        _charging(hass, baseline)
+        assert not any(service == "turn_off" for _, service, _ in calls)
     assert controller.daily_backfill_plan.phase == "before_planning_window"
 
+    _fresh(coordinator, _at(10), current_a=baseline)
+    await controller.async_reconcile(_at(10))
+    assert controller.pre_free_phase == "waiting_latest_start"
+    assert controller.target_current_a == baseline
+    assert not controller.daily_backfill_active
+    # At the original latest start, late backfill owns the existing controller.
+    _fresh(coordinator, _at(11), current_a=baseline)
+    count = len(calls)
+    await controller.async_reconcile(_at(11))
+    assert controller.pre_free_session.active
+    assert not controller.daily_backfill_active
+    assert controller.outside_stage_selection.stage == "pre_free"
+    assert controller.target_current_a == 8
+    assert not any(service == "turn_off" for _, service, _ in calls[count:])
+
+
+@pytest.mark.parametrize("baseline", [0, 1])
+async def test_connection_after_ready_time_can_start_late_pre_free(hass, baseline):
+    calls = _services(hass)
+    coordinator, controller = _site(hass, ev_protected_baseline_a=baseline)
+    _fresh(coordinator, _at(10))
+    await controller.async_reconcile(_at(10))
+    assert controller.pre_free_session.active
+    assert not controller.daily_backfill_active
+    assert controller.pre_free_plan.planned_energy_kwh == 19
+    assert controller.target_current_a == 8
+    assert calls[-1][:2] == ("switch", "turn_on")
+
+
+@pytest.mark.parametrize("available,expected", [(8, 3), (4, 0)])
+async def test_late_pre_free_cannot_spend_a_retained_larger_export_plan(hass, available, expected):
+    calls = _services(hass)
+    coordinator, controller = _site(hass)
+    coordinator.data.available_after_reserve_kwh = available
+    # Retained export evidence must not bypass current remaining house protection.
+    assert coordinator.active_controller.export_plan.planned_export_energy_kwh == 19
+    _fresh(coordinator, _at(11, 50))
+    await controller.async_reconcile(_at(11, 50))
+    assert controller.pre_free_plan.planned_energy_kwh == expected
+    assert controller.pre_free_session.active is (expected > 0)
+    if expected:
+        assert controller.target_current_a == 8
+    else:
+        # An already-stopped car needs no owned target or Start command.
+        assert controller.target_current_a in (None, 0)
+        assert not any(service == "turn_on" for _, service, _ in calls)
+
+
+@pytest.mark.parametrize("baseline", [0, 1])
+@pytest.mark.parametrize(
+    "loss",
+    [
+        "stale_house", "stale_grid", "missing_energy", "invalid_energy",
+        "grid_import", "invalid_ready",
+    ],
+)
+async def test_late_pre_free_rechecks_ready_by_energy_authority(hass, baseline, loss):
+    calls = _services(hass)
+    coordinator, controller = _site(hass, ev_protected_baseline_a=baseline)
+    _fresh(coordinator, _at(10))
+    await controller.async_reconcile(_at(10))
+    assert controller.pre_free_session.active
+    _charging(hass)
+    _fresh(coordinator, _at(10, 1), current_a=8)
+    if loss == "stale_house":
+        coordinator.telemetry = replace(
+            coordinator.telemetry,
+            house_load=replace(coordinator.telemetry.house_load, fresh=False),
+        )
+    elif loss == "stale_grid":
+        coordinator.telemetry = replace(
+            coordinator.telemetry,
+            grid_power=replace(
+                coordinator.telemetry.grid_power,
+                sources=tuple(
+                    replace(source, updated_at=_at(10, 1) - timedelta(minutes=10))
+                    for source in coordinator.telemetry.grid_power.sources
+                ),
+            ),
+        )
+    elif loss == "missing_energy":
+        coordinator.data.available_after_reserve_kwh = None
+    elif loss == "invalid_energy":
+        coordinator.data.available_after_reserve_kwh = float("nan")
+    elif loss == "grid_import":
+        _fresh(coordinator, _at(10, 1), grid_kw=2, current_a=8)
+    else:
+        coordinator.update_config_value("ev_daily_ready_time", "13:00:00")
+    count = len(calls)
+    await controller.async_reconcile(_at(10, 1))
+    assert not controller.pre_free_session.active
+    assert not controller.daily_backfill_active
+    assert controller.target_current_a == baseline
+    if baseline == 0:
+        assert calls[-1][:2] == ("switch", "turn_off")
+    else:
+        assert not any(service == "turn_off" for _, service, _ in calls[count:])
+
+
+async def test_late_pre_free_restart_keeps_one_owner_and_free_window_takes_over(hass):
+    calls = _services(hass)
+    coordinator, controller = _site(hass, ev_protected_baseline_a=1)
+    await controller.async_reconcile(_at())
+    _charging(hass)
     _fresh(coordinator, _at(10), current_a=8)
     await controller.async_reconcile(_at(10))
-    assert controller.pre_free_phase == "ready_by_selected"
-    assert controller.target_current_a == 0
+    assert controller.pre_free_session.active
     assert not controller.daily_backfill_active
+    assert controller.daily_backfill_stop_pending
+    controller.daily_backfill_delivered_kwh = 2.5
+    await controller._async_save(_at(10))
+    restarted = ActiveEvController(hass, coordinator)
+    await restarted._async_restore()
+    frozen_start = restarted.pre_free_session.frozen_start
+    _fresh(coordinator, _at(10, 1), current_a=8)
+    count = len(calls)
+    await restarted.async_reconcile(_at(10, 1))
+    assert restarted.pre_free_session.active
+    assert restarted.pre_free_session.frozen_start == frozen_start
+    assert not restarted.daily_backfill_active
+    assert restarted.daily_backfill_delivered_kwh == 2.5
+    assert restarted.target_current_a == 8
+    assert not any(service == "turn_off" for _, service, _ in calls[count:])
+
+    _fresh(coordinator, _at(12, 1), current_a=8)
+    await restarted.async_reconcile(_at(12, 1))
+    assert not restarted.pre_free_session.active
+    assert not restarted.daily_backfill_active
+    assert not restarted.daily_backfill_stop_pending
+    assert restarted.daily_backfill_delivered_kwh == 2.5
+    assert restarted.target_current_a == 16
+    assert not any(service == "turn_off" for _, service, _ in calls[count:])
+
+
+async def test_ready_to_due_pre_free_handoff_does_not_send_a_stale_stop(hass):
+    calls = _services(hass)
+    coordinator, controller = _site(hass, ev_daily_ready_time="10:00:00")
+    _fresh(coordinator, _at(9, 59, 59))
+    await controller.async_reconcile(_at(9, 59, 59))
+    assert controller.daily_backfill_active
+    _charging(hass)
+    _fresh(coordinator, _at(10), current_a=8)
+    count = len(calls)
+    await controller.async_reconcile(_at(10))
+    assert not controller.daily_backfill_active
+    assert controller.pre_free_session.active
+    assert controller.daily_backfill_stop_pending
+    assert controller.target_current_a == 8
+    assert not any(service == "turn_off" for _, service, _ in calls[count:])
+
+    # Once the successor loses its authority, the retained Stop still applies.
+    coordinator.data.available_after_reserve_kwh = 4
+    _fresh(coordinator, _at(10, 1), current_a=8)
+    await controller.async_reconcile(_at(10, 1))
+    assert not controller.pre_free_session.active
+    assert controller.target_current_a == 0
+    assert calls[-1][:2] == ("switch", "turn_off")
+
+
+async def test_late_pre_free_preserves_next_ready_fixed_quota_and_delivery_ledger(hass):
+    _services(hass)
+    coordinator, controller = _site(
+        hass, ev_daily_backfill_energy_kwh=3, ev_protected_baseline_a=1
+    )
+    await controller.async_reconcile(_at())
+    _charging(hass)
+    controller.daily_backfill_delivered_kwh = 2
+    coordinator.data.available_after_reserve_kwh = 12
+    # The export controller has protected the next morning's 3 kWh allocation.
+    coordinator.active_controller.export_plan = ExportPlan(4, 4, 1, "ready")
+    _fresh(coordinator, _at(8), current_a=8)
+    await controller.async_reconcile(_at(8))
+    assert controller.daily_backfill_cycle_ready_at == _at(8) + timedelta(days=1)
+    assert controller.daily_backfill_delivered_kwh == 0
+    assert controller.pre_free_plan.planned_energy_kwh == 4
+    assert controller.daily_backfill_protection_kwh(_at(8)) == 3
+    _charging(hass, 1)
+    _fresh(coordinator, _at(11, 50), current_a=1)
+    await controller.async_reconcile(_at(11, 50))
+    assert controller.pre_free_session.active
+    assert not controller.daily_backfill_active
+    _charging(hass)
+    _fresh(coordinator, _at(11, 51), current_a=8)
+    await controller.async_reconcile(_at(11, 51))
+    assert controller.daily_backfill_delivered_kwh == 0
+    assert controller.daily_backfill_protection_kwh(_at(11, 51)) == 3
+
+
+@pytest.mark.parametrize("month,day", [(4, 5), (10, 4)])
+@pytest.mark.parametrize(
+    "hour,expected_pre_free", [(0, False), (7, False), (8, False), (10, True), (23, False)]
+)
+async def test_handoff_uses_upcoming_free_window_date_across_dst(
+    hass, month, day, hour, expected_pre_free
+):
+    _services(hass)
+    coordinator, controller = _site(hass)
+    now = datetime(2026, month, day, hour, tzinfo=ZoneInfo("Australia/Sydney"))
+    _fresh(coordinator, now)
+    await controller.async_reconcile(now)
+    assert controller.pre_free_session.active is expected_pre_free
+    assert not (controller.pre_free_session.active and controller.daily_backfill_active)
+
+
+@pytest.mark.parametrize("phases,expected_current", [(1, 13), (3, 4)])
+@pytest.mark.parametrize("cutoff", ["battery_reserve", "vehicle_limit"])
+async def test_late_backfill_overrides_solar_but_preserves_power_and_soc_limits(
+    hass, phases, expected_current, cutoff
+):
+    calls = _services(hass)
+    coordinator, controller = _site(
+        hass,
+        ev_daily_ready_time="07:00:00",
+        free_charge_window_start="11:01:00",
+        ev_protected_baseline_a=1,
+        ev_phase_count=phases,
+        site_phase_count=phases,
+        inverter_discharge_limit_kw=10,
+        ev_outside_inverter_percent=30,
+        solar_configured=True,
+        ev_morning_solar_enabled=True,
+        ev_morning_solar_reserve_soc_percent=20,
+    )
+    coordinator.snapshot = replace(coordinator.snapshot, battery_soc=28)
+    hass.states.async_set("sensor.site_battery_soc", "28", {"unit_of_measurement": "%"})
+    coordinator.data.available_after_reserve_kwh = 4
+    coordinator.learning_remaining_kwh = 1
+    coordinator.active_controller.export_plan = ExportPlan(3, 3, 1, "ready")
+    _fresh(coordinator, _at(10, 30))
+    coordinator.telemetry = replace(
+        coordinator.telemetry,
+        battery_power=replace(coordinator.telemetry.battery_power, value=1.15),
+    )
+    await controller.async_reconcile(_at(10, 30))
+    assert controller.morning_solar.current_a > 0
+    assert controller.outside_stage_selection.stage == "pre_free"
+    assert controller.pre_free_plan.planned_energy_kwh == 3
+    assert not controller.daily_backfill_active
+    assert controller.target_current_a == expected_current
+    assert controller.target_current_a * 230 * phases / 1000 <= 3
+    assert controller.target_limit_percent == 90
+
+    _charging(hass, expected_current)
+    _fresh(coordinator, _at(10, 31), current_a=expected_current)
+    if cutoff == "battery_reserve":
+        coordinator.snapshot = replace(coordinator.snapshot, battery_soc=20)
+    else:
+        hass.states.async_set("sensor.car_soc", "90", {"unit_of_measurement": "%"})
+    await controller.async_reconcile(_at(10, 31))
+    assert not controller.pre_free_session.active
+    assert controller.target_current_a == 1
+    assert not any(service == "turn_off" for _, service, _ in calls)
 
 
 @pytest.mark.parametrize("baseline", [0, 1])
@@ -571,14 +836,16 @@ async def test_ready_by_restart_retains_session_and_free_window_takes_ownership(
 
 
 @pytest.mark.parametrize("presence", ["away", "disconnected", "safety_lock"])
-async def test_ready_by_never_starts_when_vehicle_or_control_is_ineligible(hass, presence):
+@pytest.mark.parametrize("hour", [5, 10])
+async def test_ready_by_never_starts_when_vehicle_or_control_is_ineligible(hass, presence, hour):
     calls = _services(hass)
     coordinator, controller = _site(hass)
+    _fresh(coordinator, _at(hour))
     if presence == "away":
         hass.states.async_set("device_tracker.car", "not_home")
     elif presence == "disconnected":
         hass.states.async_set("binary_sensor.car_cable", "off")
     else:
         coordinator.update_config_value("rehearsal_mode", True)
-    await controller.async_reconcile(_at())
+    await controller.async_reconcile(_at(hour))
     assert calls == []

@@ -13,8 +13,9 @@ Status here describes behavioral parity, not merely the presence of code.
 - Keep new price controls default-off and separately commissioned. High-price
   physical export and optional trip-helper acceptance remain distinct from
   baseline upgrade acceptance and remote rollout.
-- Automatic price-triggered buying and other new features start in the next
-  version (`0.12.30`), with their own design, tests and acceptance.
+- `0.12.30` contains only the Ready by → pre-free policy-handoff correction.
+  Automatic price-triggered buying remains planned for a later feature release,
+  with its own design, tests and acceptance; it is not cancelled or bundled here.
 
 ## Optional one-off trip charging
 
@@ -220,11 +221,21 @@ Status here describes behavioral parity, not merely the presence of code.
   and before free power; latest-start charging may begin overnight and uses
   elapsed time across daylight-saving transitions. Lost energy authority or
   import above the commissioned zero-import threshold curtails through existing
-  bounded reconciliation. Ready by suppresses the old conservative pre-free
-  stage after the deadline as well, so eligible morning-solar/free-window
-  policies can take over. Charge to Full and free-window charging do not enter
-  ready-cycle delivery. See the
-  [timing and fixed-allocation contract](docs/ev-daily-ready-backfill.md).
+  bounded reconciliation. The v0.12.30 policy-handoff correction preserves
+  Ready by as an additional earlier opportunity, then re-enables original
+  latest-start pre-free planning from the current protected budget. Morning
+  solar can run while it waits; active pre-free owns current exclusively.
+  Invalid Ready by evidence cannot authorise a fallback. Late pre-free,
+  Charge to Full and free-window charging do not enter ready-cycle delivery.
+  See the [timing and fixed-allocation contract](docs/ev-daily-ready-backfill.md).
+
+- [x] Correct the Ready by → pre-free policy handoff without adding another
+  controller, timer, quota or storage field. Retain Conservative arithmetic,
+  current energy/house protection, baseline stop obligations and free-window
+  takeover. Cover exact deadlines, depleted/stale budgets, restart, fixed-quota
+  rollover, solar priority, phase limits, SoC cutoffs and daylight-saving dates.
+- [ ] Complete separately approved live pilot acceptance after publication of this
+  handoff correction. No live installation is implied by local test coverage.
 
 - [ ] Complete the broader generated full-system lifecycle and incident
   harness, full-day replay corpus, and live acceptance for opportunistic surplus.

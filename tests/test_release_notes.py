@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+import tomllib
 from pathlib import Path
 
 import pytest
@@ -64,3 +66,18 @@ def test_stable_01229_promotes_frozen_runtime_with_complete_notes() -> None:
     assert "HACS does not" in notes and "No automatic price-triggered buying" in notes
     assert "Live high-price export was not forced" in notes
     assert not Version("0.12.29").is_prerelease
+
+
+def test_01230_handoff_patch_has_matching_descriptive_stable_metadata() -> None:
+    title, notes = release_text("v0.12.30", CHANGELOG_PATH.read_text(encoding="utf-8"))
+    assert title == "v0.12.30 — Ready-by and pre-free EV handoff"
+    assert "additional earlier charging opportunity" in notes
+    assert "current" in notes and "protected" in notes
+    assert "Conservative timing is unchanged" in notes
+    assert "no automatic price-triggered buying" in notes
+    assert not Version("0.12.30").is_prerelease
+    manifest = json.loads(
+        Path("custom_components/home_energy_orchestrator/manifest.json").read_text()
+    )
+    project = tomllib.loads(Path("pyproject.toml").read_text())["project"]
+    assert manifest["version"] == project["version"] == "0.12.30"

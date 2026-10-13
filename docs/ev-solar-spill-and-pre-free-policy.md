@@ -55,6 +55,14 @@ pre-free, free-window, daily-backfill, or charge-to-full takeover.
 
 ## Latest-start pre-free mapping
 
+With **Ready by** timing, the daily ready-by session is an earlier opportunity.
+After its deadline, the retained pre-free planner below becomes eligible again,
+using the current protected energy ceiling rather than reusing the earlier
+allocation or tomorrow's ready-by schedule. Morning solar may continue while
+that planner waits; active pre-free backfill remains exclusive. With explicitly
+selected **Conservative** timing, the original arithmetic is unchanged. See
+[backfill handoff](ev-daily-ready-backfill.md#handoff-after-the-ready-time).
+
 | Pilot source | Preserved HEO decision |
 | --- | --- |
 | `configuration_v1.4.24.yaml:4037` | Begin with AC-deliverable battery energy after the battery floor and configured reserve. |

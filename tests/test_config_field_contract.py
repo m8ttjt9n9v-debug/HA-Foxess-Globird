@@ -105,6 +105,8 @@ def test_backfill_timing_has_translated_choices_and_shared_ready_time() -> None:
         assert "overnight after midnight" in description
         assert "Ready by is the default" in description
         assert "does not enable backfill or automatic EV control" in description
+        assert "After the ready-by time" in description
+        assert "remaining safe surplus can still backfill before free power" in description
         assert "after midnight and before free power" in screen["data_description"][
             "ev_daily_ready_time"
         ]
