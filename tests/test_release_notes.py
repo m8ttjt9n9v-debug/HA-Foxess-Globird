@@ -53,3 +53,14 @@ def test_rc18_has_complete_descriptive_notes_and_candidate_flag() -> None:
     workflow = Path(".github/workflows/release.yml").read_text(encoding="utf-8")
     assert "Version(os.environ" in workflow and ".is_prerelease" in workflow
     assert workflow.count('--prerelease="$release_prerelease"') == 2
+
+
+def test_stable_01229_promotes_frozen_runtime_with_complete_notes() -> None:
+    title, notes = release_text("v0.12.29", CHANGELOG_PATH.read_text(encoding="utf-8"))
+    assert title == "v0.12.29 — Protected export, Fleet controls and trip helpers"
+    assert "functionality-frozen rc18 runtime" in notes
+    assert "release metadata only" in notes
+    assert "DispatchIS" in notes and "Fleet" in notes and "trip-charge" in notes
+    assert "HACS does not" in notes and "No automatic price-triggered buying" in notes
+    assert "Live high-price export was not forced" in notes
+    assert not Version("0.12.29").is_prerelease

@@ -2,6 +2,20 @@
 
 Status here describes behavioral parity, not merely the presence of code.
 
+## v0.12.29 release boundary
+
+- Freeze runtime functionality at `v0.12.29rc18` (`2b12c10`). Stable promotion
+  changes versions, release notes and process records only; it must not bundle
+  another controller feature or alter operator settings.
+- Require the existing repository checks and controlled pilot baseline
+  acceptance before publishing stable `v0.12.29`. Do not manufacture a market
+  price or device command merely to claim physical price-export acceptance.
+- Keep new price controls default-off and separately commissioned. High-price
+  physical export and optional trip-helper acceptance remain distinct from
+  baseline upgrade acceptance and remote rollout.
+- Automatic price-triggered buying and other new features start in the next
+  version (`0.12.30`), with their own design, tests and acceptance.
+
 ## Optional one-off trip charging
 
 - [x] Package the existing native-HA wrapper for a selected 1–100% target and
@@ -27,8 +41,13 @@ Status here describes behavioral parity, not merely the presence of code.
   stale deadline callbacks, startup/reload, changed mapping and manual Stop.
   Keep the frozen legacy identity and persistence contracts unchanged through
   explicit append-only extensions.
-- [ ] Publish and perform controlled pilot acceptance before any remote rollout.
-  No retailer reward claim or critical-event buy control is included.
+- [x] Publish the default-off extension in the rc18 candidate.
+- [x] Complete controlled pilot baseline acceptance for stable promotion:
+  released files, successful setup, ordinary free-window restoration and EV
+  baseline handoff, healthy telemetry, retained settings and all-day export cap.
+- [ ] Separately commission and verify physical high-price export before
+  active-policy rollout. Baseline acceptance is not a claim of live price-event
+  delivery. No retailer reward claim or critical-event buy control is included.
 
 ## Planned price-triggered buying
 

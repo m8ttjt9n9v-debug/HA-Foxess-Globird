@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.12.29 — Protected export, Fleet controls and trip helpers
+
+- Promote the functionality-frozen rc18 runtime to stable. This promotion
+  changes release metadata only, not inverter or EV control logic.
+- Include optional default-off actual AEMO DispatchIS monitoring and protected
+  price-triggered export through the existing controller. Retain house/EV
+  reserves, the shared all-day export cap, bounded price permission and
+  restart-safe cleanup. A price threshold is not proof of a retailer event
+  or payment.
+- Include Fleet maximum-export, Stop/Self Use and Resume controls, persistent
+  manual holds and authenticated backend transport without dashboard tokens.
+- Retain the candidate series' normal EV charge ceiling, charging-window
+  handoffs, configurable morning solar charging and native three-phase mapping.
+- Provide optional one-off trip-charge helpers for a selected 1–100% target
+  and departure time. HACS does not install the helper package/card
+  automatically; commissioning and installation remain separate.
+- Baseline pilot acceptance covers ordinary running and the free-window
+  handoff. Live high-price export was not forced during acceptance; policy
+  activation and physical delivery remain separately commissioned.
+- No automatic price-triggered buying is included. Further feature work
+  belongs to the next version, not this frozen release.
+
 ## 0.12.29rc18 — Protected price export and trip helpers
 
 - Package the existing native Home Assistant trip-charge helpers, automation
