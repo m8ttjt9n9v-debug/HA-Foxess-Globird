@@ -80,4 +80,8 @@ def test_01230_handoff_patch_has_matching_descriptive_stable_metadata() -> None:
         Path("custom_components/home_energy_orchestrator/manifest.json").read_text()
     )
     project = tomllib.loads(Path("pyproject.toml").read_text())["project"]
-    assert manifest["version"] == project["version"] == "0.12.30"
+    assert manifest["version"] == project["version"]
+    current_title, _ = release_text(
+        "v" + manifest["version"], CHANGELOG_PATH.read_text(encoding="utf-8")
+    )
+    assert current_title.startswith("v" + manifest["version"] + " — ")
