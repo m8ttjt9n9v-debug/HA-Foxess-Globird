@@ -64,14 +64,19 @@ jobs:
         run: |
           set -euo pipefail
           release_title="$(<.github-release-title.txt)"
+          release_prerelease="$(
+            python -c 'import os; from packaging.version import Version; print(str(Version(os.environ["GITHUB_REF_NAME"].removeprefix("v")).is_prerelease).lower())'
+          )"
           if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
             gh release edit "$GITHUB_REF_NAME" \
+              --prerelease="$release_prerelease" \
               --title "$release_title" \
               --notes-file .github-release-notes.md
             gh release upload "$GITHUB_REF_NAME" home_energy_orchestrator.zip --clobber
           else
             gh release create "$GITHUB_REF_NAME" home_energy_orchestrator.zip \
               --verify-tag \
+              --prerelease="$release_prerelease" \
               --title "$release_title" \
               --notes-file .github-release-notes.md
           fi

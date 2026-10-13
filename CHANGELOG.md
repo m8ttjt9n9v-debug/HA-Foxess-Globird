@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased — Optional trip-charge helper package
+## 0.12.29rc18 — Protected price export and trip helpers
 
 - Package the existing native Home Assistant trip-charge helpers, automation
   and card with their generator and regression tests. Schedule the existing
@@ -11,8 +11,6 @@
   install the package/card automatically. Normal policies resume after the
   owned Full request ends; the selected target is not a permanent charge
   ceiling or an exact-time/physical-percentage guarantee.
-
-## Unreleased — Protected wholesale price export
 
 - Add default-off monitoring of current actual AEMO DispatchIS prices, explicit
   NEM region and configurable export threshold. Cached summaries, forecasts,
@@ -32,6 +30,10 @@
   regressions. No price-triggered buying, event reward accounting, or change to
   retailer scorecard assumptions is included. See the price-export guide for
   operation and the required safe downgrade procedure.
+- Add 28 regression cases for each three-phase telemetry source and EV
+  rolling-average priority. These tests do not change the control policies.
+- Mark release candidates as GitHub prereleases while retaining descriptive
+  HACS release titles and notes from this matching changelog section.
 
 ## 0.12.29rc17 — Fleet manual export controls
 

@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
+from packaging.version import Version
 
 from scripts.release_notes import CHANGELOG_PATH, release_text
 
@@ -38,3 +41,15 @@ def test_published_rc7_has_descriptive_release_metadata() -> None:
     title, notes = release_text("v0.12.29rc7", CHANGELOG_PATH.read_text(encoding="utf-8"))
     assert title == "v0.12.29rc7 — EV control hardening and conformance supervision"
     assert "conformance supervisor" in notes
+
+
+def test_rc18_has_complete_descriptive_notes_and_candidate_flag() -> None:
+    title, notes = release_text("v0.12.29rc18", CHANGELOG_PATH.read_text(encoding="utf-8"))
+    assert title == "v0.12.29rc18 — Protected price export and trip helpers"
+    assert "DispatchIS" in notes and "trip-charge" in notes
+    assert "HACS does not" in notes and "No price-triggered buying" in notes
+    assert Version("0.12.29rc18").is_prerelease
+    assert not Version("0.12.28").is_prerelease
+    workflow = Path(".github/workflows/release.yml").read_text(encoding="utf-8")
+    assert "Version(os.environ" in workflow and ".is_prerelease" in workflow
+    assert workflow.count('--prerelease="$release_prerelease"') == 2
