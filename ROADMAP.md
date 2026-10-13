@@ -550,6 +550,13 @@ Status here describes behavioral parity, not merely the presence of code.
   card relies on the normalized sensor. Completed in v0.12.7 with a bounded
   fresh signed-sensor fallback used only when staleness is the pair's sole
   failure.
+  Extended in v0.12.31 to an older inactive zero exceeding the existing EV
+  clock-skew limit while individually fresh. Coherent pairs retain priority;
+  fresh, commissioned signed evidence supplies its own accepted timestamp,
+  with rejected pair provenance retained. Older active/nonzero transition
+  evidence, contradictory directions and genuine outages do not gain this
+  additional fallback. Repeated backfill and fail-closed regressions cover
+  the shared boundary without widening age/skew limits.
 
 ## Removed pending a faithful port
 

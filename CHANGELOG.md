@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.12.31 — Stable battery telemetry for EV backfill
+
+- Correct source selection when an older inactive zero in the battery
+  charge/discharge pair exceeds the existing coherence limit. Use only an
+  explicitly mapped, fresh signed battery-power sample; preserve rejected
+  pair evidence for diagnostics and use the accepted source's own clock.
+- Retain coherent paired-source priority, commissioned signs and units, all
+  freshness/coherence limits, house reserves, outside-window limits and the
+  normal EV charge cap. Missing or invalid signed data, conflicting flow,
+  nonzero flow transitions and genuine outages cannot bypass these guards.
+- Add charge/discharge, timestamp-boundary, accepted-clock, repeated backfill
+  and outage regressions. No new settings, entities or storage migrations;
+  no automatic price-triggered buying or other pending feature is included.
+
 ## 0.12.30 — Ready-by and pre-free EV handoff
 
 - Correct Ready by timing to provide an additional earlier charging opportunity,

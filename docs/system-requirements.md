@@ -220,6 +220,16 @@ fixed-current ownership from either measured-solar stage. These
 outside-window stages are independently default-off and are rejected unless
 Local Modbus is selected as FoxESS owner.
 
+Canonical battery telemetry keeps coherent charge/discharge magnitudes as
+its first choice. If an older inactive zero is the only coherence problem,
+the existing explicitly mapped signed sensor may supply the value, using its
+own fresh timestamp and commissioned sign/unit conversion. Rejected pair
+sources remain diagnostic evidence, not accepted clocks. Grid-to-signed
+coherence and all age limits still apply. Invalid/missing signed evidence,
+opposite flow, or two nonzero magnitudes cannot use this timing fallback.
+Ready by, pre-free backfill and measured-solar stages use this same boundary;
+none gets a separate relaxed freshness rule.
+
 Measured-solar EV current changes are held until the candidate remains stable
 for 10 minutes. This rate limit persists across restart and prevents ordinary
 cloud-edge variation from producing repeated adjacent-current Tessie writes.

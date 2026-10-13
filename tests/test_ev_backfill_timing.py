@@ -14,7 +14,13 @@ from custom_components.home_energy_orchestrator.planner.ev_outside_window import
 )
 from custom_components.home_energy_orchestrator.planner.export import ExportPlan
 from custom_components.home_energy_orchestrator.planner.export_session import ExportSessionState
-from custom_components.home_energy_orchestrator.telemetry import NormalizedSample, TelemetrySource
+from custom_components.home_energy_orchestrator.telemetry import (
+    NormalizedSample,
+    SiteTelemetrySources,
+    TelemetryNormalizationConfiguration,
+    TelemetrySource,
+    normalize_site_telemetry,
+)
 from tests.test_ev_active import _controller_config, _coordinator, _set_ev_states
 
 
@@ -22,7 +28,15 @@ def _at(hour=5, minute=0, second=0):
     return datetime(2026, 9, 7, hour, minute, second, tzinfo=UTC)
 
 
-def _fresh(coordinator, now, *, grid_kw=0, current_a=0):
+def _fresh(
+    coordinator,
+    now,
+    *,
+    grid_kw=0,
+    current_a=0,
+    inactive_battery_age_seconds=None,
+    battery_outage=False,
+):
     """Provide coherent inverter evidence without assuming a cloud feedback ramp."""
 
     def sample(entity, value, unit, direction):
@@ -45,6 +59,39 @@ def _fresh(coordinator, now, *, grid_kw=0, current_a=0):
         house_load=sample("sensor.house", 0.2, "kW", "positive_consumption"),
         site_grid_current=sample("sensor.phase_current", 0, "A", "positive_import"),
     )
+    if inactive_battery_age_seconds is not None:
+        discharge_kw = 0.2 + current_a * 0.69
+        active_at = now - timedelta(seconds=120) if battery_outage else now
+        inactive_at = now - timedelta(
+            seconds=120 if battery_outage else inactive_battery_age_seconds
+        )
+        coordinator.telemetry = normalize_site_telemetry(
+            SiteTelemetrySources(
+                grid_power=TelemetrySource("sensor.site_grid", grid_kw, "kW", now),
+                signed_battery_power=TelemetrySource(
+                    "sensor.battery_signed", discharge_kw, "kW", active_at
+                ),
+                battery_charge_power=TelemetrySource("sensor.battery_charge", 0, "kW", inactive_at),
+                battery_discharge_power=TelemetrySource(
+                    "sensor.battery_discharge", discharge_kw, "kW", active_at
+                ),
+                solar_power=None,
+                house_load=TelemetrySource("sensor.house", 0.2, "kW", now),
+                site_grid_current=TelemetrySource("sensor.phase_current", 0, "A", now),
+            ),
+            TelemetryNormalizationConfiguration(
+                max_age_seconds=90,
+                grid_power_direction="positive_import",
+                battery_power_direction="positive_discharge",
+                solar_configured=False,
+                solar_generation_direction="generation_positive",
+                site_grid_current_direction="positive_import",
+                site_phase_count=3,
+                voltage_v=230,
+                battery_pair_max_skew_seconds=30,
+            ),
+            now=now,
+        )
 
 
 def _site(hass: HomeAssistant, **changes):
@@ -246,6 +293,62 @@ async def test_connection_after_ready_time_can_start_late_pre_free(hass, baselin
     assert controller.pre_free_plan.planned_energy_kwh == 19
     assert controller.target_current_a == 8
     assert calls[-1][:2] == ("switch", "turn_on")
+
+
+@pytest.mark.parametrize("baseline", [0, 1])
+async def test_late_pre_free_keeps_current_through_inactive_zero_skew_then_real_outage(
+    hass, baseline
+):
+    calls = _services(hass)
+    coordinator, controller = _site(
+        hass, ev_protected_baseline_a=baseline, ev_free_window_charge_limit_percent=100
+    )
+    frozen_start = None
+    for minute, inactive_age in enumerate((31, 45, 60)):
+        now = _at(10, minute)
+        _fresh(
+            coordinator,
+            now,
+            current_a=0 if minute == 0 else 8,
+            inactive_battery_age_seconds=inactive_age,
+        )
+        battery = coordinator.telemetry.battery_power
+        assert battery.reason == "signed_fallback_pair_incoherent"
+        assert battery.valid and battery.fresh
+        assert battery.sources[-1].entity_id == "sensor.battery_signed"
+        await controller.async_reconcile(now)
+        assert controller.pre_free_session.active
+        assert not controller.daily_backfill_active
+        assert controller.outside_stage_selection.stage == "pre_free"
+        assert controller.target_current_a == 8
+        assert controller.target_limit_percent == 90
+        if frozen_start is None:
+            frozen_start = controller.pre_free_session.frozen_start
+        assert controller.pre_free_session.frozen_start == frozen_start
+        _charging(hass)
+    assert not any(service == "turn_off" for _, service, _ in calls)
+
+    count = len(calls)
+    _fresh(
+        coordinator,
+        _at(10, 3),
+        current_a=8,
+        inactive_battery_age_seconds=60,
+        battery_outage=True,
+    )
+    assert coordinator.telemetry.battery_power.value is None
+    await controller.async_reconcile(_at(10, 3))
+    assert not controller.pre_free_session.active
+    assert not controller.daily_backfill_active
+    assert controller.target_current_a == baseline
+    assert controller.target_limit_percent <= 90
+    if baseline == 0:
+        assert calls[-1][:2] == ("switch", "turn_off")
+        assert controller.daily_backfill_stop_pending
+    else:
+        assert calls[-1][:2] == ("number", "set_value")
+        assert calls[-1][2]["value"] == 1
+        assert not any(service == "turn_off" for _, service, _ in calls[count:])
 
 
 @pytest.mark.parametrize("available,expected", [(8, 3), (4, 0)])

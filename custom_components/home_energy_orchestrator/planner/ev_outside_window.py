@@ -741,7 +741,7 @@ def _effective_source_timestamps(
     timestamps: tuple[datetime | None, ...],
 ) -> tuple[datetime | None, ...]:
     """Return timestamps which underpin the accepted normalized value."""
-    if reason == "signed_fallback_pair_stale":
+    if reason in {"signed_fallback_pair_stale", "signed_fallback_pair_incoherent"}:
         return timestamps[-1:]
     return timestamps
 

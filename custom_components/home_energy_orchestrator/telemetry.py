@@ -43,7 +43,9 @@ class NormalizedSample:
 
     @property
     def updated_at(self) -> datetime | None:
-        """Return the newest source timestamp, for coherent-sample checks."""
+        """Return the accepted value's clock, not rejected fallback provenance."""
+        if self.reason in {"signed_fallback_pair_stale", "signed_fallback_pair_incoherent"}:
+            return self.sources[-1].updated_at if self.sources else None
         timestamps = [source.updated_at for source in self.sources if source.updated_at]
         return max(timestamps) if timestamps else None
 
@@ -86,6 +88,7 @@ class TelemetryNormalizationConfiguration:
     site_grid_current_direction: str
     site_phase_count: float | None
     voltage_v: float | None
+    battery_pair_max_skew_seconds: float | None = None
 
 
 def unavailable_sample(
@@ -309,18 +312,43 @@ def battery_power_from_magnitudes_or_signed(
     charge: NormalizedSample,
     discharge: NormalizedSample,
     signed: NormalizedSample,
+    *,
+    max_skew_seconds: float | None = None,
 ) -> NormalizedSample:
     """Prefer the pilot pair, with a bounded fresh signed fallback."""
     paired = combine_battery_magnitudes(charge, discharge)
+    fallback_reason = None
     if paired.value is not None:
+        charge_at, discharge_at = charge.updated_at, discharge.updated_at
+        # Only an older inactive zero may lose clock authority. Nonzero flow
+        # transitions or an older active magnitude must still fail coherence.
+        inactive_zero_older = (
+            charge_at is not None and discharge_at is not None
+            and (
+                (charge.value == 0 and charge_at < discharge_at)
+                or (discharge.value == 0 and discharge_at < charge_at)
+            )
+        )
+        if (
+            paired.valid and paired.fresh and inactive_zero_older
+            and max_skew_seconds is not None
+            and isfinite(max_skew_seconds) and max_skew_seconds >= 0
+            and abs((charge_at - discharge_at).total_seconds()) > max_skew_seconds
+            and signed.value is not None
+            and paired.value * signed.value >= 0
+        ):
+            fallback_reason = "signed_fallback_pair_incoherent"
+        else:
+            return paired
+    elif paired.reason == "negative_magnitude":
         return paired
-    if paired.reason == "negative_magnitude":
-        return paired
-
-    pair_reasons = {charge.reason, discharge.reason}
-    stale_pair_only = "stale" in pair_reasons and pair_reasons <= {"ok", "stale"}
+    else:
+        pair_reasons = {charge.reason, discharge.reason}
+        stale_pair_only = "stale" in pair_reasons and pair_reasons <= {"ok", "stale"}
+        if stale_pair_only:
+            fallback_reason = "signed_fallback_pair_stale"
     if (
-        stale_pair_only
+        fallback_reason is not None
         and signed.value is not None
         and signed.valid
         and signed.fresh
@@ -332,7 +360,7 @@ def battery_power_from_magnitudes_or_signed(
             positive_direction="positive_charge",
             valid=True,
             fresh=True,
-            reason="signed_fallback_pair_stale",
+            reason=fallback_reason,
         )
     return paired
 
@@ -416,7 +444,8 @@ def normalize_site_telemetry(
             )
         )
         battery = battery_power_from_magnitudes_or_signed(
-            charge, discharge, signed_battery
+            charge, discharge, signed_battery,
+            max_skew_seconds=configuration.battery_pair_max_skew_seconds,
         )
     else:
         battery = signed_battery

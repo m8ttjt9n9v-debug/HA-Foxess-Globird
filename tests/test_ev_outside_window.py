@@ -200,11 +200,14 @@ def test_solar_spill_telemetry_rejects_each_incoherent_evidence_term(
     assert evaluation.battery_charge_kw == expected_battery_charge
 
 
-def test_solar_spill_telemetry_fallback_uses_only_accepted_signed_source_clock():
+@pytest.mark.parametrize(
+    "reason", ["signed_fallback_pair_stale", "signed_fallback_pair_incoherent"],
+)
+def test_solar_spill_telemetry_fallback_uses_only_accepted_signed_source_clock(reason):
     stale = NOW.replace(hour=10)
     evidence = replace(
         TELEMETRY,
-        battery_reason="signed_fallback_pair_stale",
+        battery_reason=reason,
         battery_source_updated_at=(stale, stale, NOW),
     )
     assert evaluate_solar_spill_telemetry(evidence).telemetry_valid is True
@@ -214,6 +217,19 @@ def test_solar_spill_telemetry_fallback_uses_only_accepted_signed_source_clock()
         ).telemetry_valid
         is False
     )
+
+
+@pytest.mark.parametrize(
+    "reason", ["signed_fallback_pair_stale", "signed_fallback_pair_incoherent"],
+)
+@pytest.mark.parametrize("signed_age", [31, 91, -1, None])
+def test_signed_fallback_retains_grid_coherence_and_accepted_source_age_checks(reason, signed_age):
+    accepted = None if signed_age is None else NOW - timedelta(seconds=signed_age)
+    evidence = replace(
+        TELEMETRY, battery_reason=reason,
+        battery_source_updated_at=(NOW, NOW - timedelta(seconds=40), accepted),
+    )
+    assert evaluate_solar_spill_telemetry(evidence).telemetry_valid is False
 
 
 @pytest.mark.parametrize(

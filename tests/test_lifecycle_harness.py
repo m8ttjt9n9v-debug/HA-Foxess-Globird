@@ -310,7 +310,13 @@ async def test_observer_public_state_is_equivalent_after_reload(hass) -> None:
 
 
 @pytest.mark.freeze_time("2026-09-17 02:30:00+00:00")
-async def test_battery_telemetry_recovers_after_delay_outage_and_reload(hass) -> None:
+@pytest.mark.parametrize(
+    ("inactive_age", "reason"),
+    [(600, "signed_fallback_pair_stale"), (40, "signed_fallback_pair_incoherent")],
+)
+async def test_battery_telemetry_recovers_after_delay_outage_and_reload(
+    hass, inactive_age, reason,
+) -> None:
     """Canonical battery power survives delay fallback and recovers after outage."""
     harness = LifecycleHarness(hass)
     await _seed_foxess_states(harness, 60)
@@ -324,7 +330,7 @@ async def test_battery_telemetry_recovers_after_delay_outage_and_reload(hass) ->
         "sensor.test_battery_discharge",
         "0",
         {"unit_of_measurement": "kW"},
-        timestamp=(now - timedelta(minutes=10)).timestamp(),
+        timestamp=(now - timedelta(seconds=inactive_age)).timestamp(),
     )
     await harness.set_state(
         "sensor.test_signed_battery",
@@ -350,7 +356,7 @@ async def test_battery_telemetry_recovers_after_delay_outage_and_reload(hass) ->
     battery = hass.states.get("sensor.home_energy_battery_power")
     assert battery is not None
     assert battery.state == "9.713"
-    assert battery.attributes["reason"] == "signed_fallback_pair_stale"
+    assert battery.attributes["reason"] == reason
     healthy_states = harness.states(
         {
             "sensor.home_energy_battery_soc",

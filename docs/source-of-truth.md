@@ -260,6 +260,10 @@ layers around the proven algorithm, not replacement algorithms.
   fresh signed-battery fallback. Stable battery SoC and state-qualified Tessie
   current keep the pilot implementation's value semantics rather than being
   treated as fast polling clocks.
+  The same canonical source selection serves Ready by and pre-free backfill:
+  an older inactive zero outside the configured skew limit may yield to an
+  explicitly mapped fresh signed sample, provided current flow evidence does
+  not contradict it. The accepted signed clock must still agree with the grid.
 - The smart-socket command policy is connected to the independently gated EV
   runtime. It preserves the source ordering: bound/stage current before
   power, accept service-valid staged feedback, settle the configured interval,
@@ -325,8 +329,13 @@ layers around the proven algorithm, not replacement algorithms.
 - Paired battery charge/discharge magnitudes remain the canonical pilot source.
   When a steady inactive zero alone becomes stale, a separately mapped fresh
   signed battery-power sensor may recover the canonical value with explicit
-  fallback provenance. Invalid magnitudes, disconnected sources and genuine
-  telemetry outages remain unavailable.
+  fallback provenance. The v0.12.31 source-selection correction also covers
+  an older inactive zero whose individually fresh clock exceeds the existing
+  EV coherence limit. The pair remains preferred when coherent; an older
+  active magnitude, nonzero flow transition or conflicting signed direction
+  cannot use this additional fallback. Diagnostics retain rejected pair
+  sources, but freshness checks use only the accepted signed clock. Invalid
+  magnitudes, disconnected sources and genuine outages remain blocked.
 - An installation with EV control explicitly uncommissioned has no EV energy
   reservation. Retained EV defaults or stale mappings cannot withhold its
   otherwise valid battery export plan.

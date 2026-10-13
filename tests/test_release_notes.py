@@ -85,3 +85,12 @@ def test_01230_handoff_patch_has_matching_descriptive_stable_metadata() -> None:
         "v" + manifest["version"], CHANGELOG_PATH.read_text(encoding="utf-8")
     )
     assert current_title.startswith("v" + manifest["version"] + " — ")
+
+
+def test_01231_telemetry_patch_has_bounded_descriptive_stable_notes() -> None:
+    title, notes = release_text("v0.12.31", CHANGELOG_PATH.read_text(encoding="utf-8"))
+    assert title == "v0.12.31 — Stable battery telemetry for EV backfill"
+    assert "accepted source's own clock" in notes
+    assert "freshness/coherence limits" in notes
+    assert "No new settings" in notes and "no automatic price-triggered buying" in notes
+    assert not Version("0.12.31").is_prerelease

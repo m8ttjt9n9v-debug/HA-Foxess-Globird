@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -347,12 +348,15 @@ def test_stale_inactive_magnitude_uses_fresh_signed_battery(
     ]
 
 
-def test_fresh_pair_keeps_priority_over_signed_battery() -> None:
+@pytest.mark.parametrize("skew_limit", [None, 30])
+def test_fresh_pair_keeps_priority_over_signed_battery(skew_limit) -> None:
     charge = power("sensor.battery_charge", 0, "kW")
     discharge = power("sensor.battery_discharge", 3, "kW")
     signed = power("sensor.invbatpower", 99, "kW")
 
-    battery = battery_power_from_magnitudes_or_signed(charge, discharge, signed)
+    battery = battery_power_from_magnitudes_or_signed(
+        charge, discharge, signed, max_skew_seconds=skew_limit,
+    )
 
     assert battery.value == -3
     assert battery.reason == "ok"
@@ -396,3 +400,112 @@ def test_invalid_magnitude_is_not_hidden_by_signed_fallback() -> None:
 
     assert battery.value is None
     assert battery.reason == "negative_magnitude"
+
+
+@pytest.mark.parametrize("flow_kw", [0.782, -2.339, 0.0])
+@pytest.mark.parametrize("inactive_age", [30, 31, 40, 60])
+def test_fresh_inactive_zero_pair_uses_signed_only_beyond_configured_skew(
+    flow_kw: float, inactive_age: int,
+) -> None:
+    sources = SiteTelemetrySources(
+        grid_power=TelemetrySource("sensor.grid", 0, "kW", NOW),
+        signed_battery_power=TelemetrySource("sensor.signed", -flow_kw * 1000, "W", NOW),
+        battery_charge_power=TelemetrySource(
+            "sensor.charge", max(flow_kw, 0), "kW",
+            NOW if flow_kw > 0 else NOW - timedelta(seconds=inactive_age),
+        ),
+        battery_discharge_power=TelemetrySource(
+            "sensor.discharge", max(-flow_kw, 0), "kW",
+            NOW - timedelta(seconds=inactive_age) if flow_kw > 0 else NOW,
+        ),
+        solar_power=None, house_load=None, site_grid_current=None,
+    )
+    configuration = TelemetryNormalizationConfiguration(
+        max_age_seconds=90, grid_power_direction="positive_import",
+        battery_power_direction="positive_discharge", solar_configured=False,
+        solar_generation_direction="generation_positive",
+        site_grid_current_direction="positive_import", site_phase_count=1, voltage_v=230,
+        battery_pair_max_skew_seconds=30,
+    )
+    battery = normalize_site_telemetry(sources, configuration, now=NOW).battery_power
+
+    assert battery.value == pytest.approx(flow_kw)
+    assert battery.valid and battery.fresh
+    assert battery.updated_at == NOW
+    assert battery.reason == ("ok" if inactive_age <= 30 else "signed_fallback_pair_incoherent")
+    assert len(battery.sources) == (2 if inactive_age <= 30 else 3)
+    # Without a configured coherence limit the existing paired behavior is unchanged.
+    original = normalize_site_telemetry(
+        sources, replace(configuration, battery_pair_max_skew_seconds=None), now=NOW,
+    ).battery_power
+    assert original.reason == "ok" and len(original.sources) == 2
+
+
+@pytest.mark.parametrize("reason", ["stale", "incoherent"])
+def test_signed_fallback_timestamp_is_accepted_clock_not_newest_rejected_clock(reason) -> None:
+    charge = power("sensor.charge", 2, "kW")
+    discharge = power("sensor.discharge", 0, "kW", age_seconds=91 if reason == "stale" else 40)
+    signed = power("sensor.signed", 2, "kW", age_seconds=10)
+    battery = battery_power_from_magnitudes_or_signed(
+        charge, discharge, signed, max_skew_seconds=30,
+    )
+
+    assert battery.reason == f"signed_fallback_pair_{reason}"
+    assert battery.updated_at == NOW - timedelta(seconds=10)
+    assert battery.sources[0].updated_at == NOW  # rejected pair retained only as diagnostics
+
+
+@pytest.mark.parametrize(
+    ("raw", "unit", "age"),
+    [("unavailable", "kW", 0), (2, "A", 0), (float("nan"), "kW", 0),
+     (2, "kW", 91), (2, "kW", -1), (2, "kW", None), (-2, "kW", 0)],
+)
+def test_incoherent_pair_does_not_hide_invalid_signed_or_opposite_direction(raw, unit, age):
+    charge = power("sensor.charge", 2, "kW")
+    discharge = power("sensor.discharge", 0, "kW", age_seconds=40)
+    signed = normalize_power_sample(
+        TelemetrySource("sensor.signed", raw, unit,
+                        None if age is None else NOW - timedelta(seconds=age)),
+        now=NOW, max_age_seconds=90, multiplier=1, positive_direction="positive_charge",
+    )
+    battery = battery_power_from_magnitudes_or_signed(
+        charge, discharge, signed, max_skew_seconds=30,
+    )
+
+    assert battery.reason == "ok" and len(battery.sources) == 2
+    assert battery.value == 2  # rejected by the unchanged downstream pair-coherence guard
+
+
+@pytest.mark.parametrize(("charge_kw", "discharge_kw"), [(2, 1), (1, 2), (-1, 0)])
+def test_incoherent_nonzero_or_negative_pair_is_not_hidden_by_signed_fallback(
+    charge_kw, discharge_kw,
+) -> None:
+    battery = battery_power_from_magnitudes_or_signed(
+        power("sensor.charge", charge_kw, "kW"),
+        power("sensor.discharge", discharge_kw, "kW", age_seconds=40),
+        power("sensor.signed", charge_kw - discharge_kw, "kW"),
+        max_skew_seconds=30,
+    )
+    assert battery.reason in {"ok", "negative_magnitude"}
+    assert len(battery.sources) == 2
+
+
+@pytest.mark.parametrize("flow_kw", [2, -2])
+def test_older_active_magnitude_is_not_hidden_by_inactive_zero_fallback(flow_kw) -> None:
+    battery = battery_power_from_magnitudes_or_signed(
+        power("sensor.charge", max(flow_kw, 0), "kW", age_seconds=40 if flow_kw > 0 else 0),
+        power("sensor.discharge", max(-flow_kw, 0), "kW", age_seconds=40 if flow_kw < 0 else 0),
+        power("sensor.signed", flow_kw, "kW"), max_skew_seconds=30,
+    )
+    assert battery.reason == "ok" and len(battery.sources) == 2
+
+
+@pytest.mark.parametrize("flow_kw", [2, -2])
+def test_idle_split_pair_can_use_independently_observed_signed_movement(flow_kw) -> None:
+    battery = battery_power_from_magnitudes_or_signed(
+        power("sensor.charge", 0, "kW", age_seconds=40),
+        power("sensor.discharge", 0, "kW"),
+        power("sensor.signed", flow_kw, "kW"), max_skew_seconds=30,
+    )
+    assert battery.reason == "signed_fallback_pair_incoherent"
+    assert battery.value == flow_kw and battery.updated_at == NOW

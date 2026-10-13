@@ -25,6 +25,7 @@ from .const import (
     CONF_EV_MAX_CURRENT,
     CONF_EV_MIN_CURRENT,
     CONF_EV_PHASE_COUNT,
+    CONF_EV_TELEMETRY_MAX_SKEW_SECONDS,
     CONF_EV_VOLTAGE,
     CONF_EXPORT_ALLOWANCE_KWH,
     CONF_EXPORT_LIMIT_KW,
@@ -53,6 +54,7 @@ from .const import (
     DEFAULT_BONUS_WINDOW_START,
     DEFAULT_DAILY_CHARGE,
     DEFAULT_DAILY_FREE_ALLOWANCE_KWH,
+    DEFAULT_EV_TELEMETRY_MAX_SKEW_SECONDS,
     DEFAULT_EXPORT_ALLOWANCE_KWH,
     DEFAULT_EXPORT_LIMIT_KW,
     DEFAULT_EXPORT_RATE,
@@ -936,6 +938,10 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
                 ),
                 site_phase_count=site.phase_count,
                 voltage_v=self.runtime_config.ev_connection.configured_voltage_v,
+                battery_pair_max_skew_seconds=self.runtime_config.ev_numbers.value(
+                    CONF_EV_TELEMETRY_MAX_SKEW_SECONDS,
+                    DEFAULT_EV_TELEMETRY_MAX_SKEW_SECONDS,
+                ),
             ),
             now=now,
         )

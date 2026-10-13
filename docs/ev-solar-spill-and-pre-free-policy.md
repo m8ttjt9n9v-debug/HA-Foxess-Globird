@@ -20,6 +20,24 @@ The portable runtime requires an explicitly mapped signed battery-power
 sensor and sign convention. Grid power already has an explicit sign mapping.
 Missing, stale, or incoherent telemetry produces no spill target.
 
+### Canonical battery-source timing correction
+
+Coherent charge/discharge magnitudes remain preferred. An unchanged inactive
+zero can report less often while still being individually fresh. If that
+older zero exceeds the existing configured EV skew limit, HEO can use the
+separately commissioned signed battery-power sample instead, provided it is
+valid, fresh and does not contradict the pair's direction. Both idle-zero
+readings may also use this independent signed evidence. Two nonzero magnitudes
+or an older active magnitude are not covered by this timing fallback.
+The original stale-pair fallback remains unchanged.
+
+This is a correction at the shared telemetry boundary, not a new charging
+algorithm. Diagnostics retain all sources with
+`signed_fallback_pair_incoherent` provenance; only the accepted signed source
+supplies the value's clock. The grid and accepted battery clocks must still
+pass the same age and skew limits for morning solar, Ready by and pre-free
+backfill. No arbitrary old zero is treated as current evidence.
+
 ## Morning measured-solar extension
 
 Morning solar capture is a separately identified, default-off extension.  It
