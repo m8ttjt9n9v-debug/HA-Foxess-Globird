@@ -10,6 +10,7 @@ from math import ceil
 
 from homeassistant.components import persistent_notification
 from homeassistant.core import CALLBACK_TYPE, HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.event import async_track_time_change, async_track_time_interval
 from homeassistant.util import dt as dt_util
 
@@ -436,6 +437,11 @@ class ActiveEvController:
                     ev_observation_entity_map(self.coordinator.runtime_config),
                 )
             )
+            trip = getattr(self.coordinator, "trip_charge", None)
+            if trip is not None and not await trip.async_reconcile_before_ev_locked(now):
+                self.last_reason = "trip_journal_unavailable"
+                self.last_actions = ()
+                return
             self.last_actions = ()
             self.free_window_candidate = None
             self.general_limit_candidate = None
@@ -2836,15 +2842,52 @@ class ActiveEvController:
 
     async def _async_clear_charge_to_full(self) -> None:
         """Clear the HEO-owned paid-grid override after its bounded session."""
+        await self._async_set_charge_to_full_locked(False, natural=True)
+
+    async def async_request_charge_to_full(
+        self, enabled: bool, *, owner_token: str | None = None,
+        expected_generation: int | None = None, reconcile: bool = True,
+    ) -> dict[str, object]:
+        """Serialize operator/trip Full intent; never reconcile under the lock."""
+        if type(enabled) is not bool:
+            raise HomeAssistantError("Full intent must be boolean")
+        trip = getattr(self.coordinator, "trip_charge", None)
+        if trip is not None:
+            await trip.async_restore_handoff()
+        async with self._lock:
+            result = await self._async_set_charge_to_full_locked(
+                enabled, owner_token=owner_token, expected_generation=expected_generation,
+            )
+        if result["accepted"] and reconcile:
+            await self.async_reconcile()
+        self.coordinator.async_update_listeners()
+        return result
+
+    async def _async_set_charge_to_full_locked(
+        self, enabled: bool, *, owner_token: str | None = None,
+        expected_generation: int | None = None, natural: bool = False,
+    ) -> dict[str, object]:
+        """Checkpoint ownership before changing the established Full setting."""
         entry = self.hass.config_entries.async_get_entry(self.coordinator.entry_id)
         if entry is None:
-            return
+            return {"accepted": False, "generation": None, "owner_token": None}
+        trip = getattr(self.coordinator, "trip_charge", None)
+        if trip is not None:
+            result = await trip.async_record_full_intent_locked(
+                enabled, owner_token=owner_token, expected_generation=expected_generation,
+                natural=natural,
+            )
+            if not result["accepted"]:
+                return result
+        else:
+            result = {"accepted": True, "generation": None, "owner_token": None}
         self.coordinator.update_persisted_config_value(
             entry,
             CONF_EV_CHARGE_TO_FULL_ENABLED,
-            False,
+            enabled,
             remove_key=CONF_EV_CHARGE_TO_FULL,
         )
+        return result
 
     def _float(self, key: str, default: float) -> float:
         return self.coordinator.runtime_config.ev_numbers.value(key, default)

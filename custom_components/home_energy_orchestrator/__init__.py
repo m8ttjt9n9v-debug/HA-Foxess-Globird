@@ -53,6 +53,7 @@ from .discovery import DiscoveryEntity, discover_entity_defaults
 from .ev_active import ActiveEvController
 from .manual_test import ManualTestController
 from .services import register_services, unregister_services
+from .trip_charge import TripChargeController
 
 type EnergyConfigEntry = ConfigEntry[EnergyCoordinator]
 
@@ -172,6 +173,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: EnergyConfigEntry) -> bo
     await active.manual.async_restore_handoff()
     ev_controller = ActiveEvController(hass, coordinator)
     coordinator.ev_controller = ev_controller
+    trip_charge = TripChargeController(hass, coordinator, entry)
+    coordinator.trip_charge = trip_charge
+    await trip_charge.async_restore_handoff()
     supervisor = ControlConformanceSupervisor(hass, coordinator)
     coordinator.control_supervisor = supervisor
     market = AemoMarketMonitor(hass, entry.entry_id, coordinator.runtime_config.aemo_monitor)
@@ -183,6 +187,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: EnergyConfigEntry) -> bo
     await coordinator.manual_test.async_startup()
     await active.async_start()
     await ev_controller.async_start()
+    await trip_charge.async_start()
     await supervisor.async_start()
     await market.async_start()
     hass.data.setdefault("home_energy_orchestrator", {})[entry.entry_id] = {
@@ -195,6 +200,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: EnergyConfigEntry) -> bo
 
 async def async_unload_entry(hass: HomeAssistant, entry: EnergyConfigEntry) -> bool:
     """Unload all observer entities."""
+    trip_charge = getattr(entry.runtime_data, "trip_charge", None)
+    if trip_charge is not None:
+        await trip_charge.async_stop()
     market = getattr(entry.runtime_data, "market_monitor", None)
     if market is not None:
         await market.async_stop()

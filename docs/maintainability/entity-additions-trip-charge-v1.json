@@ -1,0 +1,98 @@
+{
+  "entities": [
+    {
+      "default_entity_id": "datetime.home_energy_trip_ready_by",
+      "device_class": null,
+      "enabled_by_default": true,
+      "entity_category": null,
+      "key": "trip_ready_by",
+      "name": "Trip Departure Date and Time",
+      "platform": "datetime",
+      "state_class": null,
+      "translation_key": null,
+      "unique_id_template": "{config_entry_id}_trip_ready_by",
+      "unit": null
+    },
+    {
+      "default_entity_id": "number.home_energy_trip_extra_minutes",
+      "device_class": null,
+      "enabled_by_default": true,
+      "entity_category": "config",
+      "key": "trip_extra_minutes",
+      "name": "Trip Extra Charging Minutes",
+      "platform": "number",
+      "state_class": null,
+      "translation_key": null,
+      "unique_id_template": "{config_entry_id}_trip_extra_minutes",
+      "unit": "min"
+    },
+    {
+      "default_entity_id": "select.home_energy_trip_target_soc",
+      "device_class": null,
+      "enabled_by_default": true,
+      "entity_category": null,
+      "key": "trip_target_soc",
+      "name": "Trip Charge Target",
+      "platform": "select",
+      "state_class": null,
+      "translation_key": null,
+      "unique_id_template": "{config_entry_id}_trip_target_soc",
+      "unit": null
+    },
+    {
+      "default_entity_id": "sensor.home_energy_trip_charge_duration",
+      "device_class": "duration",
+      "enabled_by_default": true,
+      "entity_category": null,
+      "key": "trip_charge_duration",
+      "name": "Trip Estimated Charging Duration",
+      "platform": "sensor",
+      "state_class": null,
+      "translation_key": null,
+      "unique_id_template": "{config_entry_id}_trip_charge_duration",
+      "unit": "h"
+    },
+    {
+      "default_entity_id": "sensor.home_energy_trip_charge_planned_start",
+      "device_class": "timestamp",
+      "enabled_by_default": true,
+      "entity_category": null,
+      "key": "trip_charge_planned_start",
+      "name": "Trip Charge Calculated Start",
+      "platform": "sensor",
+      "state_class": null,
+      "translation_key": null,
+      "unique_id_template": "{config_entry_id}_trip_charge_planned_start",
+      "unit": null
+    },
+    {
+      "default_entity_id": "sensor.home_energy_trip_charge_status",
+      "device_class": null,
+      "enabled_by_default": true,
+      "entity_category": null,
+      "key": "trip_charge_status",
+      "name": "Trip Charge Status",
+      "platform": "sensor",
+      "state_class": null,
+      "translation_key": null,
+      "unique_id_template": "{config_entry_id}_trip_charge_status",
+      "unit": null
+    },
+    {
+      "default_entity_id": "switch.home_energy_trip_charge_scheduled",
+      "device_class": null,
+      "enabled_by_default": true,
+      "entity_category": null,
+      "key": "trip_charge_scheduled",
+      "name": "Schedule One-Off Trip Charge",
+      "platform": "switch",
+      "state_class": null,
+      "translation_key": null,
+      "unique_id_template": "{config_entry_id}_trip_charge_scheduled",
+      "unit": null
+    }
+  ],
+  "entity_count": 7,
+  "extension": "trip_charge_v1",
+  "schema_version": 1
+}

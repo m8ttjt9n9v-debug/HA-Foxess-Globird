@@ -1,0 +1,179 @@
+{
+  "attribute_profiles": {
+    "trip_charge_v1": {
+      "attributes": {
+        "armed": "Whether the one-off schedule remains armed.",
+        "cleanup_pending": "Retained obligation to withdraw this trip's owned Full request.",
+        "departure": "Selected departure as an aware ISO timestamp, or null if unset.",
+        "extra_minutes": "Optional early-start margin in minutes.",
+        "full_generation": "Logical Full request generation, advanced by manual and trip handoffs.",
+        "generation": "Schedule generation used to invalidate obsolete queued events and starts.",
+        "legacy_conflict": "Known enabled or unreadable legacy dispatcher/arming/ownership prevents built-in arming.",
+        "owner_token": "Entry-local scheduler lease token, or null; not a credential or external control identity.",
+        "owns_full": "Whether the journal's token and generation still own the current logical Full request.",
+        "storage_status": "Journal restore/save availability; invalid or unavailable cannot authorize a new start.",
+        "target_soc": "Selected integer trip target; not a permanent EV charge limit."
+      }
+    }
+  },
+  "entities": [
+    {
+      "audience": "primary",
+      "availability": "Controls/status available with controller; missing plan inputs yield unknown timing and never authorize a guessed start",
+      "consumers": [
+        "Trip Charge dashboard",
+        "One-off scheduler and existing Full-policy handoff"
+      ],
+      "decision": "retain",
+      "definition": "Selected departure date and time for one trip; not a daily ready-by policy.",
+      "equivalents": {
+        "foxess": null,
+        "globird": null,
+        "tessie": null
+      },
+      "key": "trip_ready_by",
+      "producer": "TripChargeController and integration-owned Trip entities; sole device writer remains ActiveEvController",
+      "review_status": "engineering_draft",
+      "role": "configuration",
+      "state_vocabulary": "An aware instant or unknown until configured",
+      "time_basis": "Current one-off plan; departure arithmetic uses aware UTC elapsed time with HA-local display",
+      "unit_and_sign": "Aware datetime stored in UTC and displayed using the HA profile/timezone"
+    },
+    {
+      "audience": "primary",
+      "availability": "Controls/status available with controller; missing plan inputs yield unknown timing and never authorize a guessed start",
+      "consumers": [
+        "Trip Charge dashboard",
+        "One-off scheduler and existing Full-policy handoff"
+      ],
+      "decision": "retain",
+      "definition": "Optional early-start timing allowance added to the estimated duration.",
+      "equivalents": {
+        "foxess": null,
+        "globird": null,
+        "tessie": null
+      },
+      "key": "trip_extra_minutes",
+      "producer": "TripChargeController and integration-owned Trip entities; sole device writer remains ActiveEvController",
+      "review_status": "engineering_draft",
+      "role": "configuration",
+      "state_vocabulary": "Finite number; default zero",
+      "time_basis": "Current one-off plan; departure arithmetic uses aware UTC elapsed time with HA-local display",
+      "unit_and_sign": "Minutes, 0 through 120 inclusive; positive adds planning time"
+    },
+    {
+      "audience": "primary",
+      "availability": "Controls/status available with controller; missing plan inputs yield unknown timing and never authorize a guessed start",
+      "consumers": [
+        "Trip Charge dashboard",
+        "One-off scheduler and existing Full-policy handoff"
+      ],
+      "decision": "retain",
+      "definition": "Selected reported EV SoC at which this trip's owned Full request is withdrawn; not a permanent charge ceiling.",
+      "equivalents": {
+        "foxess": null,
+        "globird": null,
+        "tessie": null
+      },
+      "key": "trip_target_soc",
+      "producer": "TripChargeController and integration-owned Trip entities; sole device writer remains ActiveEvController",
+      "review_status": "engineering_draft",
+      "role": "target",
+      "state_vocabulary": "1% through 100%; default 100%",
+      "time_basis": "Current one-off plan; departure arithmetic uses aware UTC elapsed time with HA-local display",
+      "unit_and_sign": "Integer percent, 1 through 100 inclusive"
+    },
+    {
+      "audience": "primary",
+      "availability": "Controls/status available with controller; missing plan inputs yield unknown timing and never authorize a guessed start",
+      "consumers": [
+        "Trip Charge dashboard",
+        "One-off scheduler and existing Full-policy handoff"
+      ],
+      "decision": "retain",
+      "definition": "Estimated deficit charging hours plus optional margin; not a guarantee of physical duration.",
+      "equivalents": {
+        "foxess": null,
+        "globird": null,
+        "tessie": null
+      },
+      "key": "trip_charge_duration",
+      "producer": "TripChargeController and integration-owned Trip entities; sole device writer remains ActiveEvController",
+      "review_status": "engineering_draft",
+      "role": "calculation",
+      "state_vocabulary": "Nonnegative finite hours or unknown",
+      "time_basis": "Current one-off plan; departure arithmetic uses aware UTC elapsed time with HA-local display",
+      "unit_and_sign": "Positive hours or zero; null when invalid or beyond configured Full timeout"
+    },
+    {
+      "audience": "primary",
+      "availability": "Controls/status available with controller; missing plan inputs yield unknown timing and never authorize a guessed start",
+      "consumers": [
+        "Trip Charge dashboard",
+        "One-off scheduler and existing Full-policy handoff"
+      ],
+      "decision": "retain",
+      "definition": "Latest estimated start calculated from selected target, current SoC, usable EV capacity, configured maximum power and efficiency.",
+      "equivalents": {
+        "foxess": null,
+        "globird": null,
+        "tessie": null
+      },
+      "key": "trip_charge_planned_start",
+      "producer": "TripChargeController and integration-owned Trip entities; sole device writer remains ActiveEvController",
+      "review_status": "engineering_draft",
+      "role": "plan",
+      "state_vocabulary": "Timestamp or unknown",
+      "time_basis": "Current one-off plan; departure arithmetic uses aware UTC elapsed time with HA-local display",
+      "unit_and_sign": "Aware UTC timestamp; null when planning inputs are invalid"
+    },
+    {
+      "attribute_profile": "trip_charge_v1",
+      "audience": "primary",
+      "availability": "Controls/status available with controller; missing plan inputs yield unknown timing and never authorize a guessed start",
+      "consumers": [
+        "Trip Charge dashboard",
+        "One-off scheduler and existing Full-policy handoff"
+      ],
+      "decision": "retain",
+      "definition": "One-off scheduler intent, waiting or interruption state; override_active does not prove physical charging.",
+      "equivalents": {
+        "foxess": null,
+        "globird": null,
+        "tessie": null
+      },
+      "key": "trip_charge_status",
+      "producer": "TripChargeController and integration-owned Trip entities; sole device writer remains ActiveEvController",
+      "review_status": "engineering_draft",
+      "role": "session_state",
+      "state_vocabulary": "not_scheduled, waiting_for_start, already_at_target, waiting_for_car, waiting_for_data, control_unavailable, external_override, override_active, completed, cancelled, interrupted, expired, charging_late, legacy_conflict, storage_unavailable or invalid_storage",
+      "time_basis": "Current one-off plan; departure arithmetic uses aware UTC elapsed time with HA-local display",
+      "unit_and_sign": "No unit; explicit named scheduler state"
+    },
+    {
+      "audience": "primary",
+      "availability": "Controls/status available with controller; missing plan inputs yield unknown timing and never authorize a guessed start",
+      "consumers": [
+        "Trip Charge dashboard",
+        "One-off scheduler and existing Full-policy handoff"
+      ],
+      "decision": "retain",
+      "definition": "Explicit one-off arming request; installation is unarmed and does not change normal EV policies.",
+      "equivalents": {
+        "foxess": null,
+        "globird": null,
+        "tessie": null
+      },
+      "key": "trip_charge_scheduled",
+      "producer": "TripChargeController and integration-owned Trip entities; sole device writer remains ActiveEvController",
+      "review_status": "engineering_draft",
+      "role": "operator_action",
+      "state_vocabulary": "on or off",
+      "time_basis": "Current one-off plan; departure arithmetic uses aware UTC elapsed time with HA-local display",
+      "unit_and_sign": "No unit; on arms one trip and off cancels its owned request"
+    }
+  ],
+  "entity_count": 7,
+  "extension": "trip_charge_v1",
+  "schema_version": 1
+}

@@ -26,6 +26,9 @@ AEMO_EXTENSIONS_PATH = (
 PRICE_EXTENSIONS_PATH = (
     REPOSITORY_ROOT / "docs" / "maintainability" / "entity-semantics-price-export-v1.json"
 )
+TRIP_EXTENSIONS_PATH = (
+    REPOSITORY_ROOT / "docs" / "maintainability" / "entity-semantics-trip-charge-v1.json"
+)
 
 _REQUIRED_FIELDS = {
     "key",
@@ -68,7 +71,9 @@ def load_semantic_contract() -> dict[str, Any]:
     records = list(baseline["entities"])
     merged_profiles = dict(baseline["attribute_profiles"])
     known_keys = {record["key"] for record in records}
-    for path in (MANUAL_EXTENSIONS_PATH, AEMO_EXTENSIONS_PATH, PRICE_EXTENSIONS_PATH):
+    for path in (
+        MANUAL_EXTENSIONS_PATH, AEMO_EXTENSIONS_PATH, PRICE_EXTENSIONS_PATH, TRIP_EXTENSIONS_PATH
+    ):
         extension = json.loads(path.read_text(encoding="utf-8"))
         if extension.get("schema_version") != baseline.get("schema_version"):
             raise ValueError("semantic extension schema does not match the baseline")

@@ -34,19 +34,23 @@ layers around the proven algorithm, not replacement algorithms.
 
 ## Current software truth
 
-- An optional native Home Assistant package schedules the existing HEO Charge
+- An optional HACS-owned Trip Charge wrapper schedules the existing HEO Charge
   to Full override for one departure date/time and selected integer SoC from
   1% to 100%. It calculates latest start from HEO's capacity, SoC and configured
-  maximum power, and retains restorable departure, target and ownership tickets.
+  maximum power, and retains a private typed departure, target and ownership journal.
   Completion or cancellation withdraws only its owned override; normal HEO
   policy resumes, so the target is not a permanent SoC ceiling. Target edits
   during charging cancel rather than extend the trip, and invalid SoC withdraws
   owned Full. An unreadable Full entity preserves the cleanup obligation.
-  The wrapper adds no Tessie or inverter writer. Commission its explicit
-  location/cable mappings and keep helper efficiency/timeout values aligned
-  with HEO. Competing Full automations are unsupported, and native helper steps
-  do not provide an atomic lock against every outside caller. The package/card
-  require separate installation; HACS does not install them automatically.
+  The wrapper adds no Tessie or inverter writer and uses commissioned HEO
+  runtime mappings, efficiency and Full timeout directly. An EV-controller
+  transaction lock and generation-bound lease prevent an old trip cleanup
+  from stopping a newer manual Full request. Checkpoints precede positive
+  intent; storage failure blocks a start. HACS installs its seven entities;
+  Lovelace still requires an explicit dashboard import. The new schedule is
+  off by default. A detected live legacy dispatcher blocks native arming;
+  retire it deliberately while no trip or Full request is active. Existing
+  helper values and automations are not automatically changed.
   Timing and reported target completion are estimates, with live acceptance
   separate from repository tests. See [trip charging](trip-charge-wrapper.md).
 

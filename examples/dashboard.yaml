@@ -47,6 +47,12 @@ views:
             heading_style: title
             icon: mdi:gauge
           - type: tile
+            entity: sensor.home_energy_estimated_net_cost
+            name: Forecast net cost today
+          - type: tile
+            entity: sensor.home_energy_measured_net_cost
+            name: Measured net cost so far
+          - type: tile
             entity: sensor.home_energy_available_energy
             name: Available above reserve
           - type: tile
@@ -60,22 +66,53 @@ views:
             name: Grid export today
           - type: tile
             entity: sensor.home_energy_estimated_energy_cost
-            name: Gross cost today
+            name: Measured import and supply cost
           - type: tile
             entity: sensor.home_energy_estimated_export_revenue
             name: Export revenue today
           - type: tile
             entity: sensor.home_energy_zerohero_credit
-            name: ZEROHERO credit today
-          - type: tile
-            entity: sensor.home_energy_estimated_net_cost
-            name: Net cost today
+            name: Evidenced ZEROHERO credit today
+          - type: entities
+            title: Forecast assumptions — not a retailer bill
+            show_header_toggle: false
+            entities:
+              - type: attribute
+                entity: sensor.home_energy_estimated_net_cost
+                attribute: assumed_zerohero_credit
+                name: Assumed ZEROHERO credit
+              - type: attribute
+                entity: sensor.home_energy_estimated_net_cost
+                attribute: forecast_remaining_export_kwh
+                name: Remaining forecast export (kWh)
+          - type: markdown
+            content: >-
+              The full-day net forecast is optimistic and includes assumed
+              export and ZEROHERO credit. Measured net cost uses the observed
+              ledger and evidenced credit only. Neither is the retailer's
+              settled bill; negative cost means estimated net revenue.
       - type: grid
         cards:
           - type: heading
             heading: Current Plan
             heading_style: title
             icon: mdi:calendar-clock
+          - type: entities
+            title: Operating mode — read-only
+            show_header_toggle: false
+            entities:
+              - type: attribute
+                entity: sensor.home_energy_status
+                attribute: mode
+                name: HEO mode
+              - type: attribute
+                entity: sensor.home_energy_status
+                attribute: foxess_control_owner
+                name: Commissioned inverter owner
+              - type: attribute
+                entity: sensor.home_energy_status
+                attribute: control_gate
+                name: Inverter write gate
           - type: tile
             entity: sensor.home_energy_status
             name: Orchestrator status
@@ -100,6 +137,38 @@ views:
           - type: tile
             entity: sensor.home_energy_zerohero_planned_duration
             name: Planned duration
+      - type: grid
+        column_span: 2
+        cards:
+          - type: heading
+            heading: Latest Matched Daily Scorecard
+            heading_style: title
+            icon: mdi:calendar-check
+          - type: entities
+            title: Compare the same completed retailer day
+            show_header_toggle: false
+            entities:
+              - entity: sensor.home_energy_forecast_scorecard_status
+                name: Match status
+              - type: attribute
+                entity: sensor.home_energy_forecast_scorecard_status
+                attribute: result_date
+                name: Matched result date
+              - entity: sensor.home_energy_forecast_yesterday_cost
+                name: Matched-day frozen forecast
+              - entity: sensor.home_energy_globird_yesterday_actual_cost
+                name: Matched-day retailer cost
+              - entity: sensor.home_energy_forecast_error_yesterday
+                name: Matched-day forecast error
+              - type: attribute
+                entity: sensor.home_energy_forecast_scorecard_status
+                attribute: zerohero_status
+                name: Matched-day retailer ZEROHERO outcome
+          - type: markdown
+            content: >-
+              The latest complete matched result may be older than yesterday.
+              Use its displayed date, not today's forecast or an undated native
+              retailer sensor. Missing or mismatched dates do not form a scorecard.
 
   - type: sections
     max_columns: 2
@@ -225,8 +294,9 @@ views:
               Both use the shared ready time and ledger. Ready by may start
               overnight after midnight, retains the battery reserve and power
               limits, and ends at the ready deadline before free power. The
-              conservative pre-free stage stays suspended; eligible morning
-              solar and free-window charging may take over. The allocation
+              original latest-start pre-free stage becomes eligible again from
+              the current protected budget. Morning solar may run while it
+              waits; active pre-free owns current until free-window takeover. The allocation
               remaining and shortfall cards describe the fixed quota, while
               planned wall energy includes eligible surplus. Charge to full
               is a separate paid-grid override, bounded by connector/service
@@ -294,6 +364,49 @@ views:
                 name: Actual current
               - entity: sensor.home_energy_ev_current_target
                 name: Current target
+
+  - type: sections
+    max_columns: 2
+    title: Trip Charge
+    path: trip-charge
+    icon: mdi:car-clock
+    sections:
+      - type: grid
+        column_span: 2
+        cards:
+          - type: heading
+            heading: One-Off Trip Charge
+            heading_style: title
+            icon: mdi:car-clock
+          - type: entities
+            title: Native HEO trip schedule — explicit paid override
+            show_header_toggle: false
+            entities:
+              - entity: datetime.home_energy_trip_ready_by
+                name: Departure date and time
+              - entity: select.home_energy_trip_target_soc
+                name: Selected trip target (1–100%)
+              - entity: number.home_energy_trip_extra_minutes
+                name: Extra planning minutes
+              - entity: switch.home_energy_trip_charge_scheduled
+                name: Schedule this one-off trip
+              - entity: sensor.home_energy_trip_charge_status
+                name: Trip status
+              - entity: sensor.home_energy_trip_charge_planned_start
+                name: Estimated charging start
+              - entity: sensor.home_energy_trip_charge_duration
+                name: Estimated charging duration (hours)
+          - type: markdown
+            content: >-
+              Scheduling is off by default. This uses HEO's existing paid Charge
+              to Full override: it may import paid grid energy and bypass normal
+              battery-reserve/90% policies, but not commissioning, Safety Lock,
+              connector or service limits. Start time and reported SoC are
+              estimates, not exact-time or physical-percentage guarantees.
+              Cancel to withdraw the trip-owned request and return to existing
+              normal policies; do not cancel another user's Full request.
+              These are native HEO entities, not the separate legacy input-helper
+              wrapper. Never run two trip schedulers for the same EV.
 
   - type: sections
     max_columns: 2
@@ -537,6 +650,18 @@ views:
                 name: Price observation status
               - type: attribute
                 entity: sensor.home_energy_aemo_market_status
+                attribute: source_kind
+                name: Accepted price source
+              - type: attribute
+                entity: sensor.home_energy_aemo_market_status
+                attribute: source_fresh
+                name: Price source is fresh
+              - type: attribute
+                entity: sensor.home_energy_aemo_market_status
+                attribute: price_trigger_valid
+                name: Price evidence is eligible
+              - type: attribute
+                entity: sensor.home_energy_aemo_market_status
                 attribute: interval_end
                 name: Price interval expires
               - entity: switch.home_energy_aemo_monitor
@@ -561,8 +686,11 @@ views:
               current interval may admit export through the existing protected
               export policy and commissioned write gates. Missing or expired
               price data cannot authorize new export. Price observations do not
-              establish a retailer event or payment. A software deadline needs
-              Home Assistant and actuator services to remain available.
+              establish a retailer event or payment. Automatic price-triggered
+              buying is unsupported; the observation-only import threshold is
+              not a buying control. A software deadline needs Home Assistant
+              and actuator services to remain available. Adding this panel does
+              not enable either request or change an existing setting.
       - type: grid
         cards:
           - type: heading
@@ -595,7 +723,7 @@ views:
             name: ZEROHERO guard
           - type: tile
             entity: sensor.home_energy_estimated_energy_cost
-            name: Gross cost today
+            name: Measured import and supply cost
           - type: tile
             entity: sensor.home_energy_estimated_import_energy_cost
             name: Import energy cost
@@ -616,7 +744,7 @@ views:
             name: ZEROHERO credit today
           - type: tile
             entity: sensor.home_energy_estimated_net_cost
-            name: Net cost today
+            name: Forecast net cost today
 
   - type: sections
     max_columns: 2
@@ -632,6 +760,7 @@ views:
             heading_style: title
             icon: mdi:state-machine
           - type: entities
+            show_header_toggle: false
             entities:
               - entity: sensor.home_energy_ev_control_status
                 name: Controller decision
@@ -660,6 +789,7 @@ views:
             heading_style: title
             icon: mdi:swap-horizontal-bold
           - type: entities
+            show_header_toggle: false
             entities:
               - entity: sensor.home_energy_grid_power
                 name: Grid power (+ importing)
@@ -673,6 +803,34 @@ views:
                 name: Service current (+ importing)
               - entity: binary_sensor.home_energy_sign_conventions_verified
                 name: Electrical directions verified
+          - type: entities
+            title: Configured current-source provenance
+            show_header_toggle: false
+            entities:
+              - type: attribute
+                entity: sensor.home_energy_site_grid_current
+                attribute: reason
+                name: Current-source method
+              - type: attribute
+                entity: sensor.home_energy_site_grid_current
+                attribute: sources
+                name: Accepted service-current sources
+          - type: markdown
+            content: |
+              **Commissioned phase groups (local overlay)**
+
+              | Phase | Explicitly configured pair |
+              | --- | --- |
+              | R | Grid CT R power (kW) + matching Grid R voltage (V) |
+              | S | Grid CT S power (kW) + matching Grid S voltage (V) |
+              | T | Grid CT T power (kW) + matching Grid T voltage (V) |
+
+              Add the mapped native readings to these groups only after checking
+              Settings → Devices & services → HEO → Configure. Never infer phase
+              identity from an entity name, source order or aggregate grid power.
+              A commissioned direct most-loaded-phase current is an alternative;
+              the canonical service-current card above reports the accepted
+              method and provenance. Single-phase sites must not invent S/T data.
       - type: grid
         cards:
           - type: heading
@@ -680,6 +838,7 @@ views:
             heading_style: title
             icon: mdi:shield-alert-outline
           - type: entities
+            show_header_toggle: false
             entities:
               - entity: sensor.home_energy_status
                 name: Controller status
@@ -706,6 +865,7 @@ views:
             heading_style: title
             icon: mdi:chart-box-outline
           - type: entities
+            show_header_toggle: false
             entities:
               - entity: sensor.home_energy_learning_status
                 name: Learning status
@@ -762,7 +922,7 @@ views:
               portable solar evidence from optional site weather cards.
               Configuration contains routine gates and commissioning guidance.
               Advanced exposes the decision chain and feedback health. Manual
-              contains explicit, bounded inverter tests.
+              separates persistent manual battery holds from bounded diagnostic tests.
           - type: markdown
             content: >-
               **Units and signs:** power is shown in kW, energy in kWh, current
@@ -770,6 +930,118 @@ views:
               conventions against direct evidence before enabling writes.
               Safety Lock ON blocks every HEO hardware write; turning it OFF
               does not independently enable automation.
+      - type: grid
+        column_span: 2
+        cards:
+          - type: heading
+            heading: Manual Battery Control — Persistent Hold
+            heading_style: title
+            icon: mdi:hand-back-right-outline
+          - type: markdown
+            content: >-
+              Export requests the lesser commissioned/native inverter maximum
+              until Stop; it does not enforce the automatic house/EV reserve or
+              daily sellable-energy budget. The inverter/BMS retains physical
+              protections. Disable competing VPP/cloud and other inverter writers
+              before confirming Export or Resume. This assertion does not disable
+              them for you. Stop clears both forced targets and holds Self Use;
+              automatic battery control remains paused until explicit Resume.
+              EV policies are unchanged. Safety Lock and ownership still apply.
+              These buttons resolve only a single HEO entry. With multiple entries,
+              add the reviewed entry_id to each action; never guess an entry or
+              place credentials in the browser. Importing this dashboard sends no command.
+          - type: entities
+            title: Intent, native feedback and cleanup — not physical delivery
+            show_header_toggle: false
+            entities:
+              - type: attribute
+                entity: sensor.home_energy_status
+                attribute: manual_inverter_hold
+                name: Automatic battery control held
+              - type: attribute
+                entity: sensor.home_energy_status
+                attribute: manual_inverter_target
+                name: Manual requested target
+              - type: attribute
+                entity: sensor.home_energy_status
+                attribute: manual_inverter_status
+                name: Manual command status
+              - type: attribute
+                entity: sensor.home_energy_status
+                attribute: manual_inverter_power_kw
+                name: Manual requested inverter output (kW)
+              - type: attribute
+                entity: sensor.home_energy_status
+                attribute: manual_inverter_command_confirmed
+                name: Native command feedback confirmed
+              - type: attribute
+                entity: sensor.home_energy_status
+                attribute: export_authority_source
+                name: Automatic export source
+              - type: attribute
+                entity: sensor.home_energy_status
+                attribute: export_price_deadline
+                name: Retained price deadline
+              - type: attribute
+                entity: sensor.home_energy_status
+                attribute: export_session_phase
+                name: Export session / cleanup phase
+              - type: attribute
+                entity: sensor.home_energy_status
+                attribute: last_control_reason
+                name: Last automatic-control reason
+          - type: markdown
+            content: >-
+              Stopping, recovering or blocked is not proof of cleared targets.
+              Native command feedback is not proof of physical grid export or
+              retailer payment. Check measured battery/grid flow and native
+              feedback; Safety Lock also blocks cleanup writes.
+          - type: grid
+            columns: 3
+            cards:
+              - type: button
+                entity: sensor.home_energy_status
+                name: Export at maximum inverter output
+                icon: mdi:transmission-tower-export
+                tap_action:
+                  action: call-service
+                  service: home_energy_orchestrator.manual_export_max
+                  service_data:
+                    local_control_confirmed: true
+                  confirmation:
+                    text: Export until Stop, bypassing automatic energy budgets? Confirm competing inverter writers are disabled.
+                hold_action:
+                  action: none
+                double_tap_action:
+                  action: none
+              - type: button
+                entity: sensor.home_energy_status
+                name: Stop / Self Use — keep manual hold
+                icon: mdi:stop-circle-outline
+                tap_action:
+                  action: call-service
+                  service: home_energy_orchestrator.manual_self_use
+                  confirmation:
+                    text: Clear both forced inverter targets and hold Self Use? Automatic battery control stays paused; EV control is unchanged.
+                hold_action:
+                  action: none
+                double_tap_action:
+                  action: none
+              - type: button
+                entity: sensor.home_energy_status
+                name: Resume existing automatic battery requests
+                icon: mdi:play-circle-outline
+                tap_action:
+                  action: call-service
+                  service: home_energy_orchestrator.manual_resume_automatic
+                  service_data:
+                    local_control_confirmed: true
+                  confirmation:
+                    text: Release the hold using unchanged automatic requests? Confirm competing inverter writers are disabled; no switch will be enabled.
+                hold_action:
+                  action: none
+                double_tap_action:
+                  action: none
       - type: grid
         column_span: 2
         cards:
@@ -786,6 +1058,7 @@ views:
               minutes and restore Self Use when stopped or completed.
           - type: entities
             title: Diagnostic Parameters
+            show_header_toggle: false
             entities:
               - entity: number.home_energy_test_charge_power
                 name: Charge power
@@ -795,6 +1068,7 @@ views:
                 name: Duration
           - type: entities
             title: Preview and Feedback
+            show_header_toggle: false
             entities:
               - entity: sensor.home_energy_test_charge_estimated_cost
                 name: Estimated charge cost
@@ -835,7 +1109,7 @@ views:
                     text: Submit the force-discharge test now?
               - type: button
                 entity: button.home_energy_test_stop
-                name: Stop and restore Self Use
+                name: Stop diagnostic test / restore Self Use
                 icon: mdi:stop-circle-outline
                 tap_action:
                   action: call-service
@@ -843,7 +1117,7 @@ views:
                   target:
                     entity_id: button.home_energy_test_stop
                   confirmation:
-                    text: Stop the active test and restore Self Use?
+                    text: Stop the active diagnostic test and request Self Use? This is not the manual-hold Stop control.
       - type: grid
         column_span: 2
         cards:

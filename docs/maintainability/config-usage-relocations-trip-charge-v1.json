@@ -1,0 +1,51 @@
+{
+  "extension": "trip_charge_v1",
+  "relocation_count": 2,
+  "relocations": [
+    {
+      "after": {
+        "access": "update_persisted_config_value",
+        "constant": "CONF_EV_CHARGE_TO_FULL",
+        "key": "ev_charge_to_full_entity",
+        "kind": "managed_mutation",
+        "layer": "runtime",
+        "receiver": "self.coordinator",
+        "scope": "ActiveEvController._async_set_charge_to_full_locked",
+        "source": "custom_components/home_energy_orchestrator/ev_active.py"
+      },
+      "before": {
+        "access": "update_persisted_config_value",
+        "constant": "CONF_EV_CHARGE_TO_FULL",
+        "key": "ev_charge_to_full_entity",
+        "kind": "managed_mutation",
+        "layer": "runtime",
+        "receiver": "self.coordinator",
+        "scope": "ActiveEvController._async_clear_charge_to_full",
+        "source": "custom_components/home_energy_orchestrator/ev_active.py"
+      }
+    },
+    {
+      "after": {
+        "access": "update_persisted_config_value",
+        "constant": "CONF_EV_CHARGE_TO_FULL_ENABLED",
+        "key": "ev_charge_to_full_enabled",
+        "kind": "managed_mutation",
+        "layer": "runtime",
+        "receiver": "self.coordinator",
+        "scope": "ActiveEvController._async_set_charge_to_full_locked",
+        "source": "custom_components/home_energy_orchestrator/ev_active.py"
+      },
+      "before": {
+        "access": "update_persisted_config_value",
+        "constant": "CONF_EV_CHARGE_TO_FULL_ENABLED",
+        "key": "ev_charge_to_full_enabled",
+        "kind": "managed_mutation",
+        "layer": "runtime",
+        "receiver": "self.coordinator",
+        "scope": "ActiveEvController._async_clear_charge_to_full",
+        "source": "custom_components/home_energy_orchestrator/ev_active.py"
+      }
+    }
+  ],
+  "schema_version": 1
+}

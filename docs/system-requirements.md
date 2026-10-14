@@ -280,7 +280,7 @@ else; the full conventions and commissioning procedure are documented in
 
 Import `examples/dashboard.yaml` manually or build a site-specific dashboard
 from the generated entities. HACS does not install Lovelace views. The example
-preserves the seven-view operational structure while using only HEO-owned
+preserves the eight-view operational structure, including Trip Charge, using only HEO-owned
 entity IDs. Personal backgrounds, vehicle-native Tessie cards, weather, room
 devices, heaters, and unrelated site cards are intentionally local overlays.
 The example deliberately disables Home Assistant's entities-card header toggle:
@@ -288,6 +288,14 @@ it is not an HEO master control and is unsafe to present beside the opposite-
 polarity Safety Lock. Safety Lock ON blocks all HEO hardware commands; the
 automatic export and EV switches express independent intent and do not bypass
 that lock or their respective readiness gates.
+
+Trip Charge entities are installed by HACS, with scheduling off by default.
+The first implementation requires the commissioned direct-EVSE path, usable
+EV capacity, configured maximum charging power, explicit home/cable evidence,
+EV control enabled and Safety Lock off. It uses HEO's runtime efficiency and
+Full timeout; there are no helper copies to keep in sync. A separate legacy
+trip dispatcher must be retired deliberately before arming the built-in one.
+The departure/SoC estimate does not guarantee exact physical completion.
 
 For a single read-only dashboard covering several installations, use the
 versioned Fleet Summary entity and Home Assistant's standard REST state API as

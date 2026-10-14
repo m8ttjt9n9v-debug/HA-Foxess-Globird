@@ -38,6 +38,12 @@ PRICE_ADDITIONS_PATH = (
 AEMO_MONITOR_SOURCE = (
     REPOSITORY_ROOT / "custom_components" / "home_energy_orchestrator" / "aemo_monitor.py"
 )
+TRIP_ADDITIONS_PATH = (
+    REPOSITORY_ROOT / "docs" / "maintainability" / "entity-attribute-additions-trip-charge-v1.json"
+)
+TRIP_SOURCE = (
+    REPOSITORY_ROOT / "custom_components" / "home_energy_orchestrator" / "trip_charge.py"
+)
 
 _TELEMETRY_KEYS = (
     "battery_power",
@@ -176,6 +182,11 @@ def build_entity_attribute_contract() -> dict[str, Any]:
     records.extend(
         _record(key, monitor_groups[0]) for key in ("aemo_market_status", "aemo_spot_price")
     )
+    trip_tree = ast.parse(TRIP_SOURCE.read_text(encoding="utf-8"))
+    trip_groups = _dict_return_keys(_method(trip_tree, "TripChargeController", "attributes"))
+    if len(trip_groups) != 1:
+        raise ValueError("Trip Charge must have one literal public attribute mapping")
+    records.append(_record("trip_charge_status", trip_groups[0]))
     records.sort(key=lambda item: item["entity_key"])
 
     known_entities = {
@@ -206,7 +217,9 @@ def validate_against_release_baseline() -> None:
     baseline = json.loads(BASELINE_PATH.read_text(encoding="utf-8"))
     additions = [
         json.loads(path.read_text(encoding="utf-8"))
-        for path in (MANUAL_ADDITIONS_PATH, AEMO_ADDITIONS_PATH, PRICE_ADDITIONS_PATH)
+        for path in (
+            MANUAL_ADDITIONS_PATH, AEMO_ADDITIONS_PATH, PRICE_ADDITIONS_PATH, TRIP_ADDITIONS_PATH
+        )
     ]
     for extension in additions:
         if extension.get("schema_version") != baseline.get("schema_version"):

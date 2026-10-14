@@ -14,7 +14,7 @@ from . import EnergyConfigEntry
 from .aemo_monitor import AemoMarketMonitor
 from .const import DOMAIN
 from .coordinator import EnergyCoordinator
-from .entity_catalogue import AEMO_SENSOR_DESCRIPTIONS
+from .entity_catalogue import AEMO_SENSOR_DESCRIPTIONS, TRIP_SENSOR_DESCRIPTIONS
 from .entity_catalogue import SENSOR_DESCRIPTIONS as DESCRIPTIONS
 from .read_model import (
     build_site_read_model,
@@ -22,6 +22,7 @@ from .read_model import (
     effective_export_plan,
     export_status,
 )
+from .trip_entities import TripChargeSensor
 
 
 async def async_setup_entry(
@@ -34,6 +35,10 @@ async def async_setup_entry(
     async_add_entities(
         AemoMonitorSensor(entry.runtime_data.market_monitor, entry, description)
         for description in AEMO_SENSOR_DESCRIPTIONS
+    )
+    async_add_entities(
+        TripChargeSensor(entry.runtime_data, entry, description)
+        for description in TRIP_SENSOR_DESCRIPTIONS
     )
 
 

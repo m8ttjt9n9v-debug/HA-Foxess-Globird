@@ -34,6 +34,7 @@ from .entity_catalogue import (
     PRICE_TRIGGERED_EXPORT_DESCRIPTION,
     SAFETY_DESCRIPTION,
 )
+from .trip_entities import TripScheduleSwitch
 
 
 async def async_setup_entry(
@@ -42,6 +43,7 @@ async def async_setup_entry(
     """Expose the config-backed safety lock as an unambiguous switch."""
     async_add_entities(
         (
+            TripScheduleSwitch(entry.runtime_data, entry),
             SafetyLockSwitch(entry.runtime_data, entry, SAFETY_DESCRIPTION),
             AutomaticChargeSwitch(entry.runtime_data, entry, CHARGE_DESCRIPTION),
             AutomaticExportSwitch(entry.runtime_data, entry, EXPORT_DESCRIPTION),
@@ -377,14 +379,15 @@ class EvChargeToFullSwitch(CoordinatorEntity[EnergyCoordinator], SwitchEntity):
         await self._set_enabled(False)
 
     async def _set_enabled(self, enabled: bool) -> None:
-        self.coordinator.update_persisted_config_value(
-            self._entry,
-            CONF_EV_CHARGE_TO_FULL_ENABLED,
-            enabled,
-            remove_key=CONF_EV_CHARGE_TO_FULL,
-        )
-        self.async_write_ha_state()
         controller = self.coordinator.ev_controller
         if controller is not None:
-            await controller.async_reconcile()
+            result = await controller.async_request_charge_to_full(enabled)
+            if not result["accepted"]:
+                raise HomeAssistantError("The Full request could not be safely checkpointed")
+        else:
+            self.coordinator.update_persisted_config_value(
+                self._entry, CONF_EV_CHARGE_TO_FULL_ENABLED, enabled,
+                remove_key=CONF_EV_CHARGE_TO_FULL,
+            )
+        self.async_write_ha_state()
         self.coordinator.async_update_listeners()

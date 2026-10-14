@@ -7,6 +7,7 @@ from typing import Literal
 
 from homeassistant.components.binary_sensor import BinarySensorEntityDescription
 from homeassistant.components.button import ButtonEntityDescription
+from homeassistant.components.datetime import DateTimeEntityDescription
 from homeassistant.components.number import NumberEntityDescription, NumberMode
 from homeassistant.components.select import SelectEntityDescription
 from homeassistant.components.sensor import SensorEntityDescription
@@ -27,6 +28,7 @@ EntityPlatform = Literal[
     "select",
     "sensor",
     "switch",
+    "datetime",
 ]
 AvailabilityRule = Literal[
     "coordinator",
@@ -34,6 +36,7 @@ AvailabilityRule = Literal[
     "monitor_status",
     "current_market_price",
     "market_configuration",
+    "trip_state",
 ]
 
 
@@ -816,6 +819,36 @@ PRICE_TRIGGERED_EXPORT_DESCRIPTION = SwitchEntityDescription(
     icon="mdi:transmission-tower-export",
     entity_category=EntityCategory.CONFIG,
 )
+TRIP_DATETIME_DESCRIPTION = DateTimeEntityDescription(
+    key="trip_ready_by", name="Trip Departure Date and Time", icon="mdi:calendar-clock",
+)
+TRIP_TARGET_DESCRIPTION = SelectEntityDescription(
+    key="trip_target_soc", name="Trip Charge Target", icon="mdi:battery-charging-90",
+    options=[f"{value}%" for value in range(100, 0, -1)],
+)
+TRIP_SWITCH_DESCRIPTION = SwitchEntityDescription(
+    key="trip_charge_scheduled", name="Schedule One-Off Trip Charge", icon="mdi:calendar-check",
+)
+TRIP_MARGIN_DESCRIPTION = NumberEntityDescription(
+    key="trip_extra_minutes", name="Trip Extra Charging Minutes", icon="mdi:timer-plus-outline",
+    native_unit_of_measurement="min", native_min_value=0, native_max_value=120,
+    native_step=1, mode=NumberMode.BOX, entity_category=EntityCategory.CONFIG,
+)
+TRIP_SENSOR_DESCRIPTIONS = (
+    SensorEntityDescription(
+        key="trip_charge_status", name="Trip Charge Status", icon="mdi:calendar-check-outline",
+    ),
+    SensorEntityDescription(
+        key="trip_charge_planned_start", name="Trip Charge Calculated Start",
+        device_class="timestamp", icon="mdi:clock-start",
+    ),
+    SensorEntityDescription(
+        key="trip_charge_duration", name="Trip Estimated Charging Duration",
+        native_unit_of_measurement="h", device_class="duration",
+        suggested_display_precision=2, icon="mdi:timer-outline",
+    ),
+)
+
 _AEMO_CONFIGURATION_KEYS = frozenset(
     {
         "aemo_monitor",
@@ -896,4 +929,12 @@ ENTITY_SPECS = (
     _entity_spec("switch", EV_MORNING_SOLAR_DESCRIPTION),
     _entity_spec("switch", CHARGE_TO_FULL_DESCRIPTION),
     _entity_spec("binary_sensor", SIGN_CONVENTIONS_DESCRIPTION),
+    EntitySpec(
+        "datetime", TRIP_DATETIME_DESCRIPTION, "TripDepartureDateTime.native_value", "trip_state"
+    ),
+    EntitySpec("select", TRIP_TARGET_DESCRIPTION, "TripTargetSelect.current_option", "trip_state"),
+    EntitySpec("switch", TRIP_SWITCH_DESCRIPTION, "TripScheduleSwitch.is_on", "trip_state"),
+    EntitySpec("number", TRIP_MARGIN_DESCRIPTION, "TripMarginNumber.native_value", "trip_state"),
+    *(EntitySpec("sensor", item, f"TripChargeSensor.native_value[{item.key!r}]", "trip_state")
+      for item in TRIP_SENSOR_DESCRIPTIONS),
 )

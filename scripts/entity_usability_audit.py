@@ -17,7 +17,7 @@ AUDIT_PATH = (
     REPOSITORY_ROOT
     / "docs"
     / "maintainability"
-    / "clean-install-usability-audit-price-export-v1.md"
+    / "clean-install-usability-audit-trip-charge-v1.md"
 )
 
 
@@ -99,7 +99,7 @@ def rendered_audit() -> str:
     """Render the evidence as a stable human-reviewable report."""
     audit = build_usability_audit()
     lines = [
-        "# Clean-install usability audit — retained baseline and price-export additions",
+        "# Clean-install usability audit — baseline, price-export and Trip Charge additions",
         "",
         "This generated report identifies remaining presentation gaps and records",
         "the owner-approved display-name changes. Category and dashboard decisions",
@@ -130,7 +130,7 @@ def rendered_audit() -> str:
             "",
             "Dashboard absence is audit evidence, not automatically a defect: Fleet,",
             "site overlays and deliberately advanced entities may be consumed elsewhere.",
-            "The two primary omissions require a presentation decision before change.",
+            "Any primary omissions require a presentation decision before change.",
             "",
             "### Primary entities not referenced by the portable dashboard",
             "",

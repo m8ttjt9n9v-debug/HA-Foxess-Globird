@@ -66,8 +66,8 @@ Read the [system requirements](docs/system-requirements.md),
 [installation guide](docs/installation.md), and
 [commissioning checklist](docs/commissioning.md) before enabling writes. HACS
 installs the integration, not dashboards; `examples/dashboard.yaml` is a
-portable seven-view Lovelace dashboard for manual import. Its Overview, Tesla,
-House, Solar & Weather, Configuration, Advanced, and Manual structure preserves
+portable eight-view Lovelace dashboard for manual import. Its Overview, Tesla,
+Trip Charge, House, Solar & Weather, Configuration, Advanced, and Manual structure preserves
 the proven site's operational information architecture while using only
 integration-owned entity IDs. Vehicle-native Tessie cards, local weather,
 rooms, and other site-specific cards belong in a local overlay.
@@ -86,8 +86,10 @@ current. See the [commissioning checklist](docs/commissioning.md).
 - Optional [one-off trip charging](docs/trip-charge-wrapper.md) schedules the
   existing HEO Charge to Full override for a departure and selected 1–100% SoC.
   It ends only its owned override at the reported target, then normal HEO
-  policies resume. Install and commission the native helper package and card
-  separately; HACS does not install them automatically. The target is not a
+  policies resume. HACS now installs the departure, target, schedule and status
+  entities together; import the Trip Charge view from the dashboard example.
+  The schedule starts off, and existing legacy helper installations are not
+  silently migrated. The target is not a
   permanent charge ceiling or a guarantee of an exact finishing time.
 
 - Optional [automatic export during high wholesale prices](docs/price-triggered-export.md).

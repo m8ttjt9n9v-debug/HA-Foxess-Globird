@@ -23,6 +23,9 @@ BASELINE_PATH = (
 ADDITIONS_PATH = (
     REPOSITORY_ROOT / "docs" / "maintainability" / "config-usage-additions-price-export-v1.json"
 )
+RELOCATIONS_PATH = (
+    REPOSITORY_ROOT / "docs" / "maintainability" / "config-usage-relocations-trip-charge-v1.json"
+)
 _CONFIG_ACCESS_METHODS = {
     "get",
     "pop",
@@ -194,6 +197,21 @@ def build_config_usage_contract(*, include_extensions: bool = False) -> dict[str
             if reviewed not in records:
                 raise ValueError("reviewed configuration usage addition is missing")
             records.remove(reviewed)
+        relocations = json.loads(RELOCATIONS_PATH.read_text(encoding="utf-8"))
+        if relocations.get("relocation_count") != len(relocations["relocations"]):
+            raise ValueError("configuration relocation count does not match its records")
+        # Compare the frozen inventory after validating each exact moved write.
+        # No new key, receiver, access kind or unrelated method is exempted.
+        for relocation in relocations["relocations"]:
+            before, after = relocation["before"], relocation["after"]
+            if after not in records or before in records:
+                raise ValueError("reviewed configuration mutation relocation changed")
+            if {k: v for k, v in before.items() if k != "scope"} != {
+                k: v for k, v in after.items() if k != "scope"
+            }:
+                raise ValueError("configuration relocation must preserve the mutation boundary")
+            records.remove(after)
+            records.append(before)
     records.sort(
         key=lambda item: (
             item["source"],

@@ -94,3 +94,13 @@ def test_01231_telemetry_patch_has_bounded_descriptive_stable_notes() -> None:
     assert "freshness/coherence limits" in notes
     assert "No new settings" in notes and "no automatic price-triggered buying" in notes
     assert not Version("0.12.31").is_prerelease
+
+
+def test_01232_installs_trip_entities_without_automatic_dashboard_or_policy_changes() -> None:
+    title, notes = release_text("v0.12.32", CHANGELOG_PATH.read_text(encoding="utf-8"))
+    assert title == "v0.12.32 — Built-in Trip Charge and clearer dashboards"
+    assert "Default unarmed" in notes and "legacy" in notes
+    assert "generation-bound" in notes and "restart-safe" in notes
+    assert "HACS does not replace" in notes
+    assert "No automatic price-triggered buying" in notes
+    assert not Version("0.12.32").is_prerelease

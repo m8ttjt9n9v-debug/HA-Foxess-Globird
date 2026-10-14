@@ -23,6 +23,7 @@ from .entity_catalogue import (
 from .entity_catalogue import (
     NUMBER_DESCRIPTIONS as DESCRIPTIONS,
 )
+from .trip_entities import TripMarginNumber
 
 
 async def async_setup_entry(
@@ -31,6 +32,7 @@ async def async_setup_entry(
     """Add the three local-only diagnostic inputs."""
     async_add_entities(
         (
+            TripMarginNumber(entry.runtime_data, entry),
             *(TestNumber(entry.runtime_data, entry, description) for description in DESCRIPTIONS),
             *(
                 AemoThresholdNumber(entry.runtime_data, entry, description)

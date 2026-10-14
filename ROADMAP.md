@@ -23,9 +23,12 @@ Status here describes behavioral parity, not merely the presence of code.
   departure time. Reuse HEO's capacity/max-power projections and existing paid
   Full override; preserve restorable ownership, cancellation, target-change,
   missing-input and restart safeguards. Keep device commands with HEO.
-- [ ] Complete separately approved installation and live acceptance. HACS
-  bundling and weekly repetition remain future work; the package/card require
-  explicit installation and commissioning. See
+- [x] Bundle integration-owned departure, target, schedule, timing and status
+  entities with HACS. Read runtime settings directly, persist a generation-bound
+  Full lease, default unarmed, and block competing legacy dispatchers.
+- [ ] Complete separately approved installation and physical trip acceptance.
+  Dashboard import and legacy retirement remain explicit operations; weekly
+  repetition remains future work. See
   [trip charging](docs/trip-charge-wrapper.md).
 
 ## Optional price export extension

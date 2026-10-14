@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 DOMAIN = "home_energy_orchestrator"
-PLATFORMS = ["sensor", "binary_sensor", "number", "button", "switch", "select"]
+PLATFORMS = ["sensor", "binary_sensor", "number", "button", "switch", "select", "datetime"]
 
 CONF_CONFIGURE_SOLAR = "configure_solar"
 CONF_CONFIGURE_EV = "configure_ev"

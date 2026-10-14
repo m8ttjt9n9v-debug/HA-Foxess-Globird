@@ -10,6 +10,7 @@ from pathlib import Path
 from custom_components.home_energy_orchestrator import (
     binary_sensor,
     button,
+    datetime,
     number,
     select,
     switch,
@@ -41,7 +42,7 @@ def test_entity_contract_matches_reviewed_release_baseline() -> None:
 
 def test_entity_contract_contains_frozen_and_reviewed_additive_entities() -> None:
     contract = build_entity_contract()
-    assert contract["entity_count"] == 117
+    assert contract["entity_count"] == 124
     unique_ids = [item["unique_id_template"] for item in contract["entities"]]
     entity_ids = [item["default_entity_id"] for item in contract["entities"]]
     assert len(unique_ids) == len(set(unique_ids))
@@ -60,7 +61,7 @@ def test_entity_catalogue_is_complete_and_unique() -> None:
         for spec in ENTITY_SPECS
     }
 
-    assert len(ENTITY_SPECS) == 117
+    assert len(ENTITY_SPECS) == 124
     assert len(catalogued) == len(ENTITY_SPECS)
     assert catalogued == contracted
     assert all(spec.value_projection for spec in ENTITY_SPECS)
@@ -69,6 +70,7 @@ def test_entity_catalogue_is_complete_and_unique() -> None:
     } == {
         "coordinator", "coordinator_and_projection", "monitor_status",
         "current_market_price", "market_configuration",
+        "trip_state",
     }
     assert not any(spec.deprecated for spec in ENTITY_SPECS)
 
@@ -117,6 +119,30 @@ def test_sensor_specs_match_native_value_projection_keys() -> None:
     ]
     assert len(monitor_returns) == 1
     projected_keys.update(ast.literal_eval(key) for key in monitor_returns[0].value.value.keys)
+    trip_tree = ast.parse(
+        (ROOT / "custom_components/home_energy_orchestrator/trip_entities.py").read_text(
+            encoding="utf-8"
+        )
+    )
+    trip_sensor = next(
+        node for node in trip_tree.body
+        if isinstance(node, ast.ClassDef) and node.name == "TripChargeSensor"
+    )
+    trip_value = next(
+        node for node in trip_sensor.body
+        if isinstance(node, ast.FunctionDef) and node.name == "native_value"
+    )
+    trip_returns = [
+        node for node in ast.walk(trip_value)
+        if isinstance(node, ast.Return) and isinstance(node.value, ast.Subscript)
+        and isinstance(node.value.value, ast.Dict)
+    ]
+    assert len(trip_returns) == 1
+    trip_keys = {ast.literal_eval(key) for key in trip_returns[0].value.value.keys}
+    assert trip_keys == {
+        "trip_charge_status", "trip_charge_planned_start", "trip_charge_duration"
+    }
+    projected_keys.update(trip_keys)
     read_model_projections: list[ast.Dict] = []
     for node in ast.walk(read_model_tree):
         if not isinstance(node, ast.FunctionDef) or node.name != "sensor_values":
@@ -146,7 +172,7 @@ def test_non_sensor_projection_owners_exist() -> None:
     """Non-sensor projection metadata must name a real implementation member."""
     classes = {
         name: value
-        for module in (binary_sensor, button, number, select, switch)
+        for module in (binary_sensor, button, datetime, number, select, switch)
         for name, value in vars(module).items()
         if inspect.isclass(value)
     }

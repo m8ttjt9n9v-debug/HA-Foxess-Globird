@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.12.32 — Built-in Trip Charge and clearer dashboards
+
+- Install the one-off Trip Charge departure, selected 1–100% target, schedule,
+  margin and timing/status entities through HACS. Reuse HEO's existing paid
+  Charge to Full policy and runtime settings, without another device writer.
+- Default unarmed, preserve legacy helper installations, and block competing
+  legacy dispatchers. Add a private generation-bound Full handoff journal,
+  restart-safe reducing cleanup and failed-checkpoint safeguards. Trip targets
+  are not permanent charge ceilings or exact-time completion guarantees.
+- Extend the reusable eight-view dashboard with Trip Charge, morning reserve,
+  ready-by accounting, forecast and measured net costs, a dated retailer
+  scorecard, optional price controls and clearer source provenance. Separate
+  persistent manual battery holds from bounded diagnostics. Dashboards remain
+  explicitly imported; HACS does not replace an existing dashboard.
+- Preserve normal EV/battery policies, accounting, electrical limits and saved
+  switches. Add native entity installation, lifecycle, target, journal and
+  handoff regressions. No automatic price-triggered buying is included.
+
 ## 0.12.31 — Stable battery telemetry for EV backfill
 
 - Correct source selection when an older inactive zero in the battery

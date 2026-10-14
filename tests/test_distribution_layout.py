@@ -61,6 +61,7 @@ def test_example_dashboard_uses_the_integration_entity_ids() -> None:
     assert [view["title"] for view in dashboard["views"]] == [
         "Overview",
         "Tesla",
+        "Trip Charge",
         "House",
         "Solar & Weather",
         "Configuration",
@@ -70,6 +71,7 @@ def test_example_dashboard_uses_the_integration_entity_ids() -> None:
     assert [view["path"] for view in dashboard["views"]] == [
         "overview",
         "tesla",
+        "trip-charge",
         "house",
         "solar-weather",
         "configuration",

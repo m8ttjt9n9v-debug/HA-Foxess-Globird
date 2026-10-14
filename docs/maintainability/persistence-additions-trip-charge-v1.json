@@ -1,0 +1,14 @@
+{
+  "extension": "trip_charge_v1",
+  "schema_version": 1,
+  "store_count": 1,
+  "stores": [
+    {
+      "attribute": "self._store",
+      "private": true,
+      "source": "custom_components/home_energy_orchestrator/trip_charge.py",
+      "storage_key_expression": "f'home_energy_orchestrator.{coordinator.entry_id}.trip_charge'",
+      "version": 1
+    }
+  ]
+}

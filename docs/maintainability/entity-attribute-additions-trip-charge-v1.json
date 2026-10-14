@@ -1,0 +1,24 @@
+{
+  "entities": [
+    {
+      "custom_attributes": [
+        "armed",
+        "cleanup_pending",
+        "departure",
+        "extra_minutes",
+        "full_generation",
+        "generation",
+        "legacy_conflict",
+        "owner_token",
+        "owns_full",
+        "storage_status",
+        "target_soc"
+      ],
+      "default_entity_id": "sensor.home_energy_trip_charge_status",
+      "entity_key": "trip_charge_status"
+    }
+  ],
+  "entity_count": 1,
+  "extension": "trip_charge_v1",
+  "schema_version": 1
+}

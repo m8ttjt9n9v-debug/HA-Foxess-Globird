@@ -1,5 +1,68 @@
 # One-off trip charging to a selected SoC
 
+## Built into HACS
+
+HACS installs Trip Charge together with HEO. You do not need a separate helper
+package on a new installation. Import the **Trip Charge** view from
+`examples/dashboard.yaml` or add these entities to your existing dashboard:
+
+| Control or information | Entity |
+| --- | --- |
+| Departure date and time | `datetime.home_energy_trip_ready_by` |
+| Desired car charge, 1–100% | `select.home_energy_trip_target_soc` |
+| Schedule this trip | `switch.home_energy_trip_charge_scheduled` |
+| Trip status | `sensor.home_energy_trip_charge_status` |
+| Calculated start | `sensor.home_energy_trip_charge_planned_start` |
+| Estimated charging hours | `sensor.home_energy_trip_charge_duration` |
+| Optional extra minutes | `number.home_energy_trip_extra_minutes` |
+
+Set the departure and target, then enable **Schedule this trip**. Scheduling
+starts **off**. HEO's commissioned home/cable mappings, usable capacity,
+maximum power, efficiency and Full timeout are used directly. Automatic EV
+control must remain on and Safety Lock off; the first version supports the
+direct-EVSE path. No new Tesla or inverter writer is added.
+
+The scheduler requests the existing paid **Charge to Full** policy at the
+calculated time, then withdraws only its own request when the selected reported
+SoC is reached. That policy can use paid grid power and bypass the normal
+house-battery EV reserve; electrical and hardware protections still apply.
+Normal policies resume afterwards, so this is **not a permanent charge ceiling**.
+Taper, faults and reporting delays mean an exact finish time or percentage is
+not guaranteed. The normal policies can charge before the trip's calculated
+start; their SoC changes update the calculation.
+
+A private persistent journal binds each trip to its own Full request. Manual
+Full changes invalidate that lease; old trip cleanup cannot stop a later manual
+request. Positive intent requires a successful checkpoint. Missing data blocks
+a start, invalid SoC interrupts an owned request, and restart cleanup retains
+its ownership obligation. An unstarted past departure expires rather than
+starting unexpectedly. An already-active late trip continues only within the
+existing Full timeout. It does not repeatedly restart an interrupted request.
+
+Cancel to withdraw an owned request. Editing departure or target while charging
+cancels that trip; deliberately enable the edited schedule again. Edits while
+waiting replan. An already-at-target waiting schedule stays armed until departure
+in case the SoC falls, but a completed trip is consumed. Weekly repetition is
+not implemented.
+
+For DD/MM/YYYY, choose **Profile → General → Date format → day/month/year**.
+The stored instant follows Home Assistant's timezone rather than a fixed UTC
+offset, including daylight-saving transitions.
+
+### Existing helper installations
+
+HACS does not delete, migrate or reset the older helpers. A detected enabled or
+unreadable legacy dispatcher, armed helper or ownership helper blocks built-in
+arming. Retire the legacy dispatcher explicitly only when its schedule and
+ownership are off and Full is inactive. Keep a backup; the old helper values
+may remain for reference. Do not run both schedulers together.
+
+The original generated package and its tests remain for compatibility. The
+following section documents that **legacy installation**, not the HACS-owned
+scheduler above.
+
+## Legacy native-HA helper package
+
 This optional native Home Assistant helper package schedules HEO's existing
 Charge to Full switch. It is a reusable wrapper, not another EV controller,
 and does not require an HEO upgrade. It ends its own Full request at your
@@ -143,9 +206,9 @@ the same generated package. Keep the user's existing helper values and entity
 IDs. Do not install another dispatcher, reset the departure, or adopt an active
 manual Full request. Mixed v1/v2 plan data cannot start a new override.
 
-Future HACS bundling should use HEO's own runtime settings directly and retain
-this single-writer handoff; it does not require rewriting Full for selected
-trip targets. Weekly repetition remains future work.
+The built-in HACS implementation above uses HEO runtime settings directly.
+This older package is retained for existing installations; weekly repetition
+remains future work.
 
 ## Provenance and validation
 
@@ -160,5 +223,5 @@ Native Home Assistant helper, template and automation tests cover 1/80/90/100%
 targets, zero deficit, prompt completion, invalid/unknown readings, cancellation
 and awaited-start races, actual helper restoration and HA startup, manual
 Full OFF/ON replacement and ordinary Full completion. These tests do not prove
-live delivery or an exact finishing time. Percentage support remains local
-until the updated wrapper has been separately approved and deployed.
+live delivery or an exact finishing time. Built-in scheduler tests additionally
+cover its typed journal and generation-bound manual/Trip handoff.

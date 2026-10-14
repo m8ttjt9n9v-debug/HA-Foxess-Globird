@@ -8,7 +8,11 @@ from pathlib import Path
 
 from custom_components.home_energy_orchestrator.planner.export_session import ExportSessionState
 from scripts.config_contract import ADDITIVE_CONFIG_KEYS, build_config_contract
-from scripts.entity_contract import build_entity_contract, validate_against_release_baseline
+from scripts.entity_contract import (
+    TRIP_ADDITIONS_PATH,
+    build_entity_contract,
+    validate_against_release_baseline,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -33,11 +37,19 @@ def test_price_export_admits_only_monitor_and_one_automatic_request() -> None:
         (ROOT / "docs/maintainability/entity-contract-v0.12.26.json").read_text()
     )
     old = {(record["platform"], record["key"]) for record in baseline["entities"]}
+    trip = json.loads(TRIP_ADDITIONS_PATH.read_text())
+    trip_ids = {(record["platform"], record["key"]) for record in trip["entities"]}
+    assert trip_ids == {
+        ("datetime", "trip_ready_by"), ("select", "trip_target_soc"),
+        ("switch", "trip_charge_scheduled"), ("number", "trip_extra_minutes"),
+        ("sensor", "trip_charge_status"), ("sensor", "trip_charge_planned_start"),
+        ("sensor", "trip_charge_duration"),
+    }
     new = {
         (record["platform"], record["key"])
         for record in build_entity_contract()["entities"]
     } - old
-    assert new == {
+    assert new - trip_ids == {
         ("sensor", "aemo_market_status"), ("sensor", "aemo_spot_price"),
         ("switch", "aemo_monitor"), ("select", "aemo_region"),
         ("number", "aemo_export_threshold"), ("number", "aemo_import_threshold"),

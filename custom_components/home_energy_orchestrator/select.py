@@ -16,6 +16,7 @@ from .const import (
 )
 from .coordinator import EnergyCoordinator
 from .entity_catalogue import HOUSE_OCCUPANCY_DESCRIPTION as DESCRIPTION
+from .trip_entities import TripTargetSelect
 
 
 async def async_setup_entry(
@@ -28,6 +29,7 @@ async def async_setup_entry(
         (
             HouseOccupancyModeSelect(entry.runtime_data, entry),
             AemoRegionSelect(entry.runtime_data, entry),
+            TripTargetSelect(entry.runtime_data, entry),
         )
     )
 
