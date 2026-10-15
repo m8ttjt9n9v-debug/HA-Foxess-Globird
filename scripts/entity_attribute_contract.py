@@ -44,6 +44,9 @@ TRIP_ADDITIONS_PATH = (
 TRIP_SOURCE = (
     REPOSITORY_ROOT / "custom_components" / "home_energy_orchestrator" / "trip_charge.py"
 )
+EV_CAPACITY_ADDITIONS_PATH = (
+    REPOSITORY_ROOT / "docs" / "maintainability" / "entity-attribute-additions-ev-capacity-v1.json"
+)
 
 _TELEMETRY_KEYS = (
     "battery_power",
@@ -149,6 +152,11 @@ def build_entity_attribute_contract() -> dict[str, Any]:
     # The full EV status mapping already contains ``gate``; the separate
     # unavailable fallback exposes only that same key.
     ev_control = _group_by_sentinel(read_model_groups, "decision_phase")
+    capacity_groups = _dict_return_keys(
+        _method(read_model_tree, "EvReadModel", "capacity_attributes")
+    )
+    if len(capacity_groups) != 1:
+        raise ValueError("EV capacity must have one literal public attribute mapping")
     occupancy = _group_by_sentinel(read_model_groups, "selected_mode")
     status = _group_by_sentinel(read_model_groups, "ledger_status")
 
@@ -165,6 +173,7 @@ def build_entity_attribute_contract() -> dict[str, Any]:
     records.extend(
         (
             _record("ev_control_status", ev_control),
+            _record("ev_usable_capacity", capacity_groups[0]),
             _record("house_occupancy_state", occupancy),
             _record("status", status),
         )
@@ -218,7 +227,11 @@ def validate_against_release_baseline() -> None:
     additions = [
         json.loads(path.read_text(encoding="utf-8"))
         for path in (
-            MANUAL_ADDITIONS_PATH, AEMO_ADDITIONS_PATH, PRICE_ADDITIONS_PATH, TRIP_ADDITIONS_PATH
+            MANUAL_ADDITIONS_PATH,
+            AEMO_ADDITIONS_PATH,
+            PRICE_ADDITIONS_PATH,
+            TRIP_ADDITIONS_PATH,
+            EV_CAPACITY_ADDITIONS_PATH,
         )
     ]
     for extension in additions:

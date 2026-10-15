@@ -9,6 +9,7 @@ import pytest
 from scripts import entity_semantics
 from scripts.entity_contract import build_entity_contract
 from scripts.entity_semantics import (
+    EV_CAPACITY_EXTENSIONS_PATH,
     MANUAL_EXTENSIONS_PATH,
     SEMANTICS_PATH,
     entities_awaiting_review,
@@ -67,7 +68,7 @@ def test_semantic_decisions_record_the_owner_approved_relabels() -> None:
         for item in contract["entities"]
         if item["decision"] == "relabel"
     }
-    assert len(proposed) == 9
+    assert len(proposed) == 10
     assert len(proposed.values()) == len(set(proposed.values()))
     approved = {
         item["key"]
@@ -80,3 +81,41 @@ def test_semantic_decisions_record_the_owner_approved_relabels() -> None:
         for item in contract["entities"]
         if item["key"] not in approved
     )
+
+
+def test_capacity_semantic_revision_preserves_frozen_baseline_and_other_records():
+    baseline_text = SEMANTICS_PATH.read_text(encoding="utf-8")
+    baseline = json.loads(baseline_text)
+    current = {item["key"]: item for item in load_semantic_contract()["entities"]}
+    for record in baseline["entities"]:
+        if record["key"] != "ev_usable_capacity":
+            assert current[record["key"]] == record
+    capacity = current["ev_usable_capacity"]
+    assert capacity["attribute_profile"] == "ev_capacity_v1"
+    assert capacity["proposed_display_name"] == "EV Planning Capacity"
+    assert capacity["review_status"] == "owner_approved"
+    assert SEMANTICS_PATH.read_text(encoding="utf-8") == baseline_text
+
+
+@pytest.mark.parametrize("conflict", ["identity", "predecessor", "field", "count", "duplicate"])
+def test_capacity_semantic_revision_cannot_replace_unreviewed_records(
+    monkeypatch, tmp_path, conflict
+):
+    extension = json.loads(EV_CAPACITY_EXTENSIONS_PATH.read_text(encoding="utf-8"))
+    revision = extension["entity_revisions"][0]
+    if conflict == "identity":
+        revision["key"] = "status"
+    elif conflict == "predecessor":
+        revision["previous_definition"] = "Unreviewed predecessor"
+    elif conflict == "field":
+        revision["fields"]["default_entity_id"] = "sensor.unreviewed"
+    elif conflict == "count":
+        extension["entity_revision_count"] = 2
+    else:
+        extension["entity_revisions"].append(revision.copy())
+        extension["entity_revision_count"] = 2
+    path = tmp_path / "capacity-semantics.json"
+    path.write_text(json.dumps(extension), encoding="utf-8")
+    monkeypatch.setattr(entity_semantics, "EV_CAPACITY_EXTENSIONS_PATH", path)
+    with pytest.raises(ValueError, match="semantic revision"):
+        load_semantic_contract()

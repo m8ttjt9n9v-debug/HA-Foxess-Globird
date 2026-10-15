@@ -538,6 +538,10 @@ class EvReadModel:
     driving_p85_kwh: float | None
     learning_samples: int
     usable_capacity_kwh: float | None
+    capacity_source: str | None
+    capacity_basis: str | None
+    capacity_observed_at: datetime | None
+    capacity_fallback_reason: str | None
     free_window_soc_gain_percent: float | None
     learned_charge_limit_percent: float | None
     learning_status: str
@@ -579,6 +583,17 @@ class EvReadModel:
             "ev_free_window_soc_gain": self.free_window_soc_gain_percent,
             "ev_learned_charge_limit": self.learned_charge_limit_percent,
             "ev_driving_learning_status": self.learning_status,
+        }
+
+    def capacity_attributes(self) -> dict[str, object]:
+        """Project accepted capacity provenance without reading entity state."""
+        return {
+            "source": self.capacity_source,
+            "basis": self.capacity_basis,
+            "observed_at": (
+                None if self.capacity_observed_at is None else self.capacity_observed_at.isoformat()
+            ),
+            "fallback_reason": self.capacity_fallback_reason,
         }
 
     def control_attributes(self) -> dict[str, object]:
@@ -1055,6 +1070,10 @@ def _build_ev_read_model(
             driving_p85_kwh=None,
             learning_samples=0,
             usable_capacity_kwh=None,
+            capacity_source=None,
+            capacity_basis=None,
+            capacity_observed_at=None,
+            capacity_fallback_reason=None,
             free_window_soc_gain_percent=None,
             learned_charge_limit_percent=None,
             learning_status="unavailable",
@@ -1063,6 +1082,8 @@ def _build_ev_read_model(
     grid_average = controller.grid_average.result(now)
     actual_average = controller.ev_average.result(now)
     learned = controller.learned_charge_limit
+    capacity = getattr(controller, "capacity_observation", None)
+    legacy_capacity = coordinator.runtime_config.ev_capacity.source == "legacy_ratio"
     pre_free_plan = controller.pre_free_plan
     daily_plan = controller.daily_backfill_plan
     return EvReadModel(
@@ -1148,8 +1169,16 @@ def _build_ev_read_model(
         ),
         learning_samples=len(controller.driving_history.samples),
         usable_capacity_kwh=(
-            None if learned is None else learned.usable_capacity_kwh
+            (None if learned is None else learned.usable_capacity_kwh)
+            if legacy_capacity
+            else None
+            if capacity is None
+            else capacity.value_kwh
         ),
+        capacity_source=None if capacity is None else capacity.source,
+        capacity_basis=None if capacity is None else capacity.basis,
+        capacity_observed_at=None if capacity is None else capacity.observed_at,
+        capacity_fallback_reason=None if capacity is None else capacity.reason,
         free_window_soc_gain_percent=(
             None if learned is None else learned.free_window_soc_gain_percent
         ),

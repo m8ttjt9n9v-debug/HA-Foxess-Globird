@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from custom_components.home_energy_orchestrator import const
-from scripts.config_contract import ADDITIVE_CONFIG_KEYS
+from scripts.config_contract import ADDITIVE_CONFIG_KEYS, EV_CAPACITY_CONFIG_KEYS
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 SOURCE_ROOT = REPOSITORY_ROOT / "custom_components" / "home_energy_orchestrator"
@@ -25,6 +25,9 @@ ADDITIONS_PATH = (
 )
 RELOCATIONS_PATH = (
     REPOSITORY_ROOT / "docs" / "maintainability" / "config-usage-relocations-trip-charge-v1.json"
+)
+CAPACITY_ADDITIONS_PATH = (
+    REPOSITORY_ROOT / "docs" / "maintainability" / "config-usage-additions-ev-capacity-v1.json"
 )
 _CONFIG_ACCESS_METHODS = {
     "get",
@@ -187,6 +190,19 @@ def build_config_usage_contract(*, include_extensions: bool = False) -> dict[str
         visitor.visit(tree)
         records.extend(visitor.records)
     if not include_extensions:
+        capacity = json.loads(CAPACITY_ADDITIONS_PATH.read_text(encoding="utf-8"))
+        capacity_accesses = [
+            item
+            for item in records
+            if item["key"] in EV_CAPACITY_CONFIG_KEYS
+            or item["scope"].startswith("EvCapacitySettings.")
+        ]
+        if capacity.get("access_count") != len(capacity["accesses"]) or sorted(
+            json.dumps(item, sort_keys=True) for item in capacity_accesses
+        ) != sorted(json.dumps(item, sort_keys=True) for item in capacity["accesses"]):
+            raise ValueError("reviewed EV capacity configuration usage changed")
+        for reviewed in capacity["accesses"]:
+            records.remove(reviewed)
         # Preserve the fixed baseline while auditing the exact monitor extension
         # separately. No unknown or unrelated key is exempt from comparison.
         records = [item for item in records if item["key"] not in ADDITIVE_CONFIG_KEYS]

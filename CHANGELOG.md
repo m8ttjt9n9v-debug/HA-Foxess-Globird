@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.12.33 — Reliable EV planning-capacity inputs
+
+- Add an explicit EV planning-capacity source and optional numeric fallback.
+  Reuse the exact mapped car's existing Tessie nominal-full-pack cache, or map
+  a full-capacity sensor, without additional API polling or credentials.
+- Share the selected capacity across both Trip schedulers, learned limits,
+  allowance and backfill energy-room calculations. A dedicated-source failure
+  uses only the reviewed fallback or unavailable, never a volatile ratio.
+- Retain existing settings and legacy behaviour until the new source is
+  selected. Preserve charging policies, session ownership and all safety gates.
+- Keep the existing capacity entity ID, clarify its display name and expose
+  source/basis/timestamp/fallback information. Nominal pack capacity is an
+  estimate, not a claim of exact usable energy. Add low-SoC and lifecycle tests.
+
 ## 0.12.32 — Built-in Trip Charge and clearer dashboards
 
 - Install the one-off Trip Charge departure, selected 1–100% target, schedule,

@@ -270,6 +270,8 @@ async def test_user_flow_creates_a_config_entry(hass):
     assert result["title"] == "Test Site"
     assert result["data"] == {
         **ENTRY_DATA,
+        "ev_capacity_source": "legacy_ratio",
+        "ev_capacity_fallback_kwh": 0.0,
         "ev_morning_solar_enabled": False,
         "ev_morning_solar_reserve_soc_percent": 20.0,
         "ev_outside_battery_reserve_percent": 20.0,
@@ -1557,6 +1559,8 @@ async def test_reconfigure_updates_and_reloads_an_entry(hass):
     assert entry.title == "Updated Site"
     assert entry.data == {
         **updated_data,
+        "ev_capacity_source": "legacy_ratio",
+        "ev_capacity_fallback_kwh": 0.0,
         "ev_morning_solar_enabled": False,
         "ev_morning_solar_reserve_soc_percent": 20.0,
         "ev_outside_battery_reserve_percent": 20.0,

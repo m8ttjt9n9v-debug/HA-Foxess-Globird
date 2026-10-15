@@ -17,14 +17,14 @@ from scripts.config_field_contract import (
 def test_config_field_contract_matches_reviewed_release_baseline() -> None:
     validate_against_release_baseline()
     assert json.loads(BASELINE_PATH.read_text(encoding="utf-8"))["field_count"] == 135
-    assert json.loads(rendered_contract())["field_count"] == 140
+    assert json.loads(rendered_contract())["field_count"] == 143
 
 
 def test_config_field_contract_covers_every_wizard_field_once() -> None:
     contract = build_config_field_contract()
     expected = [key for fields in ConfigFlow._PAGE_FIELDS.values() for key in fields]
     actual = [item["key"] for item in contract["fields"]]
-    assert contract["field_count"] == 140
+    assert contract["field_count"] == 143
     assert actual == expected
     assert len(actual) == len(set(actual))
     assert all(item["setup_label"] for item in contract["fields"])

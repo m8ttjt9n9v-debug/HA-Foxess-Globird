@@ -23,6 +23,9 @@ CATALOGUE_PATH = (
 ADDITIONS_PATH = (
     REPOSITORY_ROOT / "docs" / "maintainability" / "config-field-additions-price-export-v1.json"
 )
+CAPACITY_ADDITIONS_PATH = (
+    REPOSITORY_ROOT / "docs" / "maintainability" / "config-field-additions-ev-capacity-v1.json"
+)
 
 _EV_PAGES = {"car", "charger", "ev_policies", "recovery"}
 
@@ -81,10 +84,23 @@ def _field_line(field: dict[str, Any]) -> str:
 def rendered_catalogue() -> str:
     """Return deterministic Python source for every frozen wizard field."""
     contract = json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
-    additions = json.loads(ADDITIONS_PATH.read_text(encoding="utf-8"))
-    if additions["field_count"] != len(additions["fields"]):
-        raise ValueError("field catalogue additions have an invalid count")
-    contract["fields"] = contract["fields"] + additions["fields"]
+    page_order = list(dict.fromkeys(field["page"] for field in contract["fields"]))
+    fields = list(contract["fields"])
+    known = {field["key"] for field in fields}
+    for path in (ADDITIONS_PATH, CAPACITY_ADDITIONS_PATH):
+        additions = json.loads(path.read_text(encoding="utf-8"))
+        if additions["field_count"] != len(additions["fields"]):
+            raise ValueError("field catalogue additions have an invalid count")
+        for field in additions["fields"]:
+            if field["key"] in known:
+                raise ValueError("field additions cannot replace reviewed keys")
+            known.add(field["key"])
+            if field["page"] not in page_order:
+                page_order.append(field["page"])
+            fields.append(field)
+    contract["fields"] = sorted(
+        fields, key=lambda field: (page_order.index(field["page"]), field["order"])
+    )
     lines = [
         "# ruff: noqa: E501\n",
         '"""Generated immutable configuration field catalogue.\n',

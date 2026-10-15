@@ -7,7 +7,13 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from custom_components.home_energy_orchestrator.planner.export_session import ExportSessionState
-from scripts.config_contract import ADDITIVE_CONFIG_KEYS, build_config_contract
+from scripts.config_contract import (
+    ADDITIVE_CONFIG_KEYS,
+    AEMO_CONFIG_KEYS,
+    EV_CAPACITY_CONFIG_KEYS,
+    PRICE_EXPORT_CONFIG_KEYS,
+    build_config_contract,
+)
 from scripts.entity_contract import (
     TRIP_ADDITIONS_PATH,
     build_entity_contract,
@@ -23,31 +29,71 @@ def test_price_export_adds_only_five_reviewed_configuration_keys() -> None:
     )
     historical = build_config_contract()
     current = build_config_contract(include_extensions=True)
-    assert set(extension["additional_config_keys"]) == ADDITIVE_CONFIG_KEYS
+    price_keys = AEMO_CONFIG_KEYS | PRICE_EXPORT_CONFIG_KEYS
+    assert (
+        set(extension["additional_config_keys"])
+        == price_keys
+        == {
+            "aemo_export_threshold_per_kwh",
+            "aemo_import_threshold_per_kwh",
+            "aemo_monitor_enabled",
+            "aemo_region",
+            "critical_event_sell_enabled",
+        }
+    )
     assert current["config_entry_version"] == historical["config_entry_version"] == 6
     assert (
         set(current["declared_config_keys"]) - set(historical["declared_config_keys"])
-    ) == set(extension["additional_config_keys"])
-    assert current["page_field_count"] == historical["page_field_count"] + 5
+    ) - EV_CAPACITY_CONFIG_KEYS == price_keys
+    assert (
+        current["page_field_count"] - len(EV_CAPACITY_CONFIG_KEYS)
+        == historical["page_field_count"] + 5
+    )
+
+
+def test_capacity_configuration_is_a_separate_three_key_addition() -> None:
+    extension = json.loads(
+        (ROOT / "docs/maintainability/config-additions-ev-capacity-v1.json").read_text()
+    )
+    historical = build_config_contract()
+    current = build_config_contract(include_extensions=True)
+    assert (
+        set(extension["additional_config_keys"])
+        == EV_CAPACITY_CONFIG_KEYS
+        == {
+            "ev_capacity_source",
+            "ev_capacity_entity",
+            "ev_capacity_fallback_kwh",
+        }
+    )
+    price_keys = AEMO_CONFIG_KEYS | PRICE_EXPORT_CONFIG_KEYS
+    assert not (EV_CAPACITY_CONFIG_KEYS & price_keys)
+    assert ADDITIVE_CONFIG_KEYS == price_keys | EV_CAPACITY_CONFIG_KEYS
+    assert (
+        set(current["declared_config_keys"]) - set(historical["declared_config_keys"])
+        == ADDITIVE_CONFIG_KEYS
+    )
+    assert historical["page_field_count"] == 135
+    assert current["page_field_count"] == 135 + 5 + 3
 
 
 def test_price_export_admits_only_monitor_and_one_automatic_request() -> None:
     validate_against_release_baseline()
-    baseline = json.loads(
-        (ROOT / "docs/maintainability/entity-contract-v0.12.26.json").read_text()
-    )
+    baseline = json.loads((ROOT / "docs/maintainability/entity-contract-v0.12.26.json").read_text())
     old = {(record["platform"], record["key"]) for record in baseline["entities"]}
     trip = json.loads(TRIP_ADDITIONS_PATH.read_text())
     trip_ids = {(record["platform"], record["key"]) for record in trip["entities"]}
     assert trip_ids == {
-        ("datetime", "trip_ready_by"), ("select", "trip_target_soc"),
-        ("switch", "trip_charge_scheduled"), ("number", "trip_extra_minutes"),
-        ("sensor", "trip_charge_status"), ("sensor", "trip_charge_planned_start"),
+        ("datetime", "trip_ready_by"),
+        ("select", "trip_target_soc"),
+        ("switch", "trip_charge_scheduled"),
+        ("number", "trip_extra_minutes"),
+        ("sensor", "trip_charge_status"),
+        ("sensor", "trip_charge_planned_start"),
         ("sensor", "trip_charge_duration"),
     }
     new = {
-        (record["platform"], record["key"])
-        for record in build_entity_contract()["entities"]
+        (record["platform"], record["key"]) for record in build_entity_contract()["entities"]
     } - old
     assert new - trip_ids == {
         ("sensor", "aemo_market_status"), ("sensor", "aemo_spot_price"),

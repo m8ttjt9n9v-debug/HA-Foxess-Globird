@@ -12,7 +12,7 @@ remain separate.
 | Portable dashboard references | 118 |
 | Entity translation keys | 0 |
 | Proposed relabels awaiting owner review | 0 |
-| Owner-approved relabels | 9 |
+| Owner-approved relabels | 10 |
 
 ## Dashboard coverage by reviewed audience
 
@@ -72,6 +72,8 @@ a review list, not approval to change upgraded installations.
 
 - The nine display-name changes in `terminology-review-v0.12.26.md`
   are owner-approved and implemented in the catalogue.
+- The versioned EV-capacity review adds the approved EV Planning Capacity
+  label and explicit source/basis attributes without changing its entity ID.
 - Decide whether the two missing primary entities belong on the portable
   dashboard or should be reclassified.
 - Review diagnostic-category candidates before registry presentation changes.

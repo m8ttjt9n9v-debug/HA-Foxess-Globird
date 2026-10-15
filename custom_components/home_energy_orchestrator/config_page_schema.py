@@ -4,13 +4,33 @@ from __future__ import annotations
 
 import json
 from collections.abc import Iterator, Mapping
+from math import isfinite
 from typing import Any
 
 import voluptuous as vol
 from homeassistant.data_entry_flow import section
 from homeassistant.helpers import selector
 
+from .const import CONF_EV_CAPACITY_FALLBACK_KWH
 from .field_catalogue import FIELD_KEYS_BY_PAGE, FIELD_SPECS_BY_KEY, FieldSpec
+
+
+class CapacityCoerce(vol.Coerce):
+    """Keep numeric UI semantics without accepting booleans as capacity."""
+
+    def __init__(self) -> None:
+        super().__init__(float)
+
+    def __call__(self, value: Any) -> float:
+        if isinstance(value, bool):
+            raise vol.Invalid("Capacity must be a number, not boolean")
+        try:
+            result = super().__call__(value)
+        except OverflowError as error:
+            raise vol.Invalid("Capacity is too large") from error
+        if not isfinite(result) or not 0 <= result <= 1000:
+            raise vol.Invalid("Capacity must be finite and between 0 and 1000 kWh")
+        return result
 
 GRID_PHASE_SECTIONS: dict[str, tuple[str, str]] = {
     phase: (
@@ -52,6 +72,8 @@ def _validator(spec: FieldSpec) -> Any:
         else json.loads(spec.selector_config_json)
     )
     if spec.selector_kind == "number":
+        if spec.key == CONF_EV_CAPACITY_FALLBACK_KWH:
+            return CapacityCoerce()
         coerced_type = {"float": float, "int": int}[config["coerce"]]
         return vol.Coerce(coerced_type)
     if spec.selector_kind == "boolean":

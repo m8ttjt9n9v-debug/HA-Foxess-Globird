@@ -37,7 +37,7 @@ def rendered_reference() -> str:
         "",
         "This generated engineering reference joins the runtime entity catalogue",
         "to the reviewed semantic worksheet. It records the current names, including",
-        "the nine owner-approved naming-only changes. Edit the catalogue or semantic",
+        "the retained naming approvals and versioned revisions. Edit the catalogue or semantic",
         "worksheet, then regenerate this file; do not edit rows by hand.",
         "",
         f"Total entities: **{len(ENTITY_SPECS)}**.",

@@ -34,6 +34,26 @@ from scripts.trip_charge_wrapper import (
 NOW = datetime(2026, 10, 11, 8, tzinfo=UTC)
 
 
+@pytest.mark.freeze_time(NOW, real_asyncio=True)
+async def test_legacy_trip_replans_when_shared_capacity_is_corrected(hass):
+    _, calls = await _setup(hass, soc=20, capacity=120, power=3.6)
+    await hass.services.async_call(
+        "input_select", "select_option", {"entity_id": TARGET, "option": "50%"}, blocking=True
+    )
+    await hass.async_block_till_done()
+    before = Template(
+        "{{ states('sensor.heo_trip_charge_plan') | from_json }}", hass
+    ).async_render()
+    hass.states.async_set(CAPACITY, "80", {"unit_of_measurement": "kWh"})
+    await hass.async_block_till_done()
+    after = Template("{{ states('sensor.heo_trip_charge_plan') | from_json }}", hass).async_render()
+    assert before["hours"] == pytest.approx(36 / 3.24, abs=1e-6)
+    assert after["hours"] == pytest.approx(24 / 3.24, abs=1e-6)
+    assert after["start"] > before["start"] + 3 * 3600
+    assert after["target"] == 50
+    assert calls == []
+
+
 @pytest.fixture(autouse=True)
 async def _detach_test_automation(hass):
     yield

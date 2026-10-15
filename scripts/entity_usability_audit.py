@@ -165,6 +165,8 @@ def rendered_audit() -> str:
             "",
             "- The nine display-name changes in `terminology-review-v0.12.26.md`",
             "  are owner-approved and implemented in the catalogue.",
+            "- The versioned EV-capacity review adds the approved EV Planning Capacity",
+            "  label and explicit source/basis attributes without changing its entity ID.",
             "- Decide whether the two missing primary entities belong on the portable",
             "  dashboard or should be reclassified.",
             "- Review diagnostic-category candidates before registry presentation changes.",

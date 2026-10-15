@@ -1674,6 +1674,7 @@ class AllowanceProjectionInputs:
     allowance_kwh: float
     imported_in_window_kwh: float | None
     safety_margin_kwh: float
+    planning_capacity_kwh: float | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -1690,7 +1691,7 @@ def evaluate_allowance_projection(
 ) -> AllowanceProjectionResult:
     """Compose retained EV, battery and house projections without HA state."""
     if (
-        inputs.stored_energy_kwh is None
+        (inputs.stored_energy_kwh is None and inputs.planning_capacity_kwh is None)
         or inputs.vehicle_soc_percent is None
         or inputs.battery_soc_percent is None
         or inputs.house_load_kw is None
@@ -1725,6 +1726,7 @@ def evaluate_allowance_projection(
             current_soc_percent=inputs.vehicle_soc_percent,
             target_soc_percent=inputs.vehicle_target_soc_percent,
             charge_efficiency_percent=inputs.vehicle_charge_efficiency_percent,
+            planning_capacity_kwh=inputs.planning_capacity_kwh,
         )
         other = estimate_other_free_window_import_kwh(
             battery_capacity_kwh=inputs.battery_capacity_kwh,
@@ -1816,12 +1818,32 @@ def apply_daily_allowance_ceiling(inputs: AllowanceCeilingInputs) -> EvCurrentDe
 
 def estimate_vehicle_energy_to_target_kwh(
     *,
-    stored_energy_kwh: float,
+    stored_energy_kwh: float | None,
     current_soc_percent: float,
     target_soc_percent: float,
     charge_efficiency_percent: float,
+    planning_capacity_kwh: float | None = None,
 ) -> float:
     """Port the pilot site's live-capacity model and estimate wall energy to target."""
+    if planning_capacity_kwh is not None:
+        if (
+            isinstance(planning_capacity_kwh, bool)
+            or not isfinite(planning_capacity_kwh)
+            or not 0 < planning_capacity_kwh <= 1000
+        ):
+            raise ValueError("planning capacity must be finite and positive")
+        _validate_energy_projection(
+            planning_capacity_kwh,
+            current_soc_percent,
+            target_soc_percent,
+            charge_efficiency_percent,
+        )
+        if current_soc_percent > 100 or target_soc_percent > 100:
+            raise ValueError("vehicle SOC must be between zero and 100 percent")
+        deficit = max(target_soc_percent - current_soc_percent, 0.0)
+        return round(planning_capacity_kwh * deficit / charge_efficiency_percent, 3)
+    if stored_energy_kwh is None:
+        raise ValueError("stored energy is required for legacy capacity inference")
     _validate_energy_projection(
         stored_energy_kwh,
         current_soc_percent,

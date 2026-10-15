@@ -30,8 +30,13 @@ def test_catalogue_pages_exactly_reproduce_frozen_field_contract() -> None:
         assert tuple(marker.schema for marker, _ in page_fields) == tuple(
             FIELD_KEYS_BY_PAGE[page]
         )
+        # Additional fields may be appended, but no reviewed field may move or
+        # change its marker/default/selector contract.
+        assert tuple(marker.schema for marker, _ in page_fields[:len(expected_fields)]) == tuple(
+            field["key"] for field in expected_fields
+        )
         for (marker, validator), expected in zip(
-            page_fields, expected_fields, strict=True
+            page_fields[:len(expected_fields)], expected_fields, strict=True
         ):
             has_default, default = _default(marker)
             input_kind, input_config = _input_contract(validator)

@@ -1,0 +1,46 @@
+{
+  "attribute_profiles": {
+    "ev_capacity_v1": {
+      "attributes": {
+        "basis": "Capacity basis: legacy_ratio, mapped_capacity, nominal_full_pack or configured; a nominal pack estimate is not independently verified usable capacity.",
+        "fallback_reason": "Resolver reason: ok for a valid selected source, or the provider failure that caused configured fallback or unavailability.",
+        "observed_at": "Accepted source observation as an aware ISO timestamp, or null for legacy/configured values or unavailable evidence; never the render time.",
+        "source": "Actual capacity provenance: legacy_ratio, mapped_entity, tessie, configured or configured_fallback; null before an observation exists."
+      }
+    }
+  },
+  "entities": [],
+  "entity_count": 0,
+  "entity_revision_count": 1,
+  "entity_revisions": [
+    {
+      "fields": {
+        "attribute_profile": "ev_capacity_v1",
+        "availability": "Legacy mode retains the existing learned-limit capacity projection. Other modes expose accepted capacity independently of charge-limit learning; missing/invalid selected evidence requires an explicitly configured fallback or remains unavailable.",
+        "consumers": [
+          "EV learning",
+          "free-window gain calculation",
+          "Trip Charge planning",
+          "EV dashboard"
+        ],
+        "decision": "relabel",
+        "definition": "Capacity used for EV energy and timing planning from the selected legacy ratio, mapped capacity, loaded Tessie nominal full-pack estimate or configured value. A nominal/configured value is not independent proof of physically usable battery capacity.",
+        "equivalents": {
+          "foxess": null,
+          "globird": null,
+          "tessie": "Optional read-only nominal full-pack estimate from the already-loaded coordinator for the explicitly mapped car"
+        },
+        "producer": "ActiveEvController.capacity_observation via EvReadModel; legacy state retains LearnedChargeLimitDecision.usable_capacity_kwh",
+        "proposed_display_name": "EV Planning Capacity",
+        "review_status": "owner_approved",
+        "role": "calculation",
+        "time_basis": "Accepted provider observation timestamp where available; legacy and configured values have no invented source timestamp",
+        "unit_and_sign": "kWh; positive planning capacity, not power, SoC, or a verified battery-health measurement"
+      },
+      "key": "ev_usable_capacity",
+      "previous_definition": "Estimated full usable EV battery capacity derived from mapped stored energy and vehicle SoC."
+    }
+  ],
+  "extension": "ev_capacity_v1",
+  "schema_version": 1
+}

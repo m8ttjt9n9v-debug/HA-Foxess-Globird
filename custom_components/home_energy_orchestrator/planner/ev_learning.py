@@ -42,7 +42,7 @@ class LearnedChargeLimitEvidence:
     """Primitive live vehicle, window and actuator evidence from the facade."""
 
     samples_kwh: tuple[float, ...]
-    stored_energy_kwh: float
+    stored_energy_kwh: float | None
     vehicle_soc_percent: float
     maximum_current_a: float
     voltage_v: float
@@ -55,16 +55,27 @@ class LearnedChargeLimitEvidence:
     actuator_minimum_percent: float
     actuator_maximum_percent: float
     actuator_step_percent: float
+    planning_capacity_kwh: float | None = None
 
 
 def evaluate_learned_charge_limit(
     evidence: LearnedChargeLimitEvidence,
 ) -> LearnedChargeLimitDecision:
     """Compose retained capacity, free-window gain and learned-limit policy."""
-    usable = estimate_usable_ev_capacity_kwh(
-        stored_energy_kwh=evidence.stored_energy_kwh,
-        soc_percent=evidence.vehicle_soc_percent,
-    )
+    if evidence.planning_capacity_kwh is None:
+        if evidence.stored_energy_kwh is None:
+            raise ValueError("stored energy is required for legacy capacity inference")
+        usable = estimate_usable_ev_capacity_kwh(
+            stored_energy_kwh=evidence.stored_energy_kwh,
+            soc_percent=evidence.vehicle_soc_percent,
+        )
+    else:
+        usable = evidence.planning_capacity_kwh
+        if isinstance(usable, bool) or not isfinite(usable) or not 0 < usable <= 1000:
+            raise ValueError("planning capacity must be finite and positive")
+        soc = evidence.vehicle_soc_percent
+        if isinstance(soc, bool) or not isfinite(soc) or not 0 <= soc <= 100:
+            raise ValueError("vehicle SOC must be between zero and 100 percent")
     gain = estimate_free_window_soc_gain_percent(
         maximum_current_a=evidence.maximum_current_a,
         voltage_v=evidence.voltage_v,

@@ -55,7 +55,7 @@ class DailyBackfillPlanningEvidence:
     sellable_energy_kwh: float
     protected_ev_allocation_kwh: float
     delivered_this_cycle_kwh: float
-    stored_vehicle_energy_kwh: float
+    stored_vehicle_energy_kwh: float | None
     vehicle_soc_percent: float
     vehicle_target_soc_percent: float
     vehicle_charge_efficiency_percent: float
@@ -68,6 +68,7 @@ class DailyBackfillPlanningEvidence:
     charger_maximum_a: float
     planning_buffer_minutes: float
     use_all_discretionary_energy: bool = False
+    planning_capacity_kwh: float | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -170,6 +171,7 @@ def evaluate_daily_backfill_plan(
         current_soc_percent=evidence.vehicle_soc_percent,
         target_soc_percent=evidence.vehicle_target_soc_percent,
         charge_efficiency_percent=evidence.vehicle_charge_efficiency_percent,
+        planning_capacity_kwh=evidence.planning_capacity_kwh,
     )
     return calculate_daily_backfill_plan(
         DailyBackfillInputs(

@@ -225,6 +225,7 @@ class PreFreePlanningEvidence:
     voltage_v: float
     phase_count: int
     free_window_start: datetime
+    planning_capacity_kwh: float | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -240,13 +241,16 @@ def evaluate_pre_free_plan(
     evidence: PreFreePlanningEvidence,
 ) -> PreFreePlanningEvaluation:
     """Compose vehicle room and protected export into the retained plan."""
-    if evidence.planned_export_energy_kwh is None or evidence.stored_vehicle_energy_kwh is None:
+    if evidence.planned_export_energy_kwh is None or (
+        evidence.stored_vehicle_energy_kwh is None and evidence.planning_capacity_kwh is None
+    ):
         return PreFreePlanningEvaluation(None, 0.0, None)
     vehicle_room = estimate_vehicle_energy_to_target_kwh(
         stored_energy_kwh=evidence.stored_vehicle_energy_kwh,
         current_soc_percent=evidence.vehicle_soc_percent,
         target_soc_percent=evidence.vehicle_target_soc_percent,
         charge_efficiency_percent=evidence.charge_efficiency_percent,
+        planning_capacity_kwh=evidence.planning_capacity_kwh,
     )
     plan = calculate_pre_free_plan(
         PreFreePlanInputs(

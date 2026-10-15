@@ -29,6 +29,9 @@ PRICE_EXTENSIONS_PATH = (
 TRIP_EXTENSIONS_PATH = (
     REPOSITORY_ROOT / "docs" / "maintainability" / "entity-semantics-trip-charge-v1.json"
 )
+EV_CAPACITY_EXTENSIONS_PATH = (
+    REPOSITORY_ROOT / "docs" / "maintainability" / "entity-semantics-ev-capacity-v1.json"
+)
 
 _REQUIRED_FIELDS = {
     "key",
@@ -72,7 +75,8 @@ def load_semantic_contract() -> dict[str, Any]:
     merged_profiles = dict(baseline["attribute_profiles"])
     known_keys = {record["key"] for record in records}
     for path in (
-        MANUAL_EXTENSIONS_PATH, AEMO_EXTENSIONS_PATH, PRICE_EXTENSIONS_PATH, TRIP_EXTENSIONS_PATH
+        MANUAL_EXTENSIONS_PATH, AEMO_EXTENSIONS_PATH, PRICE_EXTENSIONS_PATH,
+        TRIP_EXTENSIONS_PATH, EV_CAPACITY_EXTENSIONS_PATH,
     ):
         extension = json.loads(path.read_text(encoding="utf-8"))
         if extension.get("schema_version") != baseline.get("schema_version"):
@@ -103,6 +107,28 @@ def load_semantic_contract() -> dict[str, Any]:
                 **retained,
                 "attributes": {**retained["attributes"], **attributes},
             }
+        revisions = extension.get("entity_revisions", [])
+        if extension.get("entity_revision_count", 0) != len(revisions):
+            raise ValueError("semantic revision count does not match its records")
+        if revisions:
+            if path != EV_CAPACITY_EXTENSIONS_PATH or len(revisions) != 1:
+                raise ValueError("semantic revisions require the reviewed capacity extension")
+            revision = revisions[0]
+            if revision.get("key") != "ev_usable_capacity":
+                raise ValueError("capacity semantic revision must retain its entity identity")
+            retained = next(record for record in records if record["key"] == revision["key"])
+            if retained["definition"] != revision.get("previous_definition"):
+                raise ValueError(
+                    "capacity semantic revision does not match its reviewed predecessor"
+                )
+            fields = revision.get("fields")
+            allowed = (_REQUIRED_FIELDS - {"key"}) | {"attribute_profile", "proposed_display_name"}
+            if not isinstance(fields, dict) or not fields or fields.keys() - allowed:
+                raise ValueError("capacity semantic revision contains unreviewed fields")
+            records = [
+                {**record, **fields} if record["key"] == revision["key"] else record
+                for record in records
+            ]
     added_count = len(records) - len(baseline["entities"])
     return {
         **baseline,

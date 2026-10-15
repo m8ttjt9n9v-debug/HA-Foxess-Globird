@@ -11,6 +11,7 @@ from scripts import entity_attribute_contract
 from scripts.entity_attribute_contract import (
     AEMO_ADDITIONS_PATH,
     BASELINE_PATH,
+    EV_CAPACITY_ADDITIONS_PATH,
     MANUAL_ADDITIONS_PATH,
     PRICE_ADDITIONS_PATH,
     TRIP_ADDITIONS_PATH,
@@ -29,9 +30,13 @@ def test_entity_attribute_contract_matches_reviewed_release_baseline() -> None:
     monitor = json.loads(AEMO_ADDITIONS_PATH.read_text(encoding="utf-8"))
     price = json.loads(PRICE_ADDITIONS_PATH.read_text(encoding="utf-8"))
     trip = json.loads(TRIP_ADDITIONS_PATH.read_text(encoding="utf-8"))
-    expected = {record["entity_key"]: deepcopy(record) for record in (
-        baseline["entities"] + monitor["entities"] + trip["entities"]
-    )}
+    capacity = json.loads(EV_CAPACITY_ADDITIONS_PATH.read_text(encoding="utf-8"))
+    expected = {
+        record["entity_key"]: deepcopy(record)
+        for record in (
+            baseline["entities"] + monitor["entities"] + trip["entities"] + capacity["entities"]
+        )
+    }
     for extension in (manual, price):
         for record in extension["attribute_additions"]:
             retained = expected[record["entity_key"]]
@@ -43,7 +48,7 @@ def test_entity_attribute_contract_matches_reviewed_release_baseline() -> None:
 
 def test_entity_attribute_contract_has_unique_entities_and_attributes() -> None:
     contract = build_entity_attribute_contract()
-    assert contract["entity_count"] == 19
+    assert contract["entity_count"] == 20
     entity_ids = [item["default_entity_id"] for item in contract["entities"]]
     assert len(entity_ids) == len(set(entity_ids))
     for item in contract["entities"]:
@@ -63,9 +68,7 @@ def test_attribute_generator_cannot_overwrite_the_frozen_baseline(
     assert BASELINE_PATH.read_text(encoding="utf-8") == before
 
 
-@pytest.mark.parametrize(
-    "key", ["grid_power", "fleet_summary", "status"]
-)
+@pytest.mark.parametrize("key", ["grid_power", "fleet_summary", "status", "ev_usable_capacity"])
 def test_attribute_compatibility_rejects_unreviewed_baseline_or_extension_changes(
     monkeypatch: pytest.MonkeyPatch, key: str
 ) -> None:

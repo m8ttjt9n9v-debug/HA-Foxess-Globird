@@ -61,6 +61,9 @@
           "ev_charging_state_entity": "Tessie charging-state sensor",
           "ev_actual_current_entity": "Tessie actual charging-current sensor",
           "ev_stored_energy_entity": "Tessie stored-energy sensor",
+          "ev_capacity_source": "EV planning capacity source",
+          "ev_capacity_entity": "EV planning capacity sensor (Wh or kWh; optional)",
+          "ev_capacity_fallback_kwh": "Fallback EV planning capacity (kWh; 0 or empty means unset)",
           "ev_lifetime_energy_entity": "Tessie cumulative lifetime energy-used sensor (optional driving learning)",
           "ev_current_limit_entity": "Tessie writable charging-current number",
           "ev_charge_limit_entity": "Tessie writable charge-limit number",
@@ -226,6 +229,9 @@
           "ev_charging_state_entity": "Tessie charging-state sensor",
           "ev_actual_current_entity": "Tessie actual charging-current sensor",
           "ev_stored_energy_entity": "Tessie stored-energy sensor",
+          "ev_capacity_source": "EV planning capacity source",
+          "ev_capacity_entity": "EV planning capacity sensor (Wh or kWh; optional)",
+          "ev_capacity_fallback_kwh": "Fallback EV planning capacity (kWh; 0 or empty means unset)",
           "ev_lifetime_energy_entity": "Tessie cumulative lifetime energy-used sensor (optional driving learning)",
           "ev_current_limit_entity": "Tessie writable charging-current number",
           "ev_charge_limit_entity": "Tessie writable charge-limit number",
@@ -455,7 +461,7 @@
         },
       "car": {
           "title": "Vehicle",
-          "description": "Map vehicle state and presence telemetry.",
+          "description": "Map vehicle state, presence and planning capacity. A planning or nominal capacity is not proof of physically usable energy. Legacy ratio retains the existing stored-energy/SoC calculation until you deliberately select another source. Changing a capacity source does not enable EV control or change electrical-direction verification.",
           "data": {
             "ev_soc_entity": "EV state of charge sensor (optional)",
             "ev_at_home_entity": "EV at-home evidence entity (required when mandatory EV baseline is non-zero)",
@@ -463,7 +469,15 @@
             "ev_charging_state_entity": "Tessie charging-state sensor",
             "ev_actual_current_entity": "Tessie actual charging-current sensor",
             "ev_stored_energy_entity": "Tessie stored-energy sensor",
-            "ev_lifetime_energy_entity": "Tessie cumulative lifetime energy-used sensor (optional driving learning)"
+            "ev_lifetime_energy_entity": "Tessie cumulative lifetime energy-used sensor (optional driving learning)",
+            "ev_capacity_source": "EV planning capacity source",
+            "ev_capacity_entity": "EV planning capacity sensor (Wh or kWh; optional)",
+            "ev_capacity_fallback_kwh": "Fallback EV planning capacity (kWh; 0 or empty means unset)"
+          },
+          "data_description": {
+            "ev_capacity_source": "Legacy ratio preserves stored energy divided by SoC and ignores the new fallback. Mapped sensor uses an explicitly selected capacity sensor; Configured uses the entered kWh. Tessie uses the provider of the mapped SoC entity, not a guessed vehicle; an unsupported or unavailable provider can use only the explicit fallback, otherwise planning is unavailable. Provider planning or nominal capacity is not verified usable battery energy.",
+            "ev_capacity_entity": "Map full planning capacity in Wh or kWh, not energy currently remaining. Missing or invalid source evidence uses only the explicit fallback in a newly selected mode; no vehicle size is inferred.",
+            "ev_capacity_fallback_kwh": "Enter a commissioned planning estimate from 0 to 1000 kWh. Zero or clearing means unset. Configured requires a positive value; the other new modes use it only if their selected source is unavailable. It never changes the retained Legacy ratio calculation."
           }
         },
       "charger": {
@@ -726,7 +740,7 @@
         },
       "reconfigure_car": {
           "title": "Reconfigure: Vehicle",
-          "description": "Map vehicle state and presence telemetry.",
+          "description": "Map vehicle state, presence and planning capacity. A planning or nominal capacity is not proof of physically usable energy. Legacy ratio retains the existing stored-energy/SoC calculation until you deliberately select another source. Changing a capacity source does not enable EV control or change electrical-direction verification.",
           "data": {
             "ev_soc_entity": "EV state of charge sensor (optional)",
             "ev_at_home_entity": "EV at-home evidence entity (required when mandatory EV baseline is non-zero)",
@@ -734,7 +748,15 @@
             "ev_charging_state_entity": "Tessie charging-state sensor",
             "ev_actual_current_entity": "Tessie actual charging-current sensor",
             "ev_stored_energy_entity": "Tessie stored-energy sensor",
-            "ev_lifetime_energy_entity": "Tessie cumulative lifetime energy-used sensor (optional driving learning)"
+            "ev_lifetime_energy_entity": "Tessie cumulative lifetime energy-used sensor (optional driving learning)",
+            "ev_capacity_source": "EV planning capacity source",
+            "ev_capacity_entity": "EV planning capacity sensor (Wh or kWh; optional)",
+            "ev_capacity_fallback_kwh": "Fallback EV planning capacity (kWh; 0 or empty means unset)"
+          },
+          "data_description": {
+            "ev_capacity_source": "Legacy ratio preserves stored energy divided by SoC and ignores the new fallback. Mapped sensor uses an explicitly selected capacity sensor; Configured uses the entered kWh. Tessie uses the provider of the mapped SoC entity, not a guessed vehicle; an unsupported or unavailable provider can use only the explicit fallback, otherwise planning is unavailable. Provider planning or nominal capacity is not verified usable battery energy.",
+            "ev_capacity_entity": "Map full planning capacity in Wh or kWh, not energy currently remaining. Missing or invalid source evidence uses only the explicit fallback in a newly selected mode; no vehicle size is inferred.",
+            "ev_capacity_fallback_kwh": "Enter a commissioned planning estimate from 0 to 1000 kWh. Zero or clearing means unset. Configured requires a positive value; the other new modes use it only if their selected source is unavailable. It never changes the retained Legacy ratio calculation."
           }
         },
       "reconfigure_charger": {
@@ -922,6 +944,12 @@
       "invalid_daily_ev_backfill": "Daily EV backfill requires a commissioned inverter output/discharge limit, a non-zero outside-window percentage, and a ready time before the free-power window.",
       "invalid_ready_by_ev_backfill": "Ready by surplus backfill requires a commissioned inverter output/discharge limit, a non-zero outside-window percentage, and a ready-by time after midnight and before free power starts.",
       "invalid_ev_backfill_timing": "Choose Conservative or Ready by for backfill timing.",
+      "invalid_ev_capacity_source": "Choose Legacy ratio, Mapped sensor, Tessie provider, or Configured planning capacity.",
+      "invalid_ev_capacity_fallback": "Enter a finite number from 0 to 1000 kWh; zero or clearing means unset.",
+      "ev_capacity_fallback_required": "Configured planning capacity needs a positive fallback kWh value.",
+      "ev_capacity_mapping_required": "Map a capacity sensor or enter a positive fallback planning capacity.",
+      "ev_capacity_soc_required": "Tessie capacity needs an explicitly mapped vehicle SoC sensor.",
+      "invalid_ev_capacity_unit": "Select a planning-capacity sensor measured in Wh or kWh, not remaining energy or power.",
       "invalid_schedule": "Choose different free-charge times and a non-negative fallback.",
       "review_configuration_invalid": "This configuration has a problem that needs correcting. Return to the relevant section and review its values.",
       "invalid_foxess_control_owner": "Choose observer only, local Modbus, or FoxCloud Mode Scheduler.",
@@ -998,6 +1026,14 @@
       "options": {
         "direct_evse": "Direct / EVSE",
         "smart_socket": "Smart socket"
+      }
+    },
+    "ev_capacity_source": {
+      "options": {
+        "legacy_ratio": "Legacy ratio — stored energy divided by SoC",
+        "mapped_entity": "Mapped planning-capacity sensor",
+        "tessie": "Tessie provider planning capacity (nominal estimate)",
+        "configured": "Configured planning capacity"
       }
     },
     "ev_pre_free_backfill_timing": {

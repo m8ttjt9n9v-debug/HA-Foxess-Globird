@@ -108,6 +108,14 @@ break the connection.
 
 ## Required for Tessie EV automation
 
+Optional dedicated EV planning capacity can reuse the exact mapped car's loaded
+Tessie coordinator, use an explicit Wh/kWh full-capacity sensor, or use a reviewed
+numeric fallback. Tessie's nominal-full-pack field requires supporting upstream
+software (documented for Tesla firmware 2026.32+). Older or unsupported providers
+do not supply a guessed value. This option needs no additional subscription,
+credential storage, HTTP client or polling loop in HEO; it does not enable
+control. See [capacity configuration and semantics](ev-driving-learning-port.md#optional-dedicated-planning-capacity).
+
 Tessie is optional when EV control is not commissioned. The ported EV
 free-window policy requires explicitly mapped capabilities equivalent to:
 

@@ -34,6 +34,20 @@ layers around the proven algorithm, not replacement algorithms.
 
 ## Current software truth
 
+- Optional dedicated EV planning capacity replaces the instantaneous
+  remaining-energy/SoC inference only when explicitly selected. One read-only
+  resolver supplies the learned limit/free-window gain, both Trip schedulers,
+  allowance and vehicle-room projections for backfill. It accepts an explicitly
+  mapped Wh/kWh capacity sensor, the exact mapped car's already-loaded Tessie
+  nominal-full-pack field, or a configured value. Tessie adds no HTTP reader,
+  credentials or polling loop. Invalid, stale, future, ambiguous or unloaded
+  sources yield only an explicit numeric fallback or unavailable, never an
+  implicit ratio after opt-in. Provider basis/provenance remains visible; nominal
+  pack capacity is not relabelled physically verified usable energy. Existing
+  entries retain exact legacy behaviour until configured. All charging policies,
+  safety gates, persistent sessions and efficiency settings remain unchanged.
+  See [capacity provenance](ev-driving-learning-port.md#optional-dedicated-planning-capacity).
+
 - An optional HACS-owned Trip Charge wrapper schedules the existing HEO Charge
   to Full override for one departure date/time and selected integer SoC from
   1% to 100%. It calculates latest start from HEO's capacity, SoC and configured

@@ -27,6 +27,35 @@ DUE = NOW + timedelta(hours=12)
 pytestmark = pytest.mark.freeze_time(NOW, real_asyncio=True)
 
 
+async def test_explicit_capacity_replaces_ratio_for_native_trip_without_stored_energy(trip_site):
+    site = await trip_site(
+        soc=20, capacity=120, ev_capacity_source="configured", ev_capacity_fallback_kwh=80
+    )
+    site.hass.states.async_set("sensor.car_energy", "unavailable")
+    await _arm(site, target=50)
+    inputs = site.trip._current_plan_inputs()
+    assert inputs["capacity_kwh"] == 80
+    assert site.trip.planned_start is not None
+    assert site.trip.planned_start == DUE - timedelta(hours=24 / (3.6 * 0.9))
+    assert not site.trip.owns_full
+    assert site.calls == []
+
+
+async def test_selected_capacity_failure_does_not_start_native_trip_using_ratio(trip_site):
+    site = await trip_site(
+        soc=20,
+        capacity=120,
+        ev_capacity_source="mapped_entity",
+        ev_capacity_entity="sensor.pack_capacity",
+    )
+    site.hass.states.async_set("sensor.pack_capacity", "unavailable")
+    await _arm(site, target=50)
+    assert site.trip._current_plan_inputs()["capacity_kwh"] is None
+    assert site.trip.planned_start is None
+    assert not site.trip.owns_full
+    assert site.calls == []
+
+
 @pytest.fixture
 async def trip_site(hass, freezer):
     """Actual HA, persisted entry and EV controller; actuator services are local fakes."""

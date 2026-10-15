@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "extension": "ev_capacity_v1",
+  "field_count": 3,
+  "fields": [
+    {
+      "key": "ev_capacity_source",
+      "page": "car",
+      "order": 8,
+      "required": true,
+      "has_default": true,
+      "default": "legacy_ratio",
+      "input_kind": "select",
+      "input_config": {
+        "options": ["legacy_ratio", "mapped_entity", "tessie", "configured"],
+        "custom_value": false,
+        "multiple": false,
+        "sort": false,
+        "translation_key": "ev_capacity_source"
+      },
+      "setup_label": "EV planning capacity source",
+      "reconfigure_label": "EV planning capacity source"
+    },
+    {
+      "key": "ev_capacity_entity",
+      "page": "car",
+      "order": 9,
+      "required": false,
+      "has_default": false,
+      "default": null,
+      "input_kind": "entity",
+      "input_config": {"domain": ["sensor"], "multiple": false, "reorder": false},
+      "setup_label": "EV planning capacity sensor (Wh or kWh; optional)",
+      "reconfigure_label": "EV planning capacity sensor (Wh or kWh; optional)"
+    },
+    {
+      "key": "ev_capacity_fallback_kwh",
+      "page": "car",
+      "order": 10,
+      "required": false,
+      "has_default": false,
+      "default": null,
+      "input_kind": "number",
+      "input_config": {"coerce": "float"},
+      "setup_label": "Fallback EV planning capacity (kWh; 0 or empty means unset)",
+      "reconfigure_label": "Fallback EV planning capacity (kWh; 0 or empty means unset)"
+    }
+  ]
+}

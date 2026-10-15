@@ -23,11 +23,24 @@ AEMO_CONFIG_KEYS = frozenset(
     }
 )
 PRICE_EXPORT_CONFIG_KEYS = frozenset({const.CONF_CRITICAL_EVENT_SELL_ENABLED})
-ADDITIVE_CONFIG_KEYS = AEMO_CONFIG_KEYS | PRICE_EXPORT_CONFIG_KEYS
+EV_CAPACITY_CONFIG_KEYS = frozenset({
+    const.CONF_EV_CAPACITY_SOURCE, const.CONF_EV_CAPACITY_ENTITY,
+    const.CONF_EV_CAPACITY_FALLBACK_KWH,
+})
+ADDITIVE_CONFIG_KEYS = AEMO_CONFIG_KEYS | PRICE_EXPORT_CONFIG_KEYS | EV_CAPACITY_CONFIG_KEYS
+CAPACITY_ADDITIONS_PATH = (
+    REPOSITORY_ROOT / "docs" / "maintainability" / "config-additions-ev-capacity-v1.json"
+)
 
 
 def build_config_contract(*, include_extensions: bool = False) -> dict[str, object]:
     """Return page order plus declared persisted-key vocabulary."""
+    addition = json.loads(CAPACITY_ADDITIONS_PATH.read_text(encoding="utf-8"))
+    if (
+        addition["config_entry_version"] != ConfigFlow.VERSION
+        or set(addition["additional_config_keys"]) != EV_CAPACITY_CONFIG_KEYS
+    ):
+        raise ValueError("reviewed capacity configuration identities changed")
     pages = {
         page: [key for key in fields if include_extensions or key not in ADDITIVE_CONFIG_KEYS]
         for page, fields in ConfigFlow._PAGE_FIELDS.items()

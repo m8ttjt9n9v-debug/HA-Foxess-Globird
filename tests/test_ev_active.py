@@ -79,6 +79,43 @@ def _controller_config(**changes):
     return config
 
 
+async def test_configured_capacity_reaches_runtime_learning_without_stored_energy(hass):
+    _set_ev_states(hass)
+    hass.states.async_set("sensor.car_energy", "unavailable")
+    controller = ActiveEvController(hass, _coordinator(_controller_config(
+        ev_capacity_source="configured", ev_capacity_fallback_kwh=80,
+    )))
+    learned = controller._learned_general_limit(controller._observation(), vehicle_soc=40)
+    assert learned is not None
+    assert learned.usable_capacity_kwh == 80
+    assert controller.capacity_observation.source == "configured"
+    assert controller.writes_performed == 0
+
+
+async def test_failed_dedicated_capacity_has_no_runtime_ratio_backdoor(hass):
+    _set_ev_states(hass)
+    controller = ActiveEvController(hass, _coordinator(_controller_config(
+        ev_capacity_source="mapped_entity", ev_capacity_entity="sensor.pack_capacity",
+    )))
+    assert controller._learned_general_limit(controller._observation(), vehicle_soc=40) is None
+    assert controller.capacity_observation.value_kwh is None
+    assert controller.capacity_observation.source == "mapped_entity"
+    assert controller.writes_performed == 0
+
+
+async def test_explicit_fallback_not_stored_energy_is_runtime_outage_authority(hass):
+    _set_ev_states(hass)
+    controller = ActiveEvController(hass, _coordinator(_controller_config(
+        ev_capacity_source="mapped_entity", ev_capacity_entity="sensor.pack_capacity",
+        ev_capacity_fallback_kwh=80,
+    )))
+    learned = controller._learned_general_limit(controller._observation(), vehicle_soc=40)
+    assert learned.usable_capacity_kwh == 80
+    assert controller.capacity_observation.source == "configured_fallback"
+    assert controller.capacity_observation.reason == "mapped_entity_unavailable"
+    assert controller.writes_performed == 0
+
+
 def _coordinator(config):
     observed_at = datetime(2026, 9, 7, 12, 1, tzinfo=UTC)
     grid_source = TelemetrySource("sensor.site_grid", 10, "kW", observed_at)

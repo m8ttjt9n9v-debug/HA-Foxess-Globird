@@ -48,6 +48,9 @@ from .const import (
     CONF_EV_BEFORE_EXPORT_ENABLED,
     CONF_EV_BEFORE_EXPORT_SOC_TARGET,
     CONF_EV_CABLE_CONNECTED,
+    CONF_EV_CAPACITY_ENTITY,
+    CONF_EV_CAPACITY_FALLBACK_KWH,
+    CONF_EV_CAPACITY_SOURCE,
     CONF_EV_CHARGE_LIMIT,
     CONF_EV_CHARGE_PATH,
     CONF_EV_CHARGE_SWITCH,
@@ -144,6 +147,7 @@ from .const import (
     DEFAULT_EV_AUTOMATIC_CONTROL_ENABLED,
     DEFAULT_EV_BEFORE_EXPORT_ENABLED,
     DEFAULT_EV_BEFORE_EXPORT_SOC_TARGET,
+    DEFAULT_EV_CAPACITY_SOURCE,
     DEFAULT_EV_CHARGE_PATH,
     DEFAULT_EV_CHARGE_TO_FULL_ENABLED,
     DEFAULT_EV_CONTROL_COMMISSIONED,
@@ -195,6 +199,7 @@ from .const import (
     DEFAULT_ZERO_IMPORT_CONFIRM_MINUTES,
     DEFAULT_ZERO_IMPORT_THRESHOLD_KW,
     DEFAULT_ZEROHERO_DAILY_CREDIT,
+    EV_CAPACITY_SOURCES,
     GRID_POSITIVE_EXPORT,
     GRID_POSITIVE_IMPORT,
     HOUSE_OCCUPANCY_MODES,
@@ -393,6 +398,56 @@ class EvTelemetrySettings:
     actual_current_entity: str | None
     stored_energy_entity: str | None
     lifetime_energy_entity: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class EvCapacitySettings:
+    """Explicit planning-capacity sources, separate from verified usable energy."""
+
+    source: str
+    entity_id: str | None
+    fallback_kwh: float | None
+
+    @classmethod
+    def from_mapping(cls, data: Mapping[str, object]) -> EvCapacitySettings:
+        raw_source = data.get(CONF_EV_CAPACITY_SOURCE, DEFAULT_EV_CAPACITY_SOURCE)
+        raw_entity = data.get(CONF_EV_CAPACITY_ENTITY)
+        raw_fallback = data.get(CONF_EV_CAPACITY_FALLBACK_KWH)
+        fallback = cls._number(raw_fallback)
+        return cls(
+            source=raw_source if isinstance(raw_source, str) else "",
+            entity_id=raw_entity if isinstance(raw_entity, str) and raw_entity else None,
+            fallback_kwh=fallback if fallback is not None and 0 < fallback <= 1000 else None,
+        )
+
+    @staticmethod
+    def _number(raw: object) -> float | None:
+        if isinstance(raw, bool):
+            return None
+        try:
+            number = float(raw)
+        except (TypeError, ValueError, OverflowError):
+            return None
+        return number if isfinite(number) else None
+
+    @classmethod
+    def validate_mapping(cls, data: Mapping[str, object]) -> dict[str, str]:
+        raw_source = data.get(CONF_EV_CAPACITY_SOURCE, DEFAULT_EV_CAPACITY_SOURCE)
+        if not isinstance(raw_source, str) or raw_source not in EV_CAPACITY_SOURCES:
+            return {CONF_EV_CAPACITY_SOURCE: "invalid_ev_capacity_source"}
+        raw = data.get(CONF_EV_CAPACITY_FALLBACK_KWH)
+        if raw not in (None, ""):
+            value = cls._number(raw)
+            if value is None or not 0 <= value <= 1000:
+                return {CONF_EV_CAPACITY_FALLBACK_KWH: "invalid_ev_capacity_fallback"}
+        selected = cls.from_mapping(data)
+        if raw_source == "configured" and selected.fallback_kwh is None:
+            return {CONF_EV_CAPACITY_FALLBACK_KWH: "ev_capacity_fallback_required"}
+        if raw_source == "mapped_entity" and not (selected.entity_id or selected.fallback_kwh):
+            return {CONF_EV_CAPACITY_ENTITY: "ev_capacity_mapping_required"}
+        if raw_source == "tessie" and not data.get(CONF_EV_SOC):
+            return {CONF_EV_SOC: "ev_capacity_soc_required"}
+        return {}
 
 
 @dataclass(frozen=True, slots=True)
@@ -774,6 +829,7 @@ class RuntimeConfiguration:
     ev_connection: EvConnectionSettings
     ev_actuators: EvActuatorSettings
     ev_telemetry: EvTelemetrySettings
+    ev_capacity: EvCapacitySettings
     ev_policy: EvPolicySettings
     ev_numbers: EvNumericSettings
     house: HouseSettings
@@ -800,7 +856,17 @@ class RuntimeConfiguration:
                 self.ev_connection.cable_connected_entity,
                 self.ev_telemetry.charging_state_entity,
                 self.ev_telemetry.actual_current_entity,
-                self.ev_telemetry.stored_energy_entity,
+                (
+                    self.ev_telemetry.stored_energy_entity
+                    if self.ev_capacity.source == "legacy_ratio"
+                    else self.ev_capacity.entity_id or self.ev_capacity.fallback_kwh
+                    if self.ev_capacity.source == "mapped_entity"
+                    else self.ev_capacity.fallback_kwh
+                    if self.ev_capacity.source == "configured"
+                    else self.ev_telemetry.soc_entity
+                    if self.ev_capacity.source == "tessie"
+                    else None
+                ),
                 *(
                     self.ev_actuators.direct_entities
                     if self.ev_actuators.direct_entities is not None
@@ -1024,6 +1090,7 @@ class RuntimeConfiguration:
                     else None
                 ),
             ),
+            ev_capacity=EvCapacitySettings.from_mapping(data),
             ev_policy=EvPolicySettings(
                 charge_path=cast(
                     str,

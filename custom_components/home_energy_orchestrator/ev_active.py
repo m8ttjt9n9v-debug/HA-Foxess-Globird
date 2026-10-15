@@ -116,6 +116,7 @@ from .const import (
 )
 from .coordinator import EnergyCoordinator
 from .ev_adapter import EvEntityMap, EvServiceAdapter, EvWriteBlocked, ev_control_gate_status
+from .ev_capacity import CapacityObservation, resolve_ev_capacity
 from .ev_observation_adapter import (
     EvEntityFeedback,
     EvFeedbackSnapshot,
@@ -297,6 +298,7 @@ class ActiveEvController:
         self.driving_snapshot = DrivingSnapshotState()
         self.daily_driving_energy_kwh: float | None = None
         self.learned_charge_limit: LearnedChargeLimitDecision | None = None
+        self.capacity_observation: CapacityObservation | None = None
         self.pre_free_current_a: float | None = None
         self.daily_backfill_plan: DailyBackfillPlan | None = None
         self.daily_backfill_hold_reason: str | None = None
@@ -437,6 +439,7 @@ class ActiveEvController:
                     ev_observation_entity_map(self.coordinator.runtime_config),
                 )
             )
+            self.capacity_evidence(now)
             trip = getattr(self.coordinator, "trip_charge", None)
             if trip is not None and not await trip.async_reconcile_before_ev_locked(now):
                 self.last_reason = "trip_journal_unavailable"
@@ -1637,6 +1640,11 @@ class ActiveEvController:
         stored = self._mapped_energy(
             self.coordinator.runtime_config.ev_telemetry.stored_energy_entity
         )
+        capacity = self.capacity_evidence()
+        explicit_capacity = self.coordinator.runtime_config.ev_capacity.source != "legacy_ratio"
+        if explicit_capacity and capacity.value_kwh is None:
+            return None
+        planning_capacity = capacity.value_kwh if explicit_capacity else None
         imported = (
             self.coordinator.free_window_import.imported_kwh
             if self.coordinator.free_window_import.last_at is not None
@@ -1644,7 +1652,7 @@ class ActiveEvController:
         )
         load_includes_ev = self.coordinator.runtime_config.house.load_includes_ev
         projection_evidence_present = (
-            stored is not None
+            (stored is not None or planning_capacity is not None)
             and vehicle_soc is not None
             and snapshot.battery_soc is not None
             and snapshot.house_load_kw is not None
@@ -1684,16 +1692,12 @@ class ActiveEvController:
                 actual_ev_current_a=actual_current,
                 actual_ev_current_valid=actual_current_valid,
                 ev_voltage_v=self._float(CONF_EV_VOLTAGE, DEFAULT_EV_VOLTAGE),
-                ev_phase_count=int(
-                    self._float(CONF_EV_PHASE_COUNT, DEFAULT_EV_PHASE_COUNT)
-                ),
+                ev_phase_count=int(self._float(CONF_EV_PHASE_COUNT, DEFAULT_EV_PHASE_COUNT)),
                 site_service_limit_a=self._float(
                     CONF_SERVICE_IMPORT_LIMIT_A,
                     DEFAULT_SERVICE_IMPORT_LIMIT_A,
                 ),
-                site_phase_count=int(
-                    self._float(CONF_SITE_PHASE_COUNT, DEFAULT_SITE_PHASE_COUNT)
-                ),
+                site_phase_count=int(self._float(CONF_SITE_PHASE_COUNT, DEFAULT_SITE_PHASE_COUNT)),
                 remaining_window_hours=remaining_hours,
                 allowance_kwh=self._float(
                     CONF_DAILY_FREE_ALLOWANCE_KWH,
@@ -1704,6 +1708,7 @@ class ActiveEvController:
                     CONF_EV_ALLOWANCE_SAFETY_MARGIN,
                     DEFAULT_EV_ALLOWANCE_SAFETY_MARGIN,
                 ),
+                planning_capacity_kwh=planning_capacity,
             )
         )
         self.allowance_house_load_kw = result.house_load_kw
@@ -1887,10 +1892,7 @@ class ActiveEvController:
         self.pre_free_plan = None
         self.pre_free_current_a = baseline
         pre_free_hold = self._pre_free_backfill_hold(now, free_start)
-        if (
-            self.coordinator.runtime_config.ev_policy.pre_free_enabled
-            and pre_free_hold is None
-        ):
+        if self.coordinator.runtime_config.ev_policy.pre_free_enabled and pre_free_hold is None:
             active_controller = getattr(self.coordinator, "active_controller", None)
             export_plan = getattr(active_controller, "export_plan", None)
             planned_export_energy = (
@@ -1910,6 +1912,12 @@ class ActiveEvController:
             stored_energy = self._mapped_energy(
                 self.coordinator.runtime_config.ev_telemetry.stored_energy_entity
             )
+            capacity = self.capacity_evidence(now)
+            explicit_capacity = self.coordinator.runtime_config.ev_capacity.source != "legacy_ratio"
+            # An opted-in source failure must not revive the old ratio through
+            # the pure planner's compatibility branch.
+            if explicit_capacity and capacity.value_kwh is None:
+                stored_energy = None
             planning = evaluate_pre_free_plan(
                 PreFreePlanningEvidence(
                     planned_export_energy_kwh=planned_export_energy,
@@ -1924,10 +1932,9 @@ class ActiveEvController:
                     baseline_a=baseline,
                     current_ceiling_a=pre_free_ceiling,
                     voltage_v=self._float(CONF_EV_VOLTAGE, DEFAULT_EV_VOLTAGE),
-                    phase_count=int(
-                        self._float(CONF_EV_PHASE_COUNT, DEFAULT_EV_PHASE_COUNT)
-                    ),
+                    phase_count=int(self._float(CONF_EV_PHASE_COUNT, DEFAULT_EV_PHASE_COUNT)),
                     free_window_start=free_start,
+                    planning_capacity_kwh=capacity.value_kwh if explicit_capacity else None,
                 )
             )
             self.pre_free_plan = planning.plan
@@ -2184,12 +2191,15 @@ class ActiveEvController:
         stored_energy = self._mapped_energy(
             self.coordinator.runtime_config.ev_telemetry.stored_energy_entity
         )
+        capacity = self.capacity_evidence(now)
+        explicit_capacity = self.coordinator.runtime_config.ev_capacity.source != "legacy_ratio"
         if (
             data is None
             or data.available_after_reserve_kwh is None
             or protected_house is None
             or export_plan is None
-            or stored_energy is None
+            or (explicit_capacity and capacity.value_kwh is None)
+            or (not explicit_capacity and stored_energy is None)
         ):
             self.last_reason = "daily_backfill_energy_inputs_unavailable"
             if full_surplus:
@@ -2240,6 +2250,7 @@ class ActiveEvController:
                     DEFAULT_EV_BACKFILL_BUFFER_MINUTES,
                 ),
                 use_all_discretionary_energy=full_surplus,
+                planning_capacity_kwh=capacity.value_kwh if explicit_capacity else None,
             )
             return evaluate_daily_backfill_plan(evidence)
         except (ValueError, TypeError):
@@ -2499,6 +2510,19 @@ class ActiveEvController:
             same_ready_cycle=self.daily_backfill_cycle_ready_at == ready_at,
         )
 
+    def capacity_evidence(self, now: datetime | None = None) -> CapacityObservation:
+        """Resolve one shared, read-only capacity input without another poller."""
+        runtime = self.coordinator.runtime_config
+        self.capacity_observation = resolve_ev_capacity(
+            self.hass,
+            runtime.ev_capacity,
+            soc_entity=runtime.ev_telemetry.soc_entity,
+            stored_energy_kwh=self._mapped_energy(runtime.ev_telemetry.stored_energy_entity),
+            soc_percent=self._mapped_number(runtime.ev_telemetry.soc_entity),
+            now=now or dt_util.now(),
+        )
+        return self.capacity_observation
+
     def _learned_general_limit(
         self,
         observation: DirectEvseObservation,
@@ -2509,25 +2533,29 @@ class ActiveEvController:
         stored = self._mapped_energy(
             self.coordinator.runtime_config.ev_telemetry.stored_energy_entity
         )
+        capacity = self.capacity_evidence()
+        explicit_capacity = self.coordinator.runtime_config.ev_capacity.source != "legacy_ratio"
         minimum = observation.limit_minimum_percent
         maximum = observation.limit_maximum_percent
         step = observation.limit_step_percent
-        if stored is None or minimum is None or maximum is None or step is None:
+        if (
+            (explicit_capacity and capacity.value_kwh is None)
+            or (not explicit_capacity and stored is None)
+            or minimum is None
+            or maximum is None
+            or step is None
+        ):
             self.learned_charge_limit = None
             return None
         try:
             self.learned_charge_limit = evaluate_learned_charge_limit(
                 LearnedChargeLimitEvidence(
-                    samples_kwh=tuple(
-                        sample.energy_kwh for sample in self.driving_history.samples
-                    ),
+                    samples_kwh=tuple(sample.energy_kwh for sample in self.driving_history.samples),
                     stored_energy_kwh=stored,
                     vehicle_soc_percent=vehicle_soc,
                     maximum_current_a=self._path_ceiling_a(),
                     voltage_v=self._float(CONF_EV_VOLTAGE, DEFAULT_EV_VOLTAGE),
-                    phase_count=int(
-                        self._float(CONF_EV_PHASE_COUNT, DEFAULT_EV_PHASE_COUNT)
-                    ),
+                    phase_count=int(self._float(CONF_EV_PHASE_COUNT, DEFAULT_EV_PHASE_COUNT)),
                     free_window_hours=self._free_window_duration_hours(),
                     charge_efficiency_percent=self._float(
                         CONF_EV_CHARGE_EFFICIENCY,
@@ -2550,6 +2578,7 @@ class ActiveEvController:
                     actuator_minimum_percent=minimum,
                     actuator_maximum_percent=maximum,
                     actuator_step_percent=step,
+                    planning_capacity_kwh=capacity.value_kwh if explicit_capacity else None,
                 )
             )
         except ValueError:
@@ -2614,6 +2643,7 @@ class ActiveEvController:
                 phase_count=phases,
             )
         )
+
     def _solar_spill_decision(
         self,
         now: datetime,

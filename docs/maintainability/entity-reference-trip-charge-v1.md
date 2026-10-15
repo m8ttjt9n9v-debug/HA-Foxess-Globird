@@ -2,7 +2,7 @@
 
 This generated engineering reference joins the runtime entity catalogue
 to the reviewed semantic worksheet. It records the current names, including
-the nine owner-approved naming-only changes. Edit the catalogue or semantic
+the retained naming approvals and versioned revisions. Edit the catalogue or semantic
 worksheet, then regenerate this file; do not edit rows by hand.
 
 Total entities: **124**.
@@ -101,7 +101,7 @@ Total entities: **124**.
 | `sensor.home_energy_ev_solar_spill_current_target` | EV Solar Spill Current Target | target | advanced | A | `EnergySensor.native_value['ev_solar_spill_current_target']` | coordinator_and_projection | retain | Charging current selected from coherent measured solar spill after battery, export-window and EV eligibility gates. |
 | `sensor.home_energy_ev_solar_spill_status` | EV Solar Spill Status | session_state | advanced | — | `EnergySensor.native_value['ev_solar_spill_status']` | coordinator_and_projection | retain | Current eligibility or decision phase of measured solar-spill EV charging. |
 | `sensor.home_energy_ev_solar_spill_surplus` | EV Reconstructed Solar Spill | calculation | diagnostic | kW | `EnergySensor.native_value['ev_solar_spill_surplus']` | coordinator_and_projection | retain | Reconstructed instantaneous solar surplus available to the EV from coherent signed grid, battery and charging telemetry. |
-| `sensor.home_energy_ev_usable_capacity` | EV Estimated Usable Capacity | learning_output | advanced | kWh | `EnergySensor.native_value['ev_usable_capacity']` | coordinator_and_projection | retain | Estimated full usable EV battery capacity derived from mapped stored energy and vehicle SoC. |
+| `sensor.home_energy_ev_usable_capacity` | EV Planning Capacity | calculation | advanced | kWh | `EnergySensor.native_value['ev_usable_capacity']` | coordinator_and_projection | relabel | Capacity used for EV energy and timing planning from the selected legacy ratio, mapped capacity, loaded Tessie nominal full-pack estimate or configured value. A nominal/configured value is not independent proof of physically usable battery capacity. |
 | `sensor.home_energy_fleet_summary` | Fleet Summary | calculation | advanced | — | `EnergySensor.native_value['fleet_summary']` | coordinator_and_projection | retain | Versioned compact read-only projection of selected HEO values for cross-site REST monitoring. |
 | `sensor.home_energy_forecast_error_yesterday` | Forecast Error for Latest GloBird Day | calculation | advanced | — | `EnergySensor.native_value['forecast_error_yesterday']` | coordinator_and_projection | retain | Matched completed-day retailer actual cost minus HEO's frozen calibrated forecast. |
 | `sensor.home_energy_forecast_export_realisation` | Forecast Export Realisation | learning_output | diagnostic | % | `EnergySensor.native_value['forecast_export_realisation']` | coordinator_and_projection | retain | Bounded learned percentage of planned export assumed to be realised by the optimistic forecast. |

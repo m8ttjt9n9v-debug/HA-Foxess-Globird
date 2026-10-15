@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "extension": "ev_capacity_v1",
+  "access_count": 10,
+  "accesses": [
+    {"constant": "CONF_EV_CAPACITY_FALLBACK_KWH", "key": "ev_capacity_fallback_kwh", "source": "custom_components/home_energy_orchestrator/config_flow.py", "scope": "ConfigFlow._apply_defaults", "receiver": "data", "access": "get", "kind": "raw_mapping", "layer": "boundary"},
+    {"constant": "CONF_EV_CAPACITY_SOURCE", "key": "ev_capacity_source", "source": "custom_components/home_energy_orchestrator/config_flow.py", "scope": "ConfigFlow._apply_defaults", "receiver": "data", "access": "get", "kind": "raw_mapping", "layer": "boundary"},
+    {"constant": "CONF_EV_CAPACITY_SOURCE", "key": "ev_capacity_source", "source": "custom_components/home_energy_orchestrator/config_flow.py", "scope": "ConfigFlow._schema", "receiver": "defaults", "access": "get", "kind": "raw_mapping", "layer": "boundary"},
+    {"constant": "CONF_EV_CAPACITY_ENTITY", "key": "ev_capacity_entity", "source": "custom_components/home_energy_orchestrator/config_flow.py", "scope": "ConfigFlow._validate_ev_capacity", "receiver": "data", "access": "get", "kind": "raw_mapping", "layer": "boundary"},
+    {"constant": "CONF_EV_CAPACITY_ENTITY", "key": "ev_capacity_entity", "source": "custom_components/home_energy_orchestrator/configuration.py", "scope": "EvCapacitySettings.from_mapping", "receiver": "data", "access": "get", "kind": "raw_mapping", "layer": "boundary"},
+    {"constant": "CONF_EV_CAPACITY_FALLBACK_KWH", "key": "ev_capacity_fallback_kwh", "source": "custom_components/home_energy_orchestrator/configuration.py", "scope": "EvCapacitySettings.from_mapping", "receiver": "data", "access": "get", "kind": "raw_mapping", "layer": "boundary"},
+    {"constant": "CONF_EV_CAPACITY_SOURCE", "key": "ev_capacity_source", "source": "custom_components/home_energy_orchestrator/configuration.py", "scope": "EvCapacitySettings.from_mapping", "receiver": "data", "access": "get", "kind": "raw_mapping", "layer": "boundary"},
+    {"constant": "CONF_EV_CAPACITY_FALLBACK_KWH", "key": "ev_capacity_fallback_kwh", "source": "custom_components/home_energy_orchestrator/configuration.py", "scope": "EvCapacitySettings.validate_mapping", "receiver": "data", "access": "get", "kind": "raw_mapping", "layer": "boundary"},
+    {"constant": "CONF_EV_CAPACITY_SOURCE", "key": "ev_capacity_source", "source": "custom_components/home_energy_orchestrator/configuration.py", "scope": "EvCapacitySettings.validate_mapping", "receiver": "data", "access": "get", "kind": "raw_mapping", "layer": "boundary"},
+    {"constant": "CONF_EV_SOC", "key": "ev_soc_entity", "source": "custom_components/home_energy_orchestrator/configuration.py", "scope": "EvCapacitySettings.validate_mapping", "receiver": "data", "access": "get", "kind": "raw_mapping", "layer": "boundary"}
+  ]
+}

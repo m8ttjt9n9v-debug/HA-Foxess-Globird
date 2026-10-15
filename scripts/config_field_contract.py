@@ -33,6 +33,9 @@ TRANSLATION_PATH = (
 ADDITIONS_PATH = (
     REPOSITORY_ROOT / "docs" / "maintainability" / "config-field-additions-price-export-v1.json"
 )
+CAPACITY_ADDITIONS_PATH = (
+    REPOSITORY_ROOT / "docs" / "maintainability" / "config-field-additions-ev-capacity-v1.json"
+)
 
 
 def _json_value(value: Any) -> Any:
@@ -58,7 +61,7 @@ def _default(marker: vol.Marker) -> tuple[bool, Any]:
 
 def _input_contract(validator: Any) -> tuple[str, dict[str, Any] | None]:
     class_name = type(validator).__name__
-    if class_name == "Coerce":
+    if isinstance(validator, vol.Coerce):
         coerced_type = getattr(validator, "type", None)
         return "number", {"coerce": getattr(coerced_type, "__name__", str(coerced_type))}
     if not class_name.endswith("Selector"):
@@ -124,7 +127,18 @@ def rendered_contract() -> str:
 def validate_against_release_baseline() -> None:
     """Preserve frozen field records and admit only reviewed additional fields."""
     baseline = json.loads(BASELINE_PATH.read_text(encoding="utf-8"))
-    extension = json.loads(ADDITIONS_PATH.read_text(encoding="utf-8"))
+    extensions = [
+        json.loads(path.read_text(encoding="utf-8"))
+        for path in (ADDITIONS_PATH, CAPACITY_ADDITIONS_PATH)
+    ]
+    extension = {"schema_version": baseline["schema_version"], "fields": []}
+    for addition in extensions:
+        if addition.get("schema_version") != baseline["schema_version"]:
+            raise ValueError("field addition schema does not match the baseline")
+        if addition.get("field_count") != len(addition["fields"]):
+            raise ValueError("field addition count does not match its records")
+        extension["fields"].extend(addition["fields"])
+    extension["field_count"] = len(extension["fields"])
     if extension.get("schema_version") != baseline["schema_version"]:
         raise ValueError("field addition schema does not match the baseline")
     if extension.get("field_count") != len(extension["fields"]):

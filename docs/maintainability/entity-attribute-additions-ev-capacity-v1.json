@@ -1,0 +1,17 @@
+{
+  "entities": [
+    {
+      "custom_attributes": [
+        "basis",
+        "fallback_reason",
+        "observed_at",
+        "source"
+      ],
+      "default_entity_id": "sensor.home_energy_ev_usable_capacity",
+      "entity_key": "ev_usable_capacity"
+    }
+  ],
+  "entity_count": 1,
+  "extension": "ev_capacity_v1",
+  "schema_version": 1
+}

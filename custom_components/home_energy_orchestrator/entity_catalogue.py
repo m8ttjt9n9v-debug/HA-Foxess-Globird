@@ -326,7 +326,7 @@ SENSOR_DESCRIPTIONS = (
     ),
     SensorEntityDescription(
         key="ev_usable_capacity",
-        name="EV Estimated Usable Capacity",
+        name="EV Planning Capacity",
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
         device_class="energy",
         suggested_display_precision=2,

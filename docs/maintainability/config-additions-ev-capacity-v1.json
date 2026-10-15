@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "extension": "ev_capacity_v1",
+  "config_entry_version": 6,
+  "additional_config_keys": [
+    "ev_capacity_entity", "ev_capacity_fallback_kwh", "ev_capacity_source"
+  ],
+  "default_source": "legacy_ratio",
+  "automatic_control_defaults_changed": false,
+  "electrical_direction_verification_changed": false,
+  "capacity_claim": "planning or nominal estimate; not independently verified usable energy"
+}

@@ -23,6 +23,7 @@ TRIP_ADDITIONS_PATH = (
 APPROVED_DISPLAY_NAMES = {
     "automatic_export": "Automatic Battery Export",
     "bonus_zero_import_allowed": "ZEROHERO Local Telemetry Qualified",
+    "ev_usable_capacity": "EV Planning Capacity",
     "free_charge_allowed": "Battery Free-Charge Energy Allowed",
     "status": "Orchestrator Status",
     "zerohero_export_status": "Automatic Battery Export Status",

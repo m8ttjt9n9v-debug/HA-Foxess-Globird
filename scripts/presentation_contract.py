@@ -75,6 +75,7 @@ def validate_presentation_contract() -> None:
         "read_model.cost.sensor_attributes",
         "read_model.scorecard.sensor_attributes",
         "read_model.ev.control_attributes",
+        "read_model.ev.capacity_attributes",
         "read_model.learning.occupancy_attributes",
         "read_model.status_attributes",
     }

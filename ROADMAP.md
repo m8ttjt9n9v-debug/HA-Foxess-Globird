@@ -2,6 +2,19 @@
 
 Status here describes behavioral parity, not merely the presence of code.
 
+## Capacity-input correction
+
+- [x] Add explicit dedicated EV planning capacity with a reviewed fallback;
+  reuse the mapped car's loaded Tessie cache or a mapped capacity sensor,
+  without another API client, poller or charging controller. Preserve the
+  original ratio for unconfigured sites only. Share the selected input across
+  learned limits, both Trip schedulers, allowance and backfill vehicle room;
+  expose nominal/configured/legacy provenance without changing entity IDs.
+- [ ] Complete full release validation and approved controlled pilot acceptance.
+  Retain schedule, ownership and safety settings; do not interrupt an active
+  charge to make an installation possible. Capacity remains an estimate;
+  physical trip timing is separate from successful installation.
+
 ## v0.12.29 release boundary
 
 - Freeze runtime functionality at `v0.12.29rc18` (`2b12c10`). Stable promotion

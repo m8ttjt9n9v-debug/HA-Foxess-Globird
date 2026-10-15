@@ -12,8 +12,8 @@ from homeassistant.core import callback, valid_entity_id
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import selector
 
-from .config_page_schema import GRID_PHASE_SECTIONS, build_page_schema
-from .configuration import AemoMonitorConfiguration
+from .config_page_schema import GRID_PHASE_SECTIONS, CapacityCoerce, build_page_schema
+from .configuration import AemoMonitorConfiguration, EvCapacitySettings
 from .const import (
     BATTERY_POSITIVE_DISCHARGE,
     BATTERY_POWER_DIRECTIONS,
@@ -53,6 +53,9 @@ from .const import (
     CONF_EV_BEFORE_EXPORT_ENABLED,
     CONF_EV_BEFORE_EXPORT_SOC_TARGET,
     CONF_EV_CABLE_CONNECTED,
+    CONF_EV_CAPACITY_ENTITY,
+    CONF_EV_CAPACITY_FALLBACK_KWH,
+    CONF_EV_CAPACITY_SOURCE,
     CONF_EV_CHARGE_EFFICIENCY,
     CONF_EV_CHARGE_LIMIT,
     CONF_EV_CHARGE_PATH,
@@ -181,6 +184,8 @@ from .const import (
     DEFAULT_EV_BACKFILL_BUFFER_MINUTES,
     DEFAULT_EV_BEFORE_EXPORT_ENABLED,
     DEFAULT_EV_BEFORE_EXPORT_SOC_TARGET,
+    DEFAULT_EV_CAPACITY_FALLBACK_KWH,
+    DEFAULT_EV_CAPACITY_SOURCE,
     DEFAULT_EV_CHARGE_EFFICIENCY,
     DEFAULT_EV_CHARGE_PATH,
     DEFAULT_EV_CHARGE_TO_FULL_ENABLED,
@@ -263,6 +268,7 @@ from .const import (
     DEFAULT_ZERO_IMPORT_THRESHOLD_KW,
     DEFAULT_ZEROHERO_DAILY_CREDIT,
     DOMAIN,
+    EV_CAPACITY_SOURCES,
     EV_CHARGE_PATH_SMART_SOCKET,
     EV_CHARGE_PATHS,
     EV_FREE_WINDOW_PRIORITIES,
@@ -570,6 +576,8 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         candidate = self._capability_safe_data(self._apply_defaults(data))
         if page == "aemo_monitor":
             return self._validate_aemo_monitor(candidate)
+        if page == "car" and (capacity_errors := self._validate_ev_capacity(candidate)):
+            return capacity_errors
         limit_error = self._page_limit_error(page, candidate)
         if limit_error:
             return limit_error
@@ -1341,6 +1349,14 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 optional_entity(CONF_EV_ACTUAL_CURRENT): ENTITY,
                 optional_entity(CONF_EV_STORED_ENERGY): ENTITY,
                 optional_entity(CONF_EV_LIFETIME_ENERGY): ENTITY,
+                vol.Required(
+                    CONF_EV_CAPACITY_SOURCE,
+                    default=defaults.get(CONF_EV_CAPACITY_SOURCE, DEFAULT_EV_CAPACITY_SOURCE),
+                ): selector.SelectSelector(selector.SelectSelectorConfig(
+                    options=list(EV_CAPACITY_SOURCES), translation_key="ev_capacity_source",
+                )),
+                optional_entity(CONF_EV_CAPACITY_ENTITY): ENTITY,
+                optional_entity(CONF_EV_CAPACITY_FALLBACK_KWH): CapacityCoerce(),
                 optional_entity(CONF_EV_CURRENT_LIMIT): NUMBER_ENTITY,
                 optional_entity(CONF_EV_CHARGE_LIMIT): NUMBER_ENTITY,
                 optional_entity(CONF_EV_CHARGE_SWITCH): SWITCH_ENTITY,
@@ -1821,6 +1837,10 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             CONF_CRITICAL_EVENT_SELL_ENABLED: data.get(
                 CONF_CRITICAL_EVENT_SELL_ENABLED, DEFAULT_CRITICAL_EVENT_SELL_ENABLED
             ),
+            CONF_EV_CAPACITY_SOURCE: data.get(CONF_EV_CAPACITY_SOURCE, DEFAULT_EV_CAPACITY_SOURCE),
+            CONF_EV_CAPACITY_FALLBACK_KWH: data.get(
+                CONF_EV_CAPACITY_FALLBACK_KWH, DEFAULT_EV_CAPACITY_FALLBACK_KWH
+            ),
             CONF_FREE_CHARGE_START: data.get(CONF_FREE_CHARGE_START, DEFAULT_FREE_CHARGE_START),
             CONF_BATTERY_POWER_DIRECTION: data.get(
                 CONF_BATTERY_POWER_DIRECTION,
@@ -2157,6 +2177,26 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             return {CONF_CRITICAL_EVENT_SELL_ENABLED: "price_export_requires_local_modbus"}
         return {}
 
+    def _validate_ev_capacity(self, data: dict[str, object]) -> dict[str, str]:
+        """Check explicit planning sources, not provider internals or usable energy."""
+        if errors := EvCapacitySettings.validate_mapping(data):
+            return errors
+        entity_id = data.get(CONF_EV_CAPACITY_ENTITY)
+        if entity_id is not None:
+            if (
+                not isinstance(entity_id, str)
+                or not valid_entity_id(entity_id)
+                or not entity_id.startswith("sensor.")
+            ):
+                return {CONF_EV_CAPACITY_ENTITY: "invalid_entity"}
+            state = self.hass.states.get(entity_id)
+            if state is not None and state.attributes.get("unit_of_measurement") not in {
+                "Wh",
+                "kWh",
+            }:
+                return {CONF_EV_CAPACITY_ENTITY: "invalid_ev_capacity_unit"}
+        return {}
+
     def _validate_input(self, data: dict[str, object]) -> dict[str, str]:
         """Reject malformed IDs and unsafe physical limits before saving them."""
         if not str(data.get(CONF_NAME, "")).strip():
@@ -2165,6 +2205,10 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             return {CONF_FOXESS_CONTROL_OWNER: "invalid_foxess_control_owner"}
         if market_errors := self._validate_aemo_monitor(data):
             return market_errors
+        if data.get(self._CONF_CONFIGURE_EV, True) and (
+            capacity_errors := self._validate_ev_capacity(data)
+        ):
+            return capacity_errors
         if data.get(CONF_GRID_POWER_DIRECTION) not in GRID_POWER_DIRECTIONS:
             return {CONF_GRID_POWER_DIRECTION: "invalid_power_direction"}
         if data.get(CONF_BATTERY_POWER_DIRECTION) not in BATTERY_POWER_DIRECTIONS:
@@ -2192,6 +2236,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             CONF_EV_CHARGING_STATE,
             CONF_EV_ACTUAL_CURRENT,
             CONF_EV_STORED_ENERGY,
+            CONF_EV_CAPACITY_ENTITY,
             CONF_EV_CURRENT_LIMIT,
             CONF_EV_CHARGE_LIMIT,
             CONF_EV_CHARGE_SWITCH,
@@ -2279,6 +2324,15 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             data.get(CONF_EV_CHARGE_LIMIT),
             data.get(CONF_EV_CHARGE_SWITCH),
         )
+        capacity = EvCapacitySettings.from_mapping(data)
+        if capacity.source != "legacy_ratio":
+            capacity_mapped = (
+                capacity.entity_id or capacity.fallback_kwh
+                if capacity.source == "mapped_entity"
+                else capacity.fallback_kwh if capacity.source == "configured"
+                else ev_mapping[0] if capacity.source == "tessie" else None
+            )
+            ev_mapping = (*ev_mapping[:5], capacity_mapped, *ev_mapping[6:])
         if data.get(CONF_EV_CONTROL_COMMISSIONED) and not all(ev_mapping):
             return {"base": "incomplete_ev_mapping"}
         if (

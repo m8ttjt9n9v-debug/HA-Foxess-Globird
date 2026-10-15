@@ -560,11 +560,14 @@ class TripChargeController:
     def _current_plan_inputs(self):
         runtime = self.coordinator.runtime_config
         learned = self._ev.learned_charge_limit
+        capacity = None if learned is None else learned.usable_capacity_kwh
+        if runtime.ev_capacity.source != "legacy_ratio":
+            capacity = self._ev.capacity_evidence().value_kwh
         return {
             "departure": self.departure,
             "target_soc": self.target_soc,
             "soc": self._soc(),
-            "capacity_kwh": None if learned is None else learned.usable_capacity_kwh,
+            "capacity_kwh": capacity,
             "maximum_power_kw": getattr(self.coordinator.data, "ev_max_power_kw", None),
             "efficiency_percent": runtime.ev_numbers.value(
                 CONF_EV_CHARGE_EFFICIENCY, DEFAULT_EV_CHARGE_EFFICIENCY
