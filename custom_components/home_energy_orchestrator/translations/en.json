@@ -915,9 +915,9 @@
         "data_description": {
           "aemo_monitor_enabled": "Observe official actual five-minute prices. Monitoring alone sends no device commands and does not confirm a retailer event or payment.",
           "aemo_region": "Choose the site's NEM region explicitly; no region is assumed.",
-          "aemo_export_threshold_per_kwh": "The price must be strictly above this operating threshold. The default $3/kWh is a chosen rule, not a verified retailer trigger.",
+          "aemo_export_threshold_per_kwh": "Export becomes eligible at or above this operating threshold. The default $3/kWh is a chosen rule, not a verified retailer trigger.",
           "aemo_import_threshold_per_kwh": "Optional read-only consumption observation. No automatic buying is added and no surplus trigger is assumed; clear this value to disable the hint.",
-          "critical_event_sell_enabled": "Default off. Use the existing Sellable Energy and shared automatic-export budget outside the ordinary export window while a current actual price exceeds the threshold. Local Modbus, commissioning, master and Safety Lock gates still apply."
+          "critical_event_sell_enabled": "Default off. Use the existing Sellable Energy and shared automatic-export budget while a current actual price is at or above the threshold. Local Modbus, commissioning, master and Safety Lock gates still apply."
         }
       }
     },

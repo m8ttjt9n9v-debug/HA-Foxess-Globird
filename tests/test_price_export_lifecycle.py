@@ -54,6 +54,39 @@ async def price_lifecycle(hass, monkeypatch, freezer):
         harness.close()
 
 
+async def test_exact_threshold_after_reload_uses_actual_feed_and_stops_below(
+    price_lifecycle,
+):
+    harness, entry, calls, feed = price_lifecycle
+    await harness.unload(entry)
+    feed.side_effect = lambda: dispatch_report(dt_util.utcnow(), price=3000)
+    seed_price_states(harness.hass)
+    calls.clear()
+    await harness.setup(entry)
+    await harness.hass.async_block_till_done(wait_background_tasks=True)
+    active = entry.runtime_data.active_controller
+    monitor = entry.runtime_data.market_monitor
+    assert monitor.current_result.price_per_kwh == 3
+    assert monitor.current_result.status == "possible_export_event"
+    assert monitor.current_result.price_trigger_valid
+    # Restart restoration is a separate tick: fresh equality permission must
+    # not bypass clearing the previous session before a new positive command.
+    assert (MODE, "Self Use") in calls
+    await active.async_reconcile()
+    await harness.hass.async_block_till_done(wait_background_tasks=True)
+    assert (MODE, "Force Discharge") in calls
+    assert active.export_session.authority_source == "price"
+    assert active.export_plan.sellable_energy_kwh > 0
+    feed.side_effect = lambda: dispatch_report(dt_util.utcnow(), price=2999.99, serial=2)
+    calls.clear()
+    await monitor.async_refresh()
+    await harness.hass.async_block_till_done(wait_background_tasks=True)
+    assert monitor.current_result.status == "watching"
+    assert (MODE, "Self Use") in calls
+    assert float(harness.hass.states.get(DISCHARGE).state) == 0
+    assert (MODE, "Force Discharge") not in calls
+
+
 async def test_setup_and_reload_require_fresh_dispatch_before_same_owner_readmission(
     price_lifecycle
 ):

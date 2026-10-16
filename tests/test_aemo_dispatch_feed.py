@@ -123,9 +123,14 @@ def test_duplicate_header_or_region_and_unknown_schema_fail_closed():
 
 
 @pytest.mark.freeze_time(NOW)
-def test_same_threshold_is_not_an_export_candidate_and_exact_expiry_is_closed(freezer):
-    exact = parse_aemo_dispatch_csv(dispatch_csv(price=3000), CONFIG, NOW)
-    assert exact.status == "watching"
+@pytest.mark.parametrize(
+    ("price", "status"),
+    [(2999.99, "watching"), (3000, "possible_export_event"),
+     (3000.01, "possible_export_event")],
+)
+def test_inclusive_export_threshold_and_exact_expiry_is_closed(freezer, price, status):
+    exact = parse_aemo_dispatch_csv(dispatch_csv(price=price), CONFIG, NOW)
+    assert exact.status == status
     assert exact.price_trigger_valid
     freezer.move_to(datetime(2026, 10, 12, 4, 30, tzinfo=UTC))
     assert not exact.source_fresh
@@ -201,14 +206,19 @@ async def test_older_high_replay_preserves_newer_low_and_original_fetch_time(has
 
 
 @pytest.mark.freeze_time(NOW)
-async def test_highest_serial_same_price_is_retained_across_history_restore(hass, freezer):
+@pytest.mark.parametrize(
+    ("price", "status"), [(100, "watching"), (3000, "possible_export_event")],
+)
+async def test_highest_serial_same_price_is_retained_across_history_restore(
+    hass, freezer, price, status,
+):
     key = "serial-roundtrip"
-    latest = dispatch_report(price=100, serial=4)
+    latest = dispatch_report(price=price, serial=4)
     first = AemoMarketMonitor(hass, key, CONFIG)
     first._async_fetch_summary = AsyncMock(
         side_effect=[
             dispatch_report(price=9998.66, serial=1),
-            dispatch_report(price=100, serial=3),
+            dispatch_report(price=price, serial=3),
             latest,
         ]
     )
@@ -229,7 +239,7 @@ async def test_highest_serial_same_price_is_retained_across_history_restore(hass
         await restored.async_refresh()
         assert restored.current_result == accepted
         assert restored.current_result.source_url == latest.source_url
-        assert restored.current_result.status == "watching"
+        assert restored.current_result.status == status
     finally:
         await restored.async_stop()
 

@@ -15,6 +15,7 @@ from scripts.entity_attribute_contract import (
     MANUAL_ADDITIONS_PATH,
     PRICE_ADDITIONS_PATH,
     TRIP_ADDITIONS_PATH,
+    TRIP_IMPACT_ADDITIONS_PATH,
     build_entity_attribute_contract,
     validate_against_release_baseline,
 )
@@ -31,13 +32,20 @@ def test_entity_attribute_contract_matches_reviewed_release_baseline() -> None:
     price = json.loads(PRICE_ADDITIONS_PATH.read_text(encoding="utf-8"))
     trip = json.loads(TRIP_ADDITIONS_PATH.read_text(encoding="utf-8"))
     capacity = json.loads(EV_CAPACITY_ADDITIONS_PATH.read_text(encoding="utf-8"))
+    impact = json.loads(TRIP_IMPACT_ADDITIONS_PATH.read_text(encoding="utf-8"))
+    assert impact["entities"] == [] and impact["entity_count"] == 0
+    assert impact["attribute_additions"] == [{
+        "entity_key": "trip_charge_status",
+        "default_entity_id": "sensor.home_energy_trip_charge_status",
+        "custom_attributes": ["energy_impact"],
+    }]
     expected = {
         record["entity_key"]: deepcopy(record)
         for record in (
             baseline["entities"] + monitor["entities"] + trip["entities"] + capacity["entities"]
         )
     }
-    for extension in (manual, price):
+    for extension in (manual, price, impact):
         for record in extension["attribute_additions"]:
             retained = expected[record["entity_key"]]
             retained["custom_attributes"] = sorted(

@@ -68,9 +68,21 @@ layers around the proven algorithm, not replacement algorithms.
   Timing and reported target completion are estimates, with live acceptance
   separate from repository tests. See [trip charging](trip-charge-wrapper.md).
 
+- Trip status also exposes a read-only pre-free energy/cost estimate. It uses
+  the current native request or a validated standard helper plan, canonical
+  energy above the configured battery floor, discharge efficiency, existing
+  remaining house protection once, and saved import tariffs. It does not turn
+  timing margin into energy, price every EV kWh as a grid purchase, or carry
+  today's battery pool unchanged through free charging. Paid-energy liability
+  includes displaced house demand; a cost range reflects possible tariff bands.
+  Later/free-window energy is separate, missing costs remain unavailable, and
+  no actuator, permission, setting, journal or charging policy is changed.
+  This estimate excludes solar/export forecasts, supply charges, export earnings
+  and ZEROHERO credit. See [estimate basis](trip-charge-wrapper.md#estimated-trip-impact).
+
 - A separately commissioned, default-off price request adds admission to the
   existing protected export controller, not another inverter writer. Only a
-  current actual regional DispatchIS price above the configured threshold can
+  current actual regional DispatchIS price at or above the configured threshold can
   grant permission. The operator threshold is not a retailer critical-event
   declaration or payment guarantee. Price admission reuses protected house/EV
   energy, battery floor/reserve, and the shared all-day measured export cap.

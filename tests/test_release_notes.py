@@ -104,3 +104,13 @@ def test_01232_installs_trip_entities_without_automatic_dashboard_or_policy_chan
     assert "HACS does not replace" in notes
     assert "No automatic price-triggered buying" in notes
     assert not Version("0.12.32").is_prerelease
+
+
+def test_01234_describes_readonly_trip_scope_and_inclusive_sell_threshold() -> None:
+    title, notes = release_text("v0.12.34", CHANGELOG_PATH.read_text(encoding="utf-8"))
+    assert title == "v0.12.34 — Trip energy estimates and inclusive price export"
+    assert "read-only Trip impact" in notes and "before the next free" in notes
+    assert "at or above" in notes and "exactly the threshold" in notes
+    assert "explicit card import" in notes and "intent are preserved" in notes
+    assert "No automatic price-triggered buying" in notes
+    assert not Version("0.12.34").is_prerelease

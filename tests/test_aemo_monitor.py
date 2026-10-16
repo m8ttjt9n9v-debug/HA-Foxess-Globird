@@ -61,13 +61,14 @@ def summary(price: object = 3001, **overrides: object) -> dict[str, object]:
 @pytest.mark.parametrize(
     ("price", "status", "price_per_kwh"),
     [
-        (3000, "watching", 3.0),
+        (2999.99, "watching", 2.99999),
+        (3000, "possible_export_event", 3.0),
         (3000.01, "possible_export_event", 3.00001),
         (-1000, "watching", -1.0),
         (0, "watching", 0.0),
     ],
 )
-def test_units_strict_export_threshold_and_no_inferred_import(price, status, price_per_kwh):
+def test_units_inclusive_export_threshold_and_no_inferred_import(price, status, price_per_kwh):
     result = parse_aemo_summary(summary(price), CONFIGURATION, NOW)
     assert result.status == status
     assert result.price_per_mwh == price

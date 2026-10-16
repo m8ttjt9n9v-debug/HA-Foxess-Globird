@@ -15,6 +15,111 @@ Status here describes behavioral parity, not merely the presence of code.
   charge to make an installation possible. Capacity remains an estimate;
   physical trip timing is separate from successful installation.
 
+## Planned — Tessie-derived charging efficiency
+
+- [ ] Add optional charging-efficiency learning from Tessie's completed-charge
+  history, packaged within HACS. Reuse the exact mapped car's existing Tessie
+  authentication/client where supported, otherwise a small read-only adapter;
+  require no second login, duplicate credential store or separate helper install.
+- [ ] Bind requests to the commissioned vehicle, handle Tessie entry reloads
+  and authentication changes, and never expose tokens or raw location history
+  in entities, diagnostics, logs or public fixtures.
+- [ ] Use positively identified home AC sessions, not an all-time average or
+  the assumption that every non-Supercharger session occurred at home. Define
+  suitability for normal-rate charging; reject incomplete, tiny, invalid or
+  unrepresentative keep-alive sessions. Calculate an energy-weighted estimate
+  from summed battery energy added divided by summed charger energy used.
+- [ ] Fetch a bounded initial history, then refresh infrequently after completed
+  charging or on a daily schedule; cache the result and back off on failures.
+  Do not query history on every control tick or wake/command the car to learn it.
+- [ ] Expose the effective percentage, source, sample coverage and freshness.
+  Make source selection explicit and retain the reviewed configured efficiency
+  as fallback for unavailable, stale or insufficient evidence. Do not silently
+  overwrite existing settings or activate learning just because HEO is updated.
+- [ ] Feed the selected efficiency into existing planning, not a new controller.
+  Cover both native and older helper Trip paths without silently editing legacy
+  helpers; preserve targets, departure times, ownership and charging safeguards.
+- [ ] Test wrong-car/location matching, mixed AC/DC and charging rates, invalid
+  energy/zero denominators, weighting, stale/partial data, rate limits, revoked
+  authentication, reload/restart, fallback and trip timing against recorded or
+  synthetic sessions. Keep physical finish-time acceptance separate from unit
+  tests and from the already released capacity-input correction.
+
+## Immediate operator priorities
+
+1. Complete commissioning and acceptance of **automatic selling during AEMO
+   price spikes**. The existing default-off price-export implementation must
+   use protected Sellable energy and retain its freshness, ownership and daily
+   cap safeguards. See [Optional price export extension](#optional-price-export-extension).
+2. **High priority next: customer-friendly HEO dashboard and settings**, scoped
+   below. Record and plan this work now; do not implement it ahead of the price-
+   export priority. Adding controls must not change the charging/export policy.
+
+## High priority next — customer-friendly dashboard settings
+
+Provide a dedicated **HEO Settings** view so routine policy changes do not
+require traversing Reconfigure. Use switches for on/off choices, dropdowns for
+policies, numeric inputs for amounts and time pickers for schedules. Every
+control must edit the same canonical saved value used by Reconfigure: no
+duplicate helpers, second controller or competing configuration source.
+
+- [ ] Organise the existing dashboard-capable controls with brief plain-language
+  descriptions: automatic battery free charging and export; Safety Lock; house
+  Auto/Home/Away; automatic EV control and Charge to Full; EV-before-export
+  on/off and its EV SoC threshold; morning solar on/off and its **house-battery**
+  minimum SoC; Trip departure date/time, selected EV SoC, schedule on/off and
+  extra minutes; AEMO monitoring, region, export threshold and automatic
+  price-triggered export; consumption observation threshold and its clear
+  action. Label consumption observation as observation, not automatic buying.
+  Keep charging diagnostics separate from everyday settings. Preserve legacy
+  Trip conflict protection rather than exposing two competing schedulers.
+- [ ] Expose free-window EV policy: house-battery/EV priority; normal EV target
+  SoC; guaranteed minimum current (A); settling delay (minutes); and house-
+  battery SoC for the EV taper handoff. Explain that the current settling clock
+  starts at the configured free-window boundary and applies to house-battery
+  priority, not EV priority; do not imply a measured battery-start timer.
+- [ ] Expose regular solar EV charging on/off and its house-battery activation
+  SoC, keeping these distinct from morning solar and its minimum reserve.
+- [ ] Expose pre-free backfill on/off; conservative/ready-by timing policy;
+  daily ready-by time; explicitly reserved EV energy (kWh); and ready-by
+  planning buffer (minutes). Explain the different morning stages and their
+  handoffs without suggesting that ready-by replaces pre-free backfill.
+- [ ] Expose outside-window EV power as a percentage of **inverter output**,
+  minimum house-battery SoC and keep-alive current (A). Explain the existing
+  Full exception; do not mislabel inverter power as grid-service capacity.
+- [ ] Expose free-energy allowance enforcement and safety margin (kWh), EV
+  Auto/Home/Away location policy and Charge to Full maximum duration (hours).
+  Make the duration an ordinary editable dashboard control after setup, using
+  the same canonical saved value as Reconfigure. Explain when a planned trip
+  needs longer than that duration instead of reporting "Waiting for data".
+  Deliberately synchronise or retire older Trip timeout helpers during migration;
+  do not leave independent timeout values that can silently disagree.
+- [ ] Expose occupied/away house fallback budgets (kWh), away-confirmation
+  duration, minimum house-battery SoC, additional protected reserve (kWh),
+  expected free-window battery target SoC and maximum automatic daily export
+  energy (kWh).
+- [ ] Provide a reviewed tariff settings section for free/peak/export/credit
+  windows, import and export rates, daily supply charge, free/export allowances
+  and ZEROHERO credit. Preserve exact schedule confirmation and atomic
+  cross-field validation; a dashboard must not bypass commissioning guards.
+- [ ] Put technical policy tuning in **Advanced settings**: efficiencies,
+  learning sample counts/arrival reserve, connector headroom, telemetry
+  freshness/skew and recovery timings. Keep sensor/actuator mappings,
+  electrical directions, phase count, commissioned physical limits, control
+  ownership and commissioning confirmations in the reviewed setup wizard,
+  not routine dashboard controls. Future assisted calibration is separate work.
+- [ ] Test persistence across reload/restart, dashboard/Reconfigure agreement,
+  invalid values and cross-field constraints, active-session changes, Safety
+  Lock, capabilities and user-renamed entities. Preserve existing saved values,
+  defaults, unique IDs, ownership and session safeguards; use existing
+  configuration-update/reconciliation paths rather than new control logic.
+- [ ] Review the layout on a phone and with a non-expert customer. Use concise
+  titles and one-sentence explanations identifying which battery, which window,
+  units and consequences. Distinguish requests, effective gates and actual
+  charging. Maintain descriptions in one canonical vocabulary; update the
+  reusable dashboard example without private site data, preserve custom
+  overlays and never silently overwrite an installed dashboard.
+
 ## v0.12.29 release boundary
 
 - Freeze runtime functionality at `v0.12.29rc18` (`2b12c10`). Stable promotion
@@ -27,11 +132,17 @@ Status here describes behavioral parity, not merely the presence of code.
   physical export and optional trip-helper acceptance remain distinct from
   baseline upgrade acceptance and remote rollout.
 - `0.12.30` contains only the Ready by → pre-free policy-handoff correction.
-  Automatic price-triggered buying remains planned for a later feature release,
-  with its own design, tests and acceptance; it is not cancelled or bundled here.
+  No automatic price-triggered buying was bundled with that release.
 
 ## Optional one-off trip charging
 
+- [x] Add a read-only pre-free impact projection and shared native/helper Trip
+  card: wall energy, before/during/after-free split, battery contribution after
+  expected house use, incremental paid energy and configured-tariff cost bounds.
+  Preserve floor/efficiency accounting and missing-data honesty; do not change
+  the Trip controller or predict later costs from the current battery pool.
+- [ ] Publish and separately install the tested display, then verify the named
+  site's saved dashboard, source and request remain unchanged except that card.
 - [x] Package the existing native-HA wrapper for a selected 1–100% target and
   departure time. Reuse HEO's capacity/max-power projections and existing paid
   Full override; preserve restorable ownership, cancellation, target-change,
@@ -44,8 +155,58 @@ Status here describes behavioral parity, not merely the presence of code.
   repetition remains future work. See
   [trip charging](docs/trip-charge-wrapper.md).
 
+### Deferred — tariff-aware trip planning and interruption recovery
+
+Leave the released charging policy unchanged for now. The earlier preferred-
+rate/maximum-rate suggestion is a design candidate, not an agreed algorithm.
+Specify human intent and scenario tests before implementing this extension.
+
+- [ ] Shorten the Trip card title and control labels. Put paid-power/reserve
+  explanations below the controls, not in a truncated technical headline.
+- [ ] Evaluate the whole cost of a trip: configured import tariff windows,
+  conditional ZEROHERO credit lost through qualifying-window imports, missed
+  export opportunities, and house energy needed until the next free window.
+  Avoid shifting an apparent EV saving into later paid house consumption.
+  Use commissioned plan values; do not hardcode a particular window or credit.
+- [ ] Decide how the existing outside-window percentage of **inverter output**
+  applies to scheduled trips, separately from grid-service safety limits and
+  permission to spend the house reserve. Normal-rate planning, earlier starts,
+  maximum-rate escalation and explicit operator exceptions need one coherent
+  definition. A fixed percentage leaves headroom but cannot guarantee that
+  simultaneous hot-water/aircon/house demand will never cause grid imports.
+- [ ] Define deadline-versus-cost precedence, insufficient time even at maximum
+  rate, taper/efficiency uncertainty, and visible predicted shortfall. Distinguish
+  small partial-charge top-ups from finishing near departure at 100%; neither
+  a latest-start nor a lowest-cost rule should be silently assumed universal.
+- [ ] Define whether a temporary detected unplug should **pause an outstanding
+  trip request** rather than consume it. If resumption is approved, preserve the
+  original deadline/target and reassess current SoC, remaining energy/time and
+  ownership on reconnect. Distinguish physical disconnect, brief cable tidying,
+  telemetry loss, a charger fault, deliberate cancellation and manual Full
+  replacement; never restore a superseded or completed paid request.
+- [ ] Cover reconnection before start, during active charging, after the planned
+  start and after departure; repeated plug/unplug, HA restart while disconnected,
+  changed target/departure, free-window handoff, and power surges that curtail
+  charging. Specify timeout behaviour across pauses, expiry and notifications.
+- [ ] Build table-driven and time-sequenced tests with small/large SoC deficits,
+  one/three-phase rates, tariff/credit boundaries, changing house/solar demand,
+  depleted house energy, stale feedback, missed deadlines and manual ownership.
+  Compare plausible human choices before changing code. Keep the existing single
+  actuator owner and use the same selected rate in planning and execution.
+
+Current v0.12.32 behaviour is deliberately simpler: a detected home/cable loss
+after Trip owns Full interrupts and consumes that trip; reconnect alone does
+not re-arm it. An unstarted armed trip can keep waiting for the car, but expires
+if departure passes. Resumable-trip behaviour remains design work, not a released
+capability.
+
 ## Optional price export extension
 
+- [x] Make the configurable sell threshold inclusive: sell eligibility at or
+  above the threshold (default $3/kWh), not strictly above. Apply the same rule
+  to current observation, corrected/restored reports and live command guards.
+  Retain Sellable, shared daily cap, fixed deadlines and all existing gates;
+  add exact/adjacent-price, delayed-command and full setup/reload regressions.
 - [x] Add a default-off observer of exact current actual AEMO DispatchIS prices,
   explicit region and configurable export threshold; keep price observation
   distinct from a retailer event declaration or payment confirmation.
@@ -66,14 +227,12 @@ Status here describes behavioral parity, not merely the presence of code.
   active-policy rollout. Baseline acceptance is not a claim of live price-event
   delivery. No retailer reward claim or critical-event buy control is included.
 
-## Planned price-triggered buying
+## Price-triggered buying — withdrawn
 
-- [ ] Extend the existing battery-charge controller with verified current
-  DispatchIS evidence after a separate design for import thresholds, energy
-  limits, SoC targets and retailer-payment assumptions. Keep the request off
-  by default and retain the existing inverter owner, journal and write gates.
-  The earlier separate event runtime is not the planned implementation path;
-  buying remains planned work, with no automatic import control added here.
+The operator withdrew the automatic buying request. Current work is sell-only;
+do not implement a negative-price buying controller. The existing optional
+consumption-observation field remains read-only for compatibility and cannot
+request charging.
 
 ## Operator extension — Fleet manual export
 
@@ -89,7 +248,7 @@ Status here describes behavioral parity, not merely the presence of code.
   behaviour only through a separately authorised operator action; mapped mode
   confirmation alone is insufficient.
 
-## Next priority — lifecycle and incident regression harness
+## Acceptance requirement — lifecycle and incident regression harness
 
 - [ ] **Build this before further controller expansion.** Add a permanent
   time-sequenced fault-injection suite around every HEO controller. Pure policy
@@ -98,6 +257,10 @@ Status here describes behavioral parity, not merely the presence of code.
   reconciliation, persistence, reconfiguration, reload, restart, telemetry
   loss/recovery, tariff boundaries, external mode changes, and operator
   intervention.
+
+  Apply the relevant lifecycle regressions as acceptance gates for the
+  immediate priorities above; this requirement is not a competing feature
+  queue ahead of price-export acceptance and customer-friendly settings.
 
   Convert each confirmed live failure into a sanitized recorder-style replay
   fixture, beginning with the battery-charge sequence in which confirmed Force
@@ -604,7 +767,7 @@ Working Single Phase Pilot Site parity.
 
 ### Human commissioning and dashboard usability
 
-- [ ] **NEXT SMALL FIX — expose all three primary automatic-control requests
+- [ ] **Part of the high-priority dashboard settings work — expose all three primary automatic-control requests
   together on the configuration dashboard:** Automatic Battery Free Charge
   (grid import), Automatic ZEROHERO Export, and Automatic EV Control. The
   integration-owned import switch already exists as
@@ -612,7 +775,7 @@ Working Single Phase Pilot Site parity.
   EV switches, label all three in plain language, and show their effective gate
   status so an enabled request is not mistaken for authorised hardware control.
 
-- [ ] **NEXT SMALL FIX — add an Electrical Directions calibration panel directly
+- [ ] **Separate advanced commissioning work — add an Electrical Directions calibration panel directly
   beneath the sign-verification status.** Do not require the operator to use the
   monolithic reconfigure form merely to correct or reconfirm a direction. Show
   the configured source entity, live raw value, resulting normalized value, and
@@ -751,16 +914,12 @@ Working Single Phase Pilot Site parity.
   the smaller of the commissioned inverter limit and the mapped native number
   maximum. A rejected service call must not leave a diagnostic session latched
   as active or require a manual Stop action before retrying.
-- [ ] Add an upgrade-safe dashboard configuration surface for occupied and away
-  house fallback energy, away-confirmation duration, house occupancy policy,
-  EV supply path, EV location policy, free-window priority, all telemetry sign
-  directions, Charge to Full timeout, whole-site free-energy allowance and
-  margin, daily protected EV energy, daily ready-by time, and outside-window EV
-  inverter percentage.
-- [ ] Put the operational switches on that configuration surface: Local Modbus
-  battery charging, ZEROHERO export, EV-before-export priority and threshold,
-  automatic EV control, and Safety Lock. Descriptions must be sourced from one
-  maintained documentation vocabulary rather than duplicated dashboard text.
+- [ ] Deliver the upgrade-safe routine configuration surface and operational
+  switches under [High priority next — customer-friendly dashboard settings](#high-priority-next--customer-friendly-dashboard-settings).
+  This consolidated scope supersedes the earlier proposal to expose EV supply
+  mappings or telemetry sign directions as routine dashboard settings; those
+  remain part of reviewed commissioning. Source descriptions from one maintained
+  vocabulary rather than duplicated dashboard text.
 - [ ] Add the normalized helpers required by the Working Single Phase Pilot
   Site power-flow card: EV charge rate in kW and house load excluding EV load.
   Define the input topology explicitly so an already EV-exclusive house sensor
@@ -780,7 +939,9 @@ Working Single Phase Pilot Site parity.
   calibration layout, while retaining configuration-driven entities and
   upgrade-safe user overlays.
 - [ ] Make dashboard help extensive but maintainable from the same canonical
-  documentation source as setup, entities, and README guidance.
+  documentation source as setup, entities, and README guidance. Deliver routine
+  settings descriptions through the consolidated high-priority settings scope
+  above; do not maintain a second set of competing control explanations.
 - [ ] Add safe Tessie convenience controls for unlock, front trunk, rear trunk,
   and window venting, with explicit confirmation appropriate to each action.
 - [ ] **Lower priority:** add optional solar forecasting and weather context to

@@ -11,6 +11,8 @@ from pathlib import Path
 
 import yaml
 
+from scripts.trip_impact_card import build_trip_impact_card
+
 ROOT = Path(__file__).resolve().parents[1]
 PACKAGE_PATH = ROOT / "examples/trip-charge-package.yaml"
 CARD_PATH = ROOT / "examples/trip-charge-card.yaml"
@@ -483,6 +485,7 @@ def build_card() -> dict:
                 "policy, including its keepalive. Changing the date or target after charging "
                 "starts cancels that trip. If charging is interrupted, re-arm deliberately.",
             },
+            build_trip_impact_card(),
         ],
     }
 

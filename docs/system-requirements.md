@@ -18,7 +18,9 @@ native force-power number entities in kW. It needs no third-party price
 integration. Observation and automatic export are separate default-off
 requests. Exclusive Local Modbus ownership and the existing control gates
 remain mandatory; a price reading cannot prove a VPP is disabled or that a
-retailer payment applies.
+retailer payment applies. The configurable sell threshold is inclusive:
+the current source price must be at or above it (default $3/kWh). Automatic
+price-triggered buying is not included.
 
 ## Required for the retained feature set
 
@@ -304,6 +306,9 @@ EV control enabled and Safety Lock off. It uses HEO's runtime efficiency and
 Full timeout; there are no helper copies to keep in sync. A separate legacy
 trip dispatcher must be retired deliberately before arming the built-in one.
 The departure/SoC estimate does not guarantee exact physical completion.
+The optional Trip impact display also needs valid existing house/battery
+budgets and saved import tariffs. It estimates extra paid energy only until
+the next free window; it adds no forecasting provider or control dependency.
 
 For a single read-only dashboard covering several installations, use the
 versioned Fleet Summary entity and Home Assistant's standard REST state API as

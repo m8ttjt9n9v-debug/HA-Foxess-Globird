@@ -333,7 +333,7 @@ class ActiveFoxessController:
             or result.region != config.region
             or not result.price_trigger_valid
             or result.price_per_kwh is None
-            or not result.price_per_kwh > config.export_threshold_per_kwh
+            or not result.price_per_kwh >= config.export_threshold_per_kwh
             or result.interval_start is None
             or result.interval_end is None
             or not result.interval_start <= now < result.interval_end

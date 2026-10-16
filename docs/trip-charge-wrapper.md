@@ -45,9 +45,85 @@ waiting replan. An already-at-target waiting schedule stays armed until departur
 in case the SoC falls, but a completed trip is consumed. Weekly repetition is
 not implemented.
 
+### Unplugging and reconnecting
+
+In the built-in v0.12.32 scheduler, if HEO detects the car being unplugged or
+loses confirmed home/cable evidence **after the trip override has started**, it
+withdraws only that trip's Full request, reports **Interrupted**, and switches
+the one-off schedule off. Plugging back in does not automatically resume that
+trip. To continue it, check the departure and target, then deliberately enable
+the schedule again. Normal HEO charging policies can still operate independently
+after reconnect; that is not resumption of the interrupted trip.
+
+If the scheduled override **has not started**, the armed schedule can wait for
+the car and re-evaluate on reconnect before departure. A passed departure
+expires instead of starting a late unexpected paid charge. A very brief physical
+unplug that never reaches Home Assistant telemetry is not a detected interruption.
+
+Tariff-aware rates, ZEROHERO credit trade-offs and resumable temporary pauses
+are deferred design work in the [roadmap](../ROADMAP.md), not current behaviour.
+
 For DD/MM/YYYY, choose **Profile → General → Date format → day/month/year**.
 The stored instant follows Home Assistant's timezone rather than a fixed UTC
 offset, including daylight-saving transitions.
+
+### Estimated trip impact
+
+The reusable Trip Charge view includes a read-only **Estimated trip impact**
+card. Its cost is **extra paid electricity before the next free-power window**,
+not the whole trip price. It never changes the start, target, charge rate,
+reserve, control switches or charging owner.
+
+It shows charging energy including losses, the part scheduled before free
+power, the house battery available after expected house use, and the remaining
+paid-energy shortfall. It uses the selected scheduler's actual plan, the
+shared EV capacity/efficiency and HEO's existing remaining house-energy budget.
+The Full override can spend normal additional reserves, so the estimate starts
+with battery energy above the configured minimum floor, converts it to AC
+energy using discharge efficiency, and deducts expected house use exactly once.
+Using the house battery for the car can move later house consumption onto the
+grid; that displaced demand is included rather than calling battery energy
+unconditionally free. Timing margin moves the start but is not extra energy.
+
+Cost uses the site's saved paid import tariffs. If multiple rates may apply
+before free power, it displays a range instead of pretending to know the exact
+time that a house-versus-car shortfall will occur. Daily supply charges, lost
+export revenue and ZEROHERO credits are excluded. Future solar and export,
+inverter headroom, BMS restrictions, taper and unusual house demand can change
+the result. This is a planning estimate, not a bill quote or electrical guarantee.
+
+Energy scheduled during and after the free window is listed separately. The
+current battery balance is not carried unchanged through that recharge window
+to invent a later cost. When the trip starts after the next free window, or
+free power is already underway, the card explicitly says that this pre-free
+cost estimate does not apply. Missing inputs are unavailable, not $0.
+
+HACS supplies the read-only `energy_impact` attribute on the existing Trip
+status entity; no new setting, storage journal or actuator is added. For an
+existing standard helper wrapper, it validates that helper plan against its
+current target/departure and shared EV inputs, and labels the source **legacy**.
+It does not adopt that wrapper's Full ownership, enable native scheduling,
+or hide the intentional native `legacy_conflict`. Custom/renamed or stale
+helper plans are not guessed. Existing dashboards require an explicit card
+import; an older HEO version without the attribute shows an unavailable message.
+Failed ledger refreshes or invalid/stale canonical grid, battery or house-power
+evidence withhold the cost. Stable SoC retains the source controller's value
+semantics rather than receiving a new fast-poll clock. The calculation timestamp
+is not a claim that every unchanged source value was newly measured. Expired,
+unowned requests cannot be presented as a new future charge.
+
+| Existing input | Estimate use |
+| --- | --- |
+| Native Trip plan, or validated published helper plan | Current target, capacity, efficiency and start; neither planner is replaced |
+| Canonical ledger above the configured battery floor | DC energy converted once using existing discharge efficiency |
+| Remaining learned/fallback house budget | Existing non-free-cycle house protection, deducted once |
+| Configured free/peak windows and import tariffs | Before/during/after split and paid pre-free cost bounds |
+
+Automated tests cover energy versus timing margin, house protection, conversion
+losses, tariff boundaries, midnight/DST, free-window crossover, invalid inputs,
+helper-plan mismatch, read-only native integration and card rendering. They
+do not prove a future physical charging result. Release and controlled site
+installation remain separate from local implementation.
 
 ### Existing helper installations
 

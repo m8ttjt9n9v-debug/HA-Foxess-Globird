@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "extension": "trip_impact_v1",
+  "entity_count": 0,
+  "entities": [],
+  "attribute_addition_count": 1,
+  "attribute_additions": [
+    {
+      "entity_key": "trip_charge_status",
+      "default_entity_id": "sensor.home_energy_trip_charge_status",
+      "custom_attributes": ["energy_impact"]
+    }
+  ]
+}

@@ -309,7 +309,7 @@ def parse_aemo_summary(
         return replace(result, status="market_suspended")
     if apc:
         return replace(result, status="administered_pricing")
-    if price / 1000 > configuration.export_threshold_per_kwh:
+    if price / 1000 >= configuration.export_threshold_per_kwh:
         return replace(result, status="possible_export_event")
     if (
         configuration.import_threshold_per_kwh is not None
@@ -879,7 +879,7 @@ class AemoMarketMonitor(DataUpdateCoordinator[AemoMonitorResult]):
             status = "market_suspended"
         elif newest.apc_flag:
             status = "administered_pricing"
-        elif newest.price_per_kwh > configuration.export_threshold_per_kwh:
+        elif newest.price_per_kwh >= configuration.export_threshold_per_kwh:
             status = "possible_export_event"
         elif (
             configuration.import_threshold_per_kwh is not None

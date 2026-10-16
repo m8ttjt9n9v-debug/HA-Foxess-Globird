@@ -7,7 +7,7 @@ EV, or the battery reserve. Price monitoring and automatic price-triggered
 export are both off by default.
 
 This is a price rule, not confirmation of a retailer critical event. A price
-above your threshold does not prove that your retailer will pay a particular
+at or above your threshold does not prove that your retailer will pay a particular
 amount. Check your plan and participation conditions before enabling it.
 
 ## Choose the price rule
@@ -16,8 +16,9 @@ In **Reconfigure → AEMO prices and export**, enable **AEMO price monitoring**,
 select your NEM region, and set the export threshold in Australian dollars per
 kWh. NSW, including the Illawarra, uses `NSW1`. The starting threshold is
 `$3.00/kWh`; this is a configurable operating choice, not an official GloBird
-event definition. Exactly $3.00 does not trigger a rule set to greater than
-$3.00.
+event definition. A price of exactly $3.00 qualifies when the threshold is
+$3.00; anything below it does not. This comparison uses the source price,
+not a rounded dashboard display.
 
 First leave **Automatic price-triggered export** off and observe the price,
 source status, and expiry. Enable it only after commissioning exclusive Local
@@ -31,7 +32,7 @@ is observation only; there is no price-triggered buying in this implementation.
 
 ## What HEO does
 
-When a valid current price exceeds the threshold, HEO checks the same energy
+When a valid current price reaches or exceeds the threshold, HEO checks the same energy
 protections used for ordinary export. It also checks fresh battery, grid,
 house-load and SoC evidence, the remaining daily automatic-export budget, and
 the EV-before-export policy. Missing or uncertain evidence prevents a start.
@@ -62,6 +63,10 @@ never extended. HEO begins restoration slightly before it expires. It also
 restores Self Use and clears both forced targets when the price falls, the
 feed expires or fails, safe Sellable runs out, or the price-export request is
 turned off.
+
+A price falling to exactly the threshold still qualifies. Falling below it
+withdraws price permission; there is no extra price deadband or rounded-price
+comparison. The same inclusive rule applies after restart and report correction.
 
 Consecutive high-price blocks do not silently renew the old session. HEO first
 confirms Self Use and cleared targets, then rechecks current evidence before

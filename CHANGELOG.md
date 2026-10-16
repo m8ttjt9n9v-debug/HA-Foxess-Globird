@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.12.34 — Trip energy estimates and inclusive price export
+
+- Add a read-only Trip impact display: charging energy, expected battery
+  contribution and additional paid electricity/cost before the next free
+  window, using existing house protection and saved tariffs. Show later energy
+  separately; do not change charging policy or claim a whole-trip price.
+- Include the same estimate in the reusable native and helper-based Trip
+  dashboard cards. Existing dashboards require an explicit card import;
+  existing schedules, control switches and price-export intent are preserved.
+- Qualify automatic price-triggered export at or above the configured threshold
+  (default $3/kWh), including exactly the threshold. Align current observations,
+  report-replay protection and the live inverter command guard.
+- Preserve protected Sellable energy, the shared daily export cap, fixed price
+  deadlines, default-off intent and existing ownership/safety gates. Add
+  exact/adjacent-price and Home Assistant setup/reload regressions.
+- No automatic price-triggered buying is included; that request was withdrawn.
+
 ## 0.12.33 — Reliable EV planning-capacity inputs
 
 - Add an explicit EV planning-capacity source and optional numeric fallback.

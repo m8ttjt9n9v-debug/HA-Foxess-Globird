@@ -149,13 +149,15 @@ async def price_rig(hass, monkeypatch, freezer):
     await hass.async_block_till_done(wait_background_tasks=True)
 
 
-async def test_price_starts_outside_normal_window_and_fall_restores_same_owner(price_rig):
+@pytest.mark.parametrize("price", [3, 3.00001, 4])
+async def test_price_starts_outside_normal_window_and_fall_restores_same_owner(price_rig, price):
     rig = price_rig
+    rig.result.price_per_kwh = price
     await rig.active.async_reconcile()
     assert rig.calls == [(DISCHARGE, 15), (MODE, "Force Discharge")]
     assert rig.active.export_session.authority_source == "price"
     assert rig.active.export_plan.sellable_energy_kwh > 0
-    rig.result.price_per_kwh = 3
+    rig.result.price_per_kwh = 2.99999
     await rig.active.async_reconcile()
     assert rig.calls[-2:] == [(MODE, "Self Use"), (DISCHARGE, 0)]
     await rig.active.async_reconcile()
@@ -211,12 +213,12 @@ async def test_legacy_paid_full_on_during_settlement_fences_price_force_mode(
 
 
 @pytest.mark.parametrize(
-    "problem", ["equal_three", "zero", "stale", "sellable_zero", "cap", "daily_missing", "unit"]
+    "problem", ["below_three", "zero", "stale", "sellable_zero", "cap", "daily_missing", "unit"]
 )
 async def test_price_admission_fails_closed_from_current_evidence(price_rig, problem):
     rig = price_rig
-    if problem == "equal_three":
-        rig.result.price_per_kwh = 3
+    if problem == "below_three":
+        rig.result.price_per_kwh = 2.99999
     elif problem == "zero":
         rig.result.price_per_kwh = 0
     elif problem == "stale":
@@ -394,7 +396,10 @@ async def test_restart_cannot_move_original_price_ownership_to_changed_actuators
         await restarted.async_stop()
 
 
-async def test_price_fall_during_settlement_cannot_issue_a_late_force_mode(price_rig, monkeypatch):
+@pytest.mark.parametrize("price", [2.99999, 3])
+async def test_price_rechecked_during_settlement_at_inclusive_boundary(
+    price_rig, monkeypatch, price,
+):
     rig = price_rig
     entered, release = asyncio.Event(), asyncio.Event()
 
@@ -407,8 +412,12 @@ async def test_price_fall_during_settlement_cannot_issue_a_late_force_mode(price
     monkeypatch.setattr(FoxessServiceAdapter, "_async_execute_command", settle)
     start = asyncio.create_task(rig.active.async_reconcile())
     await entered.wait()
-    rig.result.price_per_kwh = 3
+    rig.result.price_per_kwh = price
     release.set()
+    if price == 3:
+        await start
+        assert (MODE, "Force Discharge") in rig.calls
+        return
     with pytest.raises(FoxessWriteBlocked):
         await start
     await rig.active.async_reconcile()

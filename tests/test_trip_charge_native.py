@@ -185,6 +185,19 @@ async def test_default_is_disarmed_without_helper_or_hardware_installation(trip_
     assert not any(s.entity_id.startswith("input_") for s in site.hass.states.async_all())
 
 
+async def test_trip_impact_projects_without_changing_request_or_writing(trip_site):
+    site = await trip_site(soc=20, capacity=60)
+    await _arm(site, target=80)
+    before = (site.trip._state, site.trip._plan, list(site.calls))
+    impact = site.trip.attributes["energy_impact"]
+    assert impact["source"] == "native"
+    assert impact["status"] == "estimated"
+    assert impact["wall_energy_kwh"] == pytest.approx(40)
+    assert impact["cost_min"] is not None
+    assert before == (site.trip._state, site.trip._plan, site.calls)
+    assert not site.trip.owns_full
+
+
 @pytest.mark.parametrize("target", [1, 80, 90, 100])
 @pytest.mark.parametrize("phases,voltage", [(1, 225), (3, 230)])
 async def test_selected_target_math_uses_heo_capacity_and_configured_maximum(

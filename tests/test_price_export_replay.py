@@ -38,7 +38,7 @@ def test_repeated_spikes_cannot_regrant_spent_energy(spend):
         end = start + timedelta(minutes=5)
         context = _context(
             now=start, price_interval_start=start, price_interval_end=end,
-            price_export_enabled=price > 3,
+            price_export_enabled=price >= 3,
             available_after_reserve_kwh=(6 + budget - exported) if spend == "sellable" else 30,
             automatic_limit_kwh=budget if spend == "daily_cap" else 25,
             exported_kwh=exported, session=state,
@@ -56,7 +56,7 @@ def test_repeated_spikes_cannot_regrant_spent_energy(spend):
             assert state.phase == "idle"
             assert not transition.plan.commands
             continue
-        assert price > 3
+        assert price >= 3
         positive_starts += 1
         assert state.price_deadline < end
         seconds = (state.price_deadline - start).total_seconds()

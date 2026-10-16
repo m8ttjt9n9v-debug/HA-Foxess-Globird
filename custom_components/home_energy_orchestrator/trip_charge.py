@@ -26,6 +26,7 @@ from .const import (
 from .ev_observation_adapter import capture_ev_entity_feedback
 from .persistence import create_typed_value_repository
 from .planner.trip_charge import TripChargeState, calculate_trip_charge_plan
+from .trip_impact import build_trip_energy_impact
 
 
 class TripChargeController:
@@ -104,6 +105,7 @@ class TripChargeController:
             "owner_token": self._state.owner_token,
             "cleanup_pending": self._state.cleanup_pending,
             "legacy_conflict": self._legacy_conflict(),
+            "energy_impact": build_trip_energy_impact(self),
             "storage_status": "invalid"
             if self._invalid_storage
             else (

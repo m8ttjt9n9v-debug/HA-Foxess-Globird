@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "extension": "trip_impact_v1",
+  "entity_count": 0,
+  "entities": [],
+  "attribute_profiles": {},
+  "attribute_profile_additions": {
+    "trip_charge_v1": {
+      "energy_impact": "Read-only before-next-free-window estimate for the native Trip request or the validated standard legacy helper plan, with explicit source/scope/status/time, remaining pack/wall energy, before/during/after-free energy, battery surplus after configured floor and existing house forecast once, incremental paid-energy liability and configured-tariff cost bounds. Missing/invalid/out-of-scope costs are null, not free. No current battery pool is carried through free charging, no later cost or retailer payment is implied, and no value grants control authority."
+    }
+  }
+}
