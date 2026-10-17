@@ -729,10 +729,15 @@ class TripChargeController:
                 return await self._finish_locked("cancelled")
             if soc is not None and soc >= state.captured_target:
                 return await self._finish_locked("completed")
-            if not self._ev._connected_at_home()[0]:
-                if self._ev._disconnection_is_verified():
-                    return await self._pause_locked()
-                return await self._finish_locked("interrupted", stop_reason="invalid_data")
+            connected = self._ev._connected_at_home()[0]
+            if not connected and self._ev._disconnection_is_verified():
+                return await self._pause_locked()
+            if self._ev.full_startup_evidence_pending or not connected:
+                # A restored upstream integration may populate home/cable
+                # before its SoC and actuator observations. Keep this existing
+                # lease and original deadline, without admitting a new command.
+                self._state = replace(state, status="waiting_for_data")
+                return False
             if soc is None:
                 return await self._finish_locked("interrupted")
             self._state = replace(

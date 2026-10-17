@@ -123,3 +123,13 @@ def test_01235_describes_pause_boundaries_and_live_setting_preservation() -> Non
     assert "newer live" in notes and "final schedule confirmation" in notes
     assert "explicit" in notes and "does not silently migrate" in notes
     assert not Version("0.12.35").is_prerelease
+
+
+def test_01236_describes_startup_hold_without_new_budget_or_activation() -> None:
+    title, notes = release_text("v0.12.36", CHANGELOG_PATH.read_text(encoding="utf-8"))
+    assert title == "v0.12.36 — Preserve trip charging during startup"
+    assert "already-enabled" in notes and "initial vehicle telemetry" in notes
+    assert "without new EV commands" in notes and "absolute timeout" in notes
+    assert "Do not automatically re-arm" in notes
+    assert "does not migrate helpers or overwrite live dashboards" in notes
+    assert not Version("0.12.36").is_prerelease

@@ -2,6 +2,7 @@
 
 import json
 from datetime import UTC, datetime
+from itertools import permutations
 
 import pytest
 from homeassistant.components.automation.config import async_validate_config_item
@@ -15,6 +16,7 @@ from scripts.trip_charge_wrapper import (
     CAPACITY,
     CONTROL,
     EFFICIENCY,
+    EV_STATUS,
     GENERATION,
     LOCK,
     MARGIN,
@@ -86,6 +88,7 @@ async def _setup(
     native_attributes=None,
     location_state="home",
     cable_state="on",
+    startup_pending=False,
 ):
     await hass.config.async_set_time_zone("Australia/Sydney")
     package = build_package(
@@ -106,7 +109,13 @@ async def _setup(
     ):
         hass.states.async_set(entity, value)
     hass.states.async_set(
-        "sensor.home_energy_ev_control_status", "feedback_confirmed", {"gate": "ready"}
+        EV_STATUS,
+        "feedback_confirmed",
+        {
+            "gate": "ready",
+            "startup_feedback_pending": startup_pending,
+            "charge_switch_on": None if startup_pending else True,
+        },
     )
     hass.states.async_set(
         NATIVE_STATUS, "legacy_conflict", native_attributes or {"full_generation": 0}
@@ -1002,3 +1011,115 @@ async def test_active_checkpoint_waits_for_temporarily_unavailable_generation(ha
     await hass.async_block_till_done()
     assert calls == ["turn_on", "turn_off"]
     assert hass.states.get(STATUS).state == "Completed"
+
+
+def _restored_owned_checkpoint():
+    record = {
+        "v": 1,
+        "first": NOW.timestamp() - 2 * 3600,
+        "expires": NOW.timestamp() + 14 * 3600,
+        "generation": 1,
+        "paused": False,
+    }
+    return [*_restored_trip(owned=True), State(RESUME, json.dumps(record))], record
+
+
+@pytest.mark.freeze_time(NOW, real_asyncio=True)
+@pytest.mark.parametrize("order", list(permutations(("home", "cable", "soc", "charge"))))
+async def test_restored_startup_waits_for_shared_cohort_in_every_source_order(hass, order):
+    restored, record = _restored_owned_checkpoint()
+    _, calls = await _setup(
+        hass,
+        soc="unavailable",
+        restore_states=restored,
+        override_state="on",
+        native_attributes={"full_generation": 1},
+        location_state="unavailable",
+        cable_state="unknown",
+        startup_pending=True,
+    )
+    await hass.async_start()
+    await hass.async_block_till_done()
+    assert hass.states.get(ARMED).state == hass.states.get(OWNED).state == "on"
+    assert hass.states.get(STATUS).state == "Waiting for data"
+    for source in order:
+        if source == "home":
+            hass.states.async_set("device_tracker.test_ev", "home")
+        elif source == "cable":
+            hass.states.async_set("binary_sensor.test_cable", "on")
+        elif source == "soc":
+            hass.states.async_set(SOC, "80", {"unit_of_measurement": "%"})
+        else:
+            attributes = dict(hass.states.get(EV_STATUS).attributes)
+            attributes["charge_switch_on"] = True
+            hass.states.async_set(EV_STATUS, "feedback_confirmed", attributes)
+        await hass.async_block_till_done()
+        assert calls == []
+        assert hass.states.get(ARMED).state == hass.states.get(OWNED).state == "on"
+        assert _resume_record(hass) == record
+    attributes = dict(hass.states.get(EV_STATUS).attributes)
+    attributes["startup_feedback_pending"] = False
+    hass.states.async_set(EV_STATUS, "feedback_confirmed", attributes)
+    await hass.async_block_till_done()
+    assert calls == []
+    assert hass.states.get(STATUS).state == "Override active"
+    assert _resume_record(hass) == record
+    # Once established, target completion still withdraws only this owned Full.
+    hass.states.async_set(SOC, "90", {"unit_of_measurement": "%"})
+    await hass.async_block_till_done()
+    assert calls == ["turn_off"]
+    assert hass.states.get(STATUS).state == "Completed"
+
+
+@pytest.mark.freeze_time(NOW, real_asyncio=True)
+@pytest.mark.parametrize("pending", [True, None])
+async def test_missing_or_pending_startup_marker_holds_but_does_not_extend_expiry(
+    hass,
+    freezer,
+    pending,
+):
+    restored, record = _restored_owned_checkpoint()
+    _, calls = await _setup(
+        hass,
+        soc="unknown",
+        restore_states=restored,
+        override_state="on",
+        native_attributes={"full_generation": 1},
+        location_state="unknown",
+        cable_state="unavailable",
+        startup_pending=pending,
+    )
+    await hass.async_start()
+    await hass.async_block_till_done()
+    assert calls == []
+    assert hass.states.get(OWNED).state == "on"
+    await _tick(hass, freezer, datetime.fromtimestamp(record["expires"], UTC))
+    assert calls == ["turn_off"]  # Reducing expiry, never a new paid start.
+    assert hass.states.get(ARMED).state == hass.states.get(OWNED).state == "off"
+    assert hass.states.get(STATUS).state == "Expired"
+
+
+@pytest.mark.freeze_time(NOW, real_asyncio=True)
+@pytest.mark.parametrize("bad_soc", ["unknown", "unavailable", "101", "-1"])
+async def test_established_restored_cohort_keeps_invalid_soc_terminal(hass, bad_soc):
+    restored, _ = _restored_owned_checkpoint()
+    _, calls = await _setup(
+        hass,
+        soc=80,
+        restore_states=restored,
+        override_state="on",
+        native_attributes={"full_generation": 1},
+        startup_pending=True,
+    )
+    await hass.async_start()
+    await hass.async_block_till_done()
+    attributes = dict(hass.states.get(EV_STATUS).attributes)
+    attributes["startup_feedback_pending"] = False
+    hass.states.async_set(EV_STATUS, "feedback_confirmed", attributes)
+    await hass.async_block_till_done()
+    assert calls == []
+    hass.states.async_set(SOC, bad_soc, {"unit_of_measurement": "%"})
+    await hass.async_block_till_done()
+    assert calls == ["turn_off"]
+    assert hass.states.get(STATUS).state == "Interrupted"
+    assert hass.states.get(ARMED).state == "off"

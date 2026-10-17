@@ -157,6 +157,10 @@ duplicate helpers, second controller or competing configuration source.
 
 ### Trip interruption recovery
 
+- [x] Distinguish unavailable startup feedback from a confirmed disconnect.
+  Use one shared EV startup classification in both schedulers; test phased
+  source arrivals and original-timeout expiry without a new grace timer.
+
 - [x] Retain an outstanding trip across a confirmed temporary unplug or away
   interval, without EV writes while away. Re-evaluate on qualified reconnect
   before departure using the original target and absolute timeout; do not

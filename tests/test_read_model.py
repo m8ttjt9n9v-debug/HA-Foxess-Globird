@@ -591,11 +591,20 @@ def test_ev_control_attributes_preserve_existing_public_values() -> None:
         "charge_to_full_started_at": datetime(
             2026, 9, 17, 8, 30, tzinfo=UTC
         ),
+        "startup_feedback_pending": False,
         "driving_learning_mode": "learned",
         "driving_learning_samples": 3,
         "driving_p85_kwh": 11.0,
         "learned_general_limit_percent": 82,
     }
+
+
+@pytest.mark.parametrize("pending", [False, True])
+def test_ev_startup_status_projects_shared_controller_evidence(pending) -> None:
+    coordinator = _coordinator()
+    coordinator.ev_controller.full_startup_evidence_pending = pending
+    model = build_site_read_model(coordinator)
+    assert model.ev.control_attributes()["startup_feedback_pending"] is pending
 
 
 def test_export_revenue_attributes_use_authoritative_accounting_components() -> None:

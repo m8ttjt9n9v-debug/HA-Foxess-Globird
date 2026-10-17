@@ -546,6 +546,7 @@ class EvReadModel:
     learned_charge_limit_percent: float | None
     learning_status: str
     charge_to_full_started_at: datetime | None
+    startup_feedback_pending: bool
 
     def sensor_values(self) -> dict[str, object]:
         """Project the existing EV entity states."""
@@ -642,6 +643,7 @@ class EvReadModel:
             ),
             "daily_backfill_frozen_start": self.daily_backfill_frozen_start,
             "charge_to_full_started_at": self.charge_to_full_started_at,
+            "startup_feedback_pending": self.startup_feedback_pending,
             "driving_learning_mode": self.learning_status,
             "driving_learning_samples": self.learning_samples,
             "driving_p85_kwh": self.driving_p85_kwh,
@@ -1078,6 +1080,7 @@ def _build_ev_read_model(
             learned_charge_limit_percent=None,
             learning_status="unavailable",
             charge_to_full_started_at=None,
+            startup_feedback_pending=False,
         )
     grid_average = controller.grid_average.result(now)
     actual_average = controller.ev_average.result(now)
@@ -1187,6 +1190,7 @@ def _build_ev_read_model(
         ),
         learning_status="unavailable" if learned is None else learned.mode,
         charge_to_full_started_at=controller.charge_to_full_started_at,
+        startup_feedback_pending=getattr(controller, "full_startup_evidence_pending", False),
     )
 
 

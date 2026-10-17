@@ -15,6 +15,17 @@ changed; this file records the authority order, supported behavior, and rules
 future work must preserve. Site addresses, credentials, incident chronology,
 and private operational evidence belong only in the local private record.
 
+## Restored EV intent while startup feedback loads
+
+From v0.12.36, an already-enabled restored Full request waits while its initial
+vehicle/actuator feedback is still loading. One shared EV startup-evidence
+classification is used by EV control, native Trip and the published legacy
+dispatcher. Missing startup evidence is not a confirmed unplug and cannot
+authorise new EV commands. The original timeout continues counting. Confirmed
+absence, deliberate cancellation/replacement, completion, expiry and established
+invalid-data safeguards remain authoritative. A consumed request is not
+automatically re-armed by an upgrade.
+
 ## Authority order
 
 1. Direct inverter registers and measured electrical behavior.

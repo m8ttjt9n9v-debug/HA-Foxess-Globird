@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.12.36 — Preserve trip charging during startup
+
+- Preserve an already-enabled Full request while its initial vehicle telemetry
+  is still loading after Home Assistant or integration startup. Distinguish
+  missing startup evidence from a confirmed unplug, away state or invalid value.
+- Share one startup-feedback status between EV control, native Trip and the
+  published legacy dispatcher. Wait without new EV commands; retain the original
+  Full start and absolute timeout rather than granting a new charging budget.
+- Keep confirmed-disconnect pause/resume, deliberate cancellation, replacement
+  ownership, target completion, timeout and established invalid-data safeguards.
+  Do not automatically re-arm a request that was already consumed.
+- Add ordered startup-source, restoration, expiry and late-feedback regressions
+  alongside the existing free-window handoff and concurrent-settings tests.
+  Existing legacy installations still require the matching dispatcher update;
+  HACS does not migrate helpers or overwrite live dashboards.
+
 ## 0.12.35 — Resume paused trips and preserve live settings
 
 - Keep an outstanding Trip request across a confirmed temporary unplug or

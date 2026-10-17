@@ -38,6 +38,9 @@ TRIP_IMPACT_EXTENSIONS_PATH = (
 TRIP_RESUME_EXTENSIONS_PATH = (
     REPOSITORY_ROOT / "docs" / "maintainability" / "entity-semantics-trip-resume-v1.json"
 )
+EV_STARTUP_EXTENSIONS_PATH = (
+    REPOSITORY_ROOT / "docs" / "maintainability" / "entity-semantics-ev-startup-v1.json"
+)
 
 _REQUIRED_FIELDS = {
     "key",
@@ -84,6 +87,7 @@ def load_semantic_contract() -> dict[str, Any]:
         MANUAL_EXTENSIONS_PATH, AEMO_EXTENSIONS_PATH, PRICE_EXTENSIONS_PATH,
         TRIP_EXTENSIONS_PATH, EV_CAPACITY_EXTENSIONS_PATH, TRIP_IMPACT_EXTENSIONS_PATH,
         TRIP_RESUME_EXTENSIONS_PATH,
+        EV_STARTUP_EXTENSIONS_PATH,
     ):
         extension = json.loads(path.read_text(encoding="utf-8"))
         if extension.get("schema_version") != baseline.get("schema_version"):

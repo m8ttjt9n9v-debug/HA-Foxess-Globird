@@ -24,6 +24,7 @@ STARTED_TARGET = "input_number.heo_trip_started_target"
 GENERATION = "input_text.heo_trip_full_generation"
 RESUME = "input_text.heo_trip_resume_state"
 NATIVE_STATUS = "sensor.home_energy_trip_charge_status"
+EV_STATUS = "sensor.home_energy_ev_control_status"
 ARMED = "input_boolean.heo_trip_charge_scheduled"
 OWNED = "input_boolean.heo_trip_charge_started"
 TARGET = "input_select.heo_trip_target_soc"
@@ -132,6 +133,14 @@ def _full_generation() -> str:
     )
 
 
+def _startup_feedback_pending() -> str:
+    """Use HEO's shared startup-cohort decision; missing evidence is not ready."""
+    return (
+        f"(not has_value('{EV_STATUS}') or "
+        f"state_attr('{EV_STATUS}', 'startup_feedback_pending') is not sameas false)"
+    )
+
+
 def _finish(label: str, *, clear_override=False) -> list[dict]:
     result = []
     if clear_override:
@@ -218,6 +227,11 @@ def build_package(
         "and full_generation == resume_record.get('generation') + 1"
     )
     branches = [
+        # Time spent restarting or waiting for telemetry still spends the same budget.
+        _branch(
+            "owned and resume_valid and now_ts >= resume_record.get('expires')",
+            _finish("Expired", clear_override=True),
+        ),
         # A confirmed OFF event ends our intent even if a human has already
         # turned Full back ON before this queued run. Do not stop their new ON.
         _branch(
@@ -261,12 +275,9 @@ def build_package(
             "or target != started_target)",
             _finish("Cancelled", clear_override=True),
         ),
+        _branch("owned and startup_feedback_pending", [_status("Waiting for data")]),
         _branch("owned and not soc_valid", _finish("Interrupted", clear_override=True)),
         _branch("owned and soc >= started_target", _finish("Completed", clear_override=True)),
-        _branch(
-            "owned and resume_valid and now_ts >= resume_record.get('expires')",
-            _finish("Expired", clear_override=True),
-        ),
         _branch("owned and not override_on", _finish("Interrupted")),
         _branch(
             "owned and due <= now_ts",
@@ -398,6 +409,7 @@ def build_package(
             {"trigger": "state", "entity_id": OVERRIDE, "from": None, "id": "full_changed"},
             {"trigger": "state", "entity_id": [location_entity, cable_entity], "from": None},
             {"trigger": "state", "entity_id": NATIVE_STATUS},
+            {"trigger": "state", "entity_id": EV_STATUS, "attribute": "startup_feedback_pending"},
         ],
         "conditions": [
             _condition(
@@ -414,7 +426,9 @@ def build_package(
                     _condition(
                         f"is_state('{OWNED}', 'on') and ("
                         "(trigger is defined and trigger.get('id') == 'startup') or "
-                        f"states('{OVERRIDE}') not in ['on', 'off'])"
+                        f"states('{OVERRIDE}') not in ['on', 'off'] or "
+                        + _startup_feedback_pending()
+                        + ")"
                     )
                 ],
                 "then": [_action("input_text.set_value", GENERATION, value="restoring")],
@@ -449,6 +463,7 @@ def build_package(
                     "override_on": f"{{{{ is_state('{OVERRIDE}', 'on') }}}}",
                     "override_state": f"{{{{ states('{OVERRIDE}') }}}}",
                     "owns_current_full": "{{ " + _owns_current_full() + " }}",
+                    "startup_feedback_pending": "{{ " + _startup_feedback_pending() + " }}",
                     "resume_record": "{% set record = states('"
                     + RESUME
                     + "') | from_json({}) %}{{ record if record is mapping else {} }}",
@@ -484,6 +499,7 @@ def build_package(
                     f"and is_state('{LOCK}', 'off') "
                     f"and state_attr('{NATIVE_STATUS}', 'full_generation') is integer "
                     f"and states['{RESUME}'] is not none "
+                    "and not " + _startup_feedback_pending() + " "
                     "and state_attr('sensor.home_energy_ev_control_status', 'gate') "
                     "== 'ready' }}",
                 }

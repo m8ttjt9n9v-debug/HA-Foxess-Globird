@@ -790,18 +790,26 @@ async def test_actual_config_entry_reload_preserves_owned_trip_and_releases_at_t
         ("binary_sensor.car_cable", "unknown"),
     ],
 )
-async def test_owned_disconnect_consumes_trip_and_withdraws_only_its_full(trip_site, entity, state):
+async def test_uncertain_connection_holds_owned_trip_without_commands(trip_site, entity, state):
     site = await trip_site()
     await _start(site)
+    original = site.trip._state
+    timer = site.ev.charge_to_full_started_at
+    commands = list(site.calls)
     site.hass.states.async_set(entity, state)
     await _reconcile(site)
-    assert not site.ev._charge_to_full_requested()
-    assert not site.trip.armed and not site.trip.owns_full
-    assert site.trip.status == "interrupted"
+    assert site.ev._charge_to_full_requested()
+    assert site.trip.armed and site.trip.owns_full
+    assert site.trip.status == "waiting_for_data"
+    assert site.trip._state.full_generation == original.full_generation
+    assert site.trip._state.timeout_at == original.timeout_at
+    assert site.ev.charge_to_full_started_at == timer
+    assert site.calls == commands
     site.hass.states.async_set("device_tracker.car", "home")
     site.hass.states.async_set("binary_sensor.car_cable", "on")
     await _reconcile(site)
-    assert not site.ev._charge_to_full_requested()
+    assert site.trip.armed and site.trip.owns_full and site.ev._charge_to_full_requested()
+    assert site.trip._state.full_generation == original.full_generation
 
 
 @pytest.mark.parametrize("entity,state", [
@@ -977,15 +985,15 @@ async def test_old_lease_cleanup_cannot_stop_a_resumed_trip(trip_site):
     assert site.trip.owns_full and site.ev._charge_to_full_requested()
 
 
-@pytest.mark.parametrize("stop_reason", ["disconnected", "invalid_data", "timeout", "completed"])
+@pytest.mark.parametrize("stop_reason", ["disconnected", "timeout", "completed"])
 async def test_operator_full_stop_provenance_is_bound_to_its_on_generation(trip_site, stop_reason):
     site = await trip_site()
     await site.ev.async_request_charge_to_full(True, reconcile=False)
     generation = site.trip._state.full_generation
-    if stop_reason in {"disconnected", "invalid_data"}:
+    if stop_reason == "disconnected":
         site.ev.charge_to_full_started_at = NOW
         site.hass.states.async_set(
-            "binary_sensor.car_cable", "off" if stop_reason == "disconnected" else "unknown",
+            "binary_sensor.car_cable", "off",
         )
     elif stop_reason == "timeout":
         site.ev.charge_to_full_started_at = NOW - timedelta(hours=13)

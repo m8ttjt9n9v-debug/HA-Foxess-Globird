@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "extension": "ev_startup_v1",
+  "entity_count": 0,
+  "entities": [],
+  "attribute_addition_count": 1,
+  "attribute_additions": [
+    {
+      "entity_key": "ev_control_status",
+      "default_entity_id": "sensor.home_energy_ev_control_status",
+      "custom_attributes": ["startup_feedback_pending"]
+    }
+  ]
+}

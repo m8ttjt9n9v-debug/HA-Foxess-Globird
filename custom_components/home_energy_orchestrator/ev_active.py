@@ -271,6 +271,7 @@ class ActiveEvController:
         self._unsub_driving_snapshot: CALLBACK_TYPE | None = None
         self._started_at: datetime | None = None
         self._startup_grid_recovery_pending = False
+        self._full_startup_evidence_required = self._charge_to_full_requested()
         self._lock = asyncio.Lock()
         self._adapter: EvServiceAdapter | None = self._create_adapter()
         self._repository = create_typed_value_repository(
@@ -356,9 +357,31 @@ class ActiveEvController:
             adapter_connected=self._adapter is not None,
         )
 
+    @property
+    def full_startup_evidence_pending(self) -> bool:
+        """Restore Full intent only after its first complete source cohort.
+
+        This lifecycle latch has no grace period and grants no write authority.
+        Explicit absence wins immediately; available-but-invalid SoC is not a
+        startup outage and remains visible to ordinary terminal validation.
+        """
+        if not self._full_startup_evidence_required:
+            return False
+        if not self._charge_to_full_requested() or self._disconnection_is_verified():
+            self._full_startup_evidence_required = False
+        elif (
+            self._connected_at_home()[0]
+            and self._mapped_state(self.coordinator.runtime_config.ev_telemetry.soc_entity)
+            is not None
+            and self._observation() is not None
+        ):
+            self._full_startup_evidence_required = False
+        return self._full_startup_evidence_required
+
     async def async_start(self) -> None:
         self._started_at = dt_util.now()
         await self._async_restore()
+        self._full_startup_evidence_required = self._charge_to_full_requested()
         if self._unsub_interval is None:
             self._unsub_interval = async_track_time_interval(
                 self.hass, self._async_tick, timedelta(seconds=30)
@@ -521,6 +544,20 @@ class ActiveEvController:
                 smart_path=smart_path,
                 home_control_active=self._home_control_active(),
             )
+            startup_pending = self.full_startup_evidence_pending
+            if startup_pending or (
+                self._charge_to_full_requested()
+                and not connected and not self._disconnection_is_verified()
+            ):
+                # Missing startup/transport feedback is not affirmative unplug
+                # evidence. Preserve dated intent, but never renew its original
+                # timeout or issue a positive command while it is unqualified.
+                await self._async_expire_unobserved_full(now)
+                self.last_reason = (
+                    "ev_startup_waiting_for_data"
+                    if startup_pending else self.eligibility_route.reason
+                )
+                return
             if not connected:
                 cleanup = cleanup_disconnected_ev(
                     self._daily_backfill_cycle_state(),
@@ -910,6 +947,18 @@ class ActiveEvController:
             smart_path=smart_path,
             home_control_active=self._home_control_active(),
         )
+        # Missing electrical feedback forbids positive decisions, not logical
+        # expiry or a confirmed unplug. Otherwise this early return would keep
+        # a restored standalone/legacy Full request alive beyond its old timer.
+        await self._async_expire_unobserved_full(now)
+        if (
+            not connected and self._disconnection_is_verified()
+            and self._charge_to_full_requested()
+            and self.charge_to_full_started_at is not None
+        ):
+            await self._async_clear_charge_to_full(stop_reason="disconnected")
+            self.charge_to_full_started_at = None
+            await self._async_save(now)
         if (
             self._ready_by_backfill_selected()
             and connected
@@ -2879,6 +2928,22 @@ class ActiveEvController:
             return preference.charge_to_full_enabled
         legacy_entity = preference.legacy_charge_to_full_entity
         return self._entity_feedback(legacy_entity).reported_state == "on"
+
+    async def _async_expire_unobserved_full(self, now: datetime) -> bool:
+        """Reduce an elapsed existing Full intent without requiring live sources."""
+        if (
+            not self._charge_to_full_requested()
+            or self.charge_to_full_started_at is None
+            or dt_util.as_utc(now) - dt_util.as_utc(self.charge_to_full_started_at)
+            < timedelta(hours=self._float(
+                CONF_EV_CHARGE_TO_FULL_MAX_HOURS, DEFAULT_EV_CHARGE_TO_FULL_MAX_HOURS,
+            ))
+        ):
+            return False
+        await self._async_clear_charge_to_full(stop_reason="timeout")
+        self.charge_to_full_started_at = None
+        await self._async_save(now)
+        return True
 
     async def _async_clear_charge_to_full(self, *, stop_reason: str = "unknown") -> None:
         """Clear the HEO-owned paid-grid override after its bounded session."""
