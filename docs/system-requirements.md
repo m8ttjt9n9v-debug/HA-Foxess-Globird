@@ -15,6 +15,12 @@ that attempt, failures do not create a new repeating network poller, and normal
 populated catalogue reads make no new request. Published-tag membership and
 explicit stable-release metadata remain mandatory.
 
+HACS 2.0.5 can restore both published tags and release models as empty lists.
+The v0.12.42 compatibility correction permits that valid cold state to reach
+the native metadata read after exact installed-repository verification; malformed
+lists still fail closed. Persisted tag strings are not required to authorise a
+metadata read and are never sufficient to authorise installation.
+
 Remote targets require explicitly configured private origins and administrator
 credentials stored only on the hub. Monitoring accounts are not automatically
 elevated. Both the initiating hub user and node token must be current active

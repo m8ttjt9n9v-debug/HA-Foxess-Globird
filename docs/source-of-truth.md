@@ -27,13 +27,17 @@ Publishing v0.12.40 installs, configures and activates nothing on a site;
 installing its code alone starts no maintenance operation. Controlled initial
 HACS installation and live acceptance remain separately approved steps.
 
-From v0.12.41, a verified HACS repository with persisted published tags but an
-empty in-memory release-detail cache gets one shared native HACS metadata-refresh
-attempt per process/repository. This is cold-start dependency initialisation,
-not installation or a second GitHub poller. Populated caches stay read-only;
-failed initialisation is reported rather than retried each status cycle. After
-the await, the exact binding is checked again. Stable tag syntax never replaces
-the published non-draft/non-prerelease metadata checks.
+v0.12.41 introduced one shared native HACS metadata-refresh attempt per
+process/repository for an empty release-detail cache. Its initial nonempty-tag
+prerequisite does not cover HACS 2.0.5, which saves published tags but does not
+restore them into memory. The v0.12.42 correction permits a valid empty tag
+list after exact installed repository/entity verification. Refreshed release
+models and matching published tags remain required before offering a version.
+This is cold-start dependency initialisation, not installation or a second
+GitHub poller. Populated caches stay read-only; failed initialisation is reported
+rather than retried each status cycle. After the await, the exact binding is
+checked again. Stable tag syntax never replaces the published non-draft/
+non-prerelease metadata checks.
 
 Every HEO entry on the target host must have trusted idle runtime/session and
 fresh physical evidence. Existing locks are drained and a short process-local

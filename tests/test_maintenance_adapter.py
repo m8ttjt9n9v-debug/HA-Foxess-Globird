@@ -248,9 +248,11 @@ async def test_explicit_cancellation_also_consumes_single_cold_hydration_attempt
 async def test_cold_native_models_retain_strict_stable_and_published_filters(hass):
     _, repository, _ = await _hacs(hass)
     repository.releases.objects = []
-    repository.data.published_tags += ["v0.12.41", "v0.12.42", "v0.12.43rc1"]
+    published_tags = repository.data.published_tags + ["v0.12.41", "v0.12.42", "v0.12.43rc1"]
+    repository.data.published_tags = []
 
     async def warm(**kwargs):
+        repository.data.published_tags = published_tags
         repository.releases.objects = [
             SimpleNamespace(tag_name="v0.12.41", draft=False, prerelease=True),
             SimpleNamespace(tag_name="v0.12.42", draft=True, prerelease=False),
@@ -261,6 +263,7 @@ async def test_cold_native_models_retain_strict_stable_and_published_filters(has
 
     repository.update_repository.side_effect = warm
     assert (await adapter.async_hacs_catalog(hass))["versions"] == ["v0.12.40"]
+    repository.update_repository.assert_awaited_once_with(ignore_issues=True, force=True)
 
 
 async def test_final_installer_refuses_cold_cache_until_prior_status_warm(hass):
@@ -283,11 +286,70 @@ async def test_final_installer_refuses_cold_cache_until_prior_status_warm(hass):
     assert entity.calls == [("v0.12.40", False)]
 
 
-async def test_missing_persisted_tags_cannot_authorize_cold_hydration(hass):
+async def test_actual_cold_restore_with_empty_models_and_tags_warms_both_once(hass):
+    _, repository, entity = await _hacs(hass)
+    releases = repository.releases.objects
+    tags = repository.data.published_tags
+    repository.releases.objects = []
+    repository.data.published_tags = []
+
+    async def warm(**kwargs):
+        assert repository.releases.objects == [] and repository.data.published_tags == []
+        assert kwargs == {"ignore_issues": True, "force": True}
+        repository.releases.objects = releases
+        repository.data.published_tags = tags
+
+    repository.update_repository.side_effect = warm
+    result = await adapter.async_hacs_catalog(hass)
+    assert result["versions"] == ["v0.12.40", "v0.12.39"]
+    assert result["entity_id"] == entity.entity_id
+    assert await adapter.async_hacs_catalog(hass) == result
+    repository.update_repository.assert_awaited_once_with(ignore_issues=True, force=True)
+    assert not entity.calls
+
+
+async def test_native_refresh_without_tag_population_cannot_admit_install_or_retry(hass):
+    _, repository, entity = await _hacs(hass)
+    releases = repository.releases.objects
+    repository.releases.objects = []
+    repository.data.published_tags = []
+
+    async def models_only(**kwargs):
+        repository.releases.objects = releases
+
+    repository.update_repository.side_effect = models_only
+    for _ in range(3):
+        assert (await adapter.async_hacs_catalog(hass))["versions"] == []
+    with pytest.raises(adapter.MaintenanceAdapterError, match="release_not_available"):
+        await adapter.async_install(hass, "v0.12.40", Context())
+    repository.update_repository.assert_awaited_once()
+    assert not entity.calls
+
+
+async def test_native_refresh_of_only_tags_cannot_replace_release_metadata(hass):
     _, repository, entity = await _hacs(hass)
     repository.releases.objects = []
     repository.data.published_tags = []
+
+    async def tags_only(**kwargs):
+        repository.data.published_tags = ["v0.12.40"]
+
+    repository.update_repository.side_effect = tags_only
+    for _ in range(3):
+        with pytest.raises(adapter.MaintenanceAdapterError, match="hacs_capability_unavailable"):
+            await adapter.async_hacs_catalog(hass)
     with pytest.raises(adapter.MaintenanceAdapterError, match="hacs_capability_unavailable"):
+        await adapter.async_install(hass, "v0.12.40", Context())
+    repository.update_repository.assert_awaited_once()
+    assert not entity.calls
+
+
+@pytest.mark.parametrize("tags", [None, (), {}, "v0.12.40", [None], ["v0.12.40", 42]])
+async def test_malformed_cold_tags_never_trigger_native_warm(hass, tags):
+    _, repository, entity = await _hacs(hass)
+    repository.releases.objects = []
+    repository.data.published_tags = tags
+    with pytest.raises(adapter.MaintenanceAdapterError, match="hacs_catalog_unsupported"):
         await adapter.async_hacs_catalog(hass)
     repository.update_repository.assert_not_called()
     assert not entity.calls
@@ -328,11 +390,14 @@ async def test_catalog_only_uses_cached_stable_published_tags(hass):
 )
 async def test_repository_identity_mismatch_blocks_catalog_and_install(hass, field, value):
     _, repository, entity = await _hacs(hass)
+    repository.releases.objects = []
+    repository.data.published_tags = []
     setattr(repository.data, field, value)
     with pytest.raises(adapter.MaintenanceAdapterError):
         await adapter.async_hacs_catalog(hass)
     with pytest.raises(adapter.MaintenanceAdapterError):
         await adapter.async_install(hass, "v0.12.40", Context())
+    repository.update_repository.assert_not_called()
     assert entity.calls == []
 
 

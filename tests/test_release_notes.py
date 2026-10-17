@@ -77,6 +77,17 @@ def test_01241_cold_catalog_notes_keep_metadata_and_installation_separate() -> N
     assert not Version("0.12.41").is_prerelease
 
 
+def test_01242_covers_empty_restored_tags_without_adding_control_authority() -> None:
+    title, notes = release_text("v0.12.42", CHANGELOG_PATH.read_text(encoding="utf-8"))
+    assert title == "v0.12.42 — Restore Fleet release choices after restart"
+    assert "HACS 2.0.5" in notes and "does not restore" in notes
+    assert "Both the tag" in notes and "one-time native" in notes
+    assert "full refreshed tag/model checks" in notes
+    assert "No installation, restart, policy change" in notes
+    assert "final installer remains cache-only" in notes
+    assert not Version("0.12.42").is_prerelease
+
+
 def test_release_text_requires_matching_nonempty_section() -> None:
     with pytest.raises(ValueError, match="no section"):
         release_text("v1.2.3", "# Changelog\n")

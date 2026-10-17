@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.12.42 — Restore Fleet release choices after restart
+
+- Correct the remaining cold-start case in HACS 2.0.5, which saves published
+  release tags but does not restore them into memory at startup. Both the tag
+  list and detailed release list may legitimately be empty. The verified
+  installed repository can initialise both through the same one-time native
+  metadata refresh; an empty tag list must not prevent that read.
+- Keep exact repository/entity verification, the bounded shared attempt and
+  full refreshed tag/model checks. No installation, restart, policy change or
+  battery/EV command is added. The final installer remains cache-only.
+
 ## 0.12.41 — Load Fleet releases after Home Assistant restart
 
 - Initialise an empty HACS release-detail cache through HACS's own verified

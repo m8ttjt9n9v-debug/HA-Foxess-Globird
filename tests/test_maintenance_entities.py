@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from datetime import timedelta
+from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
@@ -23,10 +26,14 @@ from custom_components.home_energy_orchestrator.const import DOMAIN
 from custom_components.home_energy_orchestrator.maintenance import NODE_KEY
 from tests.test_setup import ENTRY_DATA
 
+RUNNING_VERSION = json.loads(
+    (Path(__file__).resolve().parents[1]
+     / "custom_components/home_energy_orchestrator/manifest.json").read_text()
+)["version"]
 CATALOG = {
     "entity_id": "update.verified_heo_release",
-    "installed_version": "v0.12.41",
-    "versions": ["v0.12.41", "v0.12.40", "v0.12.39"],
+    "installed_version": f"v{RUNNING_VERSION}",
+    "versions": [f"v{RUNNING_VERSION}", "v0.12.40", "v0.12.39"],
     "in_progress": False,
 }
 LOCAL = {"key": "alpha", "name": "Local site", "local": True}
@@ -149,6 +156,7 @@ async def test_blocked_cold_hacs_metadata_cannot_prevent_ordinary_heo_setup(hass
 
     _, repository, _ = await _hacs(hass)
     repository.releases.objects = []
+    repository.data.published_tags = []
 
     async def blocked(**kwargs):
         await asyncio.Event().wait()
@@ -164,6 +172,55 @@ async def test_blocked_cold_hacs_metadata_cannot_prevent_ordinary_heo_setup(hass
     await hass.data[NODE_KEY].async_status()
     repository.update_repository.assert_awaited_once()
     assert events == []
+    for method in never.values():
+        method.assert_not_called()
+
+
+async def test_actual_ha_cold_start_populates_node_hub_and_release_selector(hass, monkeypatch):
+    """Reproduce a valid HACS restore with neither cache populated, not tag-only restore."""
+    from tests.test_maintenance_adapter import _hacs
+
+    _, repository, entity = await _hacs(hass)
+    repository.display_installed_version = CATALOG["installed_version"]
+    repository.ref = None
+    repository.integration_manifest = {}
+    repository.data.installed_version = CATALOG["installed_version"]
+    repository.data.last_version = CATALOG["installed_version"]
+    repository.releases.objects = []
+    repository.data.published_tags = []
+
+    async def native_warm(**kwargs):
+        # Only the external HACS metadata-fetch boundary is fake; setup,
+        # native update/registry entities and Fleet projection are real HA.
+        assert kwargs == {"ignore_issues": True, "force": True}
+        assert repository.ref is None and repository.integration_manifest == {}
+        assert repository.data.installed is True and repository.data.releases is True
+        assert repository.data.installed_version == repository.data.last_version
+        assert repository.releases.objects == [] and repository.data.published_tags == []
+        repository.data.published_tags = list(CATALOG["versions"])
+        repository.releases.objects = [
+            SimpleNamespace(tag_name=tag, draft=False, prerelease=False)
+            for tag in CATALOG["versions"]
+        ]
+
+    repository.update_repository.side_effect = native_warm
+    entry, events, never = await _setup(hass, monkeypatch, fleet=True, catalog=False)
+    for key in ("maintenance", "fleet_alpha_maintenance"):
+        status = hass.states.get(_id(hass, entry, "sensor", key))
+        assert status.state == "idle"
+        assert status.attributes.get("error") is None
+        assert status.attributes["installed_version"] == CATALOG["installed_version"]
+        assert status.attributes["available_versions"] == CATALOG["versions"]
+    selector = hass.states.get(_id(hass, entry, "select", "fleet_alpha_release"))
+    assert selector.attributes["options"] == CATALOG["versions"]
+    assert hass.data[NODE_KEY].record is None
+    assert hass.data[FLEET_KEY].selected_versions == {}
+    assert hass.states.get("sensor.home_energy_status").state == "observe"
+    assert dict(entry.data) == ENTRY_DATA
+    await hass.data[NODE_KEY].async_status()
+    await hass.data[FLEET_KEY].async_refresh()
+    repository.update_repository.assert_awaited_once_with(ignore_issues=True, force=True)
+    assert events == [] and entity.calls == []
     for method in never.values():
         method.assert_not_called()
 

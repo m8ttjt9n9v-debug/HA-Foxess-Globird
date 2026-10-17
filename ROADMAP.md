@@ -12,6 +12,11 @@ Status here describes behavioral parity, not merely the presence of code.
 - [x] Correct cold-start release catalogue initialisation through one shared
   native HACS metadata refresh, retaining strict stable-release checks and
   never turning a failed initialisation into a recurring network poller.
+- [x] Characterise the HACS 2.0.5 restored state with both tag/model lists empty;
+  remove the nonempty-tag prerequisite only for the verified installed
+  repository's bounded metadata read. Adapter and actual HA/Fleet startup
+  regressions fail against v0.12.41 and pass with the v0.12.42 correction;
+  full release validation remains mandatory. Live acceptance is separate.
 - [x] Wrap native verified HA+database backups, host-wide idle/session/source
   checks, unchanged settings, existing locks and a transient actuator fence.
   Preserve all policy switches, Safety Lock and device state.

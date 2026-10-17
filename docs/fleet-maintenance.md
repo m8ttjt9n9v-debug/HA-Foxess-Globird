@@ -14,9 +14,12 @@ Available in v0.12.40. Publishing the release does not install, configure or
 activate maintenance on a site; controlled installation and live acceptance are
 separate steps.
 
-Use v0.12.41 or newer for cold-start release-list loading. HACS persists release
-tags but not its detailed in-memory list. HEO initialises that empty list once
-through HACS's own metadata path, without downloading code or issuing controls.
+v0.12.41 introduced cold-start release-list loading but misses a HACS 2.0.5
+startup case: that version saves release tags without restoring them into memory,
+so both tags and release details may be empty. The v0.12.42 correction allows
+the verified installed repository to initialise both lists through HACS's own
+metadata path, without downloading code or issuing controls. Versions still
+require full published, non-draft, non-prerelease evidence after that read.
 A failed attempt is reported, not retried on every status update; check HACS's
 connection and refresh its repository information before retrying deliberately.
 

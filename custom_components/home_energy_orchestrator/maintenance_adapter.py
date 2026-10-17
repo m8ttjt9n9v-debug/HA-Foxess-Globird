@@ -142,9 +142,10 @@ def _catalog(repository: Any, entity: Any) -> dict[str, object]:
 async def async_hacs_catalog(hass: HomeAssistant) -> dict[str, object]:
     """Use verified HACS releases, warming its cold native cache at most once.
 
-    HACS persists published tags but not the release-model objects. After boot,
-    use the same native refresh as its repository screen once, not a new API
-    reader or a periodic failed-fetch loop. Never infer stable status from tags.
+    HACS may restore neither published tags nor release-model objects after
+    boot. An empty valid tag list is a cold cache, not an identity failure. Use
+    its native refresh once, not a new reader or a periodic failed-fetch loop.
+    Refreshed published membership and explicit stable metadata remain required.
     """
     try:
         repository, entity = _hacs_binding(hass)
@@ -154,8 +155,6 @@ async def async_hacs_catalog(hass: HomeAssistant) -> dict[str, object]:
         tags = repository.data.published_tags
         if not isinstance(tags, list) or any(not isinstance(tag, str) for tag in tags):
             raise MaintenanceAdapterError("hacs_catalog_unsupported")
-        if not tags:
-            raise MaintenanceAdapterError("hacs_capability_unavailable")
         provider = hass.data["hacs"]
         hydrations = hass.data.setdefault(_CATALOG_HYDRATION, {})
         hydration = hydrations.setdefault(id(repository), _CatalogHydration(repository))
