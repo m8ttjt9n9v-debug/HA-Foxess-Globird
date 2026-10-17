@@ -16,6 +16,7 @@ from .const import DOMAIN
 from .coordinator import EnergyCoordinator
 from .entity_catalogue import AEMO_SENSOR_DESCRIPTIONS, TRIP_SENSOR_DESCRIPTIONS
 from .entity_catalogue import SENSOR_DESCRIPTIONS as DESCRIPTIONS
+from .maintenance_entities import MaintenanceStatus
 from .read_model import (
     build_site_read_model,
     control_mode,
@@ -29,6 +30,9 @@ async def async_setup_entry(
     hass: HomeAssistant, entry: EnergyConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
     """Add observer entities."""
+    async_add_entities((MaintenanceStatus(entry.runtime_data.maintenance, entry),))
+    if (hub := entry.runtime_data.fleet_maintenance) is not None:
+        async_add_entities(MaintenanceStatus(hub, entry, target) for target in hub.targets)
     async_add_entities(
         EnergySensor(entry.runtime_data, entry, description) for description in DESCRIPTIONS
     )

@@ -12,6 +12,9 @@ from .const import (
     SERVICE_TEST_FORCE_DISCHARGE,
     SERVICE_TEST_STOP,
 )
+from .fleet_maintenance import async_require_admin
+from .maintenance import NODE_KEY
+from .maintenance_barrier import maintenance_writes_blocked
 from .manual_inverter import ManualInverterError
 from .manual_test import ManualTestError
 
@@ -68,6 +71,8 @@ def register_services(hass: HomeAssistant) -> None:
     hass.services.async_register(DOMAIN, SERVICE_TEST_STOP, stop, TEST_SCHEMA)
 
     async def manual_request(call: ServiceCall) -> dict[str, object]:
+        if maintenance_writes_blocked(hass):
+            raise HomeAssistantError("maintenance_in_progress")
         controller = _controller(hass, call.data.get("entry_id"))
         automatic = getattr(controller.coordinator, "active_controller", None)
         if automatic is None:
@@ -91,12 +96,67 @@ def register_services(hass: HomeAssistant) -> None:
             supports_response=SupportsResponse.OPTIONAL,
         )
 
+    async def maintenance_status(call):
+        return await hass.data[NODE_KEY].async_status()
+
+    async def maintenance_request(call):
+        return await hass.data[NODE_KEY].async_submit(
+            "update_and_restart" if call.service == "maintenance_update_and_restart" else "restart",
+            call.data["request_id"], call.data["issued_at"], call.data.get("version"),
+            call.context, call.data["wait_minutes"],
+        )
+
+    hass.services.async_register(
+        DOMAIN, "maintenance_status", maintenance_status, vol.Schema({}),
+        supports_response=SupportsResponse.ONLY,
+    )
+    for action in ("maintenance_update_and_restart", "maintenance_restart"):
+        fields = {
+            vol.Required("request_id"): str, vol.Required("issued_at"): str,
+            vol.Optional("wait_minutes", default=60): vol.All(
+                vol.Coerce(float), vol.Range(min=1, max=1440),
+            ),
+        }
+        if action == "maintenance_update_and_restart":
+            fields[vol.Required("version")] = str
+        hass.services.async_register(
+            DOMAIN, action, maintenance_request, vol.Schema(fields),
+            supports_response=SupportsResponse.OPTIONAL,
+        )
+
+    async def fleet_request(call):
+        await async_require_admin(hass, call.context)
+        hub = hass.data.get("heo_fleet_maintenance")
+        if hub is None:
+            raise HomeAssistantError("fleet_maintenance_not_configured")
+        if call.service == "fleet_maintenance_refresh":
+            await hub.async_refresh()
+            return {}
+        return await hub.async_request(
+            call.data["site"],
+            "update_and_restart" if call.service == "fleet_maintenance_update" else "restart",
+            call.context,
+        )
+
+    for action in ("fleet_maintenance_update", "fleet_maintenance_restart",
+                   "fleet_maintenance_refresh"):
+        hass.services.async_register(
+            DOMAIN, action, fleet_request,
+            vol.Schema({} if action.endswith("refresh") else {vol.Required("site"): str}),
+            supports_response=SupportsResponse.OPTIONAL,
+        )
+
 
 def unregister_services(hass: HomeAssistant) -> None:
     """Remove service endpoints after the final configured entry unloads."""
     for service in (SERVICE_TEST_FORCE_CHARGE, SERVICE_TEST_FORCE_DISCHARGE, SERVICE_TEST_STOP):
         hass.services.async_remove(DOMAIN, service)
     for name in MANUAL_SERVICES:
+        hass.services.async_remove(DOMAIN, name)
+    for name in (
+        "maintenance_status", "maintenance_update_and_restart", "maintenance_restart",
+        "fleet_maintenance_update", "fleet_maintenance_restart", "fleet_maintenance_refresh",
+    ):
         hass.services.async_remove(DOMAIN, name)
 
 

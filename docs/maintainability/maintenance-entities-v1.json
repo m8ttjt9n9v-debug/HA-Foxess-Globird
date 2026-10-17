@@ -1,0 +1,130 @@
+{
+  "schema_version": 1,
+  "extension": "maintenance_v1",
+  "scope": "Separate host-status and optional explicitly configured Fleet-hub extension; not part of the 124 retained canonical EntitySpec inventory.",
+  "identity_rule": "Entry-scoped unique IDs are stable. Registry names, entity IDs, icons, areas, visibility and enabled state remain user-owned. Site keys come from trusted backend configuration, not discovered electrical assumptions.",
+  "entity_pattern_count": 5,
+  "entity_patterns": [
+    {
+      "class": "MaintenanceStatus",
+      "scope": "host",
+      "platform": "sensor",
+      "key_template": "maintenance",
+      "unique_id_template": "{config_entry_id}_maintenance",
+      "default_entity_id_template": "sensor.home_energy_maintenance"
+    },
+    {
+      "class": "MaintenanceStatus",
+      "scope": "configured_fleet_site",
+      "platform": "sensor",
+      "key_template": "fleet_{site_key}_maintenance",
+      "unique_id_template": "{config_entry_id}_fleet_{site_key}_maintenance",
+      "default_entity_id_template": "sensor.home_energy_fleet_{site_key}_maintenance"
+    },
+    {
+      "class": "MaintenanceVersion",
+      "scope": "configured_fleet_site",
+      "platform": "select",
+      "key_template": "fleet_{site_key}_release",
+      "unique_id_template": "{config_entry_id}_fleet_{site_key}_release",
+      "default_entity_id_template": "select.home_energy_fleet_{site_key}_release"
+    },
+    {
+      "class": "MaintenanceButton",
+      "scope": "configured_fleet_site",
+      "platform": "button",
+      "key_template": "fleet_{site_key}_update_and_restart",
+      "unique_id_template": "{config_entry_id}_fleet_{site_key}_update_and_restart",
+      "default_entity_id_template": "button.home_energy_fleet_{site_key}_update_and_restart"
+    },
+    {
+      "class": "MaintenanceButton",
+      "scope": "configured_fleet_site",
+      "platform": "button",
+      "key_template": "fleet_{site_key}_restart",
+      "unique_id_template": "{config_entry_id}_fleet_{site_key}_restart",
+      "default_entity_id_template": "button.home_energy_fleet_{site_key}_restart"
+    }
+  ],
+  "node_status_attributes": [
+    "action",
+    "available_versions",
+    "backup_id",
+    "backup_verified",
+    "blockers",
+    "error",
+    "expected_version",
+    "installed_version",
+    "last_update",
+    "phase",
+    "request_id",
+    "restart_pending",
+    "running_version",
+    "schema_version"
+  ],
+  "fleet_status_allowed_attributes": [
+    "accepted",
+    "action",
+    "available_versions",
+    "backup_verified",
+    "blockers",
+    "busy",
+    "deadline",
+    "error",
+    "expected_version",
+    "installed_version",
+    "issued_at",
+    "last_update",
+    "phase",
+    "request_id",
+    "restart_pending",
+    "running_version",
+    "schema_version",
+    "started_at"
+  ],
+  "node_journal_fields": [
+    "action",
+    "backup_id",
+    "boot_id",
+    "error",
+    "expires_at",
+    "issued_at",
+    "phase",
+    "request_id",
+    "settings_digest",
+    "v",
+    "version"
+  ],
+  "node_journal_phases": [
+    "backing_up",
+    "blocked",
+    "checking",
+    "failed",
+    "installing",
+    "interrupted",
+    "restart_pending",
+    "restart_requested",
+    "unknown",
+    "verified",
+    "waiting"
+  ],
+  "fleet_accepted_node_phases": [
+    "backing_up",
+    "blocked",
+    "checking",
+    "failed",
+    "idle",
+    "initial_update_required",
+    "installing",
+    "interrupted",
+    "restart_pending",
+    "restart_requested",
+    "unknown",
+    "verified",
+    "waiting"
+  ],
+  "fleet_local_transient_phases": ["submitting"],
+  "invalid_restore": "An unrecognised journal schema, field set or phase blocks maintenance only; it is not deleted, rewritten, or replayed as an install/restart request and does not activate an actuator fence.",
+  "interrupted_restore": "In-progress audit phases become interrupted without resuming the operation. A pending restart is observed, never reissued. Successful reboot verification requires a distinct process identity, expected running version, healthy HEO runtime and preserved settings.",
+  "authority": "Status polling is read-only. Version selection does not install. Update/restart buttons require the actual current active administrator at both hub and node boundaries, and carry no device-control authority. HACS remains the installer; native HA backup/check/restart remain the lifecycle authorities."
+}

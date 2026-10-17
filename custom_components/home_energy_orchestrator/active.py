@@ -29,6 +29,7 @@ from .foxess_observation_adapter import (
     FoxessFeedbackSnapshot,
     capture_foxess_feedback,
 )
+from .maintenance_barrier import maintenance_writes_blocked
 from .manual_inverter import ManualInverterController
 from .models import SiteSnapshot
 from .persistence import create_typed_value_repository
@@ -498,6 +499,8 @@ class ActiveFoxessController:
             await self._async_reconcile_locked()
 
     async def _async_reconcile_locked(self) -> None:
+        if maintenance_writes_blocked(self.hass):
+            return
         if self._reconcile_stopped:
             return
         if await self.manual.async_reconcile_locked():

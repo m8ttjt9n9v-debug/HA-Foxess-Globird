@@ -36,6 +36,7 @@ from .const import (
 from .coordinator import EnergyCoordinator
 from .foxess_adapter import FoxessEntityMap, FoxessServiceAdapter
 from .foxess_observation_adapter import capture_foxess_feedback
+from .maintenance_barrier import maintenance_writes_blocked
 from .persistence import TypedValueStoreRepository
 from .planner.foxess import (
     ControlDecision,
@@ -542,6 +543,8 @@ class ManualTestController:
         await self._async_save()
 
     def _require_gate(self) -> None:
+        if maintenance_writes_blocked(self.hass):
+            raise ManualTestError("maintenance_in_progress")
         runtime = self.coordinator.runtime_config
         if runtime.automation.control_owner != FOXESS_CONTROL_OWNER_MODBUS:
             raise ManualTestError(

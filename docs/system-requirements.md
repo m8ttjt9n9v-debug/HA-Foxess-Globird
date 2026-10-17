@@ -1,5 +1,47 @@
 # System requirements and integration map
 
+## Optional Fleet maintenance
+
+Fleet maintenance requires HACS update support for the verified HEO repository,
+an available standard local Home Assistant/Supervisor backup destination, native
+configuration validation and restart support. A backup must include HA config
+and database, finish without partial failures and be read back successfully.
+Unsupported capabilities block maintenance, not ordinary HEO setup/control.
+A local backup is not an off-device or restore-tested guarantee.
+
+Remote targets require explicitly configured private origins and administrator
+credentials stored only on the hub. Monitoring accounts are not automatically
+elevated. Both the initiating hub user and node token must be current active
+administrators; direct service/button calls cannot bypass that check. No generic
+service forwarding, arbitrary download ref, redirect or retry is permitted.
+
+Admission is host-wide and fail-closed for active battery/EV/Trip/diagnostic or
+manual export, recovery/reconciliation, invalid storage and missing/stale
+physical feedback. There is no implicit exemption for idle keepalive charging.
+A remembered positive EV target can be disregarded only when fresh feedback
+positively confirms unplugged, not charging, charge switch off and actual zero
+current. Connected keepalive and pending work still block; missing/stale readings
+are not an exemption and existing freshness limits remain unchanged.
+Freshness applies to measured power, mode and EV feedback using native report
+clocks, not cached REST serialization. Stable SoC and saved force-power targets
+are checked for valid available values, not time since their last change;
+restored placeholders and nonzero targets block. No old measurement is promoted
+to fresh by an unrelated source.
+Do not stop a session to obtain an update opportunity. Stored policies remain
+unchanged; HEO temporarily fences its own actuator writes only during admitted
+maintenance. External controllers remain outside that fence.
+
+Old nodes require a separately approved first HACS installation. Dashboards and
+backend target config are explicit imports, never silently installed. Running
+version verification requires a real HA process restart, healthy HEO runtime and
+preserved settings, not just a changed HACS version or successful HTTP response.
+Unknown/restart-pending outcomes require deliberate operator review. See
+[maintenance installation and recovery](fleet-maintenance.md).
+Publication of v0.12.40 does not install, configure or activate this capability
+on any site and is not live-site acceptance.
+
+## Existing integration requirements
+
 HACS installs HEO code only. It does not install device integrations, create a
 dashboard, commission electrical limits, or migrate personal entity mappings.
 

@@ -12,12 +12,18 @@ from . import EnergyConfigEntry
 from .aemo_monitor_controls import AemoClearImportThresholdButton
 from .coordinator import EnergyCoordinator
 from .entity_catalogue import BUTTON_DESCRIPTIONS as DESCRIPTIONS
+from .maintenance_entities import MaintenanceButton
 
 
 async def async_setup_entry(
     hass: HomeAssistant, entry: EnergyConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
     """Add explicit buttons; pressing one is the submit action."""
+    if (hub := entry.runtime_data.fleet_maintenance) is not None:
+        async_add_entities(
+            MaintenanceButton(hub, entry, target, action)
+            for target in hub.targets for action in ("update_and_restart", "restart")
+        )
     async_add_entities(
         TestButton(entry.runtime_data, entry, description) for description in DESCRIPTIONS
     )

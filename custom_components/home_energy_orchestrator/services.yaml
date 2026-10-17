@@ -1,3 +1,77 @@
+maintenance_status:
+  name: Read maintenance status
+  description: Read host-wide maintenance capability, running/downloaded versions and audit. Does not install, restart or control devices.
+maintenance_update_and_restart:
+  name: Update HEO and restart when safe
+  description: Administrator-only node endpoint used by Fleet. Wait for trusted idle feedback, verify backup, install the chosen published release, check configuration and request one restart.
+  fields:
+    request_id:
+      name: Unique request ID
+      required: true
+      selector:
+        text:
+    issued_at:
+      name: Request time
+      description: Aware ISO-8601 timestamp for this fresh request.
+      required: true
+      selector:
+        text:
+    version:
+      name: Published HEO release
+      required: true
+      selector:
+        text:
+    wait_minutes:
+      name: Maximum wait for a safe time
+      default: 60
+      selector:
+        number:
+          min: 1
+          max: 1440
+          unit_of_measurement: min
+maintenance_restart:
+  name: Restart Home Assistant when safe
+  description: Administrator-only node endpoint used by Fleet. Back up and request one restart only when all HEO entries and physical feedback are safely idle.
+  fields:
+    request_id:
+      name: Unique request ID
+      required: true
+      selector:
+        text:
+    issued_at:
+      name: Request time
+      required: true
+      selector:
+        text:
+    wait_minutes:
+      name: Maximum wait for a safe time
+      default: 60
+      selector:
+        number:
+          min: 1
+          max: 1440
+          unit_of_measurement: min
+fleet_maintenance_update:
+  name: Update one Fleet site
+  description: Administrator-only. Submit the selected site's chosen published HEO release once; the node performs backup and safe-time update/restart checks.
+  fields:
+    site:
+      name: Configured site key
+      required: true
+      selector:
+        text:
+fleet_maintenance_restart:
+  name: Restart one Fleet site
+  description: Administrator-only. Submit one backed-up safe-time restart to a configured site. No download or device commands.
+  fields:
+    site:
+      name: Configured site key
+      required: true
+      selector:
+        text:
+fleet_maintenance_refresh:
+  name: Refresh Fleet maintenance status
+  description: Administrator-only read-only refresh. Never repeats or resumes an installation/restart request.
 manual_export_max:
   name: Export at maximum inverter power
   description: Hold manual battery control and request the lesser of the commissioned and native discharge maxima until explicitly stopped. Disable competing VPP control first. This is inverter output, not guaranteed grid export.

@@ -67,6 +67,82 @@ MONITOR_CARD_TEMPLATE = """\
 _Last update: {{ a('last_update') }}_
 """
 
+MAINTENANCE_CARD_TEMPLATE = """\
+{% set e = 'sensor.home_energy_fleet___SITE___maintenance' %}
+{% set phase = states(e) %}
+{% set phases = {
+  'idle': 'Ready', 'waiting': 'Waiting for a safe time', 'backing_up': 'Creating backup',
+  'installing': 'Downloading HEO', 'checking': 'Checking configuration',
+  'restart_requested': 'Restarting / reconnecting', 'restart_pending': 'Restart needs checking',
+  'verified': 'Running verified', 'blocked': 'Waiting for a safety check',
+  'failed': 'Needs attention', 'interrupted': 'Interrupted — check the site',
+  'unknown': 'Outcome unknown — check the site', 'submitting': 'Sending request',
+  'initial_update_required': 'First update needed'
+} %}
+{% set reasons = {
+  'home_assistant_not_running': 'Home Assistant is not ready',
+  'heo_runtime_unavailable': 'HEO is not ready',
+  'heo_storage_untrusted': 'Saved control state needs checking',
+  'maintenance_storage_unavailable': 'Maintenance history is unavailable',
+  'battery_charge_session_active': 'Battery charging is active',
+  'battery_export_session_active': 'Battery export is active',
+  'battery_diagnostic_active': 'A battery test is active',
+  'battery_manual_control_active': 'Manual battery control is active',
+  'trip_charge_active': 'A trip charge is active',
+  'ev_full_charge_active': 'Charge to Full is active',
+  'battery_telemetry_unavailable': 'Battery readings are unavailable',
+  'battery_mode_feedback_unavailable': 'Battery mode cannot be confirmed',
+  'battery_not_self_use': 'Battery is not in Self Use',
+  'battery_force_target_not_clear': 'Forced battery targets are not clear',
+  'ev_session_active': 'EV charging is active',
+  'ev_reconciliation_pending': 'An EV command is awaiting confirmation',
+  'ev_recovery_pending': 'EV recovery is pending',
+  'ev_charging_target_active': 'An EV charging target is active',
+  'ev_feedback_unavailable': 'EV readings are unavailable',
+  'ev_physically_charging': 'The car is charging',
+  'ev_charge_switch_on': 'The car charge switch is on',
+  'ev_full_feedback_unavailable': 'Charge to Full state is unavailable',
+  'hacs_unavailable': 'HACS is not ready',
+  'backup_not_verified': 'Backup could not be verified',
+  'backup_failed': 'Backup failed',
+  'configuration_invalid': 'Configuration needs correcting',
+  'maintenance_settings_changed': 'Settings changed during maintenance',
+  'maintenance_expired': 'Safe-time wait expired',
+  'maintenance_busy': 'Maintenance is already in progress',
+  'maintenance_verification_required': 'The previous restart needs checking',
+  'verification_failed': 'The restarted site did not pass verification',
+  'restart_not_observed': 'A completed restart was not observed',
+  'status_unavailable': 'Maintenance status is unavailable',
+  'initial_update_required': 'Install a maintenance-capable release first'
+} %}
+{% macro version(name) -%}
+  {%- set value = state_attr(e, name) -%}
+  {{- value if value is string and value else '—' -}}
+{%- endmacro %}
+{% set error = state_attr(e, 'error') %}
+{% set blockers = state_attr(e, 'blockers') %}
+{% set backup = state_attr(e, 'backup_verified') %}
+**{{ phases.get(phase, 'Maintenance unavailable') }}**
+
+| | |
+|---|---|
+| Running HEO | {{ version('running_version') }} |
+| Downloaded HEO | {{ version('installed_version') }} |
+| Backup | {{ 'Verified' if backup is sameas true else
+               'Not yet verified' if backup is sameas false else '—' }} |
+| Issue | {{ reasons.get(error, 'Needs a site check') if error else '—' }} |
+| Waiting for | {% if blockers is iterable and blockers is not string and blockers %}
+  {%- for reason in blockers -%}{{ reasons.get(reason, 'An additional safety check') }}
+  {{- '; ' if not loop.last else '' }}{%- endfor -%}{% else %}—{% endif %} |
+
+{% if phase == 'initial_update_required' %}
+Install a maintenance-capable HEO release through HACS at this site first.
+{% elif phase in ['unknown', 'unavailable', 'none'] %}
+Check the site before retrying. No update or restart is automatically replayed.
+{% endif %}
+Downloaded does not mean running. A restart is verified separately.
+"""
+
 
 class Secret(str):
     """A secret reference, never a credential value."""
@@ -378,6 +454,74 @@ def build_controls_section() -> dict:
     }
 
 
+def build_maintenance_card(site: str, label: str) -> dict:
+    """One optional node at a time; never repurpose the Fleet export dispatcher."""
+    if not re.fullmatch(r"[a-z][a-z0-9_]{0,47}", site):
+        raise ValueError("Use a configured maintenance site key")
+    prefix = f"home_energy_fleet_{site}_"
+    status = f"sensor.{prefix}maintenance"
+
+    def button(name: str, icon: str, action: str) -> dict:
+        purpose = (
+            "install the selected HEO release and restart"
+            if action == "update_and_restart"
+            else "restart Home Assistant"
+        )
+        return {
+            "type": "button",
+            "name": name,
+            "icon": icon,
+            "show_state": False,
+            "tap_action": {
+                "action": "perform-action",
+                "perform_action": "button.press",
+                "target": {"entity_id": f"button.{prefix}{action}"},
+                "confirmation": {
+                    "text": f"Back up {label}, then {purpose} when safely idle. "
+                    "Wait up to 60 minutes; active charging or export will not be stopped. "
+                    "New HEO actions pause during maintenance; avoid approaching charge deadlines. "
+                    "Only this site is affected.",
+                },
+            },
+            "hold_action": {"action": "none"},
+        }
+
+    return {
+        "type": "vertical-stack",
+        "cards": [
+            {
+                "type": "markdown",
+                "title": "HEO maintenance",
+                "content": MAINTENANCE_CARD_TEMPLATE.replace("__SITE__", site),
+            },
+            {
+                "type": "conditional",
+                "conditions": [
+                    {"condition": "state", "entity": status, "state_not": value}
+                    for value in ("unknown", "unavailable", "initial_update_required")
+                ],
+                "card": {
+                    "type": "vertical-stack",
+                    "cards": [
+                        {
+                            "type": "entities",
+                            "show_header_toggle": False,
+                            "entities": [{"entity": f"select.{prefix}release", "name": "Release"}],
+                        },
+                        {
+                            "type": "horizontal-stack",
+                            "cards": [
+                                button("Update & restart", "mdi:update", "update_and_restart"),
+                                button("Restart", "mdi:restart", "restart"),
+                            ],
+                        },
+                    ],
+                },
+            },
+        ],
+    }
+
+
 def build_dashboard() -> dict:
     sections = [build_controls_section()]
     for site, label in (
@@ -393,7 +537,8 @@ def build_dashboard() -> dict:
                         "type": "markdown",
                         "title": label,
                         "content": MONITOR_CARD_TEMPLATE.replace("__SITE__", site),
-                    }
+                    },
+                    build_maintenance_card(site, label),
                 ],
             }
         )
@@ -424,6 +569,8 @@ DASHBOARD_HEADER = """\
 # Install fleet-command-package.yaml separately. Insert the first full-width section into
 # an existing sections view without replacing its site cards. Secrets stay on the hub.
 # Version sensors read HACS installed_version, never latest_version; see docs/fleet-monitoring.md.
+# Optional per-site maintenance needs backend configuration; see docs/fleet-maintenance.md.
+# Merge only approved cards into a fresh live dashboard; never replace personal layouts.
 """
 
 
@@ -442,9 +589,9 @@ def render_assets() -> dict[Path, str]:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument(
-        "--check", action="store_true", help="Check the committed reusable examples"
-    )
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--check", action="store_true", help="Check the committed reusable examples")
+    mode.add_argument("--write", action="store_true", help="Regenerate changed reusable examples")
     args = parser.parse_args()
     if args.check:
         mismatches = [
@@ -455,6 +602,11 @@ def main() -> None:
         if mismatches:
             raise SystemExit("Fleet examples differ from contract: " + ", ".join(mismatches))
         print("Fleet command package and dashboard match the generated contract")
+    elif args.write:
+        for path, text in render_assets().items():
+            if not path.exists() or path.read_text() != text:
+                path.write_text(text)
+                print(f"Updated {path.relative_to(ROOT)}")
     else:
         for path, text in render_assets().items():
             print(f"--- {path.relative_to(ROOT)} ---\n{text}")

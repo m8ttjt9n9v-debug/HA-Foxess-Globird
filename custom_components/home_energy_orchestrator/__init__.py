@@ -4,9 +4,12 @@ from __future__ import annotations
 
 from datetime import time
 
+import voluptuous as vol
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import entity_registry as er
+from homeassistant.loader import async_get_integration
 
 from .active import ActiveFoxessController
 from .aemo_monitor import AemoMarketMonitor
@@ -51,11 +54,58 @@ from .control_supervisor import ControlConformanceSupervisor
 from .coordinator import EnergyCoordinator
 from .discovery import DiscoveryEntity, discover_entity_defaults
 from .ev_active import ActiveEvController
+from .fleet_maintenance import FleetMaintenanceHub
+from .maintenance import NODE_KEY, NodeMaintenance
 from .manual_test import ManualTestController
 from .services import register_services, unregister_services
 from .trip_charge import TripChargeController
 
 type EnergyConfigEntry = ConfigEntry[EnergyCoordinator]
+
+FLEET_KEY = "heo_fleet_maintenance"
+
+
+def _validate_maintenance_targets(values):
+    try:
+        FleetMaintenanceHub.validate_targets(values)
+    except HomeAssistantError as error:
+        raise vol.Invalid("invalid Fleet maintenance targets") from error
+    return values
+
+
+TARGET_SCHEMA = vol.Schema({
+    vol.Required("key"): str,
+    vol.Required("name"): str,
+    vol.Optional("local", default=False): bool,
+    vol.Optional("origin"): str,
+    vol.Optional("token"): str,
+})
+CONFIG_SCHEMA = vol.Schema({
+    vol.Optional("home_energy_orchestrator"): vol.Schema({
+        vol.Optional("fleet_maintenance"): vol.Schema({
+            vol.Optional("entry_id"): str,
+            vol.Required("sites"): vol.All(
+                [TARGET_SCHEMA], vol.Length(min=1, max=32), _validate_maintenance_targets,
+            ),
+        }),
+    }),
+}, extra=vol.ALLOW_EXTRA)
+
+
+async def async_setup(hass, config):
+    """Load optional backend Fleet origins/secrets without activating a policy."""
+    integration = await async_get_integration(hass, "home_energy_orchestrator")
+    node = NodeMaintenance(hass, integration.version)
+    hass.data[NODE_KEY] = node
+    await node.async_restore()
+    await node.async_register_shutdown()
+    fleet = config.get("home_energy_orchestrator", {}).get("fleet_maintenance")
+    if fleet:
+        hub = FleetMaintenanceHub(hass, fleet["sites"])
+        await hub.async_register_shutdown()
+        hub.owner_entry_id = fleet.get("entry_id")
+        hass.data[FLEET_KEY] = hub
+    return True
 
 
 async def async_migrate_entry(hass: HomeAssistant, entry: EnergyConfigEntry) -> bool:
@@ -162,6 +212,15 @@ async def async_migrate_entry(hass: HomeAssistant, entry: EnergyConfigEntry) -> 
 async def async_setup_entry(hass: HomeAssistant, entry: EnergyConfigEntry) -> bool:
     """Set up a configured observer."""
     coordinator = EnergyCoordinator(hass, {**entry.data, **entry.options}, entry.entry_id)
+    coordinator.maintenance = hass.data[NODE_KEY]
+    hub = hass.data.get(FLEET_KEY)
+    if hub is not None and hub.owner_entry_id is None:
+        # Do not duplicate hub controls across entries on the same HA host.
+        if len(hass.config_entries.async_entries("home_energy_orchestrator")) == 1:
+            hub.owner_entry_id = entry.entry_id
+    coordinator.fleet_maintenance = (
+        hub if hub is not None and hub.owner_entry_id == entry.entry_id else None
+    )
     await coordinator.async_load_demand_history()
     await coordinator.async_load_daily_import()
     await coordinator.async_load_forecast_feedback()
@@ -195,6 +254,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: EnergyConfigEntry) -> bo
         "manual_test": coordinator.manual_test,
     }
     register_services(hass)
+    coordinator.maintenance.async_set_updated_data(await coordinator.maintenance.async_status())
+    if coordinator.fleet_maintenance is not None:
+        await coordinator.fleet_maintenance.async_refresh()
     return True
 
 

@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.12.40 — Safe per-site Fleet updates and restarts
+
+- Add optional administrator-only per-site Fleet release selection, Update &
+  restart when safe, and Restart controls using HACS and native Home Assistant
+  backup/configuration/restart APIs. No all-site deployment or startup replay.
+- Require fresh host-wide idle evidence, trusted journals, a completed verified
+  configuration/database backup and unchanged settings before disruptive steps.
+  A brief process-local write fence protects delayed commands without changing
+  stored battery/EV policies, control toggles or Safety Lock.
+- Treat remembered positive EV targets as inactive only when fresh feedback
+  positively confirms unplugged, not charging, charge switch off and actual
+  current zero. Connected keepalive and pending sessions still block maintenance;
+  no freshness limit or charging policy is weakened.
+- Keep downloaded and running versions distinct. Persist the operation and
+  rollback-backup reference, then verify running version and integration health
+  after a real Home Assistant restart. Unknown outcomes never trigger retries.
+- Supply native controls and reusable optional Fleet cards. Backend origins and
+  administrator credentials require explicit private configuration; existing
+  dashboards are not overwritten and older nodes need an initial HACS update.
+- Publishing this release does not install, configure or activate maintenance
+  on any site. Older nodes need a separately approved initial HACS update;
+  backend configuration, dashboard import and controlled live acceptance remain
+  separate operations. Repository tests do not establish live acceptance.
+
 ## 0.12.39 — Export restart recovery and Fleet versions
 
 - Recognise Feed-in First as the FoxESS Modbus fallback for a valid unfinished

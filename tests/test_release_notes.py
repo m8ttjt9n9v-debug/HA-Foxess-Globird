@@ -41,6 +41,26 @@ def test_01239_has_stable_recovery_and_readonly_fleet_notes() -> None:
     assert not Version("0.12.39").is_prerelease
 
 
+def test_01240_has_stable_guarded_maintenance_and_separate_activation_notes() -> None:
+    title, notes = release_text("v0.12.40", CHANGELOG_PATH.read_text(encoding="utf-8"))
+    assert title == "v0.12.40 — Safe per-site Fleet updates and restarts"
+    assert "administrator-only per-site" in notes
+    assert "No all-site deployment or startup replay" in notes
+    assert "completed verified" in notes and "unchanged settings" in notes
+    assert "Connected keepalive and pending sessions still block" in notes
+    assert "freshness limit or charging policy is weakened" in notes
+    assert "downloaded and running versions distinct" in notes
+    assert "does not install, configure or activate maintenance" in notes
+    assert "separately approved initial HACS update" in notes
+    assert "Repository tests do not establish live acceptance" in notes
+    assert not Version("0.12.40").is_prerelease
+    manifest = json.loads(
+        Path("custom_components/home_energy_orchestrator/manifest.json").read_text()
+    )
+    project = tomllib.loads(Path("pyproject.toml").read_text())["project"]
+    assert manifest["version"] == project["version"] == "0.12.40"
+
+
 def test_release_text_requires_matching_nonempty_section() -> None:
     with pytest.raises(ValueError, match="no section"):
         release_text("v1.2.3", "# Changelog\n")

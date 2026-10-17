@@ -8,6 +8,7 @@ from dataclasses import dataclass
 
 from homeassistant.core import HomeAssistant
 
+from .maintenance_barrier import maintenance_writes_blocked
 from .planner.foxess import FoxessCommand, FoxessCommandPlan
 
 
@@ -65,6 +66,8 @@ class FoxessServiceAdapter:
             self.last_executed = ()
             executed: list[str] = []
             for command in plan.commands:
+                if maintenance_writes_blocked(self.hass):
+                    raise FoxessWriteBlocked("HEO maintenance is in progress")
                 if self.write_guard is not None and not self.write_guard():
                     raise FoxessWriteBlocked("FoxESS write gate closed during command plan")
                 await self._async_execute_command(command)

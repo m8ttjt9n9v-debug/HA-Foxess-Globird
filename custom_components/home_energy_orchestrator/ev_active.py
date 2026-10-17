@@ -125,6 +125,7 @@ from .ev_observation_adapter import (
     capture_ev_feedback,
     ev_observation_entity_map,
 )
+from .maintenance_barrier import maintenance_writes_blocked
 from .models import SiteSnapshot
 from .persistence import create_typed_value_repository
 from .planner.control_windows import (
@@ -517,6 +518,8 @@ class ActiveEvController:
         """Sample feedback, make a three-minute decision, then reconcile safely."""
         async with self._lock:
             now = now or dt_util.now()
+            if maintenance_writes_blocked(self.hass):
+                return
             _CYCLE_FEEDBACK.set(
                 capture_ev_feedback(
                     self.hass,

@@ -2,6 +2,31 @@
 
 Status here describes behavioral parity, not merely the presence of code.
 
+## Guarded per-site Fleet maintenance
+
+- [x] Add administrator-only backend dispatch, explicit trusted targets and
+  native per-site release selection/update/restart entities, without extending
+  the export dispatcher or creating a generic privileged-service proxy.
+- [x] Reuse HACS cached stable releases and its installer; require an exact
+  repository/entity binding and verify downloaded version before restart.
+- [x] Wrap native verified HA+database backups, host-wide idle/session/source
+  checks, unchanged settings, existing locks and a transient actuator fence.
+  Preserve all policy switches, Safety Lock and device state.
+- [x] Persist only the audit/rollback reference, distinguish downloaded versus
+  running versions and verify after real boot. Never replay a saved operation,
+  automatically retry an unknown mutation or roll out to all sites.
+- [x] Add reusable optional dashboard cards and private backend installation
+  guidance; preserve existing export controls and user-owned dashboard layouts.
+- [x] Complete local runtime full-suite/compatibility validation and independent
+  review: 2,712 tests pass, with final dashboard/checkpoint-focused checks,
+  Ruff, retained contracts and v0.12.39/v0.12.26 upgrade/rollback rehearsals.
+- [ ] Separately approve publication, initial manual HACS bootstrap and a
+  controlled pilot update/restart test. Then qualify each remote site; a hub
+  restart briefly takes Fleet offline and needs a separate recovery route.
+- [ ] Evaluate future deadline-aware maintenance admission. Current admission
+  checks idle evidence, not the length of the upcoming policy-free gap; warn
+  operators that slow backups can delay newly due work.
+
 ## Export restart fallback correction
 
 - [x] Recognise the FoxESS Modbus Feed-in First fallback only for a valid

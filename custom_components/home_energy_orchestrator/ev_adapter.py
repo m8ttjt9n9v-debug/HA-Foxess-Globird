@@ -10,6 +10,7 @@ from homeassistant.core import HomeAssistant
 
 from .configuration import RuntimeConfiguration
 from .const import EV_CHARGE_PATH_SMART_SOCKET
+from .maintenance_barrier import maintenance_writes_blocked
 from .planner.ev import EvCommand, EvCommandPlan
 
 
@@ -66,6 +67,8 @@ class EvServiceAdapter:
                 raise EvWriteBlocked("EV writes are disabled until commissioning")
             executed: list[str] = []
             for command in plan.commands:
+                if maintenance_writes_blocked(self.hass):
+                    raise EvWriteBlocked("HEO maintenance is in progress")
                 if self.write_guard is not None and not self.write_guard():
                     raise EvWriteBlocked("EV write gate closed during command plan")
                 await self._async_execute_command(command)

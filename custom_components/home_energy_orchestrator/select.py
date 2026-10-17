@@ -16,6 +16,7 @@ from .const import (
 )
 from .coordinator import EnergyCoordinator
 from .entity_catalogue import HOUSE_OCCUPANCY_DESCRIPTION as DESCRIPTION
+from .maintenance_entities import MaintenanceVersion
 from .trip_entities import TripTargetSelect
 
 
@@ -25,6 +26,8 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Expose the persistent Auto/Home/Away policy from the pilot."""
+    if (hub := entry.runtime_data.fleet_maintenance) is not None:
+        async_add_entities(MaintenanceVersion(hub, entry, target) for target in hub.targets)
     async_add_entities(
         (
             HouseOccupancyModeSelect(entry.runtime_data, entry),

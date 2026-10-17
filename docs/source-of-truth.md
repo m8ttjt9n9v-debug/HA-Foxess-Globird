@@ -15,6 +15,54 @@ changed; this file records the authority order, supported behavior, and rules
 future work must preserve. Site addresses, credentials, incident chronology,
 and private operational evidence belong only in the local private record.
 
+## Optional Fleet maintenance extension
+
+The separately configured Fleet maintenance wrapper uses HACS as its sole
+installer and native Home Assistant backup, configuration validation and restart.
+It is an operational extension, not a charging/export algorithm port, and
+changes no normal policy. Per-site actions require a current active administrator
+at the hub and node. Origins and remote administrator credentials remain in
+private backend config; arbitrary URLs/repositories/services are unsupported.
+Publishing v0.12.40 installs, configures and activates nothing on a site;
+installing its code alone starts no maintenance operation. Controlled initial
+HACS installation and live acceptance remain separately approved steps.
+
+Every HEO entry on the target host must have trusted idle runtime/session and
+fresh physical evidence. Existing locks are drained and a short process-local
+write fence covers the backup/install/restart boundary; no stored control switch
+or Safety Lock is changed. Locks are released before shutdown to avoid an
+unload deadlock. A completed verified local HA+database backup precedes file
+replacement. Changed settings or physical activity abort the next disruptive
+step rather than being overridden. A safe-time request expires after its bounded
+wait, defaulting to 60 minutes, without becoming a recurring schedule.
+
+Admission distinguishes roles: measured grid/battery power, inverter mode and
+EV feedback need their own fresh native report clocks. Stable battery SoC and
+saved force-power settings retain their existing value semantics, not an
+invented polling deadline. They must be available, valid and not restored
+placeholders; force targets must be zero. This does not make old electrical
+measurements fresh or change control permission.
+
+Remembered positive EV current targets count as inactive for maintenance only
+when fresh mapped feedback positively proves unplugged, non-charging, charge switch off
+and actual current zero. This does not excuse connected keepalive, pending
+sessions/reconciliation/recovery, invalid targets or missing/stale evidence.
+No existing freshness threshold or charging policy changes.
+
+Downloaded files do not establish loaded version. A private version-one host
+audit tracks identity, phase, intended version, original rollback backup,
+settings digest and prior process boot identity. Startup only verifies this
+record: it never repeats installation/restart or restores the transient write
+fence. Integration reload is not reboot. Verification covers loaded HEO,
+runtime/source/journal readiness and settings, not measured energy delivery or
+absence of external writers. Unknown outcomes require read-only reassessment.
+
+The optional native selectors/buttons and reusable dashboard cards require
+explicit hub configuration and dashboard import. Initial old-node bootstrapping
+must use an ordinary approved HACS update. Pilot qualification and individual
+remote rollout remain separate live acceptance; no automatic fleet-wide rollout
+is implemented. See [Fleet maintenance](fleet-maintenance.md).
+
 ## Restored EV intent while startup feedback loads
 
 From v0.12.36, an already-enabled restored Full request waits while its initial
