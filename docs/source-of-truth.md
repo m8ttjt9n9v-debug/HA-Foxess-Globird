@@ -31,6 +31,14 @@ when all vehicle feedback loads early. Readiness requires completed HA startup;
 an intermediate status publication cannot consume restored helper ownership
 before its startup trigger has rebound the restored Full entity context.
 
+From v0.12.38, the legacy dispatcher consumes the paired
+`observed_soc_percent` and `startup_feedback_pending` attributes from one
+EV-status update. These are sampled from the same commissioned vehicle feedback;
+it must not combine that readiness with a canonical SoC entity which may publish
+later. Missing producer capability is a wait, not an invalid-SoC cancellation
+or permission to start. Present invalid feedback after startup remains terminal.
+This is a publication-coherence correction, not a charging-policy replacement.
+
 ## Authority order
 
 1. Direct inverter registers and measured electrical behavior.

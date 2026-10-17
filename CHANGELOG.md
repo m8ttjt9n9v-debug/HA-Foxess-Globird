@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.12.38 — Coherent EV feedback for trip recovery
+
+- Publish observed vehicle SoC together with startup readiness from the same
+  feedback capture. The legacy Trip dispatcher no longer combines raw vehicle
+  readiness with a separately delayed canonical SoC sensor during startup.
+- Retain the original dated request, generation-bound ownership and absolute
+  timeout. Missing producer capability waits without starting a new Full
+  request; established invalid feedback, cancellation, manual replacement,
+  target completion and expiry retain their safeguards.
+- Add separate raw/canonical source and publication-order regressions alongside
+  the existing actual Home Assistant startup, reconnect and free-window tests.
+  No charging rate, reserve, device writer, polling loop or helper is added.
+  Existing legacy installations require the matching dispatcher update;
+  HACS does not silently migrate helpers or overwrite dashboards.
+
 ## 0.12.37 — Keep trip intent through Home Assistant startup
 
 - Keep the existing restored-Full startup hold until Home Assistant has

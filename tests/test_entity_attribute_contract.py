@@ -12,6 +12,7 @@ from scripts.entity_attribute_contract import (
     AEMO_ADDITIONS_PATH,
     BASELINE_PATH,
     EV_CAPACITY_ADDITIONS_PATH,
+    EV_FEEDBACK_ADDITIONS_PATH,
     EV_STARTUP_ADDITIONS_PATH,
     MANUAL_ADDITIONS_PATH,
     PRICE_ADDITIONS_PATH,
@@ -37,6 +38,13 @@ def test_entity_attribute_contract_matches_reviewed_release_baseline() -> None:
     impact = json.loads(TRIP_IMPACT_ADDITIONS_PATH.read_text(encoding="utf-8"))
     resume = json.loads(TRIP_RESUME_ADDITIONS_PATH.read_text(encoding="utf-8"))
     startup = json.loads(EV_STARTUP_ADDITIONS_PATH.read_text(encoding="utf-8"))
+    feedback = json.loads(EV_FEEDBACK_ADDITIONS_PATH.read_text(encoding="utf-8"))
+    assert feedback["entities"] == [] and feedback["entity_count"] == 0
+    assert feedback["attribute_additions"] == [{
+        "entity_key": "ev_control_status",
+        "default_entity_id": "sensor.home_energy_ev_control_status",
+        "custom_attributes": ["observed_soc_percent"],
+    }]
     assert startup["entities"] == [] and startup["entity_count"] == 0
     assert startup["attribute_additions"] == [{
         "entity_key": "ev_control_status",
@@ -64,7 +72,7 @@ def test_entity_attribute_contract_matches_reviewed_release_baseline() -> None:
             baseline["entities"] + monitor["entities"] + trip["entities"] + capacity["entities"]
         )
     }
-    for extension in (manual, price, impact, resume, startup):
+    for extension in (manual, price, impact, resume, startup, feedback):
         for record in extension["attribute_additions"]:
             retained = expected[record["entity_key"]]
             retained["custom_attributes"] = sorted(

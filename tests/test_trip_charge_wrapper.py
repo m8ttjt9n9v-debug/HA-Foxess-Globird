@@ -2,13 +2,17 @@
 
 import asyncio
 import json
+import math
 from datetime import UTC, datetime
+from decimal import Decimal
+from fractions import Fraction
 from itertools import permutations
 from unittest.mock import AsyncMock
 
 import pytest
 from homeassistant.components.automation.config import async_validate_config_item
-from homeassistant.core import Context, CoreState, HassJob, ServiceRegistry, State
+from homeassistant.core import Context, CoreState, HassJob, ServiceRegistry, State, callback
+from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.helpers.template import Template
 from homeassistant.setup import async_setup_component
 from pytest_homeassistant_custom_component.common import async_fire_time_changed, mock_restore_cache
@@ -42,6 +46,16 @@ from scripts.trip_charge_wrapper import (
 from .test_ev_active import _controller_config, _coordinator, _set_ev_states
 
 NOW = datetime(2026, 10, 11, 8, tzinfo=UTC)
+_CANONICAL_OBSERVATION = object()
+_MISSING_OBSERVATION = object()
+
+
+def _numeric_observation(value):
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    return number if math.isfinite(number) and 0 <= number <= 100 else None
 
 
 @pytest.mark.freeze_time(NOW, real_asyncio=True)
@@ -67,6 +81,8 @@ async def test_legacy_trip_replans_when_shared_capacity_is_corrected(hass):
 @pytest.fixture(autouse=True)
 async def _detach_test_automation(hass):
     yield
+    for remove_listener in hass.data.pop("heo_trip_wrapper_test_unsubs", []):
+        remove_listener()
     if hass.services.has_service("automation", "turn_off"):
         ids = [state.entity_id for state in hass.states.async_all("automation")]
         if ids:
@@ -94,6 +110,8 @@ async def _setup(
     location_state="home",
     cable_state="on",
     startup_pending=False,
+    observed_soc=_CANONICAL_OBSERVATION,
+    ev_status_extra=None,
 ):
     await hass.config.async_set_time_zone("Australia/Sydney")
     package = build_package(
@@ -114,15 +132,36 @@ async def _setup(
     ):
         hass.states.async_set(entity, value)
     pending = startup_pending() if callable(startup_pending) else startup_pending
+    attributes = {
+        "gate": "ready",
+        "startup_feedback_pending": pending,
+        "charge_switch_on": None if pending else True,
+    }
+    if observed_soc is not _MISSING_OBSERVATION:
+        attributes["observed_soc_percent"] = (
+            _numeric_observation(soc)
+            if observed_soc is _CANONICAL_OBSERVATION else observed_soc
+        )
+    attributes.update(ev_status_extra or {})
     hass.states.async_set(
         EV_STATUS,
         "feedback_confirmed",
-        {
-            "gate": "ready",
-            "startup_feedback_pending": pending,
-            "charge_switch_on": None if pending else True,
-        },
+        attributes,
     )
+    if observed_soc is _CANONICAL_OBSERVATION:
+        # Existing vectors publish a consistent simulated HEO observation.
+        # Split-source regressions opt out and drive the real raw cohort.
+        @callback
+        def publish_observed_soc(event):
+            state = event.data["new_state"]
+            attributes = dict(hass.states.get(EV_STATUS).attributes)
+            attributes["observed_soc_percent"] = _numeric_observation(
+                None if state is None else state.state
+            )
+            hass.states.async_set(EV_STATUS, "feedback_confirmed", attributes)
+
+        remove_listener = async_track_state_change_event(hass, [SOC], publish_observed_soc)
+        hass.data.setdefault("heo_trip_wrapper_test_unsubs", []).append(remove_listener)
     hass.states.async_set(
         NATIVE_STATUS, "legacy_conflict", native_attributes or {"full_generation": 0}
     )
@@ -366,7 +405,9 @@ async def test_gui_template_helpers_accept_the_same_checked_templates(hass):
 
 
 @pytest.mark.freeze_time(NOW, real_asyncio=True)
-@pytest.mark.parametrize("interruption", ["cancel", "source", "target", "external_override"])
+@pytest.mark.parametrize(
+    "interruption", ["cancel", "source", "target", "external_override", "feedback"]
+)
 async def test_last_awaited_start_boundary_rechecks_current_intent_and_inputs(
     hass, freezer, monkeypatch, interruption
 ):
@@ -392,6 +433,10 @@ async def test_last_awaited_start_boundary_rechecks_current_intent_and_inputs(
                     {"entity_id": TARGET, "option": "90%"},
                     blocking=True,
                 )
+            elif interruption == "feedback":
+                attributes = dict(hass.states.get(EV_STATUS).attributes)
+                attributes["observed_soc_percent"] = 20
+                hass.states.async_set(EV_STATUS, "feedback_confirmed", attributes)
             else:
                 hass.states.async_set(OVERRIDE, "on")
         return result
@@ -690,9 +735,11 @@ def _resume_record(hass):
     return Template("{{ states('" + RESUME + "') | from_json({}) }}", hass).async_render()
 
 
-async def _start_day_trip(hass, freezer):
+async def _start_day_trip(hass, freezer, *, observed_soc=_CANONICAL_OBSERVATION):
     """Synthetic long trip spanning a mid-day free window, not a site fixture."""
-    package, calls = await _setup(hass, soc=20, capacity=75, power=3.6)
+    package, calls = await _setup(
+        hass, soc=20, capacity=75, power=3.6, observed_soc=observed_soc
+    )
     await hass.services.async_call(
         "input_number", "set_value", {"entity_id": TIMEOUT, "value": 16}, blocking=True
     )
@@ -1242,3 +1289,289 @@ async def test_established_restored_cohort_keeps_invalid_soc_terminal(hass, bad_
     assert calls == ["turn_off"]
     assert hass.states.get(STATUS).state == "Interrupted"
     assert hass.states.get(ARMED).state == "off"
+
+
+def _publish_shared_ev_feedback(hass, controller):
+    pending, observed_soc = controller.startup_feedback()
+    attributes = dict(hass.states.get(EV_STATUS).attributes)
+    attributes.update(
+        startup_feedback_pending=pending,
+        observed_soc_percent=observed_soc,
+    )
+    hass.states.async_set(EV_STATUS, "feedback_confirmed", attributes)
+
+
+@pytest.mark.freeze_time(NOW, real_asyncio=True)
+@pytest.mark.parametrize(
+    ("raw_soc", "canonical_soc"),
+    [(40, "unknown"), (40, 90), (40, 101), (90, 40)],
+)
+async def test_restored_trip_consumes_atomic_feedback_not_late_canonical_projection(
+    hass, monkeypatch, raw_soc, canonical_soc
+):
+    """Mapped raw SoC and the separately refreshed canonical sensor are distinct."""
+    hass.set_state(CoreState.not_running)
+    _set_ev_states(hass)
+    hass.states.async_set("sensor.car_soc", str(raw_soc), {"unit_of_measurement": "%"})
+    controller = ActiveEvController(
+        hass, _coordinator(_controller_config(ev_charge_to_full_enabled=True))
+    )
+    monkeypatch.setattr(controller, "_async_restore", AsyncMock())
+    monkeypatch.setattr(controller, "async_reconcile", AsyncMock())
+    await controller.async_start()
+    try:
+        restored, record = _restored_owned_checkpoint()
+        _, calls = await _setup(
+            hass,
+            soc=canonical_soc,
+            restore_states=restored,
+            override_state="on",
+            native_attributes={"full_generation": 1},
+            startup_pending=lambda: controller.full_startup_evidence_pending,
+            observed_soc=raw_soc,
+        )
+        _publish_shared_ev_feedback(hass, controller)
+        await hass.async_start()
+        await hass.async_block_till_done()
+        _publish_shared_ev_feedback(hass, controller)
+        await hass.async_block_till_done()
+        assert hass.states.get(EV_STATUS).attributes["startup_feedback_pending"] is False
+        if raw_soc < 90:
+            assert calls == []
+            assert hass.states.get(ARMED).state == hass.states.get(OWNED).state == "on"
+            assert hass.states.get(STATUS).state == "Override active"
+            assert _resume_record(hass) == record
+            # Even a stale later projection cannot complete this actual cohort.
+            hass.states.async_set(SOC, "99", {"unit_of_measurement": "%"})
+            await hass.async_block_till_done()
+            assert calls == []
+            hass.states.async_set("sensor.car_soc", "90", {"unit_of_measurement": "%"})
+            _publish_shared_ev_feedback(hass, controller)
+            await hass.async_block_till_done()
+        assert calls == ["turn_off"]
+        assert hass.states.get(STATUS).state == "Completed"
+        assert hass.states.get(ARMED).state == hass.states.get(OWNED).state == "off"
+    finally:
+        await controller.async_stop()
+
+
+@pytest.mark.freeze_time(NOW, real_asyncio=True)
+@pytest.mark.parametrize("ending", ["cancel", "timeout"])
+async def test_v37_missing_observed_contract_holds_owned_budget_but_allows_cleanup(
+    hass, freezer, ending
+):
+    restored, record = _restored_owned_checkpoint()
+    _, calls = await _setup(
+        hass,
+        soc=80,
+        restore_states=restored,
+        override_state="on",
+        native_attributes={"full_generation": 1},
+        observed_soc=_MISSING_OBSERVATION,
+    )
+    await hass.async_start()
+    await hass.async_block_till_done()
+    assert calls == []
+    assert _resume_record(hass) == record
+    assert hass.states.get(ARMED).state == hass.states.get(OWNED).state == "on"
+    assert hass.states.get(STATUS).state == "Waiting for data"
+    if ending == "cancel":
+        await hass.services.async_call(
+            "input_boolean", "turn_off", {"entity_id": ARMED}, blocking=True
+        )
+        await hass.async_block_till_done()
+    else:
+        await _tick(hass, freezer, datetime.fromtimestamp(record["expires"], UTC))
+    assert calls == ["turn_off"]
+    assert hass.states.get(STATUS).state == ("Cancelled" if ending == "cancel" else "Expired")
+    assert hass.states.get(ARMED).state == hass.states.get(OWNED).state == "off"
+    assert _resume_record(hass) == {}
+
+
+@pytest.mark.freeze_time(NOW, real_asyncio=True)
+async def test_v37_missing_observed_contract_cannot_start_new_paid_full(hass, freezer):
+    _, calls = await _setup(hass, observed_soc=_MISSING_OBSERVATION)
+    await _arm(hass)
+    await _tick(hass, freezer, datetime(2026, 10, 11, 18, tzinfo=UTC))
+    assert calls == []
+    assert hass.states.get(ARMED).state == "on"
+    assert hass.states.get(OWNED).state == "off"
+    assert hass.states.get(OVERRIDE).state == "off"
+
+
+@pytest.mark.freeze_time(NOW, real_asyncio=True)
+@pytest.mark.parametrize(
+    "bad_soc", [None, True, "65", "unknown", "NaN", "Infinity", -1, 101]
+)
+async def test_present_invalid_observed_soc_after_ready_remains_terminal(hass, bad_soc):
+    restored, _ = _restored_owned_checkpoint()
+    _, calls = await _setup(
+        hass,
+        soc=80,
+        restore_states=restored,
+        override_state="on",
+        native_attributes={"full_generation": 1},
+        startup_pending=True,
+        observed_soc=bad_soc,
+    )
+    await hass.async_start()
+    await hass.async_block_till_done()
+    assert calls == []
+    attributes = dict(hass.states.get(EV_STATUS).attributes)
+    attributes["startup_feedback_pending"] = False
+    hass.states.async_set(EV_STATUS, "feedback_confirmed", attributes)
+    await hass.async_block_till_done()
+    assert calls == ["turn_off"]
+    assert hass.states.get(STATUS).state == "Interrupted"
+    assert hass.states.get(ARMED).state == hass.states.get(OWNED).state == "off"
+
+
+@pytest.mark.parametrize("bad_soc", [float("nan"), float("inf"), -float("inf")])
+def test_observed_soc_template_rejects_nonfinite_numbers(hass, bad_soc):
+    variables = build_package()["automation"][0]["actions"][3]["variables"]
+    valid = Template(variables["soc_valid"], hass).async_render(
+        {"feedback": {"observed_soc_percent": bad_soc}}
+    )
+    assert valid is False
+
+
+@pytest.mark.parametrize("observed", [65.5, Decimal("65.5"), Fraction(131, 2)])
+def test_feedback_capture_selects_only_literal_safe_pair(hass, observed):
+    class NoStr:
+        def __str__(self):
+            raise AssertionError("Unrelated diagnostic metadata must not be rendered")
+
+        def __repr__(self):
+            raise AssertionError("Unrelated diagnostic metadata must not be copied")
+
+    hass.states.async_set(EV_STATUS, "ready", {
+        "startup_feedback_pending": False,
+        "observed_soc_percent": observed,
+        "last_write_at": NOW,
+        "opaque_diagnostic": NoStr(),
+    })
+    variables = build_package()["automation"][0]["actions"][2]["variables"]
+    feedback = Template(variables["feedback"], hass).async_render()
+    assert feedback == {"startup_feedback_pending": False, "observed_soc_percent": 65.5}
+    assert type(feedback["observed_soc_percent"]) is float
+
+
+@pytest.mark.freeze_time(NOW, real_asyncio=True)
+async def test_established_observed_loss_interrupts_despite_valid_canonical_projection(
+    hass, freezer
+):
+    _, calls = await _setup(hass, soc=80, observed_soc=80)
+    await _target(hass, 90)
+    await _arm(hass)
+    await _tick(hass, freezer, datetime(2026, 10, 11, 18, 10, tzinfo=UTC))
+    assert calls == ["turn_on"]
+    attributes = dict(hass.states.get(EV_STATUS).attributes)
+    attributes["observed_soc_percent"] = None
+    hass.states.async_set(EV_STATUS, "feedback_confirmed", attributes)
+    await hass.async_block_till_done()
+    assert hass.states.get(SOC).state == "80"
+    assert calls == ["turn_on", "turn_off"]
+    assert hass.states.get(STATUS).state == "Interrupted"
+    attributes["observed_soc_percent"] = 80
+    hass.states.async_set(EV_STATUS, "feedback_confirmed", attributes)
+    await hass.async_block_till_done()
+    assert calls == ["turn_on", "turn_off"]
+    assert hass.states.get(ARMED).state == "off"
+
+
+@pytest.mark.freeze_time(NOW, real_asyncio=True)
+@pytest.mark.parametrize("change", ["soc", "gate", "pending", "missing_contract"])
+async def test_last_generation_helper_await_rechecks_observed_soc_before_full_on(
+    hass, freezer, monkeypatch, change
+):
+    _, calls = await _setup(hass, soc=80, observed_soc=80)
+    original = ServiceRegistry.async_call
+
+    async def inject(registry, domain, service, service_data=None, *args, **kwargs):
+        result = await original(registry, domain, service, service_data, *args, **kwargs)
+        data = {**(service_data or {}), **(kwargs.get("target") or {})}
+        if (
+            domain == "input_text" and service == "set_value"
+            and data.get("entity_id") in (GENERATION, [GENERATION])
+            and str(data.get("value", "")).startswith("pending:")
+        ):
+            attributes = dict(hass.states.get(EV_STATUS).attributes)
+            if change == "soc":
+                attributes["observed_soc_percent"] = 20
+            elif change == "gate":
+                attributes["gate"] = "unavailable"
+            elif change == "pending":
+                attributes["startup_feedback_pending"] = True
+            else:
+                attributes.pop("observed_soc_percent")
+            hass.states.async_set(EV_STATUS, "feedback_confirmed", attributes)
+        return result
+
+    monkeypatch.setattr(ServiceRegistry, "async_call", inject)
+    await _arm(hass)
+    await _tick(hass, freezer, datetime(2026, 10, 11, 18, tzinfo=UTC))
+    assert calls == []
+    assert hass.states.get(OWNED).state == hass.states.get(OVERRIDE).state == "off"
+
+
+@pytest.mark.freeze_time(NOW, real_asyncio=True)
+async def test_datetime_status_metadata_cannot_stringify_the_paired_cohort(hass):
+    restored, record = _restored_owned_checkpoint()
+    _, calls = await _setup(
+        hass,
+        soc=80,
+        restore_states=restored,
+        override_state="on",
+        native_attributes={"full_generation": 1},
+        observed_soc=80,
+        ev_status_extra={"last_write_at": NOW, "charge_to_full_started_at": NOW},
+    )
+    await hass.async_start()
+    await hass.async_block_till_done()
+    assert calls == []
+    assert hass.states.get(STATUS).state == "Override active"
+    assert _resume_record(hass) == record
+    attributes = dict(hass.states.get(EV_STATUS).attributes)
+    attributes["observed_soc_percent"] = 90
+    hass.states.async_set(EV_STATUS, "feedback_confirmed", attributes)
+    await hass.async_block_till_done()
+    assert calls == ["turn_off"]
+    assert hass.states.get(STATUS).state == "Completed"
+
+
+@pytest.mark.freeze_time(NOW, real_asyncio=True)
+async def test_unstarted_trip_waits_until_canonical_plan_matches_observed_soc(hass, freezer):
+    _, calls = await _setup(hass, soc=80, observed_soc=60)
+    await _arm(hass)
+    await _tick(hass, freezer, datetime(2026, 10, 11, 18, tzinfo=UTC))
+    assert calls == []
+    assert hass.states.get(OWNED).state == "off"
+    hass.states.async_set(SOC, "60", {"unit_of_measurement": "%"})
+    await hass.async_block_till_done()
+    assert calls == ["turn_on"]
+    assert hass.states.get(OWNED).state == "on"
+
+
+@pytest.mark.freeze_time(NOW, real_asyncio=True)
+async def test_paused_free_window_resume_waits_for_matching_cohort_without_new_budget(
+    hass, freezer
+):
+    _, calls = await _start_day_trip(hass, freezer, observed_soc=20)
+    original = _resume_record(hass)
+    await _tick(hass, freezer, datetime(2026, 10, 11, 23, 24, tzinfo=UTC))
+    await _native_full_stop(hass)
+    attributes = dict(hass.states.get(EV_STATUS).attributes)
+    attributes["observed_soc_percent"] = 70
+    hass.states.async_set(EV_STATUS, "feedback_confirmed", attributes)
+    await _tick(hass, freezer, datetime(2026, 10, 12, 1, 34, tzinfo=UTC))
+    await _reconnect(hass)
+    assert calls == ["turn_on"]  # Canonical plan still describes the old 20%.
+    assert hass.states.get(OWNED).state == "off"
+    hass.states.async_set(SOC, "70", {"unit_of_measurement": "%"})
+    await hass.async_block_till_done()
+    assert calls == ["turn_on", "turn_on"]
+    resumed = _resume_record(hass)
+    assert (resumed["first"], resumed["expires"]) == (original["first"], original["expires"])
+    await _tick(hass, freezer, datetime(2026, 10, 12, 2, 59, tzinfo=UTC))
+    assert calls == ["turn_on", "turn_on"]
+    assert hass.states.get(OVERRIDE).state == "on"

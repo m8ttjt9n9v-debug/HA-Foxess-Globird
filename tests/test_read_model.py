@@ -592,6 +592,7 @@ def test_ev_control_attributes_preserve_existing_public_values() -> None:
             2026, 9, 17, 8, 30, tzinfo=UTC
         ),
         "startup_feedback_pending": False,
+        "observed_soc_percent": None,
         "driving_learning_mode": "learned",
         "driving_learning_samples": 3,
         "driving_p85_kwh": 11.0,
@@ -772,7 +773,9 @@ def test_missing_ev_controller_preserves_unavailable_state_defaults() -> None:
     assert values["ev_driving_learning_status"] == "unavailable"
     assert values["ev_current_target"] is None
     ev_model = build_site_read_model(coordinator).ev
-    assert ev_model.control_attributes() == {"gate": "unavailable"}
+    assert ev_model.control_attributes() == {
+        "gate": "unavailable", "startup_feedback_pending": True, "observed_soc_percent": None,
+    }
     diagnostics = ev_model.actuator_diagnostics("disabled")
     assert diagnostics["ev_control_gate"] == "disabled"
     assert diagnostics["ev_writes_enabled"] is False

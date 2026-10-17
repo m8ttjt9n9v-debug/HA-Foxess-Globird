@@ -547,6 +547,7 @@ class EvReadModel:
     learning_status: str
     charge_to_full_started_at: datetime | None
     startup_feedback_pending: bool
+    observed_soc_percent: float | None
 
     def sensor_values(self) -> dict[str, object]:
         """Project the existing EV entity states."""
@@ -600,7 +601,10 @@ class EvReadModel:
     def control_attributes(self) -> dict[str, object]:
         """Project the existing EV Control Status entity attributes."""
         if not self.controller_available:
-            return {"gate": "unavailable"}
+            return {
+                "gate": "unavailable", "startup_feedback_pending": True,
+                "observed_soc_percent": None,
+            }
         return {
             "gate": self.gate_status,
             "decision_phase": self.decision_phase,
@@ -644,6 +648,7 @@ class EvReadModel:
             "daily_backfill_frozen_start": self.daily_backfill_frozen_start,
             "charge_to_full_started_at": self.charge_to_full_started_at,
             "startup_feedback_pending": self.startup_feedback_pending,
+            "observed_soc_percent": self.observed_soc_percent,
             "driving_learning_mode": self.learning_status,
             "driving_learning_samples": self.learning_samples,
             "driving_p85_kwh": self.driving_p85_kwh,
@@ -1080,7 +1085,8 @@ def _build_ev_read_model(
             learned_charge_limit_percent=None,
             learning_status="unavailable",
             charge_to_full_started_at=None,
-            startup_feedback_pending=False,
+            startup_feedback_pending=True,
+            observed_soc_percent=None,
         )
     grid_average = controller.grid_average.result(now)
     actual_average = controller.ev_average.result(now)
@@ -1089,6 +1095,11 @@ def _build_ev_read_model(
     legacy_capacity = coordinator.runtime_config.ev_capacity.source == "legacy_ratio"
     pre_free_plan = controller.pre_free_plan
     daily_plan = controller.daily_backfill_plan
+    capture_startup = getattr(controller, "startup_feedback", None)
+    startup_pending, observed_soc = (
+        capture_startup() if callable(capture_startup)
+        else (getattr(controller, "full_startup_evidence_pending", False), None)
+    )
     return EvReadModel(
         soc_percent=None if snapshot is None else snapshot.ev_soc,
         maximum_power_kw=ledger.ev_max_power_kw,
@@ -1190,7 +1201,8 @@ def _build_ev_read_model(
         ),
         learning_status="unavailable" if learned is None else learned.mode,
         charge_to_full_started_at=controller.charge_to_full_started_at,
-        startup_feedback_pending=getattr(controller, "full_startup_evidence_pending", False),
+        startup_feedback_pending=startup_pending,
+        observed_soc_percent=observed_soc,
     )
 
 

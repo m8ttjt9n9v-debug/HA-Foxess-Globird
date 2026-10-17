@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "extension": "ev_feedback_v1",
+  "entity_count": 0,
+  "entities": [],
+  "attribute_profiles": {},
+  "attribute_profile_additions": {
+    "ev_control_diagnostics_v1": {
+      "observed_soc_percent": "Finite vehicle SoC from 0 to 100 percent, or null for unavailable/invalid evidence, sampled from the exact commissioned vehicle SoC mapping in the same synchronous feedback capture used to qualify startup_feedback_pending. These two fields are delivered together on EV control status so Trip validation cannot mix raw readiness with a separately lagging canonical SoC entity. This is read-only feedback, not a target, a new freshness deadline, permission to charge or evidence of physical charging. Existing stable-SoC value semantics and all control gates remain unchanged. Missing field on an older producer is distinct from a present null value on this producer."
+    }
+  }
+}

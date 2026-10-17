@@ -254,6 +254,9 @@ automation:
   - trigger: state
     entity_id: sensor.home_energy_ev_control_status
     attribute: startup_feedback_pending
+  - trigger: state
+    entity_id: sensor.home_energy_ev_control_status
+    attribute: observed_soc_percent
   conditions:
   - condition: template
     value_template: '{{ is_state(''input_boolean.heo_trip_charge_scheduled'', ''on'')
@@ -265,8 +268,11 @@ automation:
       value_template: '{{ is_state(''input_boolean.heo_trip_charge_started'', ''on'')
         and ((trigger is defined and trigger.get(''id'') == ''startup'') or states(''switch.home_energy_ev_charge_to_full'')
         not in [''on'', ''off''] or (not has_value(''sensor.home_energy_ev_control_status'')
-        or state_attr(''sensor.home_energy_ev_control_status'', ''startup_feedback_pending'')
-        is not sameas false)) }}'
+        or ''observed_soc_percent'' not in (states[''sensor.home_energy_ev_control_status''].attributes
+        if states[''sensor.home_energy_ev_control_status''] is not none else {}) or
+        (states[''sensor.home_energy_ev_control_status''].attributes if states[''sensor.home_energy_ev_control_status'']
+        is not none else {}).get(''startup_feedback_pending'') is not sameas false))
+        }}'
     then:
     - action: input_text.set_value
       target:
@@ -293,7 +299,14 @@ automation:
       ticket: '{{ state_attr(''input_datetime.heo_trip_started_for'', ''timestamp'')
         | float(0) }}'
       now_ts: '{{ now().timestamp() }}'
-      soc: '{{ states(''sensor.home_energy_ev_soc'') | float(-1) }}'
+      feedback: '{% set attrs = states[''sensor.home_energy_ev_control_status''].attributes
+        if states[''sensor.home_energy_ev_control_status''] is not none else {} %}{%
+        set observed = attrs.get(''observed_soc_percent'') %}{{ {''startup_feedback_pending'':
+        attrs.get(''startup_feedback_pending'') if attrs.get(''startup_feedback_pending'')
+        is boolean else none, ''observed_soc_percent'': observed | float if (observed
+        is number and observed is not boolean and is_number(observed) and 0 <= observed
+        <= 100) else none} if ''observed_soc_percent'' in attrs else {} }}'
+      soc: '{{ feedback.get(''observed_soc_percent'') }}'
       target: '{{ states(''input_select.heo_trip_target_soc'') | replace(''%'', '''')
         | float(-1) }}'
       started_target: '{{ states(''input_number.heo_trip_started_target'') | float(-1)
@@ -315,7 +328,7 @@ automation:
         ~ '':'') or states(''input_text.heo_trip_full_generation'') == ''pending:''
         ~ states[''switch.home_energy_ev_charge_to_full''].context.id) }}'
       startup_feedback_pending: '{{ (not has_value(''sensor.home_energy_ev_control_status'')
-        or state_attr(''sensor.home_energy_ev_control_status'', ''startup_feedback_pending'')
+        or ''observed_soc_percent'' not in feedback or feedback.get(''startup_feedback_pending'')
         is not sameas false) }}'
       resume_record: '{% set record = states(''input_text.heo_trip_resume_state'')
         | from_json({}) %}{{ record if record is mapping else {} }}'
@@ -340,12 +353,12 @@ automation:
       control_ready: '{{ is_state(''switch.home_energy_automatic_ev_control'', ''on'')
         and is_state(''switch.home_energy_safety_lock'', ''off'') and state_attr(''sensor.home_energy_trip_charge_status'',
         ''full_generation'') is integer and states[''input_text.heo_trip_resume_state'']
-        is not none and not (not has_value(''sensor.home_energy_ev_control_status'')
-        or state_attr(''sensor.home_energy_ev_control_status'', ''startup_feedback_pending'')
-        is not sameas false) and state_attr(''sensor.home_energy_ev_control_status'',
+        is not none and not startup_feedback_pending and state_attr(''sensor.home_energy_ev_control_status'',
         ''gate'') == ''ready'' }}'
   - variables:
-      soc_valid: '{{ 0 <= soc <= 100 }}'
+      soc_valid: '{{ (feedback.get(''observed_soc_percent'') is number and feedback.get(''observed_soc_percent'')
+        is not boolean and is_number(feedback.get(''observed_soc_percent'')) and 0
+        <= feedback.get(''observed_soc_percent'') <= 100) }}'
       pause_requested: '{{ resume_record.get(''paused'') is sameas true }}'
       resume_valid: '{{ resume_record.get(''v'') is integer and resume_record.get(''v'')
         == 1 and resume_record.get(''first'') is number and resume_record.get(''first'')
@@ -359,8 +372,9 @@ automation:
         == (target | int | string) ~ ''%'' }}'
   - variables:
       plan_valid: "{{ plan.get('v') == 2 and plan.get('due') == due\n    and target_valid\
-        \ and plan.get('target') == target\n    and plan.get('soc') == states('sensor.home_energy_ev_soc')\
-        \ | float(-1)\n    and plan.get('cap') == states('sensor.home_energy_ev_usable_capacity')\
+        \ and plan.get('target') == target\n    and soc_valid and plan.get('soc')\
+        \ == soc\n    and plan.get('soc') == states('sensor.home_energy_ev_soc') |\
+        \ float(-1)\n    and plan.get('cap') == states('sensor.home_energy_ev_usable_capacity')\
         \ | float(-1)\n    and plan.get('kw') == states('sensor.home_energy_ev_max_power')\
         \ | float(-1)\n    and plan.get('eff') == states('input_number.heo_trip_charge_efficiency')\
         \ | float(-1)\n    and plan.get('extra') == states('input_number.heo_trip_extra_minutes')\
@@ -1031,11 +1045,11 @@ automation:
       - if:
         - condition: template
           value_template: "{{ plan.get('v') == 2 and plan.get('due') == due\n    and\
-            \ target_valid and plan.get('target') == target\n    and plan.get('soc')\
-            \ == states('sensor.home_energy_ev_soc') | float(-1)\n    and plan.get('cap')\
-            \ == states('sensor.home_energy_ev_usable_capacity') | float(-1)\n   \
-            \ and plan.get('kw') == states('sensor.home_energy_ev_max_power') | float(-1)\n\
-            \    and plan.get('eff') == states('input_number.heo_trip_charge_efficiency')\
+            \ target_valid and plan.get('target') == target\n    and soc_valid and\
+            \ plan.get('soc') == soc\n    and plan.get('soc') == states('sensor.home_energy_ev_soc')\
+            \ | float(-1)\n    and plan.get('cap') == states('sensor.home_energy_ev_usable_capacity')\
+            \ | float(-1)\n    and plan.get('kw') == states('sensor.home_energy_ev_max_power')\
+            \ | float(-1)\n    and plan.get('eff') == states('input_number.heo_trip_charge_efficiency')\
             \ | float(-1)\n    and plan.get('extra') == states('input_number.heo_trip_extra_minutes')\
             \ | float(-1)\n    and plan.get('maximum') == states('input_number.heo_trip_override_timeout')\
             \ | float(-1) and is_state('input_boolean.heo_trip_charge_scheduled',\
@@ -1051,7 +1065,18 @@ automation:
             \ | from_json({})).get('generation') is none or (state_attr('sensor.home_energy_trip_charge_status',\
             \ 'full_generation') is integer and (states('input_text.heo_trip_resume_state')\
             \ | from_json({})).get('generation') == state_attr('sensor.home_energy_trip_charge_status',\
-            \ 'full_generation') + 1)) and 0 <= states('sensor.home_energy_ev_soc')\
+            \ 'full_generation') + 1)) and not (not has_value('sensor.home_energy_ev_control_status')\
+            \ or 'observed_soc_percent' not in (states['sensor.home_energy_ev_control_status'].attributes\
+            \ if states['sensor.home_energy_ev_control_status'] is not none else {})\
+            \ or (states['sensor.home_energy_ev_control_status'].attributes if states['sensor.home_energy_ev_control_status']\
+            \ is not none else {}).get('startup_feedback_pending') is not sameas false)\
+            \ and state_attr('sensor.home_energy_ev_control_status', 'gate') == 'ready'\
+            \ and (state_attr('sensor.home_energy_ev_control_status', 'observed_soc_percent')\
+            \ is number and state_attr('sensor.home_energy_ev_control_status', 'observed_soc_percent')\
+            \ is not boolean and is_number(state_attr('sensor.home_energy_ev_control_status',\
+            \ 'observed_soc_percent')) and 0 <= state_attr('sensor.home_energy_ev_control_status',\
+            \ 'observed_soc_percent') <= 100) and state_attr('sensor.home_energy_ev_control_status',\
+            \ 'observed_soc_percent') == soc and 0 <= states('sensor.home_energy_ev_soc')\
             \ | float(-1) < target }}"
         then:
         - action: switch.turn_on

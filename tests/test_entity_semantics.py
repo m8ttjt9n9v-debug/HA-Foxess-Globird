@@ -10,6 +10,7 @@ from scripts import entity_semantics
 from scripts.entity_contract import build_entity_contract
 from scripts.entity_semantics import (
     EV_CAPACITY_EXTENSIONS_PATH,
+    EV_FEEDBACK_EXTENSIONS_PATH,
     MANUAL_EXTENSIONS_PATH,
     SEMANTICS_PATH,
     entities_awaiting_review,
@@ -26,6 +27,18 @@ def test_reviewed_entity_semantics_are_complete_and_current() -> None:
     assert contract["reviewed_entity_count"] == expected_count
     assert contract["total_entity_count"] == expected_count
     assert entities_awaiting_review(contract) == []
+
+
+def test_ev_feedback_semantics_are_additive_and_identify_the_same_capture() -> None:
+    extension = json.loads(EV_FEEDBACK_EXTENSIONS_PATH.read_text(encoding="utf-8"))
+    assert extension["entities"] == []
+    assert extension["attribute_profiles"] == {}
+    additions = extension["attribute_profile_additions"]
+    assert set(additions) == {"ev_control_diagnostics_v1"}
+    assert set(additions["ev_control_diagnostics_v1"]) == {"observed_soc_percent"}
+    description = additions["ev_control_diagnostics_v1"]["observed_soc_percent"]
+    assert "same synchronous feedback capture" in description
+    assert "Missing field" in description and "present null" in description
 
 
 def test_manual_semantics_add_only_reviewed_keys_to_existing_profiles() -> None:

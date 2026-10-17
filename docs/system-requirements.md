@@ -114,6 +114,9 @@ Restored active Full/Trip intent waits for completed Home Assistant startup
 and its initial vehicle/actuator feedback before becoming ready. The original
 timeout still counts; missing startup data is not a new permission to charge.
 Legacy helper installations require the matching startup-aware dispatcher.
+From v0.12.38 that dispatcher validates observed SoC and startup readiness
+from the same EV-status update, not separate entities with independent update
+timing. An older producer missing this capability cannot authorise a new start.
 
 Optional dedicated EV planning capacity can reuse the exact mapped car's loaded
 Tessie coordinator, use an explicit Wh/kWh full-capacity sensor, or use a reviewed

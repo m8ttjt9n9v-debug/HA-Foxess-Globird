@@ -133,11 +133,24 @@ def _full_generation() -> str:
     )
 
 
-def _startup_feedback_pending() -> str:
-    """Use HEO's shared startup-cohort decision; missing evidence is not ready."""
+def _startup_feedback_pending(feedback: str | None = None) -> str:
+    """Require the paired HEO cohort, including when staged on older code."""
+    if feedback is None:
+        feedback = (
+            f"(states['{EV_STATUS}'].attributes "
+            f"if states['{EV_STATUS}'] is not none else {{}})"
+        )
     return (
         f"(not has_value('{EV_STATUS}') or "
-        f"state_attr('{EV_STATUS}', 'startup_feedback_pending') is not sameas false)"
+        f"'observed_soc_percent' not in {feedback} or "
+        f"{feedback}.get('startup_feedback_pending') is not sameas false)"
+    )
+
+
+def _valid_soc(value: str) -> str:
+    return (
+        f"({value} is number and {value} is not boolean and is_number({value}) "
+        f"and 0 <= {value} <= 100)"
     )
 
 
@@ -192,6 +205,7 @@ def build_package(
     plan_matches = f"""\
 {{{{ plan.get('v') == 2 and plan.get('due') == due
     and target_valid and plan.get('target') == target
+    and soc_valid and plan.get('soc') == soc
     and plan.get('soc') == states('{SOC}') | float(-1)
     and plan.get('cap') == states('{CAPACITY}') | float(-1)
     and plan.get('kw') == states('{POWER}') | float(-1)
@@ -213,6 +227,10 @@ def build_package(
         + f"(state_attr('{NATIVE_STATUS}', 'full_generation') is integer and "
         + f"(states('{RESUME}') | from_json({{}})).get('generation') == "
         + f"state_attr('{NATIVE_STATUS}', 'full_generation') + 1))"
+        + " and not " + _startup_feedback_pending()
+        + f" and state_attr('{EV_STATUS}', 'gate') == 'ready'"
+        + " and " + _valid_soc(f"state_attr('{EV_STATUS}', 'observed_soc_percent')")
+        + f" and state_attr('{EV_STATUS}', 'observed_soc_percent') == soc"
         + f" and 0 <= states('{SOC}') | float(-1) < target }}"
         + "}"
     )
@@ -410,6 +428,7 @@ def build_package(
             {"trigger": "state", "entity_id": [location_entity, cable_entity], "from": None},
             {"trigger": "state", "entity_id": NATIVE_STATUS},
             {"trigger": "state", "entity_id": EV_STATUS, "attribute": "startup_feedback_pending"},
+            {"trigger": "state", "entity_id": EV_STATUS, "attribute": "observed_soc_percent"},
         ],
         "conditions": [
             _condition(
@@ -455,7 +474,20 @@ def build_package(
                     "due": f"{{{{ state_attr('{READY}', 'timestamp') | float(0) }}}}",
                     "ticket": f"{{{{ state_attr('{TICKET}', 'timestamp') | float(0) }}}}",
                     "now_ts": "{{ now().timestamp() }}",
-                    "soc": f"{{{{ states('{SOC}') | float(-1) }}}}",
+                    # Read readiness and SoC from one EV-status publication.
+                    # The separately refreshed canonical planning sensor may lag.
+                    # Copy only JSON/literal-safe cohort primitives. Full status
+                    # attributes contain datetime objects, whose repr would make
+                    # HA's native template result a string instead of a mapping.
+                    "feedback": "{% set attrs = states['" + EV_STATUS + "'].attributes "
+                    "if states['" + EV_STATUS + "'] is not none else {} %}"
+                    "{% set observed = attrs.get('observed_soc_percent') %}"
+                    "{{ {'startup_feedback_pending': "
+                    "attrs.get('startup_feedback_pending') "
+                    "if attrs.get('startup_feedback_pending') is boolean else none, "
+                    "'observed_soc_percent': observed | float if " + _valid_soc("observed")
+                    + " else none} if 'observed_soc_percent' in attrs else {} }}",
+                    "soc": "{{ feedback.get('observed_soc_percent') }}",
                     "target": f"{{{{ states('{TARGET}') | replace('%', '') | float(-1) }}}}",
                     "started_target": f"{{{{ states('{STARTED_TARGET}') | float(-1) }}}}",
                     "armed": f"{{{{ is_state('{ARMED}', 'on') }}}}",
@@ -463,7 +495,8 @@ def build_package(
                     "override_on": f"{{{{ is_state('{OVERRIDE}', 'on') }}}}",
                     "override_state": f"{{{{ states('{OVERRIDE}') }}}}",
                     "owns_current_full": "{{ " + _owns_current_full() + " }}",
-                    "startup_feedback_pending": "{{ " + _startup_feedback_pending() + " }}",
+                    "startup_feedback_pending": "{{ "
+                    + _startup_feedback_pending("feedback") + " }}",
                     "resume_record": "{% set record = states('"
                     + RESUME
                     + "') | from_json({}) %}{{ record if record is mapping else {} }}",
@@ -499,14 +532,15 @@ def build_package(
                     f"and is_state('{LOCK}', 'off') "
                     f"and state_attr('{NATIVE_STATUS}', 'full_generation') is integer "
                     f"and states['{RESUME}'] is not none "
-                    "and not " + _startup_feedback_pending() + " "
+                    "and not startup_feedback_pending "
                     "and state_attr('sensor.home_energy_ev_control_status', 'gate') "
                     "== 'ready' }}",
                 }
             },
             {
                 "variables": {
-                    "soc_valid": "{{ 0 <= soc <= 100 }}",
+                    "soc_valid": "{{ "
+                    + _valid_soc("feedback.get('observed_soc_percent')") + " }}",
                     "pause_requested": "{{ resume_record.get('paused') is sameas true }}",
                     "resume_valid": "{{ resume_record.get('v') is integer "
                     "and resume_record.get('v') == 1 "

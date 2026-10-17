@@ -157,6 +157,11 @@ duplicate helpers, second controller or competing configuration source.
 
 ### Trip interruption recovery
 
+- [x] Pair startup readiness with the observed vehicle SoC used by the helper
+  dispatcher, sampled in one feedback capture. Test distinct raw/canonical
+  entities and delayed public projection rather than masking publication order
+  by mapping both roles to the same fixture entity.
+
 - [x] Distinguish unavailable startup feedback from a confirmed disconnect.
   Retain the shared hold through Home Assistant startup jobs even when vehicle
   sources load early; test intermediate status publication before STARTED.

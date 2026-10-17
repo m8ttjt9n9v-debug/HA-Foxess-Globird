@@ -363,6 +363,27 @@ class ActiveEvController:
 
     @property
     def full_startup_evidence_pending(self) -> bool:
+        return self.startup_feedback()[0]
+
+    def startup_feedback(self) -> tuple[bool, float | None]:
+        """Pair startup qualification and mapped SoC from one captured cohort.
+
+        The canonical SoC sensor follows the independently refreshed site
+        snapshot. Consumers of this readiness signal must use its paired SoC,
+        not assume that the canonical entity has already caught up.
+        """
+        feedback = _CYCLE_FEEDBACK.get() or capture_ev_feedback(
+            self.hass, ev_observation_entity_map(self.coordinator.runtime_config),
+        )
+        token = _CYCLE_FEEDBACK.set(feedback)
+        try:
+            pending = self._startup_evidence_pending()
+        finally:
+            _CYCLE_FEEDBACK.reset(token)
+        soc = feedback.soc.number
+        return pending, soc if soc is not None and 0 <= soc <= 100 else None
+
+    def _startup_evidence_pending(self) -> bool:
         """Restore Full intent only after its first complete source cohort.
 
         This lifecycle latch has no grace period and grants no write authority.

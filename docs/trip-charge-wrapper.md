@@ -61,6 +61,11 @@ From v0.12.37 the same wait lasts until Home Assistant finishes starting,
 including when the car's information arrives immediately. This prevents a
 startup ordering race without changing the trip's target or original timeout.
 
+From v0.12.38, the older helper scheduler receives the car's charge percentage
+and startup readiness together. It no longer cancels a restored trip just
+because the displayed SoC sensor has not caught up yet. The original timeout
+still counts; cancellation, replacement and invalid data remain protected.
+
 From v0.12.35, a confirmed temporary unplug or departure from home **pauses** an
 outstanding trip rather than cancelling it. HEO withdraws only that trip's
 charging override and keeps the original target and departure. It sends no
@@ -167,7 +172,7 @@ scheduler above.
 
 This optional native Home Assistant helper package schedules HEO's existing
 Charge to Full switch. It is a reusable wrapper, not another EV controller.
-The current pause/startup-aware dispatcher requires HEO v0.12.37 or later so it
+The current pause/startup-aware dispatcher requires HEO v0.12.38 or later so it
 can share startup evidence and verify why the previous charging override stopped.
 It ends its own Full request at your
 chosen reported SoC without changing HEO's Full implementation. HACS does not
