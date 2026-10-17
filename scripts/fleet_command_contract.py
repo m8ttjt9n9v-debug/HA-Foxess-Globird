@@ -50,6 +50,7 @@ MONITOR_CARD_TEMPLATE = """\
 
 | | |
 |---|---:|
+| Installed HEO | **{{ r('heo_version') }}** |
 | Battery | **{{ a('battery_soc') }}%** · {{ a('battery_power_kw') }} kW |
 | Grid / Solar | {{ a('grid_power_kw') }} / {{ a('solar_power_kw') }} kW |
 | House / EV load | {{ r('house_load', ' kW') }} / {{ r('ev_load', ' kW') }} |
@@ -422,6 +423,7 @@ DASHBOARD_HEADER = """\
 # Reusable three-site Fleet dashboard; all site data is placeholder monitoring data.
 # Install fleet-command-package.yaml separately. Insert the first full-width section into
 # an existing sections view without replacing its site cards. Secrets stay on the hub.
+# Version sensors read HACS installed_version, never latest_version; see docs/fleet-monitoring.md.
 """
 
 

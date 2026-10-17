@@ -141,6 +141,36 @@ async def test_monitoring_cards_preserve_zero_and_show_missing_optional_data(has
     assert "| GloBird balance | **$0.00** |" in content
     assert "| GloBird expected monthly cost | **—** |" in content
     assert "| EV plug / location | — · — |" in content
+    assert "| Installed HEO | **—** |" in content
+
+
+@pytest.mark.parametrize("site", ["alpha", "bravo", "charlie"])
+@pytest.mark.parametrize("installed_version", ["v0.12.38", "0.12.29rc17"])
+async def test_monitoring_cards_show_each_sites_installed_version(hass, site, installed_version):
+    """The displayed value is each site's installed-version sensor, not an update flag."""
+    hass.states.async_set(f"sensor.fleet_site_{site}_summary", "ready")
+    hass.states.async_set(f"sensor.fleet_site_{site}_heo_version", installed_version)
+    # Neither another site's version nor the latest available release is authoritative.
+    hass.states.async_set("sensor.fleet_site_other_heo_version", "v9.0.0")
+    hass.states.async_set(
+        "update.home_energy_orchestrator_update", "on", {"latest_version": "v9.0.0"}
+    )
+    sections = build_dashboard()["views"][0]["sections"]
+    card = sections[1 + ("alpha", "bravo", "charlie").index(site)]["cards"][0]
+    content = Template(card["content"], hass).async_render(parse_result=False)
+    assert f"| Installed HEO | **{installed_version}** |" in content
+    assert "v9.0.0" not in content
+
+
+@pytest.mark.parametrize("version_state", ["unknown", "unavailable", "none"])
+async def test_monitoring_card_does_not_present_unavailable_version_as_installed(
+    hass, version_state,
+):
+    hass.states.async_set("sensor.fleet_site_alpha_summary", "ready")
+    hass.states.async_set("sensor.fleet_site_alpha_heo_version", version_state)
+    card = build_dashboard()["views"][0]["sections"][1]["cards"][0]
+    content = Template(card["content"], hass).async_render(parse_result=False)
+    assert "| Installed HEO | **—** |" in content
 
 
 @pytest.mark.parametrize("command", ["manual_export_max", "manual_resume_automatic"])
