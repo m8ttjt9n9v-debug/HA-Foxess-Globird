@@ -9,6 +9,9 @@ Status here describes behavioral parity, not merely the presence of code.
   the export dispatcher or creating a generic privileged-service proxy.
 - [x] Reuse HACS cached stable releases and its installer; require an exact
   repository/entity binding and verify downloaded version before restart.
+- [x] Correct cold-start release catalogue initialisation through one shared
+  native HACS metadata refresh, retaining strict stable-release checks and
+  never turning a failed initialisation into a recurring network poller.
 - [x] Wrap native verified HA+database backups, host-wide idle/session/source
   checks, unchanged settings, existing locks and a transient actuator fence.
   Preserve all policy switches, Safety Lock and device state.

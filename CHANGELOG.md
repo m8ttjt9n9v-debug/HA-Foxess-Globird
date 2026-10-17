@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.12.41 — Load Fleet releases after Home Assistant restart
+
+- Initialise an empty HACS release-detail cache through HACS's own verified
+  repository metadata refresh, so Fleet's release selector works after a cold
+  start without first opening HACS. This fetches metadata only: it never
+  installs, restarts, changes settings or issues battery/EV commands.
+- Share one initialisation attempt across concurrent readers. Populated caches
+  remain read-only; a failed initialisation does not become a repeating network
+  poller. Recheck the exact repository/entity binding after the awaited refresh.
+- Keep published-tag membership and explicit non-draft, non-prerelease metadata
+  checks. A version-looking tag alone does not prove a stable release.
+- Preserve maintenance admission, backups, administrator permissions, policies,
+  persisted state and all charging/export behavior. Publishing installs nothing
+  on a site; a controlled HACS installation and restart remain separate steps.
+
 ## 0.12.40 — Safe per-site Fleet updates and restarts
 
 - Add optional administrator-only per-site Fleet release selection, Update &

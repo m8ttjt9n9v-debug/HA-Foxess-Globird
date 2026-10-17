@@ -9,8 +9,10 @@ Optional integrations are inspected lazily so absence cannot break HEO setup.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import re
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -20,6 +22,17 @@ DOMAIN = "home_energy_orchestrator"
 REPOSITORY = "m8ttjt9n9v-debug/HA-Foxess-Globird"
 _STABLE_TAG = re.compile(r"v?\d+\.\d+\.\d+\Z")
 _MANIFEST = Path(__file__).with_name("manifest.json")
+_CATALOG_HYDRATION = "heo_hacs_catalog_hydration"
+_CATALOG_REFRESH_TIMEOUT_SECONDS = 10
+
+
+@dataclass(slots=True)
+class _CatalogHydration:
+    """One native warm attempt per verified repository instance and process."""
+
+    repository: Any
+    lock: asyncio.Lock = field(default_factory=asyncio.Lock)
+    attempted: bool = False
 
 
 class MaintenanceAdapterError(Exception):
@@ -102,6 +115,9 @@ def _catalog(repository: Any, entity: Any) -> dict[str, object]:
     releases = repository.releases.objects
     if not isinstance(tags, list) or not isinstance(releases, list):
         raise MaintenanceAdapterError("hacs_catalog_unsupported")
+    if not releases:
+        # Persisted tag strings alone cannot establish draft/prerelease status.
+        raise MaintenanceAdapterError("hacs_capability_unavailable")
     versions: list[str] = []
     for release in releases:
         tag = release.tag_name
@@ -124,9 +140,50 @@ def _catalog(repository: Any, entity: Any) -> dict[str, object]:
 
 
 async def async_hacs_catalog(hass: HomeAssistant) -> dict[str, object]:
-    """Return only verified HEO HACS identity and its cached stable releases."""
+    """Use verified HACS releases, warming its cold native cache at most once.
+
+    HACS persists published tags but not the release-model objects. After boot,
+    use the same native refresh as its repository screen once, not a new API
+    reader or a periodic failed-fetch loop. Never infer stable status from tags.
+    """
     try:
-        return _catalog(*_hacs_binding(hass))
+        repository, entity = _hacs_binding(hass)
+        releases = repository.releases.objects
+        if not isinstance(releases, list) or releases:
+            return _catalog(repository, entity)
+        tags = repository.data.published_tags
+        if not isinstance(tags, list) or any(not isinstance(tag, str) for tag in tags):
+            raise MaintenanceAdapterError("hacs_catalog_unsupported")
+        if not tags:
+            raise MaintenanceAdapterError("hacs_capability_unavailable")
+        provider = hass.data["hacs"]
+        hydrations = hass.data.setdefault(_CATALOG_HYDRATION, {})
+        hydration = hydrations.setdefault(id(repository), _CatalogHydration(repository))
+        async with hydration.lock:
+            rebound_repository, rebound_entity = _hacs_binding(hass)
+            if (
+                hass.data.get("hacs") is not provider
+                or rebound_repository is not repository
+                or rebound_entity is not entity
+            ):
+                raise MaintenanceAdapterError("hacs_entity_mismatch")
+            if not repository.releases.objects and not hydration.attempted:
+                # Consume before awaiting: cancellation/failure never schedules
+                # another network request on the next maintenance status poll.
+                hydration.attempted = True
+                try:
+                    async with asyncio.timeout(_CATALOG_REFRESH_TIMEOUT_SECONDS):
+                        await repository.update_repository(ignore_issues=True, force=True)
+                except Exception:
+                    raise MaintenanceAdapterError("hacs_capability_unavailable") from None
+            rebound_repository, rebound_entity = _hacs_binding(hass)
+            if (
+                hass.data.get("hacs") is not provider
+                or rebound_repository is not repository
+                or rebound_entity is not entity
+            ):
+                raise MaintenanceAdapterError("hacs_entity_mismatch")
+            return _catalog(repository, entity)
     except MaintenanceAdapterError:
         raise
     except Exception:
@@ -147,6 +204,9 @@ async def async_install(hass: HomeAssistant, version: str, context: Context) -> 
     """Pin one approved newer stable release through the real update service."""
     try:
         selected = _version(version)
+        # Status/admission may warm HACS earlier. Do not introduce a metadata
+        # network await between the node's final idle checkpoint and this write;
+        # a cache lost meanwhile must fail closed for deliberate reassessment.
         catalog = _catalog(*_hacs_binding(hass))
         if version not in catalog["versions"]:
             raise MaintenanceAdapterError("release_not_available")

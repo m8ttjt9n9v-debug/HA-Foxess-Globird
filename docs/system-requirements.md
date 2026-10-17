@@ -9,6 +9,12 @@ and database, finish without partial failures and be read back successfully.
 Unsupported capabilities block maintenance, not ordinary HEO setup/control.
 A local backup is not an off-device or restore-tested guarantee.
 
+From v0.12.41, cold-start release details are initialised once through the exact
+verified HACS repository's native metadata refresh. Concurrent readers share
+that attempt, failures do not create a new repeating network poller, and normal
+populated catalogue reads make no new request. Published-tag membership and
+explicit stable-release metadata remain mandatory.
+
 Remote targets require explicitly configured private origins and administrator
 credentials stored only on the hub. Monitoring accounts are not automatically
 elevated. Both the initiating hub user and node token must be current active

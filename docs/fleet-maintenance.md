@@ -14,6 +14,12 @@ Available in v0.12.40. Publishing the release does not install, configure or
 activate maintenance on a site; controlled installation and live acceptance are
 separate steps.
 
+Use v0.12.41 or newer for cold-start release-list loading. HACS persists release
+tags but not its detailed in-memory list. HEO initialises that empty list once
+through HACS's own metadata path, without downloading code or issuing controls.
+A failed attempt is reported, not retried on every status update; check HACS's
+connection and refresh its repository information before retrying deliberately.
+
 Once admitted, maintenance temporarily prevents **new** HEO actuator commands
 while the backup and installation run. A large backup can delay a newly due
 charging/export action. Choose a maintenance gap well away from charging and

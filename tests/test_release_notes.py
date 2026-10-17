@@ -58,11 +58,23 @@ def test_01240_has_stable_guarded_maintenance_and_separate_activation_notes() ->
         Path("custom_components/home_energy_orchestrator/manifest.json").read_text()
     )
     project = tomllib.loads(Path("pyproject.toml").read_text())["project"]
-    assert manifest["version"] == project["version"] == "0.12.40"
+    assert manifest["version"] == project["version"]
+    assert Version(manifest["version"]) >= Version("0.12.40")
     # Native backup support is optional: order it first when configured, but
     # never make its presence a requirement for ordinary HEO setup/control.
     assert "backup" in manifest["after_dependencies"]
     assert "backup" not in manifest["dependencies"]
+
+
+def test_01241_cold_catalog_notes_keep_metadata_and_installation_separate() -> None:
+    title, notes = release_text("v0.12.41", CHANGELOG_PATH.read_text(encoding="utf-8"))
+    assert title == "v0.12.41 — Load Fleet releases after Home Assistant restart"
+    assert "HACS's own verified" in notes and "metadata only" in notes
+    assert "one initialisation attempt" in notes and "repeating network" in notes
+    assert "non-draft, non-prerelease" in notes
+    assert "version-looking tag alone" in notes
+    assert "Publishing installs nothing" in notes
+    assert not Version("0.12.41").is_prerelease
 
 
 def test_release_text_requires_matching_nonempty_section() -> None:

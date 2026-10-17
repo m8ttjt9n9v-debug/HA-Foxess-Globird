@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from datetime import timedelta
 from unittest.mock import AsyncMock
 
@@ -24,8 +25,8 @@ from tests.test_setup import ENTRY_DATA
 
 CATALOG = {
     "entity_id": "update.verified_heo_release",
-    "installed_version": "v0.12.40",
-    "versions": ["v0.12.40", "v0.12.39"],
+    "installed_version": "v0.12.41",
+    "versions": ["v0.12.41", "v0.12.40", "v0.12.39"],
     "in_progress": False,
 }
 LOCAL = {"key": "alpha", "name": "Local site", "local": True}
@@ -138,6 +139,30 @@ async def test_absent_hacs_and_backup_do_not_break_ordinary_heo_setup(hass, monk
     assert status.attributes["available_versions"] == []
     assert hass.states.get("sensor.home_energy_status").state == "observe"
     assert hass.states.get("sensor.home_energy_available_energy").state == "8.0"
+    assert events == []
+    for method in never.values():
+        method.assert_not_called()
+
+
+async def test_blocked_cold_hacs_metadata_cannot_prevent_ordinary_heo_setup(hass, monkeypatch):
+    from tests.test_maintenance_adapter import _hacs
+
+    _, repository, _ = await _hacs(hass)
+    repository.releases.objects = []
+
+    async def blocked(**kwargs):
+        await asyncio.Event().wait()
+
+    repository.update_repository.side_effect = blocked
+    monkeypatch.setattr(adapter, "_CATALOG_REFRESH_TIMEOUT_SECONDS", 0.001)
+    entry, events, never = await _setup(hass, monkeypatch, catalog=False)
+    status = hass.states.get(_id(hass, entry, "sensor", "maintenance"))
+    assert status.attributes["error"] == "hacs_capability_unavailable"
+    assert entry.state is ConfigEntryState.LOADED
+    assert hass.states.get("sensor.home_energy_available_energy").state == "8.0"
+    assert dict(entry.data) == ENTRY_DATA
+    await hass.data[NODE_KEY].async_status()
+    repository.update_repository.assert_awaited_once()
     assert events == []
     for method in never.values():
         method.assert_not_called()
