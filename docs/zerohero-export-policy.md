@@ -94,6 +94,44 @@ The daily boosted-window export accumulator and session latch are stored in
 Home Assistant storage. A restart therefore cannot erase used allowance or a
 pending Self Use restoration.
 
+### Feed-in First fallback recovery
+
+FoxESS Modbus exposes Force Discharge as a remote-control overlay. Its
+underlying base-mode fallback is Feed-in First; after integration or Home
+Assistant restart the overlay may be absent even though HEO has retained its
+unfinished export request. Treating that fallback as an unrelated forced owner
+would prevent the session's existing recovery logic from ever running.
+
+HEO therefore recognises Feed-in First only when the export journal is valid,
+its phase is unfinished (`starting`, `active`, `stopping`, or `recovering`),
+there is no conflicting unfinished charge session, and no diagnostic is active.
+An idle, missing or invalid export journal grants no ownership of that mode.
+An unrelated Force Charge remains external; this exception is not permission
+to override arbitrary modes or to adopt a VPP/cloud event.
+
+The existing owner/master/Safety-Lock/sign/mapping/manual gates still run first.
+The same export state machine then maintains the retained bounded power while
+permitted, or selects Self Use and clears the target when disabled or finished.
+Retry spacing and persistence remain unchanged. Ordinary ZEROHERO retains its
+fixed-session policy; price-owned export still requires current protected
+energy, its original actuator bindings and non-extendable price deadline. No
+new grace timer, polling loop, journal field or recovery writer is added.
+
+| Source decision | Preserved implementation |
+| --- | --- |
+| Canonical `zerohero_surplus_export_controller_v1` startup trigger and latched maintenance branch | An unfinished export can reassert Force Discharge after local feedback returns, retaining its fixed-power request |
+| Canonical disabled/outside-window branch and retained latch | Existing Self Use/zero-target cleanup, including recovery after the window has ended |
+| FoxESS Modbus remote-control fallback | Narrow ownership classification in `planner/foxess_ownership.py`, not a second controller or native register implementation |
+| Existing external-owner boundary | No Feed-in First adoption without a valid unfinished export journal; charge/diagnostic conflicts and write gates remain blocking |
+
+Regression coverage uses pure ownership cases plus actual Home Assistant setup,
+storage reconstruction, repeated reload, unavailable mode feedback and periodic
+reconciliation with a fake physical actuator. It covers single-/three-phase
+configuration, fixed-power retention, window-end/disable/EV-priority cleanup,
+manual Stop, missing ownership and absolute gates. Separate price regressions
+retain deadline/mapping authority and only clean up when permission is lost.
+Repository tests are not live physical-export or competing-writer verification.
+
 ## EV-before-export first-stage provenance
 
 This requested policy does not exist in the canonical configuration and is

@@ -45,9 +45,7 @@ def _context(**overrides: object) -> FoxessOwnershipContext:
 def test_matching_retained_owner_allows_reconciliation(
     context: FoxessOwnershipContext,
 ) -> None:
-    assert evaluate_foxess_ownership(context) == FoxessOwnershipResult(
-        "verified_session"
-    )
+    assert evaluate_foxess_ownership(context) == FoxessOwnershipResult("verified_session")
 
 
 @pytest.mark.parametrize(
@@ -78,13 +76,61 @@ def test_persisted_charge_recovery_owns_backup_mode() -> None:
     ) == FoxessOwnershipResult("verified_session")
 
 
+@pytest.mark.parametrize("phase", ["starting", "active", "stopping", "recovering"])
+def test_valid_retained_export_owns_feed_in_first_fallback(phase: str) -> None:
+    """The Modbus forced-discharge overlay can disappear across restart."""
+    assert evaluate_foxess_ownership(
+        _context(mode="Feed-in First", export_phase=phase)
+    ) == FoxessOwnershipResult("verified_session")
+
+
+@pytest.mark.parametrize("status", ["missing", "malformed", "not_loaded"])
+def test_feed_in_first_cannot_adopt_untrusted_export_journal(status: str) -> None:
+    result = evaluate_foxess_ownership(
+        _context(mode="Feed-in First", export_phase="recovering", export_storage_status=status)
+    )
+    assert result.hold
+    assert result.status == "ownership_unknown"
+
+
+@pytest.mark.parametrize("phase", ["starting", "active", "stopping", "recovering"])
+def test_feed_in_first_is_not_a_charge_fallback_or_conflicting_owner(phase: str) -> None:
+    for export_phase in ["idle", "recovering"]:
+        result = evaluate_foxess_ownership(
+            _context(mode="Feed-in First", charge_phase=phase, export_phase=export_phase)
+        )
+        assert result.hold
+        assert result.status == "verified_external_owner"
+
+
+def test_feed_in_first_does_not_override_an_active_diagnostic() -> None:
+    result = evaluate_foxess_ownership(
+        _context(
+            mode="Feed-in First",
+            export_phase="recovering",
+            manual_active=True,
+            manual_kind="charge",
+        )
+    )
+    assert result.hold
+
+
+def test_owned_export_does_not_adopt_an_unrelated_force_charge() -> None:
+    assert evaluate_foxess_ownership(
+        _context(mode="Force Charge", export_phase="recovering")
+    ) == FoxessOwnershipResult(
+        "verified_external_owner",
+        hold=True,
+        reason="external_forced_mode",
+        clear_actions=True,
+    )
+
+
 @pytest.mark.parametrize("degraded_status", ["missing", "malformed", "not_loaded"])
 def test_self_use_reestablishes_safe_checkpoint_from_degraded_evidence(
     degraded_status: str,
 ) -> None:
-    result = evaluate_foxess_ownership(
-        _context(charge_storage_status=degraded_status)
-    )
+    result = evaluate_foxess_ownership(_context(charge_storage_status=degraded_status))
 
     assert result == FoxessOwnershipResult(
         "verified_safe_mode",

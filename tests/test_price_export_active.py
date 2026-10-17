@@ -370,6 +370,51 @@ async def test_known_cleanup_with_missing_ledger_and_physical_evidence(price_rig
     assert rig.active.export_session.phase == "idle"
 
 
+async def test_price_owned_feed_in_first_fallback_retains_deadline_and_mapping(price_rig, freezer):
+    rig = price_rig
+    await rig.active.async_reconcile()
+    original = rig.active.export_session
+    state = rig.hass.states.get(MODE)
+    rig.hass.states.async_set(MODE, "Feed-in First", dict(state.attributes))
+    rig.calls.clear()
+    await rig.active.async_reconcile()
+    # Existing acceptance/retry timing holds an immediate reassertion.
+    assert not rig.calls
+    assert rig.active.ownership_status == "verified_session"
+    assert rig.active.export_session.price_deadline == original.price_deadline
+    assert rig.active.export_session.price_actuator_entities == original.price_actuator_entities
+    freezer.tick(timedelta(seconds=31))
+    seed_price_states(rig.hass)
+    await rig.active.async_reconcile()
+    assert rig.calls == [(MODE, "Force Discharge")]
+    assert rig.active.export_session.price_deadline == original.price_deadline
+    assert rig.active.export_session.price_actuator_entities == original.price_actuator_entities
+
+
+@pytest.mark.parametrize("lost", ["price", "sellable", "deadline"])
+async def test_price_owned_fallback_with_lost_permission_only_restores_self_use(
+    price_rig, freezer, lost,
+):
+    rig = price_rig
+    await rig.active.async_reconcile()
+    original = rig.active.export_session
+    state = rig.hass.states.get(MODE)
+    rig.hass.states.async_set(MODE, "Feed-in First", dict(state.attributes))
+    if lost == "price":
+        rig.result.price_per_kwh = 2
+    elif lost == "sellable":
+        rig.coordinator.data.available_after_reserve_kwh = 0
+    else:
+        freezer.move_to(original.price_deadline + timedelta(seconds=1))
+        seed_price_states(rig.hass)
+    rig.calls.clear()
+    await rig.active.async_reconcile()
+    assert rig.calls == [(MODE, "Self Use"), (DISCHARGE, 0)]
+    assert rig.active.export_session.phase == "stopping"
+    assert rig.active.export_session.price_deadline <= original.price_deadline
+    assert not any(value == "Force Discharge" for _, value in rig.calls)
+
+
 async def test_restart_cannot_move_original_price_ownership_to_changed_actuators(price_rig):
     rig = price_rig
     await rig.active.async_reconcile()

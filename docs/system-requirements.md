@@ -97,6 +97,12 @@ permit charging and remains default-off after installation. After a Home
 Assistant restart it re-evaluates the same conditions; use the independent
 Automatic Battery Free Charge switch or Safety Lock to prevent resumption.
 
+An unfinished, valid HEO export journal can reconcile the FoxESS Modbus
+Feed-in First fallback after restart, while all normal write gates remain
+mandatory. Feed-in First with no valid export ownership remains external;
+the mode is not itself an export request or evidence of a cloud/VPP event.
+See [fallback recovery](zerohero-export-policy.md#feed-in-first-fallback-recovery).
+
 ### Modbus TCP connection ownership
 
 Use one Modbus TCP client for an inverter bridge unless that exact bridge and

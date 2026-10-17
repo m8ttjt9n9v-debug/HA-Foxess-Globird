@@ -191,6 +191,15 @@ layers around the proven algorithm, not replacement algorithms.
   capped only by the mapped actuator maximum. The inverter enforces its own grid
   export limit. A lower legacy user-entered discharge preference is ignored so
   ordinary house load cannot consume artificially withheld discharge headroom.
+- A valid unfinished export journal also retains ownership when FoxESS Modbus
+  exposes its underlying Feed-in First fallback after the forced-discharge
+  overlay is lost. The existing session logic decides continuation versus
+  Self Use cleanup; fallback recognition alone grants no new export permission.
+  Missing/invalid export ownership, a conflicting unfinished charge session or
+  an active diagnostic cannot use this exception. Manual holds and all normal
+  write gates still take precedence. This is not cloud/VPP provenance and does
+  not establish the absence of another writer. See the
+  [export recovery contract](zerohero-export-policy.md#feed-in-first-fallback-recovery).
 - The configurable ZEROHERO daily credit defaults to $1.00 and is deducted once
   from estimated net cost only after the full configured window is complete,
   all expected clock-hour buckets were observed, and no bucket exceeds the

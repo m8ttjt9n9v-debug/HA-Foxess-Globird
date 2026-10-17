@@ -2,6 +2,19 @@
 
 Status here describes behavioral parity, not merely the presence of code.
 
+## Export restart fallback correction
+
+- [x] Recognise the FoxESS Modbus Feed-in First fallback only for a valid
+  unfinished export owner, without adopting external modes, overriding a
+  conflicting charge/diagnostic owner, or bypassing existing write gates.
+  Use the current session state machine for continuation and Self Use cleanup;
+  retain fixed power, retry spacing, window/price authority and persistence.
+- [x] Add ownership and actual Home Assistant setup/reload/storage/periodic
+  regressions, unavailable feedback, single-/three-phase configurations,
+  expired/disabled-session cleanup, manual Stop and price-permission loss.
+- [ ] Publish a tested release and complete separately approved live-site
+  acceptance. Local regression coverage does not install or activate the fix.
+
 ## Capacity-input correction
 
 - [x] Add explicit dedicated EV planning capacity with a reviewed fallback;

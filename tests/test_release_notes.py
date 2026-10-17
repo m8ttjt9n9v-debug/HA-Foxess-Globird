@@ -30,6 +30,17 @@ def test_release_text_uses_only_the_matching_changelog_section() -> None:
     )
 
 
+def test_01239_has_stable_recovery_and_readonly_fleet_notes() -> None:
+    title, notes = release_text("v0.12.39", CHANGELOG_PATH.read_text(encoding="utf-8"))
+    assert title == "v0.12.39 — Export restart recovery and Fleet versions"
+    assert "valid unfinished" in notes and "Feed-in First" in notes
+    assert "Existing retry timing" in notes and "persistent payloads are unchanged" in notes
+    assert "Installed HEO" in notes and "explicit import" in notes
+    assert "No live site is updated or restarted" in notes
+    assert "not part of this release" in notes
+    assert not Version("0.12.39").is_prerelease
+
+
 def test_release_text_requires_matching_nonempty_section() -> None:
     with pytest.raises(ValueError, match="no section"):
         release_text("v1.2.3", "# Changelog\n")

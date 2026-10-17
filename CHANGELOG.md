@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.12.39 — Export restart recovery and Fleet versions
+
+- Recognise Feed-in First as the FoxESS Modbus fallback for a valid unfinished
+  HEO export session. Restart or reconnect can resume the retained fixed-power
+  request, or restore Self Use when its existing policy requires a finish.
+- Do not adopt Feed-in First without a valid export owner, override an active
+  diagnostic or conflicting charge session, or bypass Safety Lock and control
+  ownership. Existing retry timing, export windows, power limits, price deadlines,
+  protected-energy rules and persistent payloads are unchanged.
+- Add actual Home Assistant setup/reload, unavailable-feedback, periodic
+  reconciliation, cleanup, external-owner and price-export regressions. No new
+  controller, helper, setting, polling loop or storage field is introduced.
+- Add an Installed HEO row to the reusable Fleet dashboard, reading each site's
+  HACS installed version rather than the newest available release. Missing
+  evidence remains unavailable. Existing dashboards require explicit import
+  and the documented read-only version sensors; HACS does not replace them.
+- No live site is updated or restarted by publication. Remote Fleet update and
+  restart controls are not part of this release.
+
 ## 0.12.38 — Coherent EV feedback for trip recovery
 
 - Publish observed vehicle SoC together with startup readiness from the same

@@ -67,6 +67,18 @@ def evaluate_foxess_ownership(
     )
     if matching_owner:
         return FoxessOwnershipResult("verified_session")
+    # FoxESS Modbus uses Feed-in First beneath its Force Discharge overlay.
+    # Losing that in-memory overlay must not strand a durable export owner.
+    # The mode alone, a charge journal, or untrusted export storage is not
+    # permission to adopt it; conflicting retained owners remain blocked.
+    if (
+        context.mode == "Feed-in First"
+        and export_owned
+        and context.export_storage_status == "valid"
+        and not charge_owned
+        and not context.manual_active
+    ):
+        return FoxessOwnershipResult("verified_session")
     # A persisted unfinished HEO session remains the owner when FoxESS reports
     # either non-forced safe mode. Back-up is used by the inverter as a normal
     # non-forced mode and can appear after reload/restart; treating it as an
