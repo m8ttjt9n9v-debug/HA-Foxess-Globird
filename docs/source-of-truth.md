@@ -26,6 +26,11 @@ absence, deliberate cancellation/replacement, completion, expiry and established
 invalid-data safeguards remain authoritative. A consumed request is not
 automatically re-armed by an upgrade.
 
+From v0.12.37 this same hold also covers Home Assistant's startup jobs, even
+when all vehicle feedback loads early. Readiness requires completed HA startup;
+an intermediate status publication cannot consume restored helper ownership
+before its startup trigger has rebound the restored Full entity context.
+
 ## Authority order
 
 1. Direct inverter registers and measured electrical behavior.

@@ -158,6 +158,8 @@ duplicate helpers, second controller or competing configuration source.
 ### Trip interruption recovery
 
 - [x] Distinguish unavailable startup feedback from a confirmed disconnect.
+  Retain the shared hold through Home Assistant startup jobs even when vehicle
+  sources load early; test intermediate status publication before STARTED.
   Use one shared EV startup classification in both schedulers; test phased
   source arrivals and original-timeout expiry without a new grace timer.
 

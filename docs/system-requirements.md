@@ -110,6 +110,11 @@ break the connection.
 
 ## Required for Tessie EV automation
 
+Restored active Full/Trip intent waits for completed Home Assistant startup
+and its initial vehicle/actuator feedback before becoming ready. The original
+timeout still counts; missing startup data is not a new permission to charge.
+Legacy helper installations require the matching startup-aware dispatcher.
+
 Optional dedicated EV planning capacity can reuse the exact mapped car's loaded
 Tessie coordinator, use an explicit Wh/kWh full-capacity sensor, or use a reviewed
 numeric fallback. Tessie's nominal-full-pack field requires supporting upstream

@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.12.37 — Keep trip intent through Home Assistant startup
+
+- Keep the existing restored-Full startup hold until Home Assistant has
+  finished starting as well as receiving the required vehicle feedback.
+  A fast provider must not make an older helper dispatcher misclassify its
+  restored ownership before the Home Assistant startup trigger can run.
+- Retain the original trip timeout, generation-bound ownership, cancellation,
+  confirmed-absence handling and all electrical safeguards. Add actual
+  Home Assistant startup-job ordering regressions; no new timer, helper,
+  device writer or dashboard migration is introduced.
+
 ## 0.12.36 — Preserve trip charging during startup
 
 - Preserve an already-enabled Full request while its initial vehicle telemetry

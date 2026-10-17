@@ -1,8 +1,10 @@
 """Restored Full intent must not turn a source startup outage into an unplug."""
 
+import asyncio
 from datetime import UTC, datetime, timedelta
 
 import pytest
+from homeassistant.core import CoreState, HassJob
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.home_energy_orchestrator.ev_active import ActiveEvController
@@ -48,7 +50,7 @@ async def restored_full(hass):
         if missing == "all":
             for entity in CAR_ENTITIES:
                 hass.states.async_remove(entity)
-        else:
+        elif missing is not None:
             entity, value = missing
             hass.states.async_set(entity, value)
         restored = ActiveEvController(hass, coordinator)
@@ -207,4 +209,102 @@ async def test_missing_three_phase_current_does_not_mask_confirmed_full_disconne
     await restored.async_reconcile(NOW + timedelta(seconds=1))
     assert entry.data["ev_charge_to_full_enabled"] is False
     assert restored.charge_to_full_started_at is None
+    assert calls == []
+
+
+async def test_complete_restored_full_cohort_waits_until_home_assistant_started(
+    hass, restored_full,
+):
+    hass.set_state(CoreState.not_running)
+    restored, coordinator, entry, calls = await restored_full(missing=None)
+    assert restored.full_startup_evidence_pending
+    assert calls == []
+    observations = []
+    coordinator.async_update_listeners = lambda: observations.append(
+        (hass.state, restored.full_startup_evidence_pending)
+    )
+
+    async def other_startup_publication():
+        assert hass.state is CoreState.starting
+        assert restored.full_startup_evidence_pending
+        await restored.async_reconcile(NOW)
+        assert entry.data["ev_charge_to_full_enabled"] is True
+        assert calls == []
+
+    hass.async_add_startup_job(HassJob(other_startup_publication))
+    await hass.async_start()
+    await hass.async_block_till_done()
+    assert not restored.full_startup_evidence_pending
+    assert entry.data["ev_charge_to_full_enabled"] is True
+    assert restored.charge_to_full_started_at == NOW - timedelta(hours=1)
+    assert observations[-1] == (CoreState.running, False)
+    assert calls
+
+
+@pytest.mark.parametrize("evidence", [
+    ("device_tracker.car", "not_home"), ("binary_sensor.car_cable", "off"),
+])
+async def test_pre_started_barrier_does_not_hide_confirmed_absence(
+    hass, restored_full, evidence,
+):
+    hass.set_state(CoreState.not_running)
+    restored, _, entry, calls = await restored_full()
+    hass.states.async_set(*evidence)
+    await restored.async_reconcile(NOW)
+    assert entry.data["ev_charge_to_full_enabled"] is False
+    assert restored.charge_to_full_started_at is None
+    assert calls == []
+
+
+@pytest.mark.parametrize("hours", [12, 16])
+async def test_pre_started_barrier_cannot_extend_original_full_expiry(hass, restored_full, hours):
+    hass.set_state(CoreState.not_running)
+    restored, _, entry, calls = await restored_full(missing=None, hours=hours)
+    assert restored.full_startup_evidence_pending
+    deadline = NOW - timedelta(hours=1) + timedelta(hours=hours)
+    await restored.async_reconcile(deadline)
+    assert entry.data["ev_charge_to_full_enabled"] is False
+    assert restored.charge_to_full_started_at is None
+    assert calls == []
+
+
+async def test_unloaded_controller_does_not_reconcile_at_later_home_assistant_start(
+    hass, restored_full,
+):
+    hass.set_state(CoreState.not_running)
+    restored, _, _, calls = await restored_full()
+    await restored.async_stop()
+    _set_ev_states(hass)
+    await hass.async_start()
+    await hass.async_block_till_done()
+    assert calls == []
+
+
+async def test_running_home_assistant_reload_does_not_add_a_startup_wait(restored_full):
+    restored, _, entry, calls = await restored_full(missing=None)
+    assert not restored.full_startup_evidence_pending
+    assert entry.data["ev_charge_to_full_enabled"] is True
+    assert restored.charge_to_full_started_at == NOW - timedelta(hours=1)
+    assert calls
+
+
+async def test_unload_cancels_started_refresh_already_waiting_for_ev_lock(
+    hass, restored_full, monkeypatch,
+):
+    hass.set_state(CoreState.not_running)
+    restored, _, _, calls = await restored_full(missing=None)
+    began = asyncio.Event()
+    original_tick = restored._async_tick
+
+    async def observed_tick(now):
+        began.set()
+        await original_tick(now)
+
+    monkeypatch.setattr(restored, "_async_tick", observed_tick)
+    async with restored._lock:
+        await hass.async_start()
+        await began.wait()
+        await restored.async_stop()
+        assert calls == []
+    await hass.async_block_till_done()
     assert calls == []

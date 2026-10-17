@@ -6,7 +6,7 @@
   "attribute_profiles": {},
   "attribute_profile_additions": {
     "ev_control_diagnostics_v1": {
-      "startup_feedback_pending": "True only while restoring an already-enabled Full request before its first trustworthy vehicle/actuator feedback cohort is available. EV control and Trip schedulers retain intent without positive EV writes during this hold. It is not permission to charge or proof of physical charging; confirmed absence, cancellation and the original timeout remain authoritative. False does not bypass other evidence or control gates."
+      "startup_feedback_pending": "True only while restoring an already-enabled Full request until Home Assistant has finished starting and its first trustworthy vehicle/actuator feedback cohort is available. EV control and Trip schedulers retain intent without positive EV writes during this hold. It is not permission to charge or proof of physical charging; confirmed absence, cancellation and the original timeout remain authoritative. False does not bypass other evidence or control gates."
     }
   }
 }

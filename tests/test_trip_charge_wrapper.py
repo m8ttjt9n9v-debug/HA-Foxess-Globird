@@ -1,16 +1,19 @@
 """Real native HA helpers/automation tests; the HEO switch is the only writer."""
 
+import asyncio
 import json
 from datetime import UTC, datetime
 from itertools import permutations
+from unittest.mock import AsyncMock
 
 import pytest
 from homeassistant.components.automation.config import async_validate_config_item
-from homeassistant.core import Context, ServiceRegistry, State
+from homeassistant.core import Context, CoreState, HassJob, ServiceRegistry, State
 from homeassistant.helpers.template import Template
 from homeassistant.setup import async_setup_component
 from pytest_homeassistant_custom_component.common import async_fire_time_changed, mock_restore_cache
 
+from custom_components.home_energy_orchestrator.ev_active import ActiveEvController
 from scripts.trip_charge_wrapper import (
     ARMED,
     CAPACITY,
@@ -35,6 +38,8 @@ from scripts.trip_charge_wrapper import (
     TIMEOUT,
     build_package,
 )
+
+from .test_ev_active import _controller_config, _coordinator, _set_ev_states
 
 NOW = datetime(2026, 10, 11, 8, tzinfo=UTC)
 
@@ -108,13 +113,14 @@ async def _setup(
         ("binary_sensor.test_cable", cable_state),
     ):
         hass.states.async_set(entity, value)
+    pending = startup_pending() if callable(startup_pending) else startup_pending
     hass.states.async_set(
         EV_STATUS,
         "feedback_confirmed",
         {
             "gate": "ready",
-            "startup_feedback_pending": startup_pending,
-            "charge_switch_on": None if startup_pending else True,
+            "startup_feedback_pending": pending,
+            "charge_switch_on": None if pending else True,
         },
     )
     hass.states.async_set(
@@ -1022,6 +1028,119 @@ def _restored_owned_checkpoint():
         "paused": False,
     }
     return [*_restored_trip(owned=True), State(RESUME, json.dumps(record))], record
+
+
+@pytest.fixture
+async def restored_startup_ev(hass, monkeypatch):
+    """Use the real shared startup classifier, not an invented pending flag."""
+    hass.set_state(CoreState.not_running)
+    _set_ev_states(hass)
+    controller = ActiveEvController(
+        hass,
+        _coordinator(_controller_config(
+            ev_charge_to_full_enabled=True,
+            ev_soc_entity=SOC,
+            ev_at_home_entity="device_tracker.test_ev",
+            ev_cable_connected_entity="binary_sensor.test_cable",
+        )),
+    )
+    # Only EV actuation/persistence is outside this wrapper test. Its startup
+    # lifecycle, source classifier and the complete HA dispatcher are real.
+    monkeypatch.setattr(controller, "_async_restore", AsyncMock())
+    monkeypatch.setattr(controller, "async_reconcile", AsyncMock())
+    await controller.async_start()
+    yield controller
+    await controller.async_stop()
+
+
+@pytest.mark.freeze_time(NOW, real_asyncio=True)
+@pytest.mark.parametrize("change", ["none", "manual_replacement", "cancel", "expired"])
+async def test_cold_start_native_publication_before_started_preserves_only_owned_intent(
+    hass, restored_startup_ev, change
+):
+    """State triggers are armed before HA's later homeassistant.start trigger."""
+    controller = restored_startup_ev
+    restored, record = _restored_owned_checkpoint()
+    if change == "expired":
+        record["expires"] = NOW.timestamp() - 1
+        restored[-1] = State(RESUME, json.dumps(record))
+    _, calls = await _setup(
+        hass,
+        soc=80,
+        restore_states=restored,
+        override_state="on",
+        native_attributes={"full_generation": 1},
+        startup_pending=lambda: controller.full_startup_evidence_pending,
+    )
+    assert controller._connected_at_home()[0]
+    assert controller._observation() is not None
+    assert hass.state is CoreState.not_running
+    observations = []
+
+    async def publish_during_startup():
+        # HA attaches state triggers in startup jobs, then fires STARTED only
+        # after all jobs finish. Source/coordinator updates remain possible
+        # while another integration's startup job is still being awaited.
+        for _ in range(5):
+            await asyncio.sleep(0)
+        assert hass.state is CoreState.starting
+        if change == "manual_replacement":
+            hass.states.async_set(OVERRIDE, "on", context=Context(user_id="test_user"))
+        elif change == "cancel":
+            await hass.services.async_call(
+                "input_boolean", "turn_off", {"entity_id": ARMED}, blocking=True
+            )
+        ev_attributes = dict(hass.states.get(EV_STATUS).attributes)
+        ev_attributes["startup_feedback_pending"] = controller.full_startup_evidence_pending
+        hass.states.async_set(EV_STATUS, "feedback_confirmed", ev_attributes)
+        attributes = dict(hass.states.get(NATIVE_STATUS).attributes)
+        attributes["startup_publication"] = True
+        if change == "manual_replacement":
+            attributes["full_generation"] += 1
+        hass.states.async_set(NATIVE_STATUS, "legacy_conflict", attributes)
+        await hass.async_block_till_done()
+        observations.append((
+            hass.states.get(ARMED).state,
+            hass.states.get(OWNED).state,
+            hass.states.get(STATUS).state,
+            _resume_record(hass),
+        ))
+
+    hass.async_add_startup_job(HassJob(publish_during_startup))
+    await hass.async_start()
+    await hass.async_block_till_done()
+    ev_attributes = dict(hass.states.get(EV_STATUS).attributes)
+    ev_attributes["startup_feedback_pending"] = controller.full_startup_evidence_pending
+    hass.states.async_set(EV_STATUS, "feedback_confirmed", ev_attributes)
+    await hass.async_block_till_done()
+    assert hass.state is CoreState.running
+
+    if change == "none":
+        assert observations == [("on", "on", "Waiting for data", record)]
+        assert hass.states.get(ARMED).state == hass.states.get(OWNED).state == "on"
+        assert hass.states.get(STATUS).state == "Override active"
+        assert _resume_record(hass) == record
+        assert hass.states.get(GENERATION).state.startswith(
+            "on:" + hass.states.get(OVERRIDE).last_changed.isoformat() + ":"
+        )
+        assert calls == []  # Restoration must not restart Full or its budget.
+        hass.states.async_set(SOC, "90", {"unit_of_measurement": "%"})
+        await hass.async_block_till_done()
+        assert calls == ["turn_off"]
+        assert hass.states.get(STATUS).state == "Completed"
+    else:
+        expected = {
+            "manual_replacement": "Interrupted",
+            "cancel": "Cancelled",
+            "expired": "Expired",
+        }
+        assert observations == [("off", "off", expected[change], {})]
+        assert hass.states.get(ARMED).state == hass.states.get(OWNED).state == "off"
+        assert _resume_record(hass) == {}
+        assert calls == ([] if change == "manual_replacement" else ["turn_off"])
+        assert hass.states.get(OVERRIDE).state == (
+            "on" if change == "manual_replacement" else "off"
+        )
 
 
 @pytest.mark.freeze_time(NOW, real_asyncio=True)

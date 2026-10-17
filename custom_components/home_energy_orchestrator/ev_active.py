@@ -9,9 +9,10 @@ from datetime import datetime, timedelta
 from math import ceil
 
 from homeassistant.components import persistent_notification
-from homeassistant.core import CALLBACK_TYPE, HomeAssistant
+from homeassistant.core import CALLBACK_TYPE, CoreState, HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.event import async_track_time_change, async_track_time_interval
+from homeassistant.helpers.start import async_at_started
 from homeassistant.util import dt as dt_util
 
 from .const import (
@@ -269,9 +270,12 @@ class ActiveEvController:
         self.coordinator = coordinator
         self._unsub_interval: CALLBACK_TYPE | None = None
         self._unsub_driving_snapshot: CALLBACK_TYPE | None = None
+        self._unsub_core_started: CALLBACK_TYPE | None = None
+        self._full_startup_task: asyncio.Task | None = None
         self._started_at: datetime | None = None
         self._startup_grid_recovery_pending = False
         self._full_startup_evidence_required = self._charge_to_full_requested()
+        self._full_startup_core_ready = hass.state is CoreState.running
         self._lock = asyncio.Lock()
         self._adapter: EvServiceAdapter | None = self._create_adapter()
         self._repository = create_typed_value_repository(
@@ -370,7 +374,8 @@ class ActiveEvController:
         if not self._charge_to_full_requested() or self._disconnection_is_verified():
             self._full_startup_evidence_required = False
         elif (
-            self._connected_at_home()[0]
+            self._full_startup_core_ready
+            and self._connected_at_home()[0]
             and self._mapped_state(self.coordinator.runtime_config.ev_telemetry.soc_entity)
             is not None
             and self._observation() is not None
@@ -382,6 +387,12 @@ class ActiveEvController:
         self._started_at = dt_util.now()
         await self._async_restore()
         self._full_startup_evidence_required = self._charge_to_full_requested()
+        self._full_startup_core_ready = self.hass.state is CoreState.running
+        if self._unsub_core_started is not None:
+            self._unsub_core_started()
+            self._unsub_core_started = None
+        if self._full_startup_evidence_required and not self._full_startup_core_ready:
+            self._unsub_core_started = async_at_started(self.hass, self._async_core_started)
         if self._unsub_interval is None:
             self._unsub_interval = async_track_time_interval(
                 self.hass, self._async_tick, timedelta(seconds=30)
@@ -400,6 +411,16 @@ class ActiveEvController:
         await self.async_reconcile()
 
     async def async_stop(self) -> None:
+        if self._unsub_core_started is not None:
+            self._unsub_core_started()
+            self._unsub_core_started = None
+        if self._full_startup_task is not None:
+            task, self._full_startup_task = self._full_startup_task, None
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
         if self._unsub_interval is not None:
             self._unsub_interval()
             self._unsub_interval = None
@@ -407,6 +428,25 @@ class ActiveEvController:
             self._unsub_driving_snapshot()
             self._unsub_driving_snapshot = None
         await self._async_save()
+
+    @callback
+    def _async_core_started(self, _hass: HomeAssistant) -> None:
+        self._unsub_core_started = None
+        # Queue behind STARTED listeners, including restored wrapper rebinding.
+        # This is a lifecycle event, not a timed grace period or another poller.
+        self._full_startup_task = self.hass.async_create_task(
+            self._async_finish_full_startup(), eager_start=False,
+        )
+
+    async def _async_finish_full_startup(self) -> None:
+        try:
+            if self._unsub_interval is None:
+                return
+            self._full_startup_core_ready = True
+            await self._async_tick(None)
+        finally:
+            if self._full_startup_task is asyncio.current_task():
+                self._full_startup_task = None
 
     async def async_supervisory_repair(self, now: datetime) -> None:
         """Open one fresh, rate-bounded reconciliation epoch."""
