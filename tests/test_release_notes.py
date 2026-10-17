@@ -59,6 +59,10 @@ def test_01240_has_stable_guarded_maintenance_and_separate_activation_notes() ->
     )
     project = tomllib.loads(Path("pyproject.toml").read_text())["project"]
     assert manifest["version"] == project["version"] == "0.12.40"
+    # Native backup support is optional: order it first when configured, but
+    # never make its presence a requirement for ordinary HEO setup/control.
+    assert "backup" in manifest["after_dependencies"]
+    assert "backup" not in manifest["dependencies"]
 
 
 def test_release_text_requires_matching_nonempty_section() -> None:

@@ -1,6 +1,7 @@
 {
   "domain": "home_energy_orchestrator",
   "name": "FoxESS GloBird Tesla Energy Orchestrator",
+  "after_dependencies": ["backup"],
   "codeowners": ["@m8ttjt9n9v-debug"],
   "config_flow": true,
   "dependencies": [],
