@@ -53,6 +53,8 @@ House use, inverter limits, battery protection and slower charging near full can
 {% elif impact.get('status') == 'out_of_scope' -%}
 A before-free cost estimate does not apply to this trip's current timing.
 This does not mean the whole trip will be free.
+{% elif impact.get('reason') == 'trip_paused' -%}
+The trip is paused. The estimate will update when charging resumes.
 {% elif raw is not mapping -%}
 The trip energy estimate is not available.
 This card needs an HEO version that provides trip energy-impact data.

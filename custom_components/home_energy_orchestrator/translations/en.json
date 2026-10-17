@@ -967,6 +967,7 @@
       "price_export_requires_local_modbus": "Choose commissioned Local Modbus inverter ownership first."
     },
     "abort": {
+      "reconfigure_conflict": "A setting changed elsewhere while this form was open. Nothing from this form was applied. Reopen Reconfigure and review the current settings.",
       "schedule_confirmation_expired": "The pending schedule confirmation expired. Reopen configuration and review the times again."
     }
   },

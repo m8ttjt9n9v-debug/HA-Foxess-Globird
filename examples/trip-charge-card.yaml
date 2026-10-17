@@ -73,8 +73,9 @@ cards:
     \ use, inverter limits, battery protection and slower charging near full can change\
     \ the result.\n{% elif impact.get('status') == 'out_of_scope' -%}\nA before-free\
     \ cost estimate does not apply to this trip's current timing.\nThis does not mean\
-    \ the whole trip will be free.\n{% elif raw is not mapping -%}\nThe trip energy\
-    \ estimate is not available.\nThis card needs an HEO version that provides trip\
-    \ energy-impact data.\n{% else -%}\nThe trip energy estimate is not available\
-    \ yet.\nCheck the trip plan and its required energy and tariff inputs.\n{% endif\
-    \ %}\n"
+    \ the whole trip will be free.\n{% elif impact.get('reason') == 'trip_paused'\
+    \ -%}\nThe trip is paused. The estimate will update when charging resumes.\n{%\
+    \ elif raw is not mapping -%}\nThe trip energy estimate is not available.\nThis\
+    \ card needs an HEO version that provides trip energy-impact data.\n{% else -%}\n\
+    The trip energy estimate is not available yet.\nCheck the trip plan and its required\
+    \ energy and tariff inputs.\n{% endif %}\n"

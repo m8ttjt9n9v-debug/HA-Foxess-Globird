@@ -1,0 +1,189 @@
+{
+  "after": [
+    {
+      "access": "subscript_store",
+      "constant": "CONF_SIGN_CONVENTIONS_VERIFIED",
+      "key": "sign_conventions_verified",
+      "kind": "raw_mapping",
+      "layer": "boundary",
+      "receiver": "intent",
+      "scope": "ConfigFlow._async_finish_review",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "subscript_load",
+      "constant": "CONF_FREE_CHARGE_END",
+      "key": "free_charge_window_end",
+      "kind": "raw_mapping",
+      "layer": "boundary",
+      "receiver": "displayed",
+      "scope": "ConfigFlow._show_review",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "subscript_load",
+      "constant": "CONF_FREE_CHARGE_START",
+      "key": "free_charge_window_start",
+      "kind": "raw_mapping",
+      "layer": "boundary",
+      "receiver": "displayed",
+      "scope": "ConfigFlow._show_review",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_REHEARSAL_MODE",
+      "key": "rehearsal_mode",
+      "kind": "raw_mapping",
+      "layer": "boundary",
+      "receiver": "displayed",
+      "scope": "ConfigFlow._show_review",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_SIGN_CONVENTIONS_VERIFIED",
+      "key": "sign_conventions_verified",
+      "kind": "raw_mapping",
+      "layer": "boundary",
+      "receiver": "displayed",
+      "scope": "ConfigFlow._show_review",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_AUTOMATIC_CHARGE_ENABLED",
+      "key": "automatic_charge_enabled",
+      "kind": "raw_mapping",
+      "layer": "boundary",
+      "receiver": "pending",
+      "scope": "ConfigFlow.async_step_reconfigure",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    }
+  ],
+  "before": [
+    {
+      "access": "subscript_store",
+      "constant": "CONF_SIGN_CONVENTIONS_VERIFIED",
+      "key": "sign_conventions_verified",
+      "kind": "raw_mapping",
+      "layer": "boundary",
+      "receiver": "pending",
+      "scope": "ConfigFlow._async_finish_review",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "subscript_load",
+      "constant": "CONF_FREE_CHARGE_END",
+      "key": "free_charge_window_end",
+      "kind": "raw_mapping",
+      "layer": "boundary",
+      "receiver": "self._draft_input",
+      "scope": "ConfigFlow._show_review",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "subscript_load",
+      "constant": "CONF_FREE_CHARGE_START",
+      "key": "free_charge_window_start",
+      "kind": "raw_mapping",
+      "layer": "boundary",
+      "receiver": "self._draft_input",
+      "scope": "ConfigFlow._show_review",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_REHEARSAL_MODE",
+      "key": "rehearsal_mode",
+      "kind": "raw_mapping",
+      "layer": "boundary",
+      "receiver": "self._draft_input",
+      "scope": "ConfigFlow._show_review",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_SIGN_CONVENTIONS_VERIFIED",
+      "key": "sign_conventions_verified",
+      "kind": "raw_mapping",
+      "layer": "boundary",
+      "receiver": "self._draft_input",
+      "scope": "ConfigFlow._show_review",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_AUTOMATIC_CHARGE_ENABLED",
+      "key": "automatic_charge_enabled",
+      "kind": "raw_mapping",
+      "layer": "boundary",
+      "receiver": "user_input",
+      "scope": "ConfigFlow.async_step_reconfigure",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "in",
+      "constant": "CONF_EV_CHARGE_TO_FULL",
+      "key": "ev_charge_to_full_entity",
+      "kind": "raw_mapping",
+      "layer": "boundary",
+      "receiver": "entry.data",
+      "scope": "ConfigFlow.async_step_reconfigure",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "subscript_load",
+      "constant": "CONF_EV_CHARGE_TO_FULL",
+      "key": "ev_charge_to_full_entity",
+      "kind": "raw_mapping",
+      "layer": "boundary",
+      "receiver": "entry.data",
+      "scope": "ConfigFlow.async_step_reconfigure",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "subscript_store",
+      "constant": "CONF_EV_CHARGE_TO_FULL",
+      "key": "ev_charge_to_full_entity",
+      "kind": "raw_mapping",
+      "layer": "boundary",
+      "receiver": "user_input",
+      "scope": "ConfigFlow.async_step_reconfigure",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "in",
+      "constant": "CONF_EV_CHARGE_TO_FULL_ENABLED",
+      "key": "ev_charge_to_full_enabled",
+      "kind": "raw_mapping",
+      "layer": "boundary",
+      "receiver": "entry.data",
+      "scope": "ConfigFlow.async_step_reconfigure",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "subscript_load",
+      "constant": "CONF_EV_CHARGE_TO_FULL_ENABLED",
+      "key": "ev_charge_to_full_enabled",
+      "kind": "raw_mapping",
+      "layer": "boundary",
+      "receiver": "entry.data",
+      "scope": "ConfigFlow.async_step_reconfigure",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "subscript_store",
+      "constant": "CONF_EV_CHARGE_TO_FULL_ENABLED",
+      "key": "ev_charge_to_full_enabled",
+      "kind": "raw_mapping",
+      "layer": "boundary",
+      "receiver": "user_input",
+      "scope": "ConfigFlow.async_step_reconfigure",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    }
+  ],
+  "extension": "reconfigure_current_values_v1",
+  "reason": "Review actual draft changes against latest effective entry; remove obsolete one-page Full special case. Runtime configuration accesses and persisted keys are unchanged.",
+  "schema_version": 1
+}

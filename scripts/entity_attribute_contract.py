@@ -50,6 +50,9 @@ EV_CAPACITY_ADDITIONS_PATH = (
 TRIP_IMPACT_ADDITIONS_PATH = (
     REPOSITORY_ROOT / "docs" / "maintainability" / "entity-attribute-additions-trip-impact-v1.json"
 )
+TRIP_RESUME_ADDITIONS_PATH = (
+    REPOSITORY_ROOT / "docs" / "maintainability" / "entity-attribute-additions-trip-resume-v1.json"
+)
 
 _TELEMETRY_KEYS = (
     "battery_power",
@@ -236,6 +239,7 @@ def validate_against_release_baseline() -> None:
             TRIP_ADDITIONS_PATH,
             EV_CAPACITY_ADDITIONS_PATH,
             TRIP_IMPACT_ADDITIONS_PATH,
+            TRIP_RESUME_ADDITIONS_PATH,
         )
     ]
     for extension in additions:

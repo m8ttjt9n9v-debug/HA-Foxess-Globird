@@ -37,7 +37,8 @@ request. Positive intent requires a successful checkpoint. Missing data blocks
 a start, invalid SoC interrupts an owned request, and restart cleanup retains
 its ownership obligation. An unstarted past departure expires rather than
 starting unexpectedly. An already-active late trip continues only within the
-existing Full timeout. It does not repeatedly restart an interrupted request.
+original absolute Full timeout. It does not repeatedly restart a cancelled,
+replaced, timed-out or invalid-data request.
 
 Cancel to withdraw an owned request. Editing departure or target while charging
 cancels that trip; deliberately enable the edited schedule again. Edits while
@@ -47,21 +48,31 @@ not implemented.
 
 ### Unplugging and reconnecting
 
-In the built-in v0.12.32 scheduler, if HEO detects the car being unplugged or
-loses confirmed home/cable evidence **after the trip override has started**, it
-withdraws only that trip's Full request, reports **Interrupted**, and switches
-the one-off schedule off. Plugging back in does not automatically resume that
-trip. To continue it, check the departure and target, then deliberately enable
-the schedule again. Normal HEO charging policies can still operate independently
-after reconnect; that is not resumption of the interrupted trip.
+From v0.12.35, a confirmed temporary unplug or departure from home **pauses** an
+outstanding trip rather than cancelling it. HEO withdraws only that trip's
+charging override and keeps the original target and departure. It sends no
+charging commands while the car is away or disconnected. A qualified return
+before departure lets HEO reassess the current SoC and remaining energy, then
+resume through the existing charging policy when needed. A trip that had
+already started does not wait for a newly calculated later start time.
+
+The original timeout keeps running during the pause: reconnecting does not
+grant another full timeout. Cancel still cancels, and a manual Full replacement,
+invalid data without a confirmed disconnect, timeout or completed trip is not
+automatically revived. A missing SoC during a confirmed disconnect can pause
+the request, but cannot authorise a restart until valid data returns. Returning
+after departure cannot silently start a new paid charge. If the remaining time
+is insufficient, the original deadline is not moved or presented as achievable.
+Normal free-window charging remains independent of the trip request and may
+continue above the selected trip target after that trip has completed.
 
 If the scheduled override **has not started**, the armed schedule can wait for
 the car and re-evaluate on reconnect before departure. A passed departure
 expires instead of starting a late unexpected paid charge. A very brief physical
 unplug that never reaches Home Assistant telemetry is not a detected interruption.
 
-Tariff-aware rates, ZEROHERO credit trade-offs and resumable temporary pauses
-are deferred design work in the [roadmap](../ROADMAP.md), not current behaviour.
+Tariff-aware rates and ZEROHERO credit trade-offs remain deferred design work
+in the [roadmap](../ROADMAP.md); this correction does not change charging rates.
 
 For DD/MM/YYYY, choose **Profile → General → Date format → day/month/year**.
 The stored instant follows Home Assistant's timezone rather than a fixed UTC
@@ -111,6 +122,8 @@ evidence withhold the cost. Stable SoC retains the source controller's value
 semantics rather than receiving a new fast-poll clock. The calculation timestamp
 is not a claim that every unchanged source value was newly measured. Expired,
 unowned requests cannot be presented as a new future charge.
+Paused trips withhold this estimate until they resume, rather than presenting
+the old start time as a new charging prediction.
 
 | Existing input | Estimate use |
 | --- | --- |
@@ -140,8 +153,9 @@ scheduler above.
 ## Legacy native-HA helper package
 
 This optional native Home Assistant helper package schedules HEO's existing
-Charge to Full switch. It is a reusable wrapper, not another EV controller,
-and does not require an HEO upgrade. It ends its own Full request at your
+Charge to Full switch. It is a reusable wrapper, not another EV controller.
+The v0.12.35 pause-aware dispatcher requires HEO v0.12.35 or later so it can
+verify why the previous charging override stopped. It ends its own Full request at your
 chosen reported SoC without changing HEO's Full implementation. HACS does not
 install it automatically.
 
@@ -179,6 +193,19 @@ after charging has started cancels that request; enable the updated schedule
 deliberately. Editing either while still waiting simply replans the start.
 An interrupted, manually stopped or timed-out override is not repeatedly
 restarted. Correct the problem and re-arm if appropriate.
+
+With the updated v0.12.35 helper dispatcher, an explicitly identified temporary
+disconnect instead reports **Paused — car disconnected** and retains the dated
+request. Its restorable resume checkpoint binds the original timeout and Full
+generation. Only a matching disconnected stop can resume; an arbitrary Full OFF
+is not treated as permission to retry. Existing installations need this updated
+dispatcher and its additional checkpoint helper, not just the new HACS runtime.
+Upgrade an idle installation with a fresh backup. An approved active-charge
+upgrade must additionally prove the existing wrapper owns that exact Full
+generation and recover the original start and timeout; never seed a fresh
+timeout or adopt a manual Full request. Preserve the target, departure and
+existing helper IDs. A new HACS installation uses the native scheduler above
+and does not need this compatibility helper.
 
 If the car is already at or above the target before departure, the schedule
 waits without enabling Full. A later SoC drop can still require charging before
@@ -252,11 +279,14 @@ of starting an unexpected later charge.
 
 SoC and target changes trigger immediate wrapper checks, in addition to the
 minute fallback. A missing or invalid SoC during an owned charge withdraws Full
-and reports Interrupted rather than allowing an unchecked run toward 100%.
+and reports Interrupted rather than allowing an unchecked run toward 100%,
+unless a verified disconnect has already safely paused the dated request.
 An unavailable Full entity during startup retains the ownership obligation
 until its state is readable; it is not mistaken for a deliberate manual OFF.
-A confirmed Full OFF event consumes ownership even if a human immediately
-turns it back ON, so a new manual Full request is not stopped at the old target.
+A confirmed manual or otherwise unqualified Full OFF event consumes ownership
+even if a human immediately turns it back ON, so a new manual Full request is
+not stopped at the old target. The only resumable OFF is generation-matched
+disconnect provenance from HEO; its dated request remains armed while paused.
 After startup or unavailability, rebinding a non-user Full ON assumes it is the
 restored HEO request. This is why competing Full automations are unsupported;
 a non-user ON alone cannot prove which automation requested it. If native Full
@@ -270,6 +300,10 @@ original override continues toward the captured target within those existing
 bounds. The wrapper's
 "Override active" status means the intent is active, not proof of maximum
 physical power; inspect HEO's actual-current and reconciliation sensors.
+
+Before downgrading to a version or dispatcher without pause support, cancel
+any outstanding trip and verify its owned override has ended. Older code does
+not understand a paused trip; do not downgrade an active or paused request.
 
 ### Updating the earlier 100%-only wrapper
 
@@ -301,3 +335,22 @@ and awaited-start races, actual helper restoration and HA startup, manual
 Full OFF/ON replacement and ordinary Full completion. These tests do not prove
 live delivery or an exact finishing time. Built-in scheduler tests additionally
 cover its typed journal and generation-bound manual/Trip handoff.
+
+The v0.12.35 regressions also exercise the native Home Assistant services,
+automation reload and integration reload, not just the planning calculation:
+
+| Sequence | Required result |
+| --- | --- |
+| Active trip → unplug/away → return before departure | Retain the dated request; resume only with valid home, cable, SoC and control evidence |
+| Unplug and SoC disappears together | Pause safely; missing data cannot restart charging |
+| Reconnect during free power → free power ends | Keep the outstanding trip; normal free charging is not cancelled at its selected target |
+| Repeated pauses or restart while paused | Keep the original absolute timeout; never grant another full budget |
+| Cancel, replace Full, complete, or exceed timeout | Do not revive the consumed request |
+| Another automation reasserts Full while already on | Do not adopt or stop its newer Full generation |
+| Reconfigure opened → dashboard setting changes → Apply | Preserve newer untouched settings; reject conflicting edits without saving |
+| Electrical mapping or schedule changes during confirmation | Reject stale confirmation rather than applying old evidence |
+
+These are software regression results. A pilot upgrade still needs fresh
+backups, exact release-file verification, preserved settings and read-only
+post-restart checks. Do not manufacture a live unplug or device command merely
+to label a release tested.

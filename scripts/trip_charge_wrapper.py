@@ -22,6 +22,8 @@ READY = "input_datetime.heo_trip_ready_by"
 TICKET = "input_datetime.heo_trip_started_for"
 STARTED_TARGET = "input_number.heo_trip_started_target"
 GENERATION = "input_text.heo_trip_full_generation"
+RESUME = "input_text.heo_trip_resume_state"
+NATIVE_STATUS = "sensor.home_energy_trip_charge_status"
 ARMED = "input_boolean.heo_trip_charge_scheduled"
 OWNED = "input_boolean.heo_trip_charge_started"
 TARGET = "input_select.heo_trip_target_soc"
@@ -51,6 +53,7 @@ STATUSES = [
     "Interrupted",
     "Expired",
     "Charging late",
+    "Paused — car disconnected",
 ]
 
 # Same energy-deficit / efficiency / power arithmetic as HEO's retained latest-
@@ -106,8 +109,15 @@ def _branch(expression: str, sequence: list[dict]) -> dict:
 
 def _owns_current_full() -> str:
     """An observed ON cycle, or our still-settling service context, not any ON."""
+    record = f"(states('{RESUME}') | from_json({{}}))"
+    checkpoint_matches = (
+        f"(states('{RESUME}') in ['', 'unknown', 'unavailable'] or "
+        f"({record} is mapping and {record}.get('generation') is integer and "
+        f"{record}.get('generation') == state_attr('{NATIVE_STATUS}', 'full_generation')))"
+    )
     return (
         f"is_state('{OWNED}', 'on') and is_state('{OVERRIDE}', 'on') "
+        f"and {checkpoint_matches} "
         f"and states['{OVERRIDE}'].context.user_id is none and ("
         f"states('{GENERATION}').startswith('on:' ~ "
         f"states['{OVERRIDE}'].last_changed.isoformat() ~ ':') or "
@@ -135,10 +145,32 @@ def _finish(label: str, *, clear_override=False) -> list[dict]:
         [
             _action("input_boolean.turn_off", ARMED),
             _action("input_boolean.turn_off", OWNED),
+            _action("input_text.set_value", RESUME, value=""),
             _status(label),
         ]
     )
     return result
+
+
+def _checkpoint_resume(*, paused: bool, starting=False) -> dict:
+    """Keep dated intent and its original timeout separate from a Full lease."""
+    if starting:
+        value = (
+            "{% set generation = state_attr('" + NATIVE_STATUS + "', 'full_generation') %}"
+            "{{ {'v': 1, 'first': resume_record.get('first') if resuming else now_ts, "
+            "'expires': resume_record.get('expires') if resuming "
+            "else now_ts + plan.get('maximum') * 3600, "
+            "'generation': generation + 1 if generation is integer and generation >= 0 "
+            "else none, 'paused': false} | to_json }}"
+        )
+    else:
+        value = (
+            "{{ {'v': 1, 'first': resume_record.get('first'), "
+            "'expires': resume_record.get('expires'), "
+            "'generation': resume_record.get('generation'), "
+            f"'paused': {str(paused).lower()}" + "} | to_json }}"
+        )
+    return _action("input_text.set_value", RESUME, value=value)
 
 
 def build_package(
@@ -167,8 +199,23 @@ def build_package(
         + f" and is_state('{OVERRIDE}', 'off') and is_state('{CONTROL}', 'on')"
         + f" and is_state('{LOCK}', 'off') and is_state('{location_entity}', 'home')"
         + f" and is_state('{cable_entity}', 'on') and now().timestamp() < due"
+        + f" and now().timestamp() < (states('{RESUME}') | from_json({{}})).get('expires', 0)"
+        + f" and ((states('{RESUME}') | from_json({{}})).get('generation') is none or "
+        + f"(state_attr('{NATIVE_STATUS}', 'full_generation') is integer and "
+        + f"(states('{RESUME}') | from_json({{}})).get('generation') == "
+        + f"state_attr('{NATIVE_STATUS}', 'full_generation') + 1))"
         + f" and 0 <= states('{SOC}') | float(-1) < target }}"
         + "}"
+    )
+    disconnected_stop = (
+        "resume_valid and armed and target_valid "
+        "and target == started_target and due == ticket "
+        "and (not soc_valid or soc < started_target) "
+        "and now_ts < due and now_ts < resume_record.get('expires') "
+        "and override_state == 'off' "
+        "and full_stop_reason == 'disconnected' "
+        "and full_stop_generation == resume_record.get('generation') "
+        "and full_generation == resume_record.get('generation') + 1"
     )
     branches = [
         # A confirmed OFF event ends our intent even if a human has already
@@ -178,11 +225,37 @@ def build_package(
             "and target == started_target and due == ticket and soc >= started_target",
             _finish("Completed"),
         ),
+        _branch(
+            "owned and (full_off_edge or not override_on) and " + disconnected_stop,
+            [
+                _checkpoint_resume(paused=True),
+                _action("input_boolean.turn_off", OWNED),
+                _status("Paused — car disconnected"),
+            ],
+        ),
         _branch("owned and full_off_edge", _finish("Interrupted")),
         # Startup can briefly hide Full's state. Keep the owned obligation
         # until it is observable; unknown is not a confirmed manual OFF.
         _branch("owned and override_state not in ['on', 'off']", [_status("Waiting for data")]),
+        _branch(
+            "owned and override_on and has_resume_record and full_generation is not integer",
+            [_status("Waiting for data")],
+        ),
+        # The durable OFF receipt is published before Full's entity changes.
+        # Do not mistake that reducing transition for a same-state foreign ON.
+        _branch(
+            "owned and override_on and resume_valid "
+            "and full_generation == resume_record.get('generation') + 1 "
+            "and full_stop_generation == resume_record.get('generation') "
+            "and full_stop_reason in ['disconnected', 'completed', 'timeout', "
+            "'operator', 'cancelled', 'invalid_data']",
+            [_status("Waiting for data")],
+        ),
         _branch("owned and override_on and not owns_current_full", _finish("Interrupted")),
+        _branch(
+            "has_resume_record and not resume_valid",
+            _finish("Interrupted", clear_override=True),
+        ),
         _branch(
             "owned and (not armed or due != ticket or not target_valid "
             "or target != started_target)",
@@ -190,6 +263,10 @@ def build_package(
         ),
         _branch("owned and not soc_valid", _finish("Interrupted", clear_override=True)),
         _branch("owned and soc >= started_target", _finish("Completed", clear_override=True)),
+        _branch(
+            "owned and resume_valid and now_ts >= resume_record.get('expires')",
+            _finish("Expired", clear_override=True),
+        ),
         _branch("owned and not override_on", _finish("Interrupted")),
         _branch(
             "owned and due <= now_ts",
@@ -215,6 +292,32 @@ def build_package(
         ),
         _branch("owned", [_status("Override active")]),
         _branch(
+            "armed and resume_unreadable and due == ticket and target == started_target",
+            [_status("Waiting for data")],
+        ),
+        _branch("pause_requested and not armed", _finish("Cancelled")),
+        _branch(
+            "pause_requested and (not target_valid or target != started_target or due != ticket)",
+            _finish("Cancelled"),
+        ),
+        _branch("pause_requested and not resume_valid", _finish("Interrupted")),
+        _branch(
+            "resuming and (now_ts >= resume_record.get('expires') or due <= now_ts)",
+            _finish("Expired"),
+        ),
+        _branch("resuming and soc_valid and soc >= target", _finish("Completed")),
+        _branch(
+            "resuming and (override_state not in ['on', 'off'] or full_generation is not integer)",
+            [_status("Waiting for data")],
+        ),
+        _branch(
+            "resuming and (override_on "
+            "or full_generation != resume_record.get('generation') + 1 "
+            "or full_stop_reason != 'disconnected' "
+            "or full_stop_generation != resume_record.get('generation'))",
+            _finish("External override"),
+        ),
+        _branch(
             "armed and due <= now_ts and target_valid and soc_valid and soc >= target",
             _finish("Completed"),
         ),
@@ -224,9 +327,15 @@ def build_package(
         ),
         _branch("armed and override_on", _finish("External override")),
         _branch("armed and not plan_valid", [_status("Waiting for data")]),
-        _branch("armed and not car_ready", [_status("Waiting for car")]),
+        _branch(
+            "armed and not car_ready",
+            [_status("{{ 'Paused — car disconnected' if resuming else 'Waiting for car' }}")],
+        ),
         _branch("armed and not control_ready", [_status("HEO control unavailable")]),
-        _branch("armed and plan.get('start', now_ts + 1) > now_ts", [_status("Waiting for start")]),
+        _branch(
+            "armed and not resuming and plan.get('start', now_ts + 1) > now_ts",
+            [_status("Waiting for start")],
+        ),
         _branch(
             "armed and plan_valid and car_ready and control_ready",
             [
@@ -234,6 +343,7 @@ def build_package(
                 _action("input_datetime.set_datetime", TICKET, timestamp="{{ due }}"),
                 _action("input_number.set_value", STARTED_TARGET, value="{{ target }}"),
                 _action("input_boolean.turn_on", OWNED),
+                _checkpoint_resume(paused=False, starting=True),
                 _action(
                     "input_text.set_value",
                     GENERATION,
@@ -257,6 +367,11 @@ def build_package(
                     ],
                     "else": [
                         _action("input_boolean.turn_off", OWNED),
+                        {
+                            "if": [_condition("resuming")],
+                            "then": [_checkpoint_resume(paused=True)],
+                            "else": [_action("input_text.set_value", RESUME, value="")],
+                        },
                         _action(
                             "input_select.select_option",
                             STATUS,
@@ -281,8 +396,15 @@ def build_package(
             {"trigger": "homeassistant", "event": "start", "id": "startup"},
             {"trigger": "state", "entity_id": [READY, ARMED, TARGET, SOC], "from": None},
             {"trigger": "state", "entity_id": OVERRIDE, "from": None, "id": "full_changed"},
+            {"trigger": "state", "entity_id": [location_entity, cable_entity], "from": None},
+            {"trigger": "state", "entity_id": NATIVE_STATUS},
         ],
-        "conditions": [_condition(f"is_state('{ARMED}', 'on') or is_state('{OWNED}', 'on')")],
+        "conditions": [
+            _condition(
+                f"is_state('{ARMED}', 'on') or is_state('{OWNED}', 'on') or "
+                f"states('{RESUME}') not in ['', 'unknown', 'unavailable']"
+            )
+        ],
         "actions": [
             # HA recreates entity timestamps on startup. The durable trip
             # ticket permits rebinding its restored logical Full request, not
@@ -327,6 +449,24 @@ def build_package(
                     "override_on": f"{{{{ is_state('{OVERRIDE}', 'on') }}}}",
                     "override_state": f"{{{{ states('{OVERRIDE}') }}}}",
                     "owns_current_full": "{{ " + _owns_current_full() + " }}",
+                    "resume_record": "{% set record = states('"
+                    + RESUME
+                    + "') | from_json({}) %}{{ record if record is mapping else {} }}",
+                    "has_resume_record": "{{ states('"
+                    + RESUME
+                    + "') not in ['', 'unknown', 'unavailable'] }}",
+                    "resume_unreadable": "{{ states('"
+                    + RESUME
+                    + "') in ['unknown', 'unavailable'] }}",
+                    "full_generation": "{{ state_attr('"
+                    + NATIVE_STATUS
+                    + "', 'full_generation') }}",
+                    "full_stop_reason": "{{ state_attr('"
+                    + NATIVE_STATUS
+                    + "', 'full_stop_reason') }}",
+                    "full_stop_generation": "{{ state_attr('"
+                    + NATIVE_STATUS
+                    + "', 'full_stop_generation') }}",
                     "full_off_edge": "{{ trigger is defined "
                     "and trigger.get('id') == 'full_changed' "
                     "and trigger.get('to_state') is not none "
@@ -342,6 +482,8 @@ def build_package(
                     f"is_state('{cable_entity}', 'on') }}}}",
                     "control_ready": f"{{{{ is_state('{CONTROL}', 'on') "
                     f"and is_state('{LOCK}', 'off') "
+                    f"and state_attr('{NATIVE_STATUS}', 'full_generation') is integer "
+                    f"and states['{RESUME}'] is not none "
                     "and state_attr('sensor.home_energy_ev_control_status', 'gate') "
                     "== 'ready' }}",
                 }
@@ -349,11 +491,26 @@ def build_package(
             {
                 "variables": {
                     "soc_valid": "{{ 0 <= soc <= 100 }}",
+                    "pause_requested": "{{ resume_record.get('paused') is sameas true }}",
+                    "resume_valid": "{{ resume_record.get('v') is integer "
+                    "and resume_record.get('v') == 1 "
+                    "and resume_record.get('first') is number "
+                    "and resume_record.get('first') is not boolean "
+                    "and is_number(resume_record.get('first')) "
+                    "and resume_record.get('expires') is number "
+                    "and resume_record.get('expires') is not boolean "
+                    "and is_number(resume_record.get('expires')) "
+                    "and 0 < resume_record.get('first') <= now_ts "
+                    "and resume_record.get('first') < resume_record.get('expires') "
+                    "and resume_record.get('generation') is integer "
+                    "and resume_record.get('generation') > 0 "
+                    "and resume_record.get('paused') is boolean }}",
                     "target_valid": f"{{{{ 1 <= target <= 100 and states('{TARGET}') "
                     "== (target | int | string) ~ '%' }}",
                 }
             },
             {"variables": {"plan_valid": plan_matches}},
+            {"variables": {"resuming": "{{ pause_requested and resume_valid }}"}},
             {"choose": branches},
         ],
     }
@@ -379,6 +536,7 @@ def build_package(
         },
         "input_text": {
             "heo_trip_full_generation": {"name": "HEO Trip Full Generation", "max": 120},
+            "heo_trip_resume_state": {"name": "HEO Trip Resume State", "max": 255},
         },
         "input_number": {
             "heo_trip_started_target": {

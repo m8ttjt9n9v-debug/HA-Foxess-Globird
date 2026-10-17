@@ -786,9 +786,7 @@ async def test_actual_config_entry_reload_preserves_owned_trip_and_releases_at_t
 @pytest.mark.parametrize(
     ("entity", "state"),
     [
-        ("device_tracker.car", "not_home"),
         ("device_tracker.car", "unavailable"),
-        ("binary_sensor.car_cable", "off"),
         ("binary_sensor.car_cable", "unknown"),
     ],
 )
@@ -804,6 +802,393 @@ async def test_owned_disconnect_consumes_trip_and_withdraws_only_its_full(trip_s
     site.hass.states.async_set("binary_sensor.car_cable", "on")
     await _reconcile(site)
     assert not site.ev._charge_to_full_requested()
+
+
+@pytest.mark.parametrize("entity,state", [
+    ("device_tracker.car", "not_home"), ("binary_sensor.car_cable", "off"),
+])
+async def test_verified_absence_pauses_request_and_reconnect_reacquires_owned_full(
+    trip_site, entity, state,
+):
+    site = await trip_site()
+    await _start(site)
+    original = site.trip.attributes
+    old_generation = original["full_generation"]
+    site.hass.states.async_set(entity, state)
+    await _reconcile(site)
+    assert site.trip.armed and not site.trip.owns_full
+    assert site.trip.status == "paused" and not site.ev._charge_to_full_requested()
+    assert site.trip.attributes["full_stop_reason"] == "disconnected"
+    assert site.trip.attributes["full_stop_generation"] == old_generation
+    calls = list(site.calls)
+    await _reconcile(site, site.trip.planned_start + timedelta(minutes=20))
+    assert site.calls == calls, "An absent car must receive no EV commands"
+    site.hass.states.async_set("device_tracker.car", "home")
+    site.hass.states.async_set("binary_sensor.car_cable", "on")
+    await _reconcile(site)
+    assert site.trip.armed and site.trip.owns_full and site.ev._charge_to_full_requested()
+    assert site.trip.attributes["full_generation"] > old_generation
+    assert site.trip.attributes["first_started_at"] == original["first_started_at"]
+    assert site.trip.attributes["timeout_at"] == original["timeout_at"]
+
+
+async def test_paused_request_survives_reload_but_not_expired_departure(trip_site):
+    site = await trip_site()
+    await _start(site)
+    site.hass.states.async_set("binary_sensor.car_cable", "off")
+    await _reconcile(site)
+    original = site.trip.attributes
+    await site.trip.async_stop()
+    restored = TripChargeController(site.hass, site.coordinator, site.entry)
+    site.coordinator.trip_charge = site.trip = restored
+    await restored.async_start()
+    assert restored.armed and restored.status == "paused" and not restored.owns_full
+    assert restored.attributes["timeout_at"] == original["timeout_at"]
+    site.freezer.move_to(DUE + timedelta(seconds=1))
+    site.hass.states.async_set("binary_sensor.car_cable", "on")
+    await _reconcile(site)
+    assert not restored.armed and restored.status == "expired", repr(restored._state)
+    assert not site.ev._charge_to_full_requested()
+
+
+@pytest.mark.parametrize("enabled", [False, True])
+async def test_manual_full_intent_cancels_paused_request_without_later_resurrection(
+    trip_site, enabled,
+):
+    site = await trip_site()
+    await _start(site)
+    site.hass.states.async_set("binary_sensor.car_cable", "off")
+    await _reconcile(site)
+    await site.ev.async_request_charge_to_full(enabled, reconcile=False)
+    assert not site.trip.armed and not site.trip.owns_full
+    site.hass.states.async_set("binary_sensor.car_cable", "on")
+    await _reconcile(site)
+    assert site.ev._charge_to_full_requested() is enabled
+
+
+async def test_started_trip_resumes_before_new_later_start_after_partial_charge(trip_site):
+    site = await trip_site()
+    await _start(site, target=90)
+    original_timeout = site.trip.attributes["timeout_at"]
+    original_departure = site.trip.departure
+    site.hass.states.async_set("binary_sensor.car_cable", "off")
+    await _reconcile(site)
+    site.hass.states.async_set("sensor.car_soc", "85", {"unit_of_measurement": "%"})
+    await _reconcile(site)
+    assert site.trip.planned_start > site.freezer.time_to_freeze.replace(tzinfo=UTC)
+    assert site.trip.status == "paused"
+    site.hass.states.async_set("binary_sensor.car_cable", "on")
+    await _reconcile(site)
+    assert site.trip.owns_full and site.ev._charge_to_full_requested()
+    assert site.trip.departure == original_departure
+    assert site.trip.target_soc == 90
+    assert site.trip.attributes["timeout_at"] == original_timeout
+
+
+async def test_verified_disconnect_with_simultaneous_missing_soc_pauses_then_waits(trip_site):
+    site = await trip_site()
+    await _start(site)
+    # Both belong to one observation; defer eager entity event callbacks until
+    # the controller lock can see the complete update rather than two cycles.
+    async with site.ev._lock:
+        site.hass.states.async_set("sensor.car_soc", "unavailable")
+        site.hass.states.async_set("binary_sensor.car_cable", "off")
+    await _reconcile(site)
+    assert site.trip.armed and site.trip.status == "paused"
+    assert site.trip.attributes["full_stop_reason"] == "disconnected"
+    assert not site.ev._charge_to_full_requested()
+    site.hass.states.async_set("binary_sensor.car_cable", "on")
+    await _reconcile(site)
+    assert site.trip.armed and site.trip.status == "waiting_for_data"
+    assert not site.ev._charge_to_full_requested()
+    site.hass.states.async_set("sensor.car_soc", "80", {"unit_of_measurement": "%"})
+    await _reconcile(site)
+    assert site.trip.owns_full and site.ev._charge_to_full_requested()
+
+
+async def test_resumed_full_retains_original_absolute_timeout(trip_site):
+    site = await trip_site()
+    await _start(site)
+    timeout = datetime.fromisoformat(site.trip.attributes["timeout_at"])
+    site.hass.states.async_set("binary_sensor.car_cable", "off")
+    await _reconcile(site)
+    await _reconcile(site, site.trip.planned_start + timedelta(minutes=20))
+    site.hass.states.async_set("binary_sensor.car_cable", "on")
+    await _reconcile(site)
+    assert site.trip.owns_full
+    await _reconcile(site, timeout + timedelta(seconds=1))
+    assert not site.trip.armed and not site.ev._charge_to_full_requested()
+    assert site.trip.attributes["full_stop_reason"] == "timeout"
+
+
+async def test_old_owned_lease_bootstraps_existing_timeout_above_planner_horizon(trip_site):
+    from dataclasses import replace
+
+    from custom_components.home_energy_orchestrator.planner.trip_charge import TripChargeState
+
+    site = await trip_site()
+    await _start(site)
+    original_start = site.ev.charge_to_full_started_at
+    assert original_start is not None
+    site.coordinator.update_config_value("ev_charge_to_full_max_hours", 49)
+    site.trip._state = replace(site.trip._state, first_started_at=None, timeout_at=None)
+    await _reconcile(site)
+    assert site.trip.owns_full and site.ev._charge_to_full_requested()
+    assert site.trip._state.first_started_at == original_start
+    assert site.trip._state.timeout_at == original_start + timedelta(hours=49)
+    assert TripChargeState.from_payload(site.trip._state.to_payload()) == site.trip._state
+
+
+async def test_paused_off_tombstone_does_not_cancel_request_when_entry_save_lagged(trip_site):
+    site = await trip_site()
+    await _start(site)
+    site.hass.states.async_set("binary_sensor.car_cable", "off")
+    await _reconcile(site)
+    original = site.trip._state
+    await site.trip.async_stop()
+    # Simulate a crash after the durable OFF journal, before the ConfigEntry's
+    # delayed Full=False save reached disk. Restore must reduce, not cancel.
+    site.coordinator.update_config_value("ev_charge_to_full_enabled", True)
+    restored = TripChargeController(site.hass, site.coordinator, site.entry)
+    site.coordinator.trip_charge = site.trip = restored
+    await restored.async_start()
+    assert restored.armed and restored.status == "paused"
+    assert not site.ev._charge_to_full_requested()
+    assert restored._state.full_generation == original.full_generation
+    assert restored._state.full_stop_generation == original.full_stop_generation
+    site.hass.states.async_set("binary_sensor.car_cable", "on")
+    await _reconcile(site)
+    assert restored.owns_full and site.ev._charge_to_full_requested()
+    assert restored.attributes["timeout_at"] == original.timeout_at.isoformat()
+
+
+async def test_old_lease_cleanup_cannot_stop_a_resumed_trip(trip_site):
+    site = await trip_site()
+    await _start(site)
+    token, generation = site.trip._state.owner_token, site.trip._state.owned_generation
+    site.hass.states.async_set("binary_sensor.car_cable", "off")
+    await _reconcile(site)
+    site.hass.states.async_set("binary_sensor.car_cable", "on")
+    await _reconcile(site)
+    result = await site.ev.async_request_charge_to_full(
+        False, owner_token=token, expected_generation=generation, reconcile=False,
+    )
+    assert result["accepted"] is False
+    assert site.trip.owns_full and site.ev._charge_to_full_requested()
+
+
+@pytest.mark.parametrize("stop_reason", ["disconnected", "invalid_data", "timeout", "completed"])
+async def test_operator_full_stop_provenance_is_bound_to_its_on_generation(trip_site, stop_reason):
+    site = await trip_site()
+    await site.ev.async_request_charge_to_full(True, reconcile=False)
+    generation = site.trip._state.full_generation
+    if stop_reason in {"disconnected", "invalid_data"}:
+        site.ev.charge_to_full_started_at = NOW
+        site.hass.states.async_set(
+            "binary_sensor.car_cable", "off" if stop_reason == "disconnected" else "unknown",
+        )
+    elif stop_reason == "timeout":
+        site.ev.charge_to_full_started_at = NOW - timedelta(hours=13)
+    else:
+        site.hass.states.async_set("sensor.car_soc", "100", {"unit_of_measurement": "%"})
+    await site.ev.async_reconcile()
+    assert not site.ev._charge_to_full_requested()
+    assert site.trip.attributes["full_stop_reason"] == stop_reason
+    assert site.trip.attributes["full_stop_generation"] == generation
+    assert site.trip.attributes["full_generation"] == generation + 1
+    assert site.trip.attributes["full_stop_at"] is not None
+
+
+async def test_failed_pause_checkpoint_never_grants_automatic_paid_restart(trip_site, monkeypatch):
+    site = await trip_site()
+    await _start(site)
+    original = site.trip._store.async_save
+    monkeypatch.setattr(site.trip._store, "async_save", AsyncMock(side_effect=OSError("disk")))
+    site.hass.states.async_set("binary_sensor.car_cable", "off")
+    await _reconcile(site)
+    assert not site.trip.armed and not site.ev._charge_to_full_requested()
+    monkeypatch.setattr(site.trip._store, "async_save", original)
+    site.hass.states.async_set("binary_sensor.car_cable", "on")
+    await _reconcile(site)
+    assert not site.trip.armed and not site.ev._charge_to_full_requested()
+
+
+@pytest.mark.parametrize("field,value", [
+    ("first_started_at", None), ("timeout_at", None),
+    ("full_stop_reason", []), ("full_stop_generation", None), ("full_stop_at", None),
+])
+async def test_partial_pause_journal_is_quarantined_not_resumed(
+    trip_site, monkeypatch, field, value,
+):
+    site = await trip_site()
+    await _start(site)
+    site.hass.states.async_set("binary_sensor.car_cable", "off")
+    await _reconcile(site)
+    payload = site.trip._state.to_payload()
+    payload[field] = value
+    await site.trip.async_stop()
+    restored = TripChargeController(site.hass, site.coordinator, site.entry)
+    site.coordinator.trip_charge = site.trip = restored
+    monkeypatch.setattr(restored._store, "async_load", AsyncMock(return_value=payload))
+    await restored.async_start()
+    assert restored.status == "invalid_storage"
+    assert not restored.armed and not site.ev._charge_to_full_requested()
+
+
+@pytest.mark.parametrize("complete_inside_free", [False, True])
+async def test_actual_reload_paused_trip_then_free_boundary_handoff(
+    trip_site, monkeypatch, complete_inside_free,
+):
+    site = await trip_site(soc=20, capacity=60)
+    commands = await _setup_actual_site(site, monkeypatch)
+    try:
+        free_start = datetime(2026, 10, 12, 1, 1, tzinfo=UTC)
+        free_end = datetime(2026, 10, 12, 3, 59, tzinfo=UTC)
+        await _arm(site, target=80, due=free_end + timedelta(hours=1))
+        await _reconcile(site, site.trip.planned_start + timedelta(seconds=1))
+        assert site.trip.owns_full
+        original_timeout = site.trip.attributes["timeout_at"]
+        site.hass.states.async_set("binary_sensor.car_cable", "off")
+        await _reconcile(site)
+        assert site.trip.armed and site.trip.status == "paused"
+        before = list(commands)
+        assert await site.hass.config_entries.async_reload(site.entry.entry_id)
+        await site.hass.async_block_till_done()
+        site.coordinator = site.entry.runtime_data
+        site.ev, site.trip = site.coordinator.ev_controller, site.coordinator.trip_charge
+        assert site.trip.status == "paused" and site.trip.armed
+        assert commands == before, "Reload while absent must not command the EV"
+        site.freezer.move_to(free_start + timedelta(minutes=30))
+        site.hass.states.async_set("binary_sensor.car_cable", "on")
+        await _reconcile(site)
+        await site.ev.async_reconcile()
+        assert site.trip.owns_full and site.ev._charge_to_full_requested()
+        assert site.trip.attributes["timeout_at"] == original_timeout
+        if complete_inside_free:
+            before = len(commands)
+            site.hass.states.async_set("sensor.car_soc", "80", {"unit_of_measurement": "%"})
+            await _reconcile(site)
+            await site.ev.async_reconcile()
+            assert site.trip.status == "completed" and not site.trip.armed
+            assert not site.ev._charge_to_full_requested()
+            assert site.ev.policy_route.route == "free_window"
+            assert site.ev.target_current_a > 0 and site.ev.target_limit_percent <= 90
+            assert not any(c.action == "stop_charging" for c in commands[before:])
+        else:
+            await _reconcile(site, free_end + timedelta(minutes=1))
+            await site.ev.async_reconcile()
+            assert site.trip.owns_full and site.ev._charge_to_full_requested()
+            assert site.ev.policy_route.route == "outside_window"
+            assert site.ev.target_current_a > 0
+    finally:
+        assert await site.hass.config_entries.async_unload(site.entry.entry_id)
+        await site.hass.async_block_till_done()
+
+
+async def test_legacy_wrapper_uses_real_full_generation_and_disconnect_receipt(actual_trip_site):
+    """Only device transport is fake: wrapper, Full switch and status are real."""
+    import json
+
+    from homeassistant.helpers.event import async_track_state_change_event
+    from homeassistant.setup import async_setup_component
+
+    from scripts.trip_charge_wrapper import (
+        ARMED,
+        EFFICIENCY,
+        MARGIN,
+        NATIVE_STATUS,
+        OVERRIDE,
+        OWNED,
+        READY,
+        RESUME,
+        STATUS,
+        TARGET,
+        TIMEOUT,
+        build_package,
+    )
+
+    site = actual_trip_site
+    hass = site.hass
+    package = build_package(
+        location_entity="device_tracker.car", cable_entity="binary_sensor.car_cable",
+    )
+    for domain in ("input_datetime", "input_boolean", "input_number", "input_select", "input_text"):
+        assert await async_setup_component(hass, domain, {domain: package[domain]})
+    for entity, value in ((EFFICIENCY, 90), (TIMEOUT, 12), (MARGIN, 0)):
+        await hass.services.async_call(
+            "input_number", "set_value", {"entity_id": entity, "value": value}, blocking=True,
+        )
+    await hass.services.async_call(
+        "input_datetime", "set_datetime",
+        {"entity_id": READY, "datetime": "2026-10-11 19:30:00"}, blocking=True,
+    )
+    await hass.services.async_call(
+        "input_select", "select_option", {"entity_id": TARGET, "option": "90%"}, blocking=True,
+    )
+    assert await async_setup_component(hass, "template", {"template": package["template"]})
+    assert await async_setup_component(hass, "automation", {"automation": package["automation"]})
+    await hass.async_block_till_done()
+    off_receipts = []
+
+    def capture_off(event):
+        before, after = event.data["old_state"], event.data["new_state"]
+        if (
+            before is not None and after is not None
+            and before.state == "on" and after.state == "off"
+        ):
+            off_receipts.append(dict(hass.states.get(NATIVE_STATUS).attributes))
+
+    remove_listener = async_track_state_change_event(hass, [OVERRIDE], capture_off)
+    try:
+        previous = hass.states.get(NATIVE_STATUS).attributes["full_generation"]
+        await hass.services.async_call(
+            "input_boolean", "turn_on", {"entity_id": ARMED}, blocking=True,
+        )
+        await hass.async_block_till_done()
+        assert hass.states.get(OVERRIDE).state == "on"
+        record = json.loads(hass.states.get(RESUME).state)
+        generation = hass.states.get(NATIVE_STATUS).attributes["full_generation"]
+        assert record["generation"] == generation == previous + 1
+        assert not site.trip.armed and not site.trip.owns_full
+
+        hass.states.async_set("binary_sensor.car_cable", "off")
+        await site.ev.async_reconcile()
+        site.coordinator.async_update_listeners()
+        await hass.async_block_till_done()
+        assert hass.states.get(OVERRIDE).state == "off"
+        assert hass.states.get(ARMED).state == "on", (
+            hass.states.get(STATUS).state, hass.states.get(RESUME).state,
+            {key: hass.states.get(NATIVE_STATUS).attributes.get(key)
+             for key in ("full_generation", "full_stop_reason", "full_stop_generation")},
+            [{key: receipt.get(key) for key in (
+                "full_generation", "full_stop_reason", "full_stop_generation",
+            )} for receipt in off_receipts],
+        )
+        assert hass.states.get(OWNED).state == "off"
+        assert hass.states.get(STATUS).state == "Paused — car disconnected"
+        assert off_receipts[-1]["full_stop_reason"] == "disconnected"
+        assert off_receipts[-1]["full_stop_generation"] == generation
+        assert off_receipts[-1]["full_generation"] == generation + 1
+        paused = json.loads(hass.states.get(RESUME).state)
+
+        before = list(site.actuator_commands)
+        await site.ev.async_reconcile()
+        assert site.actuator_commands == before
+        hass.states.async_set("binary_sensor.car_cable", "on")
+        await hass.async_block_till_done()
+        assert hass.states.get(OVERRIDE).state == "on"
+        resumed = json.loads(hass.states.get(RESUME).state)
+        assert resumed["generation"] == generation + 2
+        assert resumed["first"] == paused["first"]
+        assert resumed["expires"] == paused["expires"]
+    finally:
+        remove_listener()
+        await hass.services.async_call(
+            "automation", "turn_off",
+            {"entity_id": "automation.heo_trip_charge_schedule_existing_full_override",
+             "stop_actions": True}, blocking=True,
+        )
+        await hass.async_block_till_done()
 
 
 @pytest.mark.parametrize(

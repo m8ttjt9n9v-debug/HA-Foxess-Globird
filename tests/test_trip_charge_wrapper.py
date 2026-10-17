@@ -1,5 +1,6 @@
 """Real native HA helpers/automation tests; the HEO switch is the only writer."""
 
+import json
 from datetime import UTC, datetime
 
 import pytest
@@ -17,11 +18,13 @@ from scripts.trip_charge_wrapper import (
     GENERATION,
     LOCK,
     MARGIN,
+    NATIVE_STATUS,
     OVERRIDE,
     OWNED,
     PLAN,
     POWER,
     READY,
+    RESUME,
     SOC,
     STARTED_TARGET,
     STATUS,
@@ -73,7 +76,16 @@ async def _detach_test_automation(hass):
 
 
 async def _setup(
-    hass, *, soc=80, capacity=60, power=3.6, restore_states=None, override_state="off"
+    hass,
+    *,
+    soc=80,
+    capacity=60,
+    power=3.6,
+    restore_states=None,
+    override_state="off",
+    native_attributes=None,
+    location_state="home",
+    cable_state="on",
 ):
     await hass.config.async_set_time_zone("Australia/Sydney")
     package = build_package(
@@ -89,12 +101,15 @@ async def _setup(
         (CONTROL, "on"),
         (LOCK, "off"),
         (OVERRIDE, override_state),
-        ("device_tracker.test_ev", "home"),
-        ("binary_sensor.test_cable", "on"),
+        ("device_tracker.test_ev", location_state),
+        ("binary_sensor.test_cable", cable_state),
     ):
         hass.states.async_set(entity, value)
     hass.states.async_set(
         "sensor.home_energy_ev_control_status", "feedback_confirmed", {"gate": "ready"}
+    )
+    hass.states.async_set(
+        NATIVE_STATUS, "legacy_conflict", native_attributes or {"full_generation": 0}
     )
     if not restore_states:
         for entity, value in ((EFFICIENCY, 90), (TIMEOUT, 12), (MARGIN, 0)):
@@ -127,6 +142,10 @@ async def _setup(
                 hass.states.get(TARGET).state.removesuffix("%")
             )
         calls.append(call.service)
+        native = hass.states.get(NATIVE_STATUS)
+        attributes = dict(native.attributes)
+        attributes["full_generation"] = attributes.get("full_generation", 0) + 1
+        hass.states.async_set(NATIVE_STATUS, "legacy_conflict", attributes)
         hass.states.async_set(
             OVERRIDE, "on" if call.service == "turn_on" else "off", context=call.context
         )
@@ -647,6 +666,339 @@ async def test_runtime_full_unavailability_preserves_target_stop_on_restoration(
     await hass.async_block_till_done()
     assert hass.states.get(OWNED).state == "on"
     hass.states.async_set(SOC, "90", {"unit_of_measurement": "%"})
+    await hass.async_block_till_done()
+    assert calls == ["turn_on", "turn_off"]
+    assert hass.states.get(STATUS).state == "Completed"
+
+
+def _resume_record(hass):
+    return Template("{{ states('" + RESUME + "') | from_json({}) }}", hass).async_render()
+
+
+async def _start_day_trip(hass, freezer):
+    """Synthetic long trip spanning a mid-day free window, not a site fixture."""
+    package, calls = await _setup(hass, soc=20, capacity=75, power=3.6)
+    await hass.services.async_call(
+        "input_number", "set_value", {"entity_id": TIMEOUT, "value": 16}, blocking=True
+    )
+    await hass.services.async_call(
+        "input_datetime",
+        "set_datetime",
+        {"entity_id": READY, "datetime": "2026-10-12 17:00:00"},
+        blocking=True,
+    )
+    await _target(hass, 80)
+    await _tick(hass, freezer, datetime(2026, 10, 11, 16, 10, tzinfo=UTC))
+    await _arm(hass)
+    assert calls == ["turn_on"]
+    return package, calls
+
+
+async def _native_full_stop(hass, *, reason="disconnected", disconnect=True, generation=None):
+    """Publish the HEO stop receipt before its observable Full OFF edge."""
+    if disconnect:
+        hass.states.async_set("binary_sensor.test_cable", "off")
+        hass.states.async_set("device_tracker.test_ev", "not_home")
+    attributes = dict(hass.states.get(NATIVE_STATUS).attributes)
+    previous = attributes["full_generation"]
+    attributes.update(
+        {
+            "full_generation": previous + 1,
+            "full_stop_reason": reason,
+            "full_stop_generation": previous if generation is None else generation,
+            "full_stop_at": datetime.now(UTC).isoformat(),
+        }
+    )
+    hass.states.async_set(NATIVE_STATUS, "legacy_conflict", attributes)
+    hass.states.async_set(OVERRIDE, "off")
+    await hass.async_block_till_done()
+
+
+async def _reconnect(hass):
+    hass.states.async_set("device_tracker.test_ev", "home")
+    hass.states.async_set("binary_sensor.test_cable", "on")
+    await hass.async_block_till_done()
+
+
+@pytest.mark.freeze_time(NOW, real_asyncio=True)
+async def test_owned_trip_pauses_then_resumes_through_free_end_with_original_timeout(hass, freezer):
+    _, calls = await _start_day_trip(hass, freezer)
+    original = _resume_record(hass)
+    assert original["generation"] == 1
+    await _tick(hass, freezer, datetime(2026, 10, 11, 23, 20, tzinfo=UTC))
+    await _native_full_stop(hass)
+    assert hass.states.get(ARMED).state == "on"
+    assert hass.states.get(OWNED).state == "off"
+    assert hass.states.get(STATUS).state == "Paused — car disconnected"
+    assert calls == ["turn_on"]  # No Full/current/stop request while the car is away.
+    hass.states.async_set(SOC, "70", {"unit_of_measurement": "%"})
+    await _tick(hass, freezer, datetime(2026, 10, 12, 1, 30, tzinfo=UTC))
+    await _reconnect(hass)
+    assert calls == ["turn_on", "turn_on"]
+    resumed = _resume_record(hass)
+    assert resumed["first"] == original["first"]
+    assert resumed["expires"] == original["expires"]
+    assert resumed["generation"] == 3
+    assert resumed["paused"] is False
+    # The normal latest start is now later than reconnect; outstanding intent resumes anyway.
+    plan = Template("{{ states('" + PLAN + "') | from_json }}", hass).async_render()
+    assert plan["start"] > datetime(2026, 10, 12, 1, 30, tzinfo=UTC).timestamp()
+    await _tick(hass, freezer, datetime(2026, 10, 12, 3, 0, tzinfo=UTC))
+    assert hass.states.get(OVERRIDE).state == "on"
+    assert hass.states.get(OWNED).state == "on"
+    assert calls == ["turn_on", "turn_on"]
+    # Repeated disconnection cannot buy a new sixteen-hour timeout.
+    await _native_full_stop(hass)
+    await _reconnect(hass)
+    assert _resume_record(hass)["expires"] == original["expires"]
+    assert calls == ["turn_on", "turn_on", "turn_on"]
+    await _tick(hass, freezer, datetime.fromtimestamp(original["expires"], UTC))
+    assert calls[-1] == "turn_off"
+    assert hass.states.get(ARMED).state == "off"
+    assert hass.states.get(STATUS).state == "Expired"
+
+
+@pytest.mark.freeze_time(NOW, real_asyncio=True)
+@pytest.mark.parametrize("reason", ["timeout", "operator", "completed", "invalid_data", None])
+async def test_only_generation_bound_disconnect_receipt_can_pause(hass, freezer, reason):
+    _, calls = await _start_day_trip(hass, freezer)
+    await _native_full_stop(hass, reason=reason)
+    assert hass.states.get(ARMED).state == "off"
+    assert hass.states.get(STATUS).state == "Interrupted"
+    await _reconnect(hass)
+    assert calls == ["turn_on"]
+
+
+@pytest.mark.freeze_time(NOW, real_asyncio=True)
+async def test_wrong_generation_disconnect_does_not_authorize_resume(hass, freezer):
+    _, calls = await _start_day_trip(hass, freezer)
+    await _native_full_stop(hass, generation=999)
+    await _reconnect(hass)
+    assert hass.states.get(ARMED).state == "off"
+    assert calls == ["turn_on"]
+
+
+@pytest.mark.freeze_time(NOW, real_asyncio=True)
+async def test_cancel_while_paused_is_terminal(hass, freezer):
+    _, calls = await _start_day_trip(hass, freezer)
+    await _native_full_stop(hass)
+    await hass.services.async_call("input_boolean", "turn_off", {"entity_id": ARMED}, blocking=True)
+    await hass.async_block_till_done()
+    assert hass.states.get(STATUS).state == "Cancelled"
+    assert hass.states.get(RESUME).state == ""
+    await _reconnect(hass)
+    assert calls == ["turn_on"]
+
+
+@pytest.mark.freeze_time(NOW, real_asyncio=True)
+async def test_manual_full_on_and_off_while_away_supersedes_paused_ticket(hass, freezer):
+    _, calls = await _start_day_trip(hass, freezer)
+    await _native_full_stop(hass)
+    attributes = dict(hass.states.get(NATIVE_STATUS).attributes)
+    attributes["full_generation"] += 2
+    attributes["full_stop_reason"] = "operator"
+    hass.states.async_set(NATIVE_STATUS, "legacy_conflict", attributes)
+    hass.states.async_set(OVERRIDE, "on", context=Context(user_id="human"))
+    hass.states.async_set(OVERRIDE, "off", context=Context(user_id="human"))
+    await hass.async_block_till_done()
+    await _reconnect(hass)
+    assert calls == ["turn_on"]
+    assert hass.states.get(STATUS).state == "External override"
+    assert hass.states.get(ARMED).state == "off"
+
+
+@pytest.mark.freeze_time(NOW, real_asyncio=True)
+async def test_paused_trip_expires_at_departure_without_away_commands(hass, freezer):
+    _, calls = await _start_day_trip(hass, freezer)
+    await _native_full_stop(hass)
+    await _tick(hass, freezer, datetime(2026, 10, 12, 6, 0, tzinfo=UTC))
+    assert hass.states.get(STATUS).state == "Expired"
+    await _reconnect(hass)
+    assert calls == ["turn_on"]
+
+
+@pytest.mark.freeze_time(NOW, real_asyncio=True)
+@pytest.mark.parametrize("edit", [TARGET, READY])
+async def test_paused_target_or_departure_edit_cancels_original_ticket(hass, freezer, edit):
+    _, calls = await _start_day_trip(hass, freezer)
+    await _native_full_stop(hass)
+    if edit == TARGET:
+        await _target(hass, 90)
+    else:
+        await hass.services.async_call(
+            "input_datetime",
+            "set_datetime",
+            {"entity_id": READY, "datetime": "2026-10-12 18:00:00"},
+            blocking=True,
+        )
+        await hass.async_block_till_done()
+    await _reconnect(hass)
+    assert hass.states.get(STATUS).state == "Cancelled"
+    assert calls == ["turn_on"]
+
+
+@pytest.mark.freeze_time(NOW, real_asyncio=True)
+async def test_completed_trip_is_not_restarted_after_subsequent_driving(hass, freezer):
+    _, calls = await _start_day_trip(hass, freezer)
+    hass.states.async_set(SOC, "80", {"unit_of_measurement": "%"})
+    await hass.async_block_till_done()
+    assert hass.states.get(STATUS).state == "Completed"
+    hass.states.async_set(SOC, "60", {"unit_of_measurement": "%"})
+    await _reconnect(hass)
+    await _tick(hass, freezer, datetime(2026, 10, 12, 3, 0, tzinfo=UTC))
+    assert calls == ["turn_on", "turn_off"]
+
+
+@pytest.mark.freeze_time(NOW, real_asyncio=True)
+async def test_actual_dispatcher_reload_preserves_paused_ticket(hass, freezer, monkeypatch):
+    package, calls = await _start_day_trip(hass, freezer)
+    await _native_full_stop(hass)
+    original = _resume_record(hass)
+
+    async def configuration(_hass):
+        return {"automation": package["automation"]}
+
+    monkeypatch.setattr("homeassistant.config.async_hass_config_yaml", configuration)
+    await hass.services.async_call("automation", "reload", blocking=True)
+    await hass.async_block_till_done()
+    assert _resume_record(hass) == original
+    await _reconnect(hass)
+    assert calls == ["turn_on", "turn_on"]
+
+
+@pytest.mark.freeze_time(NOW, real_asyncio=True)
+async def test_restored_paused_trip_waits_away_then_resumes_with_original_expiry(hass, freezer):
+    first = datetime(2026, 10, 11, 16, 10, tzinfo=UTC).timestamp()
+    record = {"v": 1, "first": first, "expires": first + 16 * 3600, "generation": 1, "paused": True}
+    restored = [
+        state
+        for state in _restored_trip(target=80)
+        if state.entity_id not in {READY, TICKET, STARTED_TARGET}
+    ] + [
+        State(READY, "2026-10-12 17:00:00", {"has_date": True, "has_time": True}),
+        State(TICKET, "2026-10-12 17:00:00", {"has_date": True, "has_time": True}),
+        State(STARTED_TARGET, "80"),
+        State(STATUS, "Paused — car disconnected"),
+        State(RESUME, json.dumps(record)),
+    ]
+    freezer.move_to(datetime(2026, 10, 11, 23, 20, tzinfo=UTC))
+    _, calls = await _setup(
+        hass,
+        soc=70,
+        restore_states=restored,
+        location_state="not_home",
+        cable_state="off",
+        native_attributes={
+            "full_generation": 2,
+            "full_stop_generation": 1,
+            "full_stop_reason": "disconnected",
+        },
+    )
+    await hass.async_start()
+    await hass.async_block_till_done()
+    assert calls == []
+    assert _resume_record(hass) == record
+    await _tick(hass, freezer, datetime(2026, 10, 12, 1, 30, tzinfo=UTC))
+    await _reconnect(hass)
+    assert calls == ["turn_on"]
+    assert _resume_record(hass)["expires"] == record["expires"]
+
+
+@pytest.mark.freeze_time(NOW, real_asyncio=True)
+@pytest.mark.parametrize("bad_value", ["[]", "{}", "not json"])
+async def test_corrupt_pause_record_never_creates_a_fresh_timeout(hass, freezer, bad_value):
+    _, calls = await _start_day_trip(hass, freezer)
+    await _native_full_stop(hass)
+    await hass.services.async_call(
+        "input_text", "set_value", {"entity_id": RESUME, "value": bad_value}, blocking=True
+    )
+    await _reconnect(hass)
+    assert calls == ["turn_on"]
+    assert hass.states.get(ARMED).state == "off"
+    assert hass.states.get(STATUS).state == "Interrupted"
+
+
+@pytest.mark.freeze_time(NOW, real_asyncio=True)
+async def test_unavailable_pause_record_cannot_turn_reconnect_into_a_new_trip(hass, freezer):
+    _, calls = await _start_day_trip(hass, freezer)
+    await _native_full_stop(hass)
+    record = hass.states.get(RESUME).state
+    hass.states.async_set(RESUME, "unavailable")
+    await _reconnect(hass)
+    assert calls == ["turn_on"]
+    assert hass.states.get(STATUS).state == "Waiting for data"
+    hass.states.async_set(RESUME, record)
+    await _tick(hass, freezer, datetime(2026, 10, 11, 16, 11, tzinfo=UTC))
+    assert calls == ["turn_on", "turn_on"]
+
+
+@pytest.mark.freeze_time(NOW, real_asyncio=True)
+async def test_paused_trip_waits_for_restored_soc_before_reacquiring_full(
+    hass,
+    freezer,
+):
+    _, calls = await _start_day_trip(hass, freezer)
+    await _native_full_stop(hass)
+    assert hass.states.get(ARMED).state == "on"
+    hass.states.async_set(SOC, "unavailable", {"unit_of_measurement": "%"})
+    await _reconnect(hass)
+    assert calls == ["turn_on"]
+    assert hass.states.get(STATUS).state == "Waiting for data"
+    hass.states.async_set(SOC, "60", {"unit_of_measurement": "%"})
+    await hass.async_block_till_done()
+    assert calls == ["turn_on", "turn_on"]
+
+
+@pytest.mark.freeze_time(NOW, real_asyncio=True)
+async def test_valid_existing_active_lease_keeps_longer_original_timeout(hass, freezer):
+    _, calls = await _start_day_trip(hass, freezer)
+    record = _resume_record(hass)
+    # Restored active permission may predate the helper planner's 48-hour input cap.
+    record["expires"] = record["first"] + 72 * 3600
+    await hass.services.async_call(
+        "input_text",
+        "set_value",
+        {"entity_id": RESUME, "value": json.dumps(record)},
+        blocking=True,
+    )
+    await _tick(hass, freezer, datetime(2026, 10, 11, 16, 11, tzinfo=UTC))
+    assert hass.states.get(OWNED).state == "on"
+    assert hass.states.get(OVERRIDE).state == "on"
+    await _native_full_stop(hass)
+    await _reconnect(hass)
+    assert _resume_record(hass)["expires"] == record["expires"]
+    assert calls == ["turn_on", "turn_on"]
+
+
+@pytest.mark.freeze_time(NOW, real_asyncio=True)
+async def test_non_user_full_reassertion_cannot_be_adopted_or_stopped_at_old_target(hass, freezer):
+    _, calls = await _start_day_trip(hass, freezer)
+    original_changed = hass.states.get(OVERRIDE).last_changed
+    # A different automation's ON does not change last_changed when Full is already ON.
+    await hass.services.async_call("switch", "turn_on", {"entity_id": OVERRIDE}, blocking=True)
+    await hass.async_block_till_done()
+    assert hass.states.get(OVERRIDE).last_changed == original_changed
+    assert hass.states.get(OVERRIDE).context.user_id is None
+    assert hass.states.get(ARMED).state == hass.states.get(OWNED).state == "off"
+    assert hass.states.get(STATUS).state == "Interrupted"
+    hass.states.async_set(SOC, "80", {"unit_of_measurement": "%"})
+    await hass.async_block_till_done()
+    assert calls == ["turn_on", "turn_on"]
+    assert hass.states.get(OVERRIDE).state == "on"
+
+
+@pytest.mark.freeze_time(NOW, real_asyncio=True)
+async def test_active_checkpoint_waits_for_temporarily_unavailable_generation(hass, freezer):
+    _, calls = await _start_day_trip(hass, freezer)
+    attributes = dict(hass.states.get(NATIVE_STATUS).attributes)
+    hass.states.async_set(NATIVE_STATUS, "unavailable")
+    await hass.async_block_till_done()
+    assert hass.states.get(OWNED).state == "on"
+    assert hass.states.get(STATUS).state == "Waiting for data"
+    hass.states.async_set(SOC, "80", {"unit_of_measurement": "%"})
+    await hass.async_block_till_done()
+    assert calls == ["turn_on"]
+    hass.states.async_set(NATIVE_STATUS, "legacy_conflict", attributes)
     await hass.async_block_till_done()
     assert calls == ["turn_on", "turn_off"]
     assert hass.states.get(STATUS).state == "Completed"

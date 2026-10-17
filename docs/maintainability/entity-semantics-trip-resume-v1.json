@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "extension": "trip_resume_v1",
+  "entity_count": 0,
+  "entities": [],
+  "attribute_profiles": {},
+  "attribute_profile_additions": {
+    "trip_charge_v1": {
+      "first_started_at": "Aware ISO timestamp of this native trip's original first Full start, or null. A temporary disconnect or reload does not grant a new start-time budget.",
+      "timeout_at": "Original absolute native trip timeout as an aware ISO timestamp, or null. Pauses and reconnects cannot extend it; it is separate from the selected departure.",
+      "full_stop_reason": "Persisted reason for the latest logical Full stop, or null. Only an explicitly disconnected stop matching the prior Full generation permits automatic trip pause/resumption; operator cancellation, completion, timeout and invalid data remain terminal.",
+      "full_stop_generation": "The pre-stop ON lease generation to which full_stop_reason applies, or null. This is provenance, not permission to adopt an unrelated newer Full request.",
+      "full_stop_at": "Aware ISO timestamp of the recorded logical Full stop, or null; not proof of physical charger response."
+    }
+  }
+}

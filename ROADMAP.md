@@ -141,7 +141,7 @@ duplicate helpers, second controller or competing configuration source.
   expected house use, incremental paid energy and configured-tariff cost bounds.
   Preserve floor/efficiency accounting and missing-data honesty; do not change
   the Trip controller or predict later costs from the current battery pool.
-- [ ] Publish and separately install the tested display, then verify the named
+- [x] Publish and separately install the tested display, then verify the named
   site's saved dashboard, source and request remain unchanged except that card.
 - [x] Package the existing native-HA wrapper for a selected 1–100% target and
   departure time. Reuse HEO's capacity/max-power projections and existing paid
@@ -155,7 +155,22 @@ duplicate helpers, second controller or competing configuration source.
   repetition remains future work. See
   [trip charging](docs/trip-charge-wrapper.md).
 
-### Deferred — tariff-aware trip planning and interruption recovery
+### Trip interruption recovery
+
+- [x] Retain an outstanding trip across a confirmed temporary unplug or away
+  interval, without EV writes while away. Re-evaluate on qualified reconnect
+  before departure using the original target and absolute timeout; do not
+  revive completed, cancelled, superseded or invalid-data requests.
+- [x] Record generation-bound Full stop provenance and expose pause/budget
+  evidence. Update the optional legacy dispatcher explicitly with a restorable
+  checkpoint rather than silently migrating or duplicating active schedulers.
+- [x] Preserve newer untouched live settings when Reconfigure is applied,
+  including changes during the final schedule confirmation; reject conflicting
+  concurrent edits rather than restoring an old draft snapshot.
+- [ ] Complete controlled release and approved active-charge pilot acceptance;
+  physical future unplug/free-window behaviour remains live acceptance work.
+
+### Deferred — tariff-aware trip planning
 
 Leave the released charging policy unchanged for now. The earlier preferred-
 rate/maximum-rate suggestion is a design candidate, not an agreed algorithm.
@@ -178,27 +193,16 @@ Specify human intent and scenario tests before implementing this extension.
   rate, taper/efficiency uncertainty, and visible predicted shortfall. Distinguish
   small partial-charge top-ups from finishing near departure at 100%; neither
   a latest-start nor a lowest-cost rule should be silently assumed universal.
-- [ ] Define whether a temporary detected unplug should **pause an outstanding
-  trip request** rather than consume it. If resumption is approved, preserve the
-  original deadline/target and reassess current SoC, remaining energy/time and
-  ownership on reconnect. Distinguish physical disconnect, brief cable tidying,
-  telemetry loss, a charger fault, deliberate cancellation and manual Full
-  replacement; never restore a superseded or completed paid request.
-- [ ] Cover reconnection before start, during active charging, after the planned
-  start and after departure; repeated plug/unplug, HA restart while disconnected,
-  changed target/departure, free-window handoff, and power surges that curtail
-  charging. Specify timeout behaviour across pauses, expiry and notifications.
 - [ ] Build table-driven and time-sequenced tests with small/large SoC deficits,
   one/three-phase rates, tariff/credit boundaries, changing house/solar demand,
   depleted house energy, stale feedback, missed deadlines and manual ownership.
   Compare plausible human choices before changing code. Keep the existing single
   actuator owner and use the same selected rate in planning and execution.
 
-Current v0.12.32 behaviour is deliberately simpler: a detected home/cable loss
-after Trip owns Full interrupts and consumes that trip; reconnect alone does
-not re-arm it. An unstarted armed trip can keep waiting for the car, but expires
-if departure passes. Resumable-trip behaviour remains design work, not a released
-capability.
+The v0.12.35 pause correction is separate from this deferred tariff optimizer.
+An unstarted armed trip can keep waiting for the car but expires if departure
+passes. Temporary absence does not extend a started trip's timeout, and a
+completed trip is still consumed rather than becoming an ongoing SoC reserve.
 
 ## Optional price export extension
 

@@ -29,6 +29,9 @@ RELOCATIONS_PATH = (
 CAPACITY_ADDITIONS_PATH = (
     REPOSITORY_ROOT / "docs" / "maintainability" / "config-usage-additions-ev-capacity-v1.json"
 )
+RECONFIGURE_TRANSITION_PATH = (
+    REPOSITORY_ROOT / "docs" / "maintainability" / "config-usage-transition-reconfigure-v1.json"
+)
 _CONFIG_ACCESS_METHODS = {
     "get",
     "pop",
@@ -228,6 +231,22 @@ def build_config_usage_contract(*, include_extensions: bool = False) -> dict[str
                 raise ValueError("configuration relocation must preserve the mutation boundary")
             records.remove(after)
             records.append(before)
+        transition = json.loads(RECONFIGURE_TRANSITION_PATH.read_text(encoding="utf-8"))
+        # Exact boundary-only reads/writes moved to current-value review. Do not
+        # exempt a whole file, configuration key, or any runtime access.
+        for item in (*transition["before"], *transition["after"]):
+            if item["source"] != "custom_components/home_energy_orchestrator/config_flow.py" or (
+                item["layer"] != "boundary" or item["kind"] != "raw_mapping"
+            ):
+                raise ValueError("reconfigure transition must remain at the flow boundary")
+        for item in transition["after"]:
+            if item not in records:
+                raise ValueError("reviewed reconfigure access is missing")
+            records.remove(item)
+        for item in transition["before"]:
+            if item in records:
+                raise ValueError("obsolete reconfigure access returned")
+            records.append(item)
     records.sort(
         key=lambda item: (
             item["source"],

@@ -527,8 +527,12 @@ class ActiveEvController:
                     charge_to_full_started=self.charge_to_full_started_at is not None,
                     solar_spill_enabled=policy.solar_spill_enabled,
                 )
-                if cleanup.clear_charge_to_full_config:
-                    await self._async_clear_charge_to_full()
+                if cleanup.clear_charge_to_full_config and self._charge_to_full_requested():
+                    await self._async_clear_charge_to_full(
+                        stop_reason=(
+                            "disconnected" if self._disconnection_is_verified() else "invalid_data"
+                        )
+                    )
                 self.charge_to_full_started_at = cleanup.charge_to_full_started_at
                 self._apply_daily_backfill_cycle_state(cleanup.daily_state)
                 self.pre_free_session = cleanup.pre_free_state
@@ -593,7 +597,13 @@ class ActiveEvController:
                 ),
             )
             if charge_to_full.clear_config:
-                await self._async_clear_charge_to_full()
+                await self._async_clear_charge_to_full(
+                    stop_reason=(
+                        "completed" if vehicle_soc is not None
+                        and vehicle_soc >= (observation.limit_maximum_percent or 100.0)
+                        else "timeout"
+                    )
+                )
             self.charge_to_full_started_at = charge_to_full.started_at
             self._apply_daily_backfill_cycle_state(charge_to_full.daily_state)
 
@@ -2870,9 +2880,9 @@ class ActiveEvController:
         legacy_entity = preference.legacy_charge_to_full_entity
         return self._entity_feedback(legacy_entity).reported_state == "on"
 
-    async def _async_clear_charge_to_full(self) -> None:
+    async def _async_clear_charge_to_full(self, *, stop_reason: str = "unknown") -> None:
         """Clear the HEO-owned paid-grid override after its bounded session."""
-        await self._async_set_charge_to_full_locked(False, natural=True)
+        await self._async_set_charge_to_full_locked(False, natural=True, stop_reason=stop_reason)
 
     async def async_request_charge_to_full(
         self, enabled: bool, *, owner_token: str | None = None,
@@ -2896,6 +2906,7 @@ class ActiveEvController:
     async def _async_set_charge_to_full_locked(
         self, enabled: bool, *, owner_token: str | None = None,
         expected_generation: int | None = None, natural: bool = False,
+        stop_reason: str | None = None,
     ) -> dict[str, object]:
         """Checkpoint ownership before changing the established Full setting."""
         entry = self.hass.config_entries.async_get_entry(self.coordinator.entry_id)
@@ -2906,6 +2917,7 @@ class ActiveEvController:
             result = await trip.async_record_full_intent_locked(
                 enabled, owner_token=owner_token, expected_generation=expected_generation,
                 natural=natural,
+                stop_reason=stop_reason,
             )
             if not result["accepted"]:
                 return result
@@ -2918,6 +2930,17 @@ class ActiveEvController:
             remove_key=CONF_EV_CHARGE_TO_FULL,
         )
         return result
+
+    def _disconnection_is_verified(self) -> bool:
+        """Only affirmative absence may create resumable Trip-stop evidence."""
+        connection = self.coordinator.runtime_config.ev_connection
+        cable = self._mapped_state(connection.cable_connected_entity)
+        if cable == "off" or connection.location_mode == "away":
+            return True
+        home = self._mapped_state(connection.at_home_entity)
+        return connection.location_mode == "auto" and home not in {
+            None, "", "unknown", "unavailable", "home", "on",
+        }
 
     def _float(self, key: str, default: float) -> float:
         return self.coordinator.runtime_config.ev_numbers.value(key, default)

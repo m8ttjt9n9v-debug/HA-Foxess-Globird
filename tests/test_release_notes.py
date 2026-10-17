@@ -114,3 +114,12 @@ def test_01234_describes_readonly_trip_scope_and_inclusive_sell_threshold() -> N
     assert "explicit card import" in notes and "intent are preserved" in notes
     assert "No automatic price-triggered buying" in notes
     assert not Version("0.12.34").is_prerelease
+
+
+def test_01235_describes_pause_boundaries_and_live_setting_preservation() -> None:
+    title, notes = release_text("v0.12.35", CHANGELOG_PATH.read_text(encoding="utf-8"))
+    assert title == "v0.12.35 — Resume paused trips and preserve live settings"
+    assert "original absolute timeout" in notes and "generation-bound" in notes
+    assert "newer live" in notes and "final schedule confirmation" in notes
+    assert "explicit" in notes and "does not silently migrate" in notes
+    assert not Version("0.12.35").is_prerelease

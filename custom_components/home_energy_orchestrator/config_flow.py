@@ -376,6 +376,11 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     _pending_input: dict[str, object] | None = None
     _pending_reconfigure = False
     _draft_input: dict[str, object] | None = None
+    _reconfigure_base: dict[str, object] | None = None
+    _draft_origin: dict[str, object] | None = None
+    _explicit_draft_keys: frozenset[str] = frozenset()
+    _pending_intent: dict[str, object] | None = None
+    _review_snapshot: dict[str, object] | None = None
 
     # Capability choices deliberately live in the entry.  They let the flow hide
     # irrelevant equipment without deleting previously commissioned mappings.
@@ -438,6 +443,8 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def async_step_reconfigure(self, user_input: dict[str, object] | None = None):
         """Update mappings and commissioned limits without reinstalling."""
         entry = self._get_reconfigure_entry()
+        if self._reconfigure_base is None:
+            self._reconfigure_base = self._current_reconfigure_data(entry)
         if user_input is None:
             if self._draft_input is None:
                 self._draft_input = self._apply_defaults(self._reconfigure_defaults(entry))
@@ -451,35 +458,45 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         for key in (CONF_EV_SOC, CONF_EV_CURRENT_LIMIT, CONF_EV_CHARGE_SWITCH)
                     ),
                 )
+                self._draft_origin = dict(self._draft_input)
             return self._show_reconfigure_menu()
         if CONF_BATTERY_SOC not in user_input:
             return await self._async_page("site", user_input, reconfigure=True)
         if user_input is not None:
-            if CONF_EV_CHARGE_TO_FULL_ENABLED in entry.data:
-                user_input[CONF_EV_CHARGE_TO_FULL_ENABLED] = entry.data[
-                    CONF_EV_CHARGE_TO_FULL_ENABLED
-                ]
-            elif CONF_EV_CHARGE_TO_FULL in entry.data:
-                user_input[CONF_EV_CHARGE_TO_FULL] = entry.data[CONF_EV_CHARGE_TO_FULL]
-            user_input = self._apply_defaults(user_input)
-            old_normalized = self._apply_defaults(dict(entry.data))
+            # The compatibility payload represents the visible one-page form.
+            # Hidden dashboard-owned settings remain part of the merge baseline.
+            if self._draft_origin is None:
+                self._draft_origin = dict(self._reconfigure_base)
+            editable = {
+                *(marker.schema for marker in self._schema().schema),
+                *(key for fields in self._PAGE_FIELDS.values() for key in fields),
+            }
+            self._explicit_draft_keys |= frozenset(
+                key for key, value in user_input.items() if key in editable and value is None
+            )
+            user_input = self._apply_defaults(
+                {
+                    **self._draft_origin,
+                    **{key: value for key, value in user_input.items() if key in editable},
+                }
+            )
+            old_normalized = self._reconfigure_base
             if any(
                 user_input.get(key) != old_normalized.get(key) for key in self._NORMALIZATION_KEYS
             ):
                 user_input[CONF_SIGN_CONVENTIONS_VERIFIED] = False
-            errors = self._validate_input(user_input)
+            merged = self._rebase_reconfigure(user_input)
+            if merged is None:
+                return self.async_abort(reason="reconfigure_conflict")
+            pending, changed_keys = merged
+            errors = self._validate_input(pending)
             if not errors:
-                if user_input.get(CONF_AUTOMATIC_CHARGE_ENABLED):
-                    return self._show_schedule_confirmation(user_input, reconfigure=True)
-                title = str(user_input.pop(CONF_NAME))
-                return self.async_update_reload_and_abort(
-                    entry,
-                    title=title,
-                    data_updates=user_input,
-                    reason="reconfigure_successful",
-                )
+                if pending.get(CONF_AUTOMATIC_CHARGE_ENABLED):
+                    self._pending_intent = user_input
+                    return self._show_schedule_confirmation(pending, reconfigure=True)
+                return self._commit_reconfigure(pending, changed_keys)
             return self.async_show_form(
-                step_id="reconfigure", data_schema=self._schema(user_input), errors=errors
+                step_id="reconfigure", data_schema=self._schema(pending), errors=errors
             )
         return self.async_show_form(
             step_id="reconfigure",
@@ -511,6 +528,19 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     candidate[key] = None
             errors = self._validate_page(page, candidate)
             if not errors:
+                if reconfigure:
+                    self._explicit_draft_keys |= frozenset(
+                        key for key in self._PAGE_FIELDS[page]
+                        if not FIELD_SPECS_BY_KEY[key].required and key not in submitted
+                    )
+                    # Submitting a discovered suggestion explicitly accepts it;
+                    # an untouched, unvisited suggestion is never a saved edit.
+                    assert self._draft_origin is not None
+                    assert self._reconfigure_base is not None
+                    self._explicit_draft_keys |= frozenset(
+                        key for key in self._PAGE_FIELDS[page]
+                        if self._draft_origin.get(key) != self._reconfigure_base.get(key)
+                    )
                 self._draft_input = candidate
                 if reconfigure:
                     return self._show_reconfigure_menu()
@@ -787,39 +817,99 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             data[CONF_EV_MORNING_SOLAR_ENABLED] = False
         return data
 
+    def _current_reconfigure_data(
+        self, entry: config_entries.ConfigEntry
+    ) -> dict[str, object]:
+        """Read the effective saved values without discovery suggestions."""
+        return self._apply_defaults({CONF_NAME: entry.title, **entry.data, **entry.options})
+
+    def _rebase_reconfigure(
+        self, intent: dict[str, object]
+    ) -> tuple[dict[str, object], set[str]] | None:
+        """Apply form edits to latest saved values, rejecting conflicting edits."""
+        assert self._reconfigure_base is not None
+        assert self._draft_origin is not None
+        missing = object()
+        current = self._current_reconfigure_data(self._get_reconfigure_entry())
+        changes = {
+            key: value for key, value in intent.items()
+            if value != self._draft_origin.get(key, missing) or key in self._explicit_draft_keys
+        }
+        candidate = {**current, **changes}
+        # Capability removal is an explicit commissioning edit. It may disable
+        # its dependent requests, but an unrelated page cannot reset them.
+        if self._CONF_CONFIGURE_EV in changes or self._CONF_CONFIGURE_SOLAR in changes:
+            safe = self._capability_safe_data(candidate)
+            dependent = (
+                safe.keys() if self._CONF_CONFIGURE_EV in changes
+                else (CONF_EV_SOLAR_SPILL_ENABLED, CONF_EV_MORNING_SOLAR_ENABLED)
+            )
+            changes.update(
+                {key: safe[key] for key in dependent if safe[key] != candidate.get(key, missing)}
+            )
+        for key, value in changes.items():
+            latest = current.get(key, missing)
+            if latest != self._reconfigure_base.get(key, missing) and latest != value:
+                return None
+        return {**current, **changes}, set(changes)
+
+    def _commit_reconfigure(self, pending: dict[str, object], changed_keys: set[str]):
+        """Commit atomically, removing only overrides of explicitly edited keys."""
+        entry = self._get_reconfigure_entry()
+        data = dict(pending)
+        title = str(data.pop(CONF_NAME))
+        return self.async_update_reload_and_abort(
+            entry,
+            title=title,
+            data_updates=data,
+            options={key: value for key, value in entry.options.items() if key not in changed_keys},
+            reason="reconfigure_successful",
+        )
+
     @callback
     def _show_review(self, *, reconfigure: bool, errors: dict[str, str] | None = None):
         """Show the small, explicit commit boundary."""
         assert self._draft_input is not None
+        displayed = self._draft_input
+        if reconfigure:
+            merged = self._rebase_reconfigure(self._draft_input)
+            if merged is None:
+                return self.async_abort(reason="reconfigure_conflict")
+            displayed = merged[0]
+            self._review_snapshot = dict(displayed)
         direction_verified = bool(
-            self._draft_input.get(
+            displayed.get(
                 CONF_SIGN_CONVENTIONS_VERIFIED,
                 DEFAULT_SIGN_CONVENTIONS_VERIFIED,
             )
         )
         directions_changed = False
         if reconfigure:
-            old = self._apply_defaults(dict(self._get_reconfigure_entry().data))
-            pending = self._apply_defaults(dict(self._draft_input))
+            old = self._current_reconfigure_data(self._get_reconfigure_entry())
+            pending = self._apply_defaults(dict(displayed))
             directions_changed = any(
                 pending.get(key) != old.get(key) for key in self._NORMALIZATION_KEYS
             )
             if directions_changed:
                 direction_verified = False
-        start = time.fromisoformat(str(self._draft_input[CONF_FREE_CHARGE_START]))
-        end = time.fromisoformat(str(self._draft_input[CONF_FREE_CHARGE_END]))
+        start = time.fromisoformat(str(displayed[CONF_FREE_CHARGE_START]))
+        end = time.fromisoformat(str(displayed[CONF_FREE_CHARGE_END]))
         placeholders = _schedule_confirmation(start, end)
+        capabilities = {
+            key: displayed.get(key, self._draft_input.get(key))
+            for key in (self._CONF_CONFIGURE_SOLAR, self._CONF_CONFIGURE_EV)
+        }
         placeholders.update(
             {
-                "site_summary": str(self._draft_input.get(CONF_NAME, "")),
+                "site_summary": str(displayed.get(CONF_NAME, "")),
                 "capability_summary": (
                     "Solar: "
-                    f"{'yes' if self._draft_input.get(self._CONF_CONFIGURE_SOLAR) else 'no'}; "
-                    f"EV: {'yes' if self._draft_input.get(self._CONF_CONFIGURE_EV) else 'no'}"
+                    f"{'yes' if capabilities[self._CONF_CONFIGURE_SOLAR] else 'no'}; "
+                    f"EV: {'yes' if capabilities[self._CONF_CONFIGURE_EV] else 'no'}"
                 ),
                 "safety_summary": (
                     "Hardware writes blocked"
-                    if self._draft_input.get(CONF_REHEARSAL_MODE)
+                    if displayed.get(CONF_REHEARSAL_MODE)
                     else "Hardware writes allowed by Safety Lock"
                 ),
                 "direction_summary": (
@@ -914,27 +1004,38 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             )
         # Capability choices are retained, but inactive optional systems cannot
         # request automation while absent.
-        pending = self._capability_safe_data(
-            self._apply_defaults(dict(self._draft_input))
-        )
-        pending[CONF_SIGN_CONVENTIONS_VERIFIED] = bool(
+        intent = self._apply_defaults(dict(self._draft_input))
+        intent[CONF_SIGN_CONVENTIONS_VERIFIED] = bool(
             user_input.get(CONF_SIGN_CONVENTIONS_VERIFIED, False)
         )
+        if reconfigure:
+            self._explicit_draft_keys |= {CONF_SIGN_CONVENTIONS_VERIFIED}
+            merged = self._rebase_reconfigure(intent)
+            if merged is None:
+                return self.async_abort(reason="reconfigure_conflict")
+            pending, changed_keys = merged
+            if self._review_snapshot is not None and any(
+                pending.get(key) != self._review_snapshot.get(key)
+                for key in self._NORMALIZATION_KEYS
+            ):
+                return self.async_abort(reason="reconfigure_conflict")
+        else:
+            pending = self._capability_safe_data(intent)
         errors = self._validate_input(pending)
         if errors:
-            self._draft_input = pending
+            if reconfigure and not self._validate_input(intent):
+                return self.async_abort(reason="reconfigure_conflict")
+            self._draft_input = intent
             return self._show_review_validation_error(
                 errors=errors, reconfigure=reconfigure
             )
         self._draft_input = None
         if pending.get(CONF_AUTOMATIC_CHARGE_ENABLED):
+            self._pending_intent = intent if reconfigure else None
             return self._show_schedule_confirmation(pending, reconfigure=reconfigure)
-        title = str(pending.pop(CONF_NAME))
         if reconfigure:
-            return self.async_update_reload_and_abort(
-                self._get_reconfigure_entry(), title=title, data_updates=pending,
-                reason="reconfigure_successful",
-            )
+            return self._commit_reconfigure(pending, changed_keys)
+        title = str(pending.pop(CONF_NAME))
         await self.async_set_unique_id(title.strip().casefold())
         self._abort_if_unique_id_configured()
         return self.async_create_entry(title=title, data=pending)
@@ -1040,17 +1141,30 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 errors[CONF_CONFIRM_OVERNIGHT] = "overnight_confirmation_required"
             if not errors:
                 pending = dict(self._pending_input)
+                if self._pending_reconfigure:
+                    assert self._pending_intent is not None
+                    merged = self._rebase_reconfigure(self._pending_intent)
+                    if merged is None:
+                        return self.async_abort(reason="reconfigure_conflict")
+                    pending, changed_keys = merged
+                    # Old confirmations cannot attest new electrical mappings
+                    # or a different schedule, even if another page changed them.
+                    if any(
+                        pending.get(key) != self._pending_input.get(key)
+                        for key in (
+                            *self._NORMALIZATION_KEYS,
+                            CONF_FREE_CHARGE_START, CONF_FREE_CHARGE_END,
+                        )
+                    ):
+                        return self.async_abort(reason="reconfigure_conflict")
+                    if self._validate_input(pending):
+                        return self.async_abort(reason="reconfigure_conflict")
                 pending[CONF_FREE_CHARGE_SCHEDULE_CONFIRMED] = True
-                title = str(pending.pop(CONF_NAME))
                 self._pending_input = None
                 if self._pending_reconfigure:
-                    entry = self._get_reconfigure_entry()
-                    return self.async_update_reload_and_abort(
-                        entry,
-                        title=title,
-                        data_updates=pending,
-                        reason="reconfigure_successful",
-                    )
+                    changed_keys.add(CONF_FREE_CHARGE_SCHEDULE_CONFIRMED)
+                    return self._commit_reconfigure(pending, changed_keys)
+                title = str(pending.pop(CONF_NAME))
                 await self.async_set_unique_id(title.strip().casefold())
                 self._abort_if_unique_id_configured()
                 return self.async_create_entry(title=title, data=pending)
@@ -1117,7 +1231,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     @callback
     def _reconfigure_defaults(self, entry: config_entries.ConfigEntry) -> dict[str, object]:
         """Preserve valid mappings and propose replacements for stale ones."""
-        defaults: dict[str, object] = {CONF_NAME: entry.title, **entry.data}
+        defaults: dict[str, object] = {CONF_NAME: entry.title, **entry.data, **entry.options}
         registry = er.async_get(self.hass)
         for key, suggestion in self._discovery_defaults().items():
             current = defaults.get(key)

@@ -146,7 +146,7 @@
       "producer": "TripChargeController and integration-owned Trip entities; sole device writer remains ActiveEvController",
       "review_status": "engineering_draft",
       "role": "session_state",
-      "state_vocabulary": "not_scheduled, waiting_for_start, already_at_target, waiting_for_car, waiting_for_data, control_unavailable, external_override, override_active, completed, cancelled, interrupted, expired, charging_late, legacy_conflict, storage_unavailable or invalid_storage",
+      "state_vocabulary": "not_scheduled, waiting_for_start, already_at_target, waiting_for_car, paused, waiting_for_data, control_unavailable, external_override, override_active, completed, cancelled, interrupted, expired, charging_late, legacy_conflict, storage_unavailable or invalid_storage",
       "time_basis": "Current one-off plan; departure arithmetic uses aware UTC elapsed time with HA-local display",
       "unit_and_sign": "No unit; explicit named scheduler state"
     },

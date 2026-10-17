@@ -305,6 +305,13 @@ EV capacity, configured maximum charging power, explicit home/cable evidence,
 EV control enabled and Safety Lock off. It uses HEO's runtime efficiency and
 Full timeout; there are no helper copies to keep in sync. A separate legacy
 trip dispatcher must be retired deliberately before arming the built-in one.
+Confirmed temporary disconnection pauses an outstanding trip; reconnect before
+departure requires fresh commissioned evidence and retains the original Full
+timeout. Cancellation, replacement, completion and timeout do not resume.
+The legacy helper version additionally needs its published resume-checkpoint
+helper and updated dispatcher; a HACS update alone does not replace a separate
+existing helper installation. Update that installation explicitly or migrate
+only after deliberate ownership handoff.
 The departure/SoC estimate does not guarantee exact physical completion.
 The optional Trip impact display also needs valid existing house/battery
 budgets and saved import tariffs. It estimates extra paid energy only until

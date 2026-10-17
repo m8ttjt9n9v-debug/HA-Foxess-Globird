@@ -23,7 +23,12 @@ TRIP_STATUSES = (
     "legacy_conflict",
     "storage_unavailable",
     "invalid_storage",
+    "paused",
 )
+
+FULL_STOP_REASONS = frozenset({
+    "disconnected", "completed", "timeout", "operator", "cancelled", "invalid_data", "unknown",
+})
 
 
 def _date(value: object) -> datetime | None:
@@ -55,6 +60,11 @@ class TripChargeState:
     captured_departure: datetime | None = None
     captured_target: int | None = None
     cleanup_pending: bool = False
+    first_started_at: datetime | None = None
+    timeout_at: datetime | None = None
+    full_stop_reason: str | None = None
+    full_stop_generation: int | None = None
+    full_stop_at: datetime | None = None
 
     @property
     def owns_full(self) -> bool:
@@ -83,6 +93,13 @@ class TripChargeState:
             ),
             "captured_target": self.captured_target,
             "cleanup_pending": self.cleanup_pending,
+            "first_started_at": (
+                self.first_started_at.isoformat() if self.first_started_at else None
+            ),
+            "timeout_at": self.timeout_at.isoformat() if self.timeout_at else None,
+            "full_stop_reason": self.full_stop_reason,
+            "full_stop_generation": self.full_stop_generation,
+            "full_stop_at": self.full_stop_at.isoformat() if self.full_stop_at else None,
         }
 
     @classmethod
@@ -106,6 +123,11 @@ class TripChargeState:
             captured_departure=_date(payload.get("captured_departure")),
             captured_target=payload["captured_target"],
             cleanup_pending=payload["cleanup_pending"],
+            first_started_at=_date(payload.get("first_started_at")),
+            timeout_at=_date(payload.get("timeout_at")),
+            full_stop_reason=payload.get("full_stop_reason"),
+            full_stop_generation=payload.get("full_stop_generation"),
+            full_stop_at=_date(payload.get("full_stop_at")),
         )
         if (
             type(state.target_soc) is not int
@@ -174,6 +196,22 @@ class TripChargeState:
             raise ValueError("incomplete Full intent")
         if state.cleanup_pending and not state.owns_full:
             raise ValueError("cleanup lacks current Full ownership")
+        if (state.first_started_at is None) != (state.timeout_at is None) or (
+            state.first_started_at is not None
+            and not state.timeout_at > state.first_started_at
+        ):
+            raise ValueError("incomplete trip timeout anchor")
+        stop_fields = (state.full_stop_reason, state.full_stop_generation, state.full_stop_at)
+        if any(value is not None for value in stop_fields) and (
+            any(value is None for value in stop_fields)
+            or not isinstance(state.full_stop_reason, str)
+            or state.full_stop_reason not in FULL_STOP_REASONS
+            or type(state.full_stop_generation) is not int
+            or not 0 <= state.full_stop_generation < state.full_generation
+        ):
+            raise ValueError("incomplete Full stop provenance")
+        if state.status == "paused" and (not state.armed or state.first_started_at is None):
+            raise ValueError("paused trip lacks its original request")
         return state
 
 

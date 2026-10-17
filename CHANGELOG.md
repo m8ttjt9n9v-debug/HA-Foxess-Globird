@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.12.35 — Resume paused trips and preserve live settings
+
+- Keep an outstanding Trip request across a confirmed temporary unplug or
+  departure from home. Resume the existing Full policy after a qualified
+  return before departure, preserving its target and original absolute timeout.
+  Free-window charging remains independent; completed, cancelled, replaced,
+  invalid-data and timed-out requests are not silently revived.
+- Persist generation-bound Full stop provenance so a disconnect is not confused
+  with a deliberate stop. Add native pause/reconnect, reload, free-window and
+  repeated-interruption regressions without another EV or inverter writer.
+- Correct stale Reconfigure drafts: unrelated form changes preserve newer live
+  settings, including active Full intent. Recheck at final schedule confirmation;
+  conflicting concurrent edits stop without applying an old snapshot.
+- Provide the same correction in the published legacy helper dispatcher with
+  a restorable resume checkpoint. Existing helper installations need an explicit
+  dispatcher/helper update; HACS does not silently migrate them or dashboards.
+- Preserve normal charging rates, target completion, electrical/safety gates,
+  AEMO price/export policy and all unrelated settings.
+
 ## 0.12.34 — Trip energy estimates and inclusive price export
 
 - Add a read-only Trip impact display: charging energy, expected battery

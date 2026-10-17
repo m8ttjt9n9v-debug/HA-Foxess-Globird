@@ -7,9 +7,27 @@ import json
 from scripts.config_contract import build_config_contract
 from scripts.config_usage_contract import (
     BASELINE_PATH,
+    RECONFIGURE_TRANSITION_PATH,
     build_config_usage_contract,
     rendered_contract,
 )
+
+
+def test_reconfigure_transition_is_exact_and_boundary_only() -> None:
+    transition = json.loads(RECONFIGURE_TRANSITION_PATH.read_text(encoding="utf-8"))
+    assert transition["schema_version"] == 1
+    assert len(transition["before"]) == 12
+    assert len(transition["after"]) == 6
+    current = build_config_usage_contract(include_extensions=True)["accesses"]
+    for item in transition["before"]:
+        assert item not in current
+    for item in transition["after"]:
+        assert item in current
+        assert item["layer"] == "boundary" and item["kind"] == "raw_mapping"
+    # No persisted key or runtime write was added or suppressed by this review.
+    assert {item["key"] for item in transition["after"]} <= {
+        item["key"] for item in transition["before"]
+    }
 
 
 def test_config_usage_matches_reviewed_baseline() -> None:

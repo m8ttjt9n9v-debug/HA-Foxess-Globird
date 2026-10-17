@@ -25,7 +25,7 @@ from .const import (
 )
 from .ev_observation_adapter import capture_ev_entity_feedback
 from .persistence import create_typed_value_repository
-from .planner.trip_charge import TripChargeState, calculate_trip_charge_plan
+from .planner.trip_charge import FULL_STOP_REASONS, TripChargeState, calculate_trip_charge_plan
 from .trip_impact import build_trip_energy_impact
 
 
@@ -102,6 +102,15 @@ class TripChargeController:
             "owns_full": self.owns_full,
             "generation": self._state.generation,
             "full_generation": self._state.full_generation,
+            "full_stop_reason": self._state.full_stop_reason,
+            "full_stop_generation": self._state.full_stop_generation,
+            "full_stop_at": (
+                self._state.full_stop_at.isoformat() if self._state.full_stop_at else None
+            ),
+            "first_started_at": (
+                self._state.first_started_at.isoformat() if self._state.first_started_at else None
+            ),
+            "timeout_at": self._state.timeout_at.isoformat() if self._state.timeout_at else None,
             "owner_token": self._state.owner_token,
             "cleanup_pending": self._state.cleanup_pending,
             "legacy_conflict": self._legacy_conflict(),
@@ -181,6 +190,10 @@ class TripChargeController:
         if self._stopped or not self.armed:
             return
         when = self.departure
+        if self._state.timeout_at is not None:
+            when = (
+                min(when, self._state.timeout_at) if when and when > now else self._state.timeout_at
+            )
         if not self.owns_full and self.planned_start is not None and self.planned_start > now:
             when = min(when, self.planned_start)
         if when is None or when <= now:
@@ -216,7 +229,7 @@ class TripChargeController:
     async def _edit(self, **changes) -> None:
         await self.async_restore_handoff()
         # Fence an awaited start checkpoint before waiting for its shared lock.
-        active = self.owns_full
+        active = self.owns_full or (self.armed and self._state.first_started_at is not None)
         arm_requested = "armed" in changes
         requested_arm = changes.pop("armed", self.armed)
         if self._invalid_storage and not (arm_requested and requested_arm is False):
@@ -259,7 +272,10 @@ class TripChargeController:
             else "not_scheduled",
             # Extra minutes changes only later planning. The running Full
             # lease, its captured target/departure and timeout stay frozen.
-            cleanup_pending=self._state.cleanup_pending or cancel_active,
+            cleanup_pending=self._state.cleanup_pending or (cancel_active and self.owns_full),
+            first_started_at=None
+            if requested_arm and not self.armed else self._state.first_started_at,
+            timeout_at=None if requested_arm and not self.armed else self._state.timeout_at,
         )
         self._dirty = True
         self._cancel_deadline()
@@ -363,14 +379,26 @@ class TripChargeController:
         owner_token: str | None = None,
         expected_generation: int | None = None,
         natural: bool = False,
+        stop_reason: str | None = None,
     ) -> dict[str, object]:
         """Checkpoint a logical Full change while EV's transaction lock is held."""
         state = self._state
+        if stop_reason is not None and stop_reason not in FULL_STOP_REASONS:
+            raise HomeAssistantError("Unknown Full stop reason")
         if expected_generation is not None and (
             state.full_generation != expected_generation or state.full_owner != owner_token
         ):
             return {
                 "accepted": False,
+                "generation": state.full_generation,
+                "owner_token": state.full_owner,
+            }
+        if not enabled and expected_generation is not None and not state.full_enabled:
+            # Reapplying an already checkpointed reducing intent is not a new
+            # operator OFF. Preserve its generation, disconnect receipt and
+            # paused request when ConfigEntry's delayed save lagged the journal.
+            return {
+                "accepted": True,
                 "generation": state.full_generation,
                 "owner_token": state.full_owner,
             }
@@ -382,9 +410,20 @@ class TripChargeController:
                 "owner_token": state.full_owner,
             }
         generation = state.full_generation + 1
+        stop_fields = {}
+        if not enabled and (state.full_enabled or state.full_generation == 0):
+            stop_fields = {
+                "full_stop_reason": stop_reason or ("unknown" if natural else "operator"),
+                "full_stop_generation": state.full_generation,
+                "full_stop_at": dt_util.utcnow(),
+            }
         if not trip_request:
+            started_request = state.owns_full or (
+                state.armed and state.first_started_at is not None
+            )
             self._state = replace(
                 state,
+                **stop_fields,
                 full_generation=generation,
                 full_owner="operator" if enabled else None,
                 full_enabled=enabled,
@@ -393,7 +432,7 @@ class TripChargeController:
                 captured_departure=None,
                 captured_target=None,
                 cleanup_pending=False,
-                armed=False if state.owns_full else state.armed,
+                armed=False if started_request else state.armed,
                 status=(
                     "completed"
                     if natural
@@ -402,12 +441,24 @@ class TripChargeController:
                     and self._soc() >= state.captured_target
                     else "interrupted"
                 )
-                if state.owns_full
+                if started_request
                 else state.status,
             )
         else:
+            first_start = state.first_started_at
+            timeout_at = state.timeout_at
+            if enabled and first_start is None:
+                first_start = dt_util.utcnow()
+                timeout_at = first_start + timedelta(
+                    hours=self.coordinator.runtime_config.ev_numbers.value(
+                        CONF_EV_CHARGE_TO_FULL_MAX_HOURS, DEFAULT_EV_CHARGE_TO_FULL_MAX_HOURS
+                    )
+                )
             self._state = replace(
                 state,
+                **stop_fields,
+                first_started_at=first_start,
+                timeout_at=timeout_at,
                 full_generation=generation,
                 full_owner=owner_token,
                 full_enabled=enabled,
@@ -481,7 +532,7 @@ class TripChargeController:
             feedback.number if feedback.number is not None and 0 <= feedback.number <= 100 else None
         )
 
-    async def _finish_locked(self, status: str) -> bool:
+    async def _finish_locked(self, status: str, *, stop_reason: str | None = None) -> bool:
         self._state = replace(
             self._state, armed=False, status=status, cleanup_pending=self.owns_full
         )
@@ -491,6 +542,10 @@ class TripChargeController:
                 False,
                 owner_token=self._state.owner_token,
                 expected_generation=self._state.owned_generation,
+                stop_reason=stop_reason or (
+                    "completed" if status == "completed" else "cancelled"
+                    if status == "cancelled" else "invalid_data"
+                ),
             )
             if not result["accepted"]:
                 return False
@@ -510,6 +565,31 @@ class TripChargeController:
                 return True
             return True
         await self._save()
+        return True
+
+    async def _pause_locked(self) -> bool:
+        """Retain the dated request, but release only its own temporary Full lease."""
+        self._state = replace(self._state, status="paused", cleanup_pending=self.owns_full)
+        self._dirty = True
+        # Checkpoint the pause before the reducing intent; a crash cannot turn
+        # an ambiguous Full OFF into permission to create a new paid request.
+        if not await self._save():
+            return await self._finish_locked("interrupted", stop_reason="invalid_data")
+        if self.owns_full and self._full_state() is not False:
+            result = await self._ev._async_set_charge_to_full_locked(
+                False, owner_token=self._state.owner_token,
+                expected_generation=self._state.owned_generation, stop_reason="disconnected",
+            )
+            if not result["accepted"]:
+                return False
+        pending = self._state
+        self._state = replace(
+            pending, owner_token=None, owned_generation=None, full_owner=None,
+            captured_departure=None, captured_target=None, cleanup_pending=False,
+        )
+        if not await self._save():
+            self._state = pending
+            self._dirty = True
         return True
 
     async def async_reconcile_before_ev_locked(self, now: datetime) -> bool:
@@ -587,7 +667,9 @@ class TripChargeController:
         return (
             inputs == getattr(self, "_starting_inputs", None)
             and plan is not None
-            and plan.planned_start <= now < self.departure
+            and now < self.departure
+            and (self._state.first_started_at is not None or plan.planned_start <= now)
+            and (self._state.timeout_at is None or now < self._state.timeout_at)
             and inputs["soc"] < self.target_soc
             and self._ev.gate_status == "ready"
             and self._ev._connected_at_home()[0]
@@ -607,7 +689,26 @@ class TripChargeController:
         soc = self._soc()
         runtime = self.coordinator.runtime_config
         self._plan = calculate_trip_charge_plan(**self._current_plan_inputs())
+        if self.armed and self._state.timeout_at is not None and now >= self._state.timeout_at:
+            return await self._finish_locked("expired", stop_reason="timeout")
         if self.owns_full:
+            if self._state.first_started_at is None:
+                # Upgrade old owned leases only from their already persisted
+                # EV timer, never fabricate a fresh timeout on reload.
+                first = self._ev.charge_to_full_started_at
+                if first is None:
+                    return await self._finish_locked("interrupted", stop_reason="invalid_data")
+                self._state = replace(
+                    self._state, first_started_at=first,
+                    timeout_at=first + timedelta(hours=runtime.ev_numbers.value(
+                        CONF_EV_CHARGE_TO_FULL_MAX_HOURS, DEFAULT_EV_CHARGE_TO_FULL_MAX_HOURS,
+                    )),
+                )
+                if not await self._save():
+                    return await self._finish_locked("interrupted", stop_reason="invalid_data")
+                state = self._state
+            if self._state.status == "paused" and not self._state.full_enabled:
+                return await self._pause_locked()
             if full is None:
                 self._state = replace(state, status="waiting_for_data")
                 return False
@@ -626,11 +727,13 @@ class TripChargeController:
                 )
             ):
                 return await self._finish_locked("cancelled")
-            if soc is None:
-                return await self._finish_locked("interrupted")
-            if soc >= state.captured_target:
+            if soc is not None and soc >= state.captured_target:
                 return await self._finish_locked("completed")
             if not self._ev._connected_at_home()[0]:
+                if self._ev._disconnection_is_verified():
+                    return await self._pause_locked()
+                return await self._finish_locked("interrupted", stop_reason="invalid_data")
+            if soc is None:
                 return await self._finish_locked("interrupted")
             self._state = replace(
                 state,
@@ -639,25 +742,40 @@ class TripChargeController:
             return False
         if not self.armed:
             return False
+        if self._state.first_started_at is not None and (
+            self._state.full_stop_reason != "disconnected"
+            or self._state.full_stop_generation != self._state.full_generation - 1
+        ):
+            return await self._finish_locked("interrupted", stop_reason="invalid_data")
         if self.departure is not None and now >= self.departure:
             return await self._finish_locked(
                 "completed" if soc is not None and soc >= self.target_soc else "expired"
             )
         if soc is not None and soc >= self.target_soc:
+            if self._state.first_started_at is not None:
+                return await self._finish_locked("completed")
             self._state = replace(state, status="already_at_target")
         elif full:
             return await self._finish_locked("external_override")
         elif self._legacy_conflict():
             self._state = replace(state, status="legacy_conflict")
+        elif (
+            state.first_started_at is not None
+            and not self._ev._connected_at_home()[0]
+            and self._ev._disconnection_is_verified()
+        ):
+            self._state = replace(state, status="paused")
         elif full is None or self._plan is None:
             self._state = replace(state, status="waiting_for_data")
         elif runtime.ev_policy.charge_path != EV_CHARGE_PATH_DIRECT:
             self._state = replace(state, status="control_unavailable")
         elif not self._ev._connected_at_home()[0]:
-            self._state = replace(state, status="waiting_for_car")
+            self._state = replace(
+                state, status="paused" if state.first_started_at is not None else "waiting_for_car"
+            )
         elif self._ev.gate_status != "ready":
             self._state = replace(state, status="control_unavailable")
-        elif now < self.planned_start:
+        elif state.first_started_at is None and now < self.planned_start:
             self._state = replace(state, status="waiting_for_start")
         else:
             token = f"trip:{state.generation}"

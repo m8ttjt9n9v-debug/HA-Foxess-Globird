@@ -56,6 +56,12 @@ layers around the proven algorithm, not replacement algorithms.
   policy resumes, so the target is not a permanent SoC ceiling. Target edits
   during charging cancel rather than extend the trip, and invalid SoC withdraws
   owned Full. An unreadable Full entity preserves the cleanup obligation.
+  Confirmed temporary disconnection pauses an outstanding trip rather than
+  consuming its dated request. A qualified reconnect before departure may
+  resume only that request, with its original absolute timeout and generation-
+  bound ownership. Explicit cancellation, manual replacement, invalid SoC,
+  completion and timeout remain terminal; a pause cannot grant another Full
+  budget or create a new late paid start after departure.
   The wrapper adds no Tessie or inverter writer and uses commissioned HEO
   runtime mappings, efficiency and Full timeout directly. An EV-controller
   transaction lock and generation-bound lease prevent an old trip cleanup
@@ -67,6 +73,13 @@ layers around the proven algorithm, not replacement algorithms.
   helper values and automations are not automatically changed.
   Timing and reported target completion are estimates, with live acceptance
   separate from repository tests. See [trip charging](trip-charge-wrapper.md).
+
+- Reconfigure drafts are not authoritative snapshots of later live operator
+  intent. Applying an unrelated page preserves newer untouched settings and
+  checks for concurrent conflicts, including changes during final schedule
+  confirmation. A conflicting same-field edit fails without overwriting the
+  live value; reopen the flow and review the current configuration. This does
+  not weaken electrical direction or schedule confirmation requirements.
 
 - Trip status also exposes a read-only pre-free energy/cost estimate. It uses
   the current native request or a validated standard helper plan, canonical

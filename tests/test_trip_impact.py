@@ -2,11 +2,13 @@
 
 import json
 from datetime import UTC, datetime, time, timedelta
+from types import SimpleNamespace
 from zoneinfo import ZoneInfo
 
 import pytest
 
 from custom_components.home_energy_orchestrator.planner.trip_impact import estimate_pre_free_impact
+from custom_components.home_energy_orchestrator.trip_impact import build_trip_energy_impact
 
 SYDNEY = ZoneInfo("Australia/Sydney")
 
@@ -269,3 +271,38 @@ def test_multi_day_wrong_next_window_does_not_expand_an_unbounded_forecast():
                        next_free_end=_at(14) + timedelta(days=20), battery_after_floor_kwh=0)
     assert result["cost_min"] == pytest.approx(60 * 0.3)
     assert result["cost_max"] == pytest.approx(60 * 0.6)
+
+
+@pytest.mark.parametrize("source", ["native", "legacy_status", "legacy_checkpoint"])
+async def test_paused_request_never_reuses_a_latest_start_cost_estimate(hass, source):
+    trip = SimpleNamespace(
+        status="paused" if source == "native" else "legacy_conflict",
+        armed=source == "native", owns_full=False, hass=hass,
+    )
+    if source != "native":
+        hass.states.async_set("input_boolean.heo_trip_charge_scheduled", "on")
+        if source == "legacy_status":
+            hass.states.async_set(
+                "input_select.heo_trip_charge_status", "Paused — car disconnected"
+            )
+        else:
+            hass.states.async_set("input_select.heo_trip_charge_status", "Waiting for data")
+            hass.states.async_set("input_text.heo_trip_resume_state", '{"paused": true}')
+    result = build_trip_energy_impact(trip)
+    assert result["status"] == "unavailable"
+    assert result["reason"] == "trip_paused"
+    assert result["source"] == ("native" if source == "native" else "legacy")
+    assert result.get("cost_min") is result.get("cost_max") is None
+    assert "charging_start" not in result
+
+
+async def test_inactive_legacy_pause_does_not_hide_a_native_request(hass):
+    hass.states.async_set("input_select.heo_trip_charge_status", "Paused — car disconnected")
+    hass.states.async_set("input_text.heo_trip_resume_state", '{"paused": true}')
+    trip = SimpleNamespace(
+        status="waiting_for_start", armed=True, owns_full=False, hass=hass,
+        coordinator=SimpleNamespace(data=None),
+    )
+    result = build_trip_energy_impact(trip)
+    assert result["reason"] == "energy_budget_unavailable"
+    assert result["source"] == "native"

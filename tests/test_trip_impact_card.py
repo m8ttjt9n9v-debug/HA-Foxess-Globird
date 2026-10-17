@@ -153,6 +153,13 @@ async def test_untrusted_reason_is_not_rendered_as_markup(hass):
     assert "private" not in result
 
 
+async def test_paused_trip_explains_why_no_cost_is_shown(hass):
+    result = _render(hass, {"status": "unavailable", "reason": "trip_paused"})
+    assert "The trip is paused" in result
+    assert "estimate will update when charging resumes" in result
+    assert "Extra cost before free power:" not in result
+
+
 def test_native_and_legacy_examples_use_identical_read_only_card():
     expected = build_trip_impact_card()
     dashboard = yaml.safe_load((ROOT / "examples/dashboard.yaml").read_text())

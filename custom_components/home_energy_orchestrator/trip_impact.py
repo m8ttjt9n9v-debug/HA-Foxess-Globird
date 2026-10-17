@@ -80,6 +80,25 @@ def _build_trip_energy_impact(trip) -> dict:
         "status": "unavailable", "reason": "trip_plan_unavailable",
         "scope": "before_next_free_window_only", "source": "native",
     }
+    if getattr(trip, "status", None) == "paused":
+        return {**unavailable, "reason": "trip_paused"}
+    legacy_active = any(
+        (state := trip.hass.states.get(entity)) is not None and state.state == "on"
+        for entity in (
+            "input_boolean.heo_trip_charge_scheduled", "input_boolean.heo_trip_charge_started",
+        )
+    )
+    if legacy_active and not trip.armed and not trip.owns_full:
+        legacy_status = trip.hass.states.get("input_select.heo_trip_charge_status")
+        resume = trip.hass.states.get("input_text.heo_trip_resume_state")
+        try:
+            record = json.loads(resume.state) if resume is not None else {}
+        except (TypeError, ValueError):
+            record = {}
+        if (
+            legacy_status is not None and legacy_status.state == "Paused — car disconnected"
+        ) or (isinstance(record, dict) and record.get("paused") is True):
+            return {**unavailable, "source": "legacy", "reason": "trip_paused"}
     coordinator = trip.coordinator
     ledger = getattr(coordinator, "data", None)
     if ledger is None or getattr(coordinator, "ev_controller", None) is None:
@@ -92,12 +111,6 @@ def _build_trip_energy_impact(trip) -> dict:
         if sample is None or not sample.valid or not sample.fresh or sample.value is None:
             return {**unavailable, "reason": "energy_evidence_unavailable"}
     current = trip._current_plan_inputs()
-    legacy_active = any(
-        (state := trip.hass.states.get(entity)) is not None and state.state == "on"
-        for entity in (
-            "input_boolean.heo_trip_charge_scheduled", "input_boolean.heo_trip_charge_started",
-        )
-    )
     if legacy_active and not trip.armed and not trip.owns_full:
         unavailable["source"] = "legacy"
         legacy = _legacy_inputs(trip, current)

@@ -137,10 +137,14 @@ input_select:
     - Interrupted
     - Expired
     - Charging late
+    - Paused — car disconnected
 input_text:
   heo_trip_full_generation:
     name: HEO Trip Full Generation
     max: 120
+  heo_trip_resume_state:
+    name: HEO Trip Resume State
+    max: 255
 input_number:
   heo_trip_started_target:
     name: HEO Trip Started Target
@@ -240,10 +244,18 @@ automation:
     entity_id: switch.home_energy_ev_charge_to_full
     from: null
     id: full_changed
+  - trigger: state
+    entity_id:
+    - device_tracker.your_ev
+    - binary_sensor.your_ev_cable
+    from: null
+  - trigger: state
+    entity_id: sensor.home_energy_trip_charge_status
   conditions:
   - condition: template
     value_template: '{{ is_state(''input_boolean.heo_trip_charge_scheduled'', ''on'')
-      or is_state(''input_boolean.heo_trip_charge_started'', ''on'') }}'
+      or is_state(''input_boolean.heo_trip_charge_started'', ''on'') or states(''input_text.heo_trip_resume_state'')
+      not in ['''', ''unknown'', ''unavailable''] }}'
   actions:
   - if:
     - condition: template
@@ -287,11 +299,28 @@ automation:
         }}'
       override_state: '{{ states(''switch.home_energy_ev_charge_to_full'') }}'
       owns_current_full: '{{ is_state(''input_boolean.heo_trip_charge_started'', ''on'')
-        and is_state(''switch.home_energy_ev_charge_to_full'', ''on'') and states[''switch.home_energy_ev_charge_to_full''].context.user_id
+        and is_state(''switch.home_energy_ev_charge_to_full'', ''on'') and (states(''input_text.heo_trip_resume_state'')
+        in ['''', ''unknown'', ''unavailable''] or ((states(''input_text.heo_trip_resume_state'')
+        | from_json({})) is mapping and (states(''input_text.heo_trip_resume_state'')
+        | from_json({})).get(''generation'') is integer and (states(''input_text.heo_trip_resume_state'')
+        | from_json({})).get(''generation'') == state_attr(''sensor.home_energy_trip_charge_status'',
+        ''full_generation''))) and states[''switch.home_energy_ev_charge_to_full''].context.user_id
         is none and (states(''input_text.heo_trip_full_generation'').startswith(''on:''
         ~ states[''switch.home_energy_ev_charge_to_full''].last_changed.isoformat()
         ~ '':'') or states(''input_text.heo_trip_full_generation'') == ''pending:''
         ~ states[''switch.home_energy_ev_charge_to_full''].context.id) }}'
+      resume_record: '{% set record = states(''input_text.heo_trip_resume_state'')
+        | from_json({}) %}{{ record if record is mapping else {} }}'
+      has_resume_record: '{{ states(''input_text.heo_trip_resume_state'') not in ['''',
+        ''unknown'', ''unavailable''] }}'
+      resume_unreadable: '{{ states(''input_text.heo_trip_resume_state'') in [''unknown'',
+        ''unavailable''] }}'
+      full_generation: '{{ state_attr(''sensor.home_energy_trip_charge_status'', ''full_generation'')
+        }}'
+      full_stop_reason: '{{ state_attr(''sensor.home_energy_trip_charge_status'',
+        ''full_stop_reason'') }}'
+      full_stop_generation: '{{ state_attr(''sensor.home_energy_trip_charge_status'',
+        ''full_stop_generation'') }}'
       full_off_edge: '{{ trigger is defined and trigger.get(''id'') == ''full_changed''
         and trigger.get(''to_state'') is not none and trigger.to_state.state == ''off''
         and trigger.get(''from_state'') is not none and trigger.from_state.state ==
@@ -301,10 +330,21 @@ automation:
       car_ready: '{{ is_state(''device_tracker.your_ev'', ''home'') and is_state(''binary_sensor.your_ev_cable'',
         ''on'') }}'
       control_ready: '{{ is_state(''switch.home_energy_automatic_ev_control'', ''on'')
-        and is_state(''switch.home_energy_safety_lock'', ''off'') and state_attr(''sensor.home_energy_ev_control_status'',
-        ''gate'') == ''ready'' }}'
+        and is_state(''switch.home_energy_safety_lock'', ''off'') and state_attr(''sensor.home_energy_trip_charge_status'',
+        ''full_generation'') is integer and states[''input_text.heo_trip_resume_state'']
+        is not none and state_attr(''sensor.home_energy_ev_control_status'', ''gate'')
+        == ''ready'' }}'
   - variables:
       soc_valid: '{{ 0 <= soc <= 100 }}'
+      pause_requested: '{{ resume_record.get(''paused'') is sameas true }}'
+      resume_valid: '{{ resume_record.get(''v'') is integer and resume_record.get(''v'')
+        == 1 and resume_record.get(''first'') is number and resume_record.get(''first'')
+        is not boolean and is_number(resume_record.get(''first'')) and resume_record.get(''expires'')
+        is number and resume_record.get(''expires'') is not boolean and is_number(resume_record.get(''expires''))
+        and 0 < resume_record.get(''first'') <= now_ts and resume_record.get(''first'')
+        < resume_record.get(''expires'') and resume_record.get(''generation'') is
+        integer and resume_record.get(''generation'') > 0 and resume_record.get(''paused'')
+        is boolean }}'
       target_valid: '{{ 1 <= target <= 100 and states(''input_select.heo_trip_target_soc'')
         == (target | int | string) ~ ''%'' }}'
   - variables:
@@ -316,6 +356,8 @@ automation:
         \ | float(-1)\n    and plan.get('extra') == states('input_number.heo_trip_extra_minutes')\
         \ | float(-1)\n    and plan.get('maximum') == states('input_number.heo_trip_override_timeout')\
         \ | float(-1) }}\n"
+  - variables:
+      resuming: '{{ pause_requested and resume_valid }}'
   - choose:
     - conditions:
       - condition: template
@@ -329,11 +371,40 @@ automation:
       - action: input_boolean.turn_off
         target:
           entity_id: input_boolean.heo_trip_charge_started
+      - action: input_text.set_value
+        target:
+          entity_id: input_text.heo_trip_resume_state
+        data:
+          value: ''
       - action: input_select.select_option
         target:
           entity_id: input_select.heo_trip_charge_status
         data:
           option: Completed
+    - conditions:
+      - condition: template
+        value_template: '{{ owned and (full_off_edge or not override_on) and resume_valid
+          and armed and target_valid and target == started_target and due == ticket
+          and (not soc_valid or soc < started_target) and now_ts < due and now_ts
+          < resume_record.get(''expires'') and override_state == ''off'' and full_stop_reason
+          == ''disconnected'' and full_stop_generation == resume_record.get(''generation'')
+          and full_generation == resume_record.get(''generation'') + 1 }}'
+      sequence:
+      - action: input_text.set_value
+        target:
+          entity_id: input_text.heo_trip_resume_state
+        data:
+          value: '{{ {''v'': 1, ''first'': resume_record.get(''first''), ''expires'':
+            resume_record.get(''expires''), ''generation'': resume_record.get(''generation''),
+            ''paused'': true} | to_json }}'
+      - action: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.heo_trip_charge_started
+      - action: input_select.select_option
+        target:
+          entity_id: input_select.heo_trip_charge_status
+        data:
+          option: Paused — car disconnected
     - conditions:
       - condition: template
         value_template: '{{ owned and full_off_edge }}'
@@ -344,6 +415,11 @@ automation:
       - action: input_boolean.turn_off
         target:
           entity_id: input_boolean.heo_trip_charge_started
+      - action: input_text.set_value
+        target:
+          entity_id: input_text.heo_trip_resume_state
+        data:
+          value: ''
       - action: input_select.select_option
         target:
           entity_id: input_select.heo_trip_charge_status
@@ -360,6 +436,28 @@ automation:
           option: Waiting for data
     - conditions:
       - condition: template
+        value_template: '{{ owned and override_on and has_resume_record and full_generation
+          is not integer }}'
+      sequence:
+      - action: input_select.select_option
+        target:
+          entity_id: input_select.heo_trip_charge_status
+        data:
+          option: Waiting for data
+    - conditions:
+      - condition: template
+        value_template: '{{ owned and override_on and resume_valid and full_generation
+          == resume_record.get(''generation'') + 1 and full_stop_generation == resume_record.get(''generation'')
+          and full_stop_reason in [''disconnected'', ''completed'', ''timeout'', ''operator'',
+          ''cancelled'', ''invalid_data''] }}'
+      sequence:
+      - action: input_select.select_option
+        target:
+          entity_id: input_select.heo_trip_charge_status
+        data:
+          option: Waiting for data
+    - conditions:
+      - condition: template
         value_template: '{{ owned and override_on and not owns_current_full }}'
       sequence:
       - action: input_boolean.turn_off
@@ -368,6 +466,49 @@ automation:
       - action: input_boolean.turn_off
         target:
           entity_id: input_boolean.heo_trip_charge_started
+      - action: input_text.set_value
+        target:
+          entity_id: input_text.heo_trip_resume_state
+        data:
+          value: ''
+      - action: input_select.select_option
+        target:
+          entity_id: input_select.heo_trip_charge_status
+        data:
+          option: Interrupted
+    - conditions:
+      - condition: template
+        value_template: '{{ has_resume_record and not resume_valid }}'
+      sequence:
+      - if:
+        - condition: template
+          value_template: '{{ is_state(''input_boolean.heo_trip_charge_started'',
+            ''on'') and is_state(''switch.home_energy_ev_charge_to_full'', ''on'')
+            and (states(''input_text.heo_trip_resume_state'') in ['''', ''unknown'',
+            ''unavailable''] or ((states(''input_text.heo_trip_resume_state'') | from_json({}))
+            is mapping and (states(''input_text.heo_trip_resume_state'') | from_json({})).get(''generation'')
+            is integer and (states(''input_text.heo_trip_resume_state'') | from_json({})).get(''generation'')
+            == state_attr(''sensor.home_energy_trip_charge_status'', ''full_generation'')))
+            and states[''switch.home_energy_ev_charge_to_full''].context.user_id is
+            none and (states(''input_text.heo_trip_full_generation'').startswith(''on:''
+            ~ states[''switch.home_energy_ev_charge_to_full''].last_changed.isoformat()
+            ~ '':'') or states(''input_text.heo_trip_full_generation'') == ''pending:''
+            ~ states[''switch.home_energy_ev_charge_to_full''].context.id) }}'
+        then:
+        - action: switch.turn_off
+          target:
+            entity_id: switch.home_energy_ev_charge_to_full
+      - action: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.heo_trip_charge_scheduled
+      - action: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.heo_trip_charge_started
+      - action: input_text.set_value
+        target:
+          entity_id: input_text.heo_trip_resume_state
+        data:
+          value: ''
       - action: input_select.select_option
         target:
           entity_id: input_select.heo_trip_charge_status
@@ -382,6 +523,11 @@ automation:
         - condition: template
           value_template: '{{ is_state(''input_boolean.heo_trip_charge_started'',
             ''on'') and is_state(''switch.home_energy_ev_charge_to_full'', ''on'')
+            and (states(''input_text.heo_trip_resume_state'') in ['''', ''unknown'',
+            ''unavailable''] or ((states(''input_text.heo_trip_resume_state'') | from_json({}))
+            is mapping and (states(''input_text.heo_trip_resume_state'') | from_json({})).get(''generation'')
+            is integer and (states(''input_text.heo_trip_resume_state'') | from_json({})).get(''generation'')
+            == state_attr(''sensor.home_energy_trip_charge_status'', ''full_generation'')))
             and states[''switch.home_energy_ev_charge_to_full''].context.user_id is
             none and (states(''input_text.heo_trip_full_generation'').startswith(''on:''
             ~ states[''switch.home_energy_ev_charge_to_full''].last_changed.isoformat()
@@ -397,6 +543,11 @@ automation:
       - action: input_boolean.turn_off
         target:
           entity_id: input_boolean.heo_trip_charge_started
+      - action: input_text.set_value
+        target:
+          entity_id: input_text.heo_trip_resume_state
+        data:
+          value: ''
       - action: input_select.select_option
         target:
           entity_id: input_select.heo_trip_charge_status
@@ -410,6 +561,11 @@ automation:
         - condition: template
           value_template: '{{ is_state(''input_boolean.heo_trip_charge_started'',
             ''on'') and is_state(''switch.home_energy_ev_charge_to_full'', ''on'')
+            and (states(''input_text.heo_trip_resume_state'') in ['''', ''unknown'',
+            ''unavailable''] or ((states(''input_text.heo_trip_resume_state'') | from_json({}))
+            is mapping and (states(''input_text.heo_trip_resume_state'') | from_json({})).get(''generation'')
+            is integer and (states(''input_text.heo_trip_resume_state'') | from_json({})).get(''generation'')
+            == state_attr(''sensor.home_energy_trip_charge_status'', ''full_generation'')))
             and states[''switch.home_energy_ev_charge_to_full''].context.user_id is
             none and (states(''input_text.heo_trip_full_generation'').startswith(''on:''
             ~ states[''switch.home_energy_ev_charge_to_full''].last_changed.isoformat()
@@ -425,6 +581,11 @@ automation:
       - action: input_boolean.turn_off
         target:
           entity_id: input_boolean.heo_trip_charge_started
+      - action: input_text.set_value
+        target:
+          entity_id: input_text.heo_trip_resume_state
+        data:
+          value: ''
       - action: input_select.select_option
         target:
           entity_id: input_select.heo_trip_charge_status
@@ -438,6 +599,11 @@ automation:
         - condition: template
           value_template: '{{ is_state(''input_boolean.heo_trip_charge_started'',
             ''on'') and is_state(''switch.home_energy_ev_charge_to_full'', ''on'')
+            and (states(''input_text.heo_trip_resume_state'') in ['''', ''unknown'',
+            ''unavailable''] or ((states(''input_text.heo_trip_resume_state'') | from_json({}))
+            is mapping and (states(''input_text.heo_trip_resume_state'') | from_json({})).get(''generation'')
+            is integer and (states(''input_text.heo_trip_resume_state'') | from_json({})).get(''generation'')
+            == state_attr(''sensor.home_energy_trip_charge_status'', ''full_generation'')))
             and states[''switch.home_energy_ev_charge_to_full''].context.user_id is
             none and (states(''input_text.heo_trip_full_generation'').startswith(''on:''
             ~ states[''switch.home_energy_ev_charge_to_full''].last_changed.isoformat()
@@ -453,11 +619,55 @@ automation:
       - action: input_boolean.turn_off
         target:
           entity_id: input_boolean.heo_trip_charge_started
+      - action: input_text.set_value
+        target:
+          entity_id: input_text.heo_trip_resume_state
+        data:
+          value: ''
       - action: input_select.select_option
         target:
           entity_id: input_select.heo_trip_charge_status
         data:
           option: Completed
+    - conditions:
+      - condition: template
+        value_template: '{{ owned and resume_valid and now_ts >= resume_record.get(''expires'')
+          }}'
+      sequence:
+      - if:
+        - condition: template
+          value_template: '{{ is_state(''input_boolean.heo_trip_charge_started'',
+            ''on'') and is_state(''switch.home_energy_ev_charge_to_full'', ''on'')
+            and (states(''input_text.heo_trip_resume_state'') in ['''', ''unknown'',
+            ''unavailable''] or ((states(''input_text.heo_trip_resume_state'') | from_json({}))
+            is mapping and (states(''input_text.heo_trip_resume_state'') | from_json({})).get(''generation'')
+            is integer and (states(''input_text.heo_trip_resume_state'') | from_json({})).get(''generation'')
+            == state_attr(''sensor.home_energy_trip_charge_status'', ''full_generation'')))
+            and states[''switch.home_energy_ev_charge_to_full''].context.user_id is
+            none and (states(''input_text.heo_trip_full_generation'').startswith(''on:''
+            ~ states[''switch.home_energy_ev_charge_to_full''].last_changed.isoformat()
+            ~ '':'') or states(''input_text.heo_trip_full_generation'') == ''pending:''
+            ~ states[''switch.home_energy_ev_charge_to_full''].context.id) }}'
+        then:
+        - action: switch.turn_off
+          target:
+            entity_id: switch.home_energy_ev_charge_to_full
+      - action: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.heo_trip_charge_scheduled
+      - action: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.heo_trip_charge_started
+      - action: input_text.set_value
+        target:
+          entity_id: input_text.heo_trip_resume_state
+        data:
+          value: ''
+      - action: input_select.select_option
+        target:
+          entity_id: input_select.heo_trip_charge_status
+        data:
+          option: Expired
     - conditions:
       - condition: template
         value_template: '{{ owned and not override_on }}'
@@ -468,6 +678,11 @@ automation:
       - action: input_boolean.turn_off
         target:
           entity_id: input_boolean.heo_trip_charge_started
+      - action: input_text.set_value
+        target:
+          entity_id: input_text.heo_trip_resume_state
+        data:
+          value: ''
       - action: input_select.select_option
         target:
           entity_id: input_select.heo_trip_charge_status
@@ -505,6 +720,150 @@ automation:
           option: Override active
     - conditions:
       - condition: template
+        value_template: '{{ armed and resume_unreadable and due == ticket and target
+          == started_target }}'
+      sequence:
+      - action: input_select.select_option
+        target:
+          entity_id: input_select.heo_trip_charge_status
+        data:
+          option: Waiting for data
+    - conditions:
+      - condition: template
+        value_template: '{{ pause_requested and not armed }}'
+      sequence:
+      - action: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.heo_trip_charge_scheduled
+      - action: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.heo_trip_charge_started
+      - action: input_text.set_value
+        target:
+          entity_id: input_text.heo_trip_resume_state
+        data:
+          value: ''
+      - action: input_select.select_option
+        target:
+          entity_id: input_select.heo_trip_charge_status
+        data:
+          option: Cancelled
+    - conditions:
+      - condition: template
+        value_template: '{{ pause_requested and (not target_valid or target != started_target
+          or due != ticket) }}'
+      sequence:
+      - action: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.heo_trip_charge_scheduled
+      - action: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.heo_trip_charge_started
+      - action: input_text.set_value
+        target:
+          entity_id: input_text.heo_trip_resume_state
+        data:
+          value: ''
+      - action: input_select.select_option
+        target:
+          entity_id: input_select.heo_trip_charge_status
+        data:
+          option: Cancelled
+    - conditions:
+      - condition: template
+        value_template: '{{ pause_requested and not resume_valid }}'
+      sequence:
+      - action: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.heo_trip_charge_scheduled
+      - action: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.heo_trip_charge_started
+      - action: input_text.set_value
+        target:
+          entity_id: input_text.heo_trip_resume_state
+        data:
+          value: ''
+      - action: input_select.select_option
+        target:
+          entity_id: input_select.heo_trip_charge_status
+        data:
+          option: Interrupted
+    - conditions:
+      - condition: template
+        value_template: '{{ resuming and (now_ts >= resume_record.get(''expires'')
+          or due <= now_ts) }}'
+      sequence:
+      - action: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.heo_trip_charge_scheduled
+      - action: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.heo_trip_charge_started
+      - action: input_text.set_value
+        target:
+          entity_id: input_text.heo_trip_resume_state
+        data:
+          value: ''
+      - action: input_select.select_option
+        target:
+          entity_id: input_select.heo_trip_charge_status
+        data:
+          option: Expired
+    - conditions:
+      - condition: template
+        value_template: '{{ resuming and soc_valid and soc >= target }}'
+      sequence:
+      - action: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.heo_trip_charge_scheduled
+      - action: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.heo_trip_charge_started
+      - action: input_text.set_value
+        target:
+          entity_id: input_text.heo_trip_resume_state
+        data:
+          value: ''
+      - action: input_select.select_option
+        target:
+          entity_id: input_select.heo_trip_charge_status
+        data:
+          option: Completed
+    - conditions:
+      - condition: template
+        value_template: '{{ resuming and (override_state not in [''on'', ''off'']
+          or full_generation is not integer) }}'
+      sequence:
+      - action: input_select.select_option
+        target:
+          entity_id: input_select.heo_trip_charge_status
+        data:
+          option: Waiting for data
+    - conditions:
+      - condition: template
+        value_template: '{{ resuming and (override_on or full_generation != resume_record.get(''generation'')
+          + 1 or full_stop_reason != ''disconnected'' or full_stop_generation != resume_record.get(''generation''))
+          }}'
+      sequence:
+      - action: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.heo_trip_charge_scheduled
+      - action: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.heo_trip_charge_started
+      - action: input_text.set_value
+        target:
+          entity_id: input_text.heo_trip_resume_state
+        data:
+          value: ''
+      - action: input_select.select_option
+        target:
+          entity_id: input_select.heo_trip_charge_status
+        data:
+          option: External override
+    - conditions:
+      - condition: template
         value_template: '{{ armed and due <= now_ts and target_valid and soc_valid
           and soc >= target }}'
       sequence:
@@ -514,6 +873,11 @@ automation:
       - action: input_boolean.turn_off
         target:
           entity_id: input_boolean.heo_trip_charge_started
+      - action: input_text.set_value
+        target:
+          entity_id: input_text.heo_trip_resume_state
+        data:
+          value: ''
       - action: input_select.select_option
         target:
           entity_id: input_select.heo_trip_charge_status
@@ -529,6 +893,11 @@ automation:
       - action: input_boolean.turn_off
         target:
           entity_id: input_boolean.heo_trip_charge_started
+      - action: input_text.set_value
+        target:
+          entity_id: input_text.heo_trip_resume_state
+        data:
+          value: ''
       - action: input_select.select_option
         target:
           entity_id: input_select.heo_trip_charge_status
@@ -554,6 +923,11 @@ automation:
       - action: input_boolean.turn_off
         target:
           entity_id: input_boolean.heo_trip_charge_started
+      - action: input_text.set_value
+        target:
+          entity_id: input_text.heo_trip_resume_state
+        data:
+          value: ''
       - action: input_select.select_option
         target:
           entity_id: input_select.heo_trip_charge_status
@@ -576,7 +950,8 @@ automation:
         target:
           entity_id: input_select.heo_trip_charge_status
         data:
-          option: Waiting for car
+          option: '{{ ''Paused — car disconnected'' if resuming else ''Waiting for
+            car'' }}'
     - conditions:
       - condition: template
         value_template: '{{ armed and not control_ready }}'
@@ -588,7 +963,8 @@ automation:
           option: HEO control unavailable
     - conditions:
       - condition: template
-        value_template: '{{ armed and plan.get(''start'', now_ts + 1) > now_ts }}'
+        value_template: '{{ armed and not resuming and plan.get(''start'', now_ts
+          + 1) > now_ts }}'
       sequence:
       - action: input_select.select_option
         target:
@@ -612,6 +988,16 @@ automation:
       - action: input_boolean.turn_on
         target:
           entity_id: input_boolean.heo_trip_charge_started
+      - action: input_text.set_value
+        target:
+          entity_id: input_text.heo_trip_resume_state
+        data:
+          value: '{% set generation = state_attr(''sensor.home_energy_trip_charge_status'',
+            ''full_generation'') %}{{ {''v'': 1, ''first'': resume_record.get(''first'')
+            if resuming else now_ts, ''expires'': resume_record.get(''expires'') if
+            resuming else now_ts + plan.get(''maximum'') * 3600, ''generation'': generation
+            + 1 if generation is integer and generation >= 0 else none, ''paused'':
+            false} | to_json }}'
       - action: input_text.set_value
         target:
           entity_id: input_text.heo_trip_full_generation
@@ -641,7 +1027,12 @@ automation:
             \ == target and is_state('switch.home_energy_ev_charge_to_full', 'off')\
             \ and is_state('switch.home_energy_automatic_ev_control', 'on') and is_state('switch.home_energy_safety_lock',\
             \ 'off') and is_state('device_tracker.your_ev', 'home') and is_state('binary_sensor.your_ev_cable',\
-            \ 'on') and now().timestamp() < due and 0 <= states('sensor.home_energy_ev_soc')\
+            \ 'on') and now().timestamp() < due and now().timestamp() < (states('input_text.heo_trip_resume_state')\
+            \ | from_json({})).get('expires', 0) and ((states('input_text.heo_trip_resume_state')\
+            \ | from_json({})).get('generation') is none or (state_attr('sensor.home_energy_trip_charge_status',\
+            \ 'full_generation') is integer and (states('input_text.heo_trip_resume_state')\
+            \ | from_json({})).get('generation') == state_attr('sensor.home_energy_trip_charge_status',\
+            \ 'full_generation') + 1)) and 0 <= states('sensor.home_energy_ev_soc')\
             \ | float(-1) < target }}"
         then:
         - action: switch.turn_on
@@ -651,7 +1042,12 @@ automation:
           - condition: template
             value_template: '{{ is_state(''input_boolean.heo_trip_charge_started'',
               ''on'') and is_state(''switch.home_energy_ev_charge_to_full'', ''on'')
-              and states[''switch.home_energy_ev_charge_to_full''].context.user_id
+              and (states(''input_text.heo_trip_resume_state'') in ['''', ''unknown'',
+              ''unavailable''] or ((states(''input_text.heo_trip_resume_state'') |
+              from_json({})) is mapping and (states(''input_text.heo_trip_resume_state'')
+              | from_json({})).get(''generation'') is integer and (states(''input_text.heo_trip_resume_state'')
+              | from_json({})).get(''generation'') == state_attr(''sensor.home_energy_trip_charge_status'',
+              ''full_generation''))) and states[''switch.home_energy_ev_charge_to_full''].context.user_id
               is none and (states(''input_text.heo_trip_full_generation'').startswith(''on:''
               ~ states[''switch.home_energy_ev_charge_to_full''].last_changed.isoformat()
               ~ '':'') or states(''input_text.heo_trip_full_generation'') == ''pending:''
@@ -668,6 +1064,23 @@ automation:
         - action: input_boolean.turn_off
           target:
             entity_id: input_boolean.heo_trip_charge_started
+        - if:
+          - condition: template
+            value_template: '{{ resuming }}'
+          then:
+          - action: input_text.set_value
+            target:
+              entity_id: input_text.heo_trip_resume_state
+            data:
+              value: '{{ {''v'': 1, ''first'': resume_record.get(''first''), ''expires'':
+                resume_record.get(''expires''), ''generation'': resume_record.get(''generation''),
+                ''paused'': true} | to_json }}'
+          else:
+          - action: input_text.set_value
+            target:
+              entity_id: input_text.heo_trip_resume_state
+            data:
+              value: ''
         - action: input_select.select_option
           target:
             entity_id: input_select.heo_trip_charge_status
