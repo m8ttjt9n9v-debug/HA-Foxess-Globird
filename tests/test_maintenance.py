@@ -161,6 +161,125 @@ async def test_real_auth_blocks_before_persistence_or_native_work(hass, node_rig
     assert await rig.node._repository.store.async_load() is None
 
 
+@pytest.mark.parametrize("identity", ["anonymous", "missing", "non_admin", "inactive"])
+async def test_release_check_requires_real_admin_before_metadata_access(
+    hass, node_rig, monkeypatch, identity,
+):
+    rig = node_rig
+    refresh = AsyncMock()
+    monkeypatch.setattr(rig.native, "async_refresh_hacs_catalog", refresh)
+    if identity == "anonymous":
+        context = None
+    elif identity == "missing":
+        context = Context(user_id="unknown-user")
+    else:
+        user = await hass.auth.async_create_user(
+            "Other release operator", group_ids=[GROUP_ID_ADMIN] if identity == "inactive" else [],
+        )
+        if identity == "inactive":
+            await hass.auth.async_update_user(user, is_active=False)
+        context = Context(user_id=user.id)
+    with pytest.raises(HomeAssistantError, match="active administrator"):
+        await rig.node.async_refresh_releases(context)
+    refresh.assert_not_called()
+    assert rig.node.release_refresh_state == "idle"
+    assert rig.node.record is None and rig.events == []
+    assert await rig.node._repository.store.async_load() is None
+
+
+async def test_release_check_is_metadata_only_even_while_energy_work_is_active(
+    hass, node_rig, monkeypatch,
+):
+    rig = node_rig
+    rig.blockers[:] = ["battery_charge_session_active", "ev_session_active"]
+    entered, finish = asyncio.Event(), asyncio.Event()
+    checked = "2026-10-18T03:00:00+00:00"
+    settings = dict(rig.entry.data), dict(rig.entry.options)
+
+    async def refresh(_hass):
+        entered.set()
+        await finish.wait()
+        rig.catalog["versions"] = ["v0.12.43", VERSION]
+        return dict(rig.catalog) | {"release_last_checked": checked}
+
+    native_refresh = AsyncMock(side_effect=refresh)
+    monkeypatch.setattr(rig.native, "async_refresh_hacs_catalog", native_refresh)
+    task = asyncio.create_task(rig.node.async_refresh_releases(rig.context))
+    await entered.wait()
+    assert rig.node.data["release_refresh_state"] == "checking"
+    assert FENCE_KEY not in hass.data
+    assert not any(lock.locked() for lock in rig.locks)
+    finish.set()
+    result = await task
+    assert result["release_refresh_state"] == "ready"
+    assert result["release_refresh_error"] is None
+    assert result["release_last_checked"] == checked
+    assert result["available_versions"] == ["v0.12.43", VERSION]
+    assert result["phase"] == "idle" and result["error"] is None
+    assert result["blockers"] == rig.blockers
+    assert rig.node.record is None and rig.node._task is None
+    assert await rig.node._repository.store.async_load() is None
+    assert settings == (dict(rig.entry.data), dict(rig.entry.options))
+    assert rig.events == [] and FENCE_KEY not in hass.data
+    native_refresh.assert_awaited_once_with(hass)
+    rig.native.async_create_verified_backup.assert_not_called()
+    rig.native.async_install.assert_not_called()
+    rig.native.async_check_config.assert_not_called()
+    rig.native.async_request_restart.assert_not_called()
+
+
+@pytest.mark.parametrize("failure", ["safe", "provider"])
+async def test_release_check_failure_does_not_replace_existing_maintenance_audit(
+    node_rig, monkeypatch, failure,
+):
+    rig = node_rig
+    rig.native.async_create_verified_backup.side_effect = MaintenanceAdapterError("backup_busy")
+    await rig.submit()
+    await rig.finish()
+    before = dict(rig.node.record)
+    stored = await rig.node._repository.store.async_load()
+    events = list(rig.events)
+    rig.node.release_last_checked = "2026-10-18T02:00:00+00:00"
+    refresh = AsyncMock(side_effect=(
+        MaintenanceAdapterError("hacs_catalog_unsupported") if failure == "safe"
+        else RuntimeError("Bearer PRIVATE at private host")
+    ))
+    monkeypatch.setattr(rig.native, "async_refresh_hacs_catalog", refresh)
+    result = await rig.node.async_refresh_releases(rig.context)
+    assert result["release_refresh_state"] == "failed"
+    assert result["release_refresh_error"] == (
+        "hacs_catalog_unsupported" if failure == "safe" else "hacs_capability_unavailable"
+    )
+    assert result["release_last_checked"] == "2026-10-18T02:00:00+00:00"
+    assert result["phase"] == "failed" and result["error"] == "backup_busy"
+    assert rig.node.record == before
+    assert await rig.node._repository.store.async_load() == stored
+    assert rig.events == events
+    assert "PRIVATE" not in str(result)
+
+
+async def test_release_check_cancellation_is_bounded_failure_not_maintenance_replay(
+    hass, node_rig, monkeypatch,
+):
+    rig = node_rig
+    entered = asyncio.Event()
+
+    async def refresh(_hass):
+        entered.set()
+        await asyncio.Event().wait()
+
+    monkeypatch.setattr(rig.native, "async_refresh_hacs_catalog", refresh)
+    task = asyncio.create_task(rig.node.async_refresh_releases(rig.context))
+    await entered.wait()
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    assert rig.node.data["release_refresh_state"] == "failed"
+    assert rig.node.data["release_refresh_error"] == "hacs_capability_unavailable"
+    assert rig.node.record is None and rig.events == []
+    assert FENCE_KEY not in hass.data
+
+
 async def test_duplicate_request_is_status_only_and_same_id_cannot_be_repurposed(node_rig):
     rig = node_rig
     request_id, issued = uuid4().hex, datetime.now(UTC).isoformat()

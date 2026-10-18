@@ -14,9 +14,11 @@ import json
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
+from time import monotonic
 from typing import Any
 
 from homeassistant.core import Context, HomeAssistant
+from homeassistant.util import dt as dt_util
 
 DOMAIN = "home_energy_orchestrator"
 REPOSITORY = "m8ttjt9n9v-debug/HA-Foxess-Globird"
@@ -24,15 +26,23 @@ _STABLE_TAG = re.compile(r"v?\d+\.\d+\.\d+\Z")
 _MANIFEST = Path(__file__).with_name("manifest.json")
 _CATALOG_HYDRATION = "heo_hacs_catalog_hydration"
 _CATALOG_REFRESH_TIMEOUT_SECONDS = 10
+_CATALOG_REFRESH_COOLDOWN_SECONDS = 30
 
 
 @dataclass(slots=True)
 class _CatalogHydration:
-    """One native warm attempt per verified repository instance and process."""
+    """Shared native fetch lease, cold one-shot and last validated presentation."""
 
     repository: Any
     lock: asyncio.Lock = field(default_factory=asyncio.Lock)
     attempted: bool = False
+    last_attempt: float | None = None
+    last_checked: str | None = None
+    last_error: str | None = None
+    last_catalog: dict[str, object] | None = None
+    catalog_provider: Any = None
+    catalog_entity: Any = None
+    explicit_failed: bool = False
 
 
 class MaintenanceAdapterError(Exception):
@@ -52,8 +62,12 @@ def _version(value: object):
     return Version(value)
 
 
-def _hacs_binding(hass: HomeAssistant) -> tuple[Any, Any]:
-    """Bind a renamed update entity to this exact installed HACS repository."""
+def _hacs_binding(hass: HomeAssistant, *, metadata_only=False) -> tuple[Any, Any]:
+    """Bind the exact installed repository, never guessing an update entity.
+
+    Metadata recovery alone may tolerate HACS's False release-fetch flag. This
+    does not relax identity checks or the installer's default strict binding.
+    """
     from homeassistant.components.update import DATA_COMPONENT, UpdateEntity, UpdateEntityFeature
     from homeassistant.config_entries import ConfigEntryState
     from homeassistant.helpers import entity_registry as er
@@ -79,7 +93,7 @@ def _hacs_binding(hass: HomeAssistant) -> tuple[Any, Any]:
         or data.category != "integration"
         or data.domain != DOMAIN
         or data.installed is not True
-        or data.releases is not True
+        or (data.releases is not True and not (metadata_only and data.releases is False))
         or not str(data.id).isdecimal()
         or int(data.id) <= 0
     ):
@@ -113,7 +127,11 @@ def _catalog(repository: Any, entity: Any) -> dict[str, object]:
     """Use HACS's cached published releases; do not create a second API poller."""
     tags = repository.data.published_tags
     releases = repository.releases.objects
-    if not isinstance(tags, list) or not isinstance(releases, list):
+    if (
+        not isinstance(tags, list)
+        or any(not isinstance(tag, str) for tag in tags)
+        or not isinstance(releases, list)
+    ):
         raise MaintenanceAdapterError("hacs_catalog_unsupported")
     if not releases:
         # Persisted tag strings alone cannot establish draft/prerelease status.
@@ -139,6 +157,86 @@ def _catalog(repository: Any, entity: Any) -> dict[str, object]:
     }
 
 
+def _hydration(hass, repository) -> _CatalogHydration:
+    states = hass.data.setdefault(_CATALOG_HYDRATION, {})
+    return states.setdefault(id(repository), _CatalogHydration(repository))
+
+
+def _revalidate(hass, provider, repository, entity, *, metadata_only=False) -> None:
+    rebound_repository, rebound_entity = _hacs_binding(hass, metadata_only=metadata_only)
+    if (
+        hass.data.get("hacs") is not provider
+        or rebound_repository is not repository
+        or rebound_entity is not entity
+    ):
+        raise MaintenanceAdapterError("hacs_entity_mismatch")
+
+
+def _available_catalog(hass, repository, entity) -> dict[str, object]:
+    """Retain the last validated list after a failed explicit metadata read.
+
+    This fallback is presentation only. The final installer deliberately uses
+    _catalog directly and cannot install from this retained list.
+    """
+    state = _hydration(hass, repository)
+    retained = (
+        state.last_catalog
+        and state.catalog_provider is hass.data.get("hacs")
+        and state.catalog_entity is entity
+    )
+    if repository.data.releases is False and not retained:
+        raise MaintenanceAdapterError("hacs_capability_unavailable")
+    if not (retained and (state.explicit_failed or repository.data.releases is False)):
+        result = _catalog(repository, entity)
+        state.last_catalog = result | {"versions": list(result["versions"])}
+        state.catalog_provider = hass.data.get("hacs")
+        state.catalog_entity = entity
+        return result
+    return state.last_catalog | {
+        "entity_id": entity.entity_id,
+        "installed_version": entity.installed_version,
+        "in_progress": entity.in_progress is not False,
+        "versions": list(state.last_catalog["versions"]),
+    }
+
+
+async def _native_catalog_refresh(hass, provider, repository, entity, state):
+    """One shared native metadata operation; consume timing before awaiting."""
+    state.attempted = True
+    state.last_attempt = monotonic()
+    state.last_error = None
+    try:
+        if entity.in_progress is not False:
+            raise MaintenanceAdapterError("hacs_install_busy")
+        previous_releases = repository.releases.objects
+        async with asyncio.timeout(_CATALOG_REFRESH_TIMEOUT_SECONDS):
+            await repository.update_repository(ignore_issues=True, force=True)
+        _revalidate(hass, provider, repository, entity, metadata_only=True)
+        if entity.in_progress is not False:
+            raise MaintenanceAdapterError("hacs_install_busy")
+        # HACS 2.0.5 can swallow a release-fetch error and return normally with
+        # its old models intact. Successful native release retrieval replaces
+        # this list, even when the published versions have not changed.
+        if repository.data.releases is not True or repository.releases.objects is previous_releases:
+            raise MaintenanceAdapterError("hacs_capability_unavailable")
+        result = _catalog(repository, entity)
+    except asyncio.CancelledError:
+        state.last_error = "hacs_capability_unavailable"
+        raise
+    except MaintenanceAdapterError as failure:
+        state.last_error = failure.code
+        raise
+    except Exception:
+        state.last_error = "hacs_capability_unavailable"
+        raise MaintenanceAdapterError(state.last_error) from None
+    state.last_checked = dt_util.utcnow().isoformat()
+    state.last_catalog = result | {"versions": list(result["versions"])}
+    state.catalog_provider = provider
+    state.catalog_entity = entity
+    state.explicit_failed = False
+    return result
+
+
 async def async_hacs_catalog(hass: HomeAssistant) -> dict[str, object]:
     """Use verified HACS releases, warming its cold native cache at most once.
 
@@ -148,41 +246,71 @@ async def async_hacs_catalog(hass: HomeAssistant) -> dict[str, object]:
     Refreshed published membership and explicit stable metadata remain required.
     """
     try:
-        repository, entity = _hacs_binding(hass)
-        releases = repository.releases.objects
-        if not isinstance(releases, list) or releases:
-            return _catalog(repository, entity)
-        tags = repository.data.published_tags
-        if not isinstance(tags, list) or any(not isinstance(tag, str) for tag in tags):
-            raise MaintenanceAdapterError("hacs_catalog_unsupported")
+        repository, entity = _hacs_binding(hass, metadata_only=True)
+        hydration = _hydration(hass, repository)
         provider = hass.data["hacs"]
-        hydrations = hass.data.setdefault(_CATALOG_HYDRATION, {})
-        hydration = hydrations.setdefault(id(repository), _CatalogHydration(repository))
         async with hydration.lock:
-            rebound_repository, rebound_entity = _hacs_binding(hass)
+            _revalidate(hass, provider, repository, entity, metadata_only=True)
+            releases = repository.releases.objects
             if (
-                hass.data.get("hacs") is not provider
-                or rebound_repository is not repository
-                or rebound_entity is not entity
+                repository.data.releases is False
+                or not isinstance(releases, list)
+                or releases
+                or hydration.explicit_failed
             ):
-                raise MaintenanceAdapterError("hacs_entity_mismatch")
+                return _available_catalog(hass, repository, entity)
+            tags = repository.data.published_tags
+            if not isinstance(tags, list) or any(not isinstance(tag, str) for tag in tags):
+                raise MaintenanceAdapterError("hacs_catalog_unsupported")
             if not repository.releases.objects and not hydration.attempted:
                 # Consume before awaiting: cancellation/failure never schedules
                 # another network request on the next maintenance status poll.
-                hydration.attempted = True
-                try:
-                    async with asyncio.timeout(_CATALOG_REFRESH_TIMEOUT_SECONDS):
-                        await repository.update_repository(ignore_issues=True, force=True)
-                except Exception:
-                    raise MaintenanceAdapterError("hacs_capability_unavailable") from None
-            rebound_repository, rebound_entity = _hacs_binding(hass)
-            if (
-                hass.data.get("hacs") is not provider
-                or rebound_repository is not repository
-                or rebound_entity is not entity
+                await _native_catalog_refresh(hass, provider, repository, entity, hydration)
+            _revalidate(hass, provider, repository, entity, metadata_only=True)
+            return _available_catalog(hass, repository, entity)
+    except MaintenanceAdapterError:
+        raise
+    except Exception:
+        raise MaintenanceAdapterError("hacs_capability_unavailable") from None
+
+
+async def async_refresh_hacs_catalog(hass: HomeAssistant) -> dict[str, object]:
+    """Explicit metadata-only check, coalesced with cold warm and rate limited."""
+    try:
+        repository, entity = _hacs_binding(hass, metadata_only=True)
+        provider = hass.data["hacs"]
+        state = _hydration(hass, repository)
+        async with state.lock:
+            _revalidate(hass, provider, repository, entity, metadata_only=True)
+            if entity.in_progress is not False:
+                state.last_attempt = monotonic()
+                state.last_error = "hacs_install_busy"
+                raise MaintenanceAdapterError(state.last_error)
+            if state.last_attempt is not None and (
+                monotonic() - state.last_attempt < _CATALOG_REFRESH_COOLDOWN_SECONDS
             ):
-                raise MaintenanceAdapterError("hacs_entity_mismatch")
-            return _catalog(repository, entity)
+                if state.last_error:
+                    raise MaintenanceAdapterError(state.last_error)
+                return _available_catalog(hass, repository, entity) | {
+                    "release_last_checked": state.last_checked,
+                }
+            tags = repository.data.published_tags
+            if (
+                not isinstance(repository.releases.objects, list)
+                or not isinstance(tags, list)
+                or any(not isinstance(tag, str) for tag in tags)
+            ):
+                raise MaintenanceAdapterError("hacs_catalog_unsupported")
+            try:
+                _available_catalog(hass, repository, entity)
+            except MaintenanceAdapterError:
+                pass  # A verified cold repository may have neither list yet.
+            try:
+                result = await _native_catalog_refresh(hass, provider, repository, entity, state)
+            except BaseException:
+                state.explicit_failed = True
+                raise
+            return result | {"release_last_checked": state.last_checked}
     except MaintenanceAdapterError:
         raise
     except Exception:

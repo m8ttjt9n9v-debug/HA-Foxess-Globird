@@ -36,6 +36,10 @@ CONTRACT = json.loads((
     Path(__file__).resolve().parents[1]
     / "docs" / "maintainability" / "maintenance-entities-v1.json"
 ).read_text(encoding="utf-8"))
+REFRESH_ADDITIONS = json.loads((
+    Path(__file__).resolve().parents[1]
+    / "docs" / "maintainability" / "maintenance-release-refresh-v1.json"
+).read_text(encoding="utf-8"))
 
 
 def _record(**changes):
@@ -77,10 +81,15 @@ def test_all_five_patterns_match_actual_native_entity_constructors(hass):
         entities.MaintenanceVersion(hub, entry, target),
         entities.MaintenanceButton(hub, entry, target, "update_and_restart"),
         entities.MaintenanceButton(hub, entry, target, "restart"),
+        entities.MaintenanceButton(hub, entry, target, "check_releases"),
     ]
     assert CONTRACT["schema_version"] == 1
-    assert CONTRACT["entity_pattern_count"] == len(native) == 5
-    for actual, expected in zip(native, CONTRACT["entity_patterns"], strict=True):
+    assert CONTRACT["entity_pattern_count"] == 5
+    assert REFRESH_ADDITIONS["entity_pattern_count"] == 1
+    assert len(native) == 6
+    for actual, expected in zip(
+        native, CONTRACT["entity_patterns"] + REFRESH_ADDITIONS["entity_patterns"], strict=True
+    ):
         substitutions = {"config_entry_id": entry.entry_id, "site_key": target["key"]}
         assert type(actual).__name__ == expected["class"]
         assert actual.entity_id.split(".", 1)[0] == expected["platform"]
@@ -100,7 +109,9 @@ async def test_node_public_status_attributes_match_reviewed_contract(hass, monke
     node = NodeMaintenance(hass, "0.12.39")
     await node.async_restore()
     status = await node.async_status()
-    assert sorted(status) == CONTRACT["node_status_attributes"]
+    assert sorted(status) == sorted(
+        CONTRACT["node_status_attributes"] + REFRESH_ADDITIONS["node_status_attributes"]
+    )
     node.async_set_updated_data(status)
     entry = MockConfigEntry(domain="home_energy_orchestrator")
     entity = entities.MaintenanceStatus(node, entry)
@@ -118,11 +129,16 @@ def test_fleet_public_key_whitelist_is_exhaustive_and_excludes_provider_details(
         "issued_at": "2026-10-17T00:00:00+00:00", "last_update": "2026-10-17T00:00:00+00:00",
         "started_at": "2026-10-17T00:00:00+00:00", "deadline": "2026-10-17T01:00:00+00:00",
         "action": "update_and_restart", "error": "hacs_unavailable",
+        "release_refresh_state": "failed", "release_refresh_error": "hacs_unavailable",
+        "release_last_checked": "2026-10-17T00:00:00+00:00",
         "token": "private-provider-secret", "origin": "private-provider-origin",
         "provider_exception": "private-provider-exception", "backup_id": "private-node-backup",
     }
     result = _sanitize(payload)
-    assert sorted(result) == CONTRACT["fleet_status_allowed_attributes"]
+    assert sorted(result) == sorted(
+        CONTRACT["fleet_status_allowed_attributes"]
+        + REFRESH_ADDITIONS["fleet_status_allowed_attributes"]
+    )
     assert not any("private-" in str(value) for value in result.values())
     assert sorted(_PHASES) == CONTRACT["fleet_accepted_node_phases"]
     assert sorted(node_module.PHASES) == CONTRACT["node_journal_phases"]

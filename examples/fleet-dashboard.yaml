@@ -132,137 +132,71 @@ views:
         | Forecast / measured | {{ a('forecast_cost') }} / {{ a('measured_cost') }} |
 
         _Last update: {{ a('last_update') }}_
-    - type: vertical-stack
-      cards:
-      - type: markdown
-        title: HEO maintenance
-        content: |
-          {% set e = 'sensor.home_energy_fleet_alpha_maintenance' %}
-          {% set phase = states(e) %}
-          {% set phases = {
-            'idle': 'Ready', 'waiting': 'Waiting for a safe time', 'backing_up': 'Creating backup',
-            'installing': 'Downloading HEO', 'checking': 'Checking configuration',
-            'restart_requested': 'Restarting / reconnecting', 'restart_pending': 'Restart needs checking',
-            'verified': 'Running verified', 'blocked': 'Waiting for a safety check',
-            'failed': 'Needs attention', 'interrupted': 'Interrupted — check the site',
-            'unknown': 'Outcome unknown — check the site', 'submitting': 'Sending request',
-            'initial_update_required': 'First update needed'
-          } %}
-          {% set reasons = {
-            'home_assistant_not_running': 'Home Assistant is not ready',
-            'heo_runtime_unavailable': 'HEO is not ready',
-            'heo_storage_untrusted': 'Saved control state needs checking',
-            'maintenance_storage_unavailable': 'Maintenance history is unavailable',
-            'battery_charge_session_active': 'Battery charging is active',
-            'battery_export_session_active': 'Battery export is active',
-            'battery_diagnostic_active': 'A battery test is active',
-            'battery_manual_control_active': 'Manual battery control is active',
-            'trip_charge_active': 'A trip charge is active',
-            'ev_full_charge_active': 'Charge to Full is active',
-            'battery_telemetry_unavailable': 'Battery readings are unavailable',
-            'battery_mode_feedback_unavailable': 'Battery mode cannot be confirmed',
-            'battery_not_self_use': 'Battery is not in Self Use',
-            'battery_force_target_not_clear': 'Forced battery targets are not clear',
-            'ev_session_active': 'EV charging is active',
-            'ev_reconciliation_pending': 'An EV command is awaiting confirmation',
-            'ev_recovery_pending': 'EV recovery is pending',
-            'ev_charging_target_active': 'An EV charging target is active',
-            'ev_feedback_unavailable': 'EV readings are unavailable',
-            'ev_physically_charging': 'The car is charging',
-            'ev_charge_switch_on': 'The car charge switch is on',
-            'ev_full_feedback_unavailable': 'Charge to Full state is unavailable',
-            'hacs_unavailable': 'HACS is not ready',
-            'hacs_capability_unavailable': 'HEO releases could not be loaded; check HACS',
-            'backup_not_verified': 'Backup could not be verified',
-            'backup_failed': 'Backup failed',
-            'configuration_invalid': 'Configuration needs correcting',
-            'maintenance_settings_changed': 'Settings changed during maintenance',
-            'maintenance_expired': 'Safe-time wait expired',
-            'maintenance_busy': 'Maintenance is already in progress',
-            'maintenance_verification_required': 'The previous restart needs checking',
-            'verification_failed': 'The restarted site did not pass verification',
-            'restart_not_observed': 'A completed restart was not observed',
-            'status_unavailable': 'Maintenance status is unavailable',
-            'initial_update_required': 'Install a maintenance-capable release first'
-          } %}
-          {% macro version(name) -%}
-            {%- set value = state_attr(e, name) -%}
-            {{- value if value is string and value else '—' -}}
-          {%- endmacro %}
-          {% set error = state_attr(e, 'error') %}
-          {% set blockers = state_attr(e, 'blockers') %}
-          {% set backup = state_attr(e, 'backup_verified') %}
-          **{{ phases.get(phase, 'Maintenance unavailable') }}**
-
-          | | |
-          |---|---|
-          | Running HEO | {{ version('running_version') }} |
-          | Downloaded HEO | {{ version('installed_version') }} |
-          | Backup | {{ 'Verified' if backup is sameas true else
-                         'Not yet verified' if backup is sameas false else '—' }} |
-          | Issue | {{ reasons.get(error, 'Needs a site check') if error else '—' }} |
-          | Waiting for | {% if blockers is iterable and blockers is not string and blockers %}
-            {%- for reason in blockers -%}{{ reasons.get(reason, 'An additional safety check') }}
-            {{- '; ' if not loop.last else '' }}{%- endfor -%}{% else %}—{% endif %} |
-
-          {% if phase == 'initial_update_required' %}
-          Install a maintenance-capable HEO release through HACS at this site first.
-          {% elif phase in ['unknown', 'unavailable', 'none'] %}
-          Check the site before retrying. No update or restart is automatically replayed.
-          {% endif %}
-          Downloaded does not mean running. A restart is verified separately.
-      - type: conditional
-        conditions:
-        - condition: state
-          entity: sensor.home_energy_fleet_alpha_maintenance
-          state_not: unknown
-        - condition: state
-          entity: sensor.home_energy_fleet_alpha_maintenance
-          state_not: unavailable
-        - condition: state
-          entity: sensor.home_energy_fleet_alpha_maintenance
-          state_not: initial_update_required
-        card:
-          type: vertical-stack
-          cards:
-          - type: entities
-            show_header_toggle: false
-            entities:
-            - entity: select.home_energy_fleet_alpha_release
-              name: Release
-          - type: horizontal-stack
-            cards:
-            - type: button
-              name: Update & restart
-              icon: mdi:update
-              show_state: false
-              tap_action:
-                action: perform-action
-                perform_action: button.press
-                target:
-                  entity_id: button.home_energy_fleet_alpha_update_and_restart
-                confirmation:
-                  text: Back up Local site, then install the selected HEO release and restart when safely
-                    idle. Wait up to 60 minutes; active charging or export will not be stopped. New HEO
-                    actions pause during maintenance; avoid approaching charge deadlines. Only this site
-                    is affected.
-              hold_action:
-                action: none
-            - type: button
-              name: Restart
-              icon: mdi:restart
-              show_state: false
-              tap_action:
-                action: perform-action
-                perform_action: button.press
-                target:
-                  entity_id: button.home_energy_fleet_alpha_restart
-                confirmation:
-                  text: Back up Local site, then restart Home Assistant when safely idle. Wait up to 60
-                    minutes; active charging or export will not be stopped. New HEO actions pause during
-                    maintenance; avoid approaching charge deadlines. Only this site is affected.
-              hold_action:
-                action: none
+    - type: entities
+      show_header_toggle: false
+      state_color: false
+      entities:
+      - type: buttons
+        entities:
+        - entity: select.home_energy_fleet_alpha_release
+          name: Release
+          show_name: true
+          show_icon: false
+          tap_action:
+            action: more-info
+          hold_action:
+            action: none
+          double_tap_action:
+            action: none
+        - entity: button.home_energy_fleet_alpha_update_and_restart
+          name: Update
+          icon: mdi:update
+          show_name: true
+          show_icon: false
+          tap_action:
+            action: perform-action
+            perform_action: button.press
+            target:
+              entity_id: button.home_energy_fleet_alpha_update_and_restart
+            confirmation:
+              text: Back up Local site, then install the selected HEO release and restart when safely
+                idle. Wait up to 60 minutes; active charging or export will not be stopped. New HEO actions
+                pause during maintenance; avoid approaching charge deadlines. Only this site is affected.
+          hold_action:
+            action: none
+          double_tap_action:
+            action: none
+        - entity: button.home_energy_fleet_alpha_restart
+          name: Restart
+          icon: mdi:restart
+          show_name: true
+          show_icon: false
+          tap_action:
+            action: perform-action
+            perform_action: button.press
+            target:
+              entity_id: button.home_energy_fleet_alpha_restart
+            confirmation:
+              text: Back up Local site, then restart Home Assistant when safely idle. Wait up to 60 minutes;
+                active charging or export will not be stopped. New HEO actions pause during maintenance;
+                avoid approaching charge deadlines. Only this site is affected.
+          hold_action:
+            action: none
+          double_tap_action:
+            action: none
+        - entity: button.home_energy_fleet_alpha_check_releases
+          name: Check releases
+          show_name: true
+          show_icon: false
+          tap_action:
+            action: perform-action
+            perform_action: button.press
+            target:
+              entity_id: button.home_energy_fleet_alpha_check_releases
+          hold_action:
+            action: none
+          double_tap_action:
+            action: none
   - type: grid
     cards:
     - type: markdown
@@ -308,137 +242,71 @@ views:
         | Forecast / measured | {{ a('forecast_cost') }} / {{ a('measured_cost') }} |
 
         _Last update: {{ a('last_update') }}_
-    - type: vertical-stack
-      cards:
-      - type: markdown
-        title: HEO maintenance
-        content: |
-          {% set e = 'sensor.home_energy_fleet_bravo_maintenance' %}
-          {% set phase = states(e) %}
-          {% set phases = {
-            'idle': 'Ready', 'waiting': 'Waiting for a safe time', 'backing_up': 'Creating backup',
-            'installing': 'Downloading HEO', 'checking': 'Checking configuration',
-            'restart_requested': 'Restarting / reconnecting', 'restart_pending': 'Restart needs checking',
-            'verified': 'Running verified', 'blocked': 'Waiting for a safety check',
-            'failed': 'Needs attention', 'interrupted': 'Interrupted — check the site',
-            'unknown': 'Outcome unknown — check the site', 'submitting': 'Sending request',
-            'initial_update_required': 'First update needed'
-          } %}
-          {% set reasons = {
-            'home_assistant_not_running': 'Home Assistant is not ready',
-            'heo_runtime_unavailable': 'HEO is not ready',
-            'heo_storage_untrusted': 'Saved control state needs checking',
-            'maintenance_storage_unavailable': 'Maintenance history is unavailable',
-            'battery_charge_session_active': 'Battery charging is active',
-            'battery_export_session_active': 'Battery export is active',
-            'battery_diagnostic_active': 'A battery test is active',
-            'battery_manual_control_active': 'Manual battery control is active',
-            'trip_charge_active': 'A trip charge is active',
-            'ev_full_charge_active': 'Charge to Full is active',
-            'battery_telemetry_unavailable': 'Battery readings are unavailable',
-            'battery_mode_feedback_unavailable': 'Battery mode cannot be confirmed',
-            'battery_not_self_use': 'Battery is not in Self Use',
-            'battery_force_target_not_clear': 'Forced battery targets are not clear',
-            'ev_session_active': 'EV charging is active',
-            'ev_reconciliation_pending': 'An EV command is awaiting confirmation',
-            'ev_recovery_pending': 'EV recovery is pending',
-            'ev_charging_target_active': 'An EV charging target is active',
-            'ev_feedback_unavailable': 'EV readings are unavailable',
-            'ev_physically_charging': 'The car is charging',
-            'ev_charge_switch_on': 'The car charge switch is on',
-            'ev_full_feedback_unavailable': 'Charge to Full state is unavailable',
-            'hacs_unavailable': 'HACS is not ready',
-            'hacs_capability_unavailable': 'HEO releases could not be loaded; check HACS',
-            'backup_not_verified': 'Backup could not be verified',
-            'backup_failed': 'Backup failed',
-            'configuration_invalid': 'Configuration needs correcting',
-            'maintenance_settings_changed': 'Settings changed during maintenance',
-            'maintenance_expired': 'Safe-time wait expired',
-            'maintenance_busy': 'Maintenance is already in progress',
-            'maintenance_verification_required': 'The previous restart needs checking',
-            'verification_failed': 'The restarted site did not pass verification',
-            'restart_not_observed': 'A completed restart was not observed',
-            'status_unavailable': 'Maintenance status is unavailable',
-            'initial_update_required': 'Install a maintenance-capable release first'
-          } %}
-          {% macro version(name) -%}
-            {%- set value = state_attr(e, name) -%}
-            {{- value if value is string and value else '—' -}}
-          {%- endmacro %}
-          {% set error = state_attr(e, 'error') %}
-          {% set blockers = state_attr(e, 'blockers') %}
-          {% set backup = state_attr(e, 'backup_verified') %}
-          **{{ phases.get(phase, 'Maintenance unavailable') }}**
-
-          | | |
-          |---|---|
-          | Running HEO | {{ version('running_version') }} |
-          | Downloaded HEO | {{ version('installed_version') }} |
-          | Backup | {{ 'Verified' if backup is sameas true else
-                         'Not yet verified' if backup is sameas false else '—' }} |
-          | Issue | {{ reasons.get(error, 'Needs a site check') if error else '—' }} |
-          | Waiting for | {% if blockers is iterable and blockers is not string and blockers %}
-            {%- for reason in blockers -%}{{ reasons.get(reason, 'An additional safety check') }}
-            {{- '; ' if not loop.last else '' }}{%- endfor -%}{% else %}—{% endif %} |
-
-          {% if phase == 'initial_update_required' %}
-          Install a maintenance-capable HEO release through HACS at this site first.
-          {% elif phase in ['unknown', 'unavailable', 'none'] %}
-          Check the site before retrying. No update or restart is automatically replayed.
-          {% endif %}
-          Downloaded does not mean running. A restart is verified separately.
-      - type: conditional
-        conditions:
-        - condition: state
-          entity: sensor.home_energy_fleet_bravo_maintenance
-          state_not: unknown
-        - condition: state
-          entity: sensor.home_energy_fleet_bravo_maintenance
-          state_not: unavailable
-        - condition: state
-          entity: sensor.home_energy_fleet_bravo_maintenance
-          state_not: initial_update_required
-        card:
-          type: vertical-stack
-          cards:
-          - type: entities
-            show_header_toggle: false
-            entities:
-            - entity: select.home_energy_fleet_bravo_release
-              name: Release
-          - type: horizontal-stack
-            cards:
-            - type: button
-              name: Update & restart
-              icon: mdi:update
-              show_state: false
-              tap_action:
-                action: perform-action
-                perform_action: button.press
-                target:
-                  entity_id: button.home_energy_fleet_bravo_update_and_restart
-                confirmation:
-                  text: Back up Remote site 1, then install the selected HEO release and restart when
-                    safely idle. Wait up to 60 minutes; active charging or export will not be stopped.
-                    New HEO actions pause during maintenance; avoid approaching charge deadlines. Only
-                    this site is affected.
-              hold_action:
-                action: none
-            - type: button
-              name: Restart
-              icon: mdi:restart
-              show_state: false
-              tap_action:
-                action: perform-action
-                perform_action: button.press
-                target:
-                  entity_id: button.home_energy_fleet_bravo_restart
-                confirmation:
-                  text: Back up Remote site 1, then restart Home Assistant when safely idle. Wait up to
-                    60 minutes; active charging or export will not be stopped. New HEO actions pause during
-                    maintenance; avoid approaching charge deadlines. Only this site is affected.
-              hold_action:
-                action: none
+    - type: entities
+      show_header_toggle: false
+      state_color: false
+      entities:
+      - type: buttons
+        entities:
+        - entity: select.home_energy_fleet_bravo_release
+          name: Release
+          show_name: true
+          show_icon: false
+          tap_action:
+            action: more-info
+          hold_action:
+            action: none
+          double_tap_action:
+            action: none
+        - entity: button.home_energy_fleet_bravo_update_and_restart
+          name: Update
+          icon: mdi:update
+          show_name: true
+          show_icon: false
+          tap_action:
+            action: perform-action
+            perform_action: button.press
+            target:
+              entity_id: button.home_energy_fleet_bravo_update_and_restart
+            confirmation:
+              text: Back up Remote site 1, then install the selected HEO release and restart when safely
+                idle. Wait up to 60 minutes; active charging or export will not be stopped. New HEO actions
+                pause during maintenance; avoid approaching charge deadlines. Only this site is affected.
+          hold_action:
+            action: none
+          double_tap_action:
+            action: none
+        - entity: button.home_energy_fleet_bravo_restart
+          name: Restart
+          icon: mdi:restart
+          show_name: true
+          show_icon: false
+          tap_action:
+            action: perform-action
+            perform_action: button.press
+            target:
+              entity_id: button.home_energy_fleet_bravo_restart
+            confirmation:
+              text: Back up Remote site 1, then restart Home Assistant when safely idle. Wait up to 60
+                minutes; active charging or export will not be stopped. New HEO actions pause during maintenance;
+                avoid approaching charge deadlines. Only this site is affected.
+          hold_action:
+            action: none
+          double_tap_action:
+            action: none
+        - entity: button.home_energy_fleet_bravo_check_releases
+          name: Check releases
+          show_name: true
+          show_icon: false
+          tap_action:
+            action: perform-action
+            perform_action: button.press
+            target:
+              entity_id: button.home_energy_fleet_bravo_check_releases
+          hold_action:
+            action: none
+          double_tap_action:
+            action: none
   - type: grid
     cards:
     - type: markdown
@@ -484,134 +352,68 @@ views:
         | Forecast / measured | {{ a('forecast_cost') }} / {{ a('measured_cost') }} |
 
         _Last update: {{ a('last_update') }}_
-    - type: vertical-stack
-      cards:
-      - type: markdown
-        title: HEO maintenance
-        content: |
-          {% set e = 'sensor.home_energy_fleet_charlie_maintenance' %}
-          {% set phase = states(e) %}
-          {% set phases = {
-            'idle': 'Ready', 'waiting': 'Waiting for a safe time', 'backing_up': 'Creating backup',
-            'installing': 'Downloading HEO', 'checking': 'Checking configuration',
-            'restart_requested': 'Restarting / reconnecting', 'restart_pending': 'Restart needs checking',
-            'verified': 'Running verified', 'blocked': 'Waiting for a safety check',
-            'failed': 'Needs attention', 'interrupted': 'Interrupted — check the site',
-            'unknown': 'Outcome unknown — check the site', 'submitting': 'Sending request',
-            'initial_update_required': 'First update needed'
-          } %}
-          {% set reasons = {
-            'home_assistant_not_running': 'Home Assistant is not ready',
-            'heo_runtime_unavailable': 'HEO is not ready',
-            'heo_storage_untrusted': 'Saved control state needs checking',
-            'maintenance_storage_unavailable': 'Maintenance history is unavailable',
-            'battery_charge_session_active': 'Battery charging is active',
-            'battery_export_session_active': 'Battery export is active',
-            'battery_diagnostic_active': 'A battery test is active',
-            'battery_manual_control_active': 'Manual battery control is active',
-            'trip_charge_active': 'A trip charge is active',
-            'ev_full_charge_active': 'Charge to Full is active',
-            'battery_telemetry_unavailable': 'Battery readings are unavailable',
-            'battery_mode_feedback_unavailable': 'Battery mode cannot be confirmed',
-            'battery_not_self_use': 'Battery is not in Self Use',
-            'battery_force_target_not_clear': 'Forced battery targets are not clear',
-            'ev_session_active': 'EV charging is active',
-            'ev_reconciliation_pending': 'An EV command is awaiting confirmation',
-            'ev_recovery_pending': 'EV recovery is pending',
-            'ev_charging_target_active': 'An EV charging target is active',
-            'ev_feedback_unavailable': 'EV readings are unavailable',
-            'ev_physically_charging': 'The car is charging',
-            'ev_charge_switch_on': 'The car charge switch is on',
-            'ev_full_feedback_unavailable': 'Charge to Full state is unavailable',
-            'hacs_unavailable': 'HACS is not ready',
-            'hacs_capability_unavailable': 'HEO releases could not be loaded; check HACS',
-            'backup_not_verified': 'Backup could not be verified',
-            'backup_failed': 'Backup failed',
-            'configuration_invalid': 'Configuration needs correcting',
-            'maintenance_settings_changed': 'Settings changed during maintenance',
-            'maintenance_expired': 'Safe-time wait expired',
-            'maintenance_busy': 'Maintenance is already in progress',
-            'maintenance_verification_required': 'The previous restart needs checking',
-            'verification_failed': 'The restarted site did not pass verification',
-            'restart_not_observed': 'A completed restart was not observed',
-            'status_unavailable': 'Maintenance status is unavailable',
-            'initial_update_required': 'Install a maintenance-capable release first'
-          } %}
-          {% macro version(name) -%}
-            {%- set value = state_attr(e, name) -%}
-            {{- value if value is string and value else '—' -}}
-          {%- endmacro %}
-          {% set error = state_attr(e, 'error') %}
-          {% set blockers = state_attr(e, 'blockers') %}
-          {% set backup = state_attr(e, 'backup_verified') %}
-          **{{ phases.get(phase, 'Maintenance unavailable') }}**
-
-          | | |
-          |---|---|
-          | Running HEO | {{ version('running_version') }} |
-          | Downloaded HEO | {{ version('installed_version') }} |
-          | Backup | {{ 'Verified' if backup is sameas true else
-                         'Not yet verified' if backup is sameas false else '—' }} |
-          | Issue | {{ reasons.get(error, 'Needs a site check') if error else '—' }} |
-          | Waiting for | {% if blockers is iterable and blockers is not string and blockers %}
-            {%- for reason in blockers -%}{{ reasons.get(reason, 'An additional safety check') }}
-            {{- '; ' if not loop.last else '' }}{%- endfor -%}{% else %}—{% endif %} |
-
-          {% if phase == 'initial_update_required' %}
-          Install a maintenance-capable HEO release through HACS at this site first.
-          {% elif phase in ['unknown', 'unavailable', 'none'] %}
-          Check the site before retrying. No update or restart is automatically replayed.
-          {% endif %}
-          Downloaded does not mean running. A restart is verified separately.
-      - type: conditional
-        conditions:
-        - condition: state
-          entity: sensor.home_energy_fleet_charlie_maintenance
-          state_not: unknown
-        - condition: state
-          entity: sensor.home_energy_fleet_charlie_maintenance
-          state_not: unavailable
-        - condition: state
-          entity: sensor.home_energy_fleet_charlie_maintenance
-          state_not: initial_update_required
-        card:
-          type: vertical-stack
-          cards:
-          - type: entities
-            show_header_toggle: false
-            entities:
-            - entity: select.home_energy_fleet_charlie_release
-              name: Release
-          - type: horizontal-stack
-            cards:
-            - type: button
-              name: Update & restart
-              icon: mdi:update
-              show_state: false
-              tap_action:
-                action: perform-action
-                perform_action: button.press
-                target:
-                  entity_id: button.home_energy_fleet_charlie_update_and_restart
-                confirmation:
-                  text: Back up Remote site 2, then install the selected HEO release and restart when
-                    safely idle. Wait up to 60 minutes; active charging or export will not be stopped.
-                    New HEO actions pause during maintenance; avoid approaching charge deadlines. Only
-                    this site is affected.
-              hold_action:
-                action: none
-            - type: button
-              name: Restart
-              icon: mdi:restart
-              show_state: false
-              tap_action:
-                action: perform-action
-                perform_action: button.press
-                target:
-                  entity_id: button.home_energy_fleet_charlie_restart
-                confirmation:
-                  text: Back up Remote site 2, then restart Home Assistant when safely idle. Wait up to
-                    60 minutes; active charging or export will not be stopped. New HEO actions pause during
-                    maintenance; avoid approaching charge deadlines. Only this site is affected.
-              hold_action:
-                action: none
+    - type: entities
+      show_header_toggle: false
+      state_color: false
+      entities:
+      - type: buttons
+        entities:
+        - entity: select.home_energy_fleet_charlie_release
+          name: Release
+          show_name: true
+          show_icon: false
+          tap_action:
+            action: more-info
+          hold_action:
+            action: none
+          double_tap_action:
+            action: none
+        - entity: button.home_energy_fleet_charlie_update_and_restart
+          name: Update
+          icon: mdi:update
+          show_name: true
+          show_icon: false
+          tap_action:
+            action: perform-action
+            perform_action: button.press
+            target:
+              entity_id: button.home_energy_fleet_charlie_update_and_restart
+            confirmation:
+              text: Back up Remote site 2, then install the selected HEO release and restart when safely
+                idle. Wait up to 60 minutes; active charging or export will not be stopped. New HEO actions
+                pause during maintenance; avoid approaching charge deadlines. Only this site is affected.
+          hold_action:
+            action: none
+          double_tap_action:
+            action: none
+        - entity: button.home_energy_fleet_charlie_restart
+          name: Restart
+          icon: mdi:restart
+          show_name: true
+          show_icon: false
+          tap_action:
+            action: perform-action
+            perform_action: button.press
+            target:
+              entity_id: button.home_energy_fleet_charlie_restart
+            confirmation:
+              text: Back up Remote site 2, then restart Home Assistant when safely idle. Wait up to 60
+                minutes; active charging or export will not be stopped. New HEO actions pause during maintenance;
+                avoid approaching charge deadlines. Only this site is affected.
+          hold_action:
+            action: none
+          double_tap_action:
+            action: none
+        - entity: button.home_energy_fleet_charlie_check_releases
+          name: Check releases
+          show_name: true
+          show_icon: false
+          tap_action:
+            action: perform-action
+            perform_action: button.press
+            target:
+              entity_id: button.home_energy_fleet_charlie_check_releases
+          hold_action:
+            action: none
+          double_tap_action:
+            action: none

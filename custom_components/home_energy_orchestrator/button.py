@@ -22,7 +22,8 @@ async def async_setup_entry(
     if (hub := entry.runtime_data.fleet_maintenance) is not None:
         async_add_entities(
             MaintenanceButton(hub, entry, target, action)
-            for target in hub.targets for action in ("update_and_restart", "restart")
+            for target in hub.targets
+            for action in ("update_and_restart", "restart", "check_releases")
         )
     async_add_entities(
         TestButton(entry.runtime_data, entry, description) for description in DESCRIPTIONS

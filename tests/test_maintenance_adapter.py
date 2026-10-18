@@ -76,6 +76,15 @@ async def _hacs(hass):
         display_installed_version="v0.12.39",
         update_repository=AsyncMock(),
     )
+
+    async def native_metadata_success(**kwargs):
+        # HACS replaces release-model and published-tag lists on a completed
+        # native metadata fetch, including a fetch with unchanged versions.
+        repository.releases.objects = list(repository.releases.objects)
+        repository.data.published_tags = list(repository.data.published_tags)
+        repository.data.releases = True
+
+    repository.update_repository.side_effect = native_metadata_success
     hacs = SimpleNamespace(
         system=SimpleNamespace(disabled=False),
         status=SimpleNamespace(startup=False),
@@ -106,9 +115,366 @@ async def test_catalog_binds_renamed_entity_by_repository_id(hass):
         "in_progress": False,
     }
     assert entity.entity_id == result["entity_id"]
-    hacs.repositories.get_by_full_name.assert_called_once_with(adapter.REPOSITORY)
+    # Rebind after acquiring the shared metadata lock, even for a warm read.
+    assert hacs.repositories.get_by_full_name.call_count == 2
+    hacs.repositories.get_by_full_name.assert_called_with(adapter.REPOSITORY)
     repository.update_repository.assert_not_called()
     assert not entity.calls
+
+
+async def test_explicit_refresh_updates_warm_catalog_and_does_not_install(hass, monkeypatch):
+    _, repository, entity = await _hacs(hass)
+    clock = [100.0]
+    monkeypatch.setattr(adapter, "monotonic", lambda: clock[0])
+    assert (await adapter.async_hacs_catalog(hass))["versions"][0] == "v0.12.40"
+
+    async def refresh(**kwargs):
+        assert kwargs == {"ignore_issues": True, "force": True}
+        repository.data.published_tags.insert(0, "v0.12.43")
+        repository.releases.objects = [
+            SimpleNamespace(tag_name="v0.12.43", draft=False, prerelease=False),
+            *repository.releases.objects,
+        ]
+
+    repository.update_repository.side_effect = refresh
+    result = await adapter.async_refresh_hacs_catalog(hass)
+    assert result["versions"] == ["v0.12.43", "v0.12.40", "v0.12.39"]
+    assert result["release_last_checked"].endswith("+00:00")
+    assert await adapter.async_refresh_hacs_catalog(hass) == result
+    clock[0] = 130.0
+    # Ordinary polling never gains a refresh timer, even after cooldown.
+    assert (await adapter.async_hacs_catalog(hass))["versions"] == result["versions"]
+    repository.update_repository.assert_awaited_once_with(ignore_issues=True, force=True)
+    assert (await adapter.async_refresh_hacs_catalog(hass))["versions"] == result["versions"]
+    assert repository.update_repository.await_count == 2
+    assert entity.calls == []
+
+
+@pytest.mark.parametrize("cold_first", [False, True])
+async def test_explicit_and_cold_refresh_share_one_inflight_operation(hass, cold_first):
+    _, repository, entity = await _hacs(hass)
+    releases = repository.releases.objects
+    repository.releases.objects = []
+    entered, finish = asyncio.Event(), asyncio.Event()
+
+    async def refresh(**kwargs):
+        entered.set()
+        await finish.wait()
+        repository.releases.objects = releases
+
+    repository.update_repository.side_effect = refresh
+    first_call = adapter.async_hacs_catalog if cold_first else adapter.async_refresh_hacs_catalog
+    second_call = adapter.async_refresh_hacs_catalog if cold_first else adapter.async_hacs_catalog
+    first = asyncio.create_task(first_call(hass))
+    await entered.wait()
+    others = [asyncio.create_task(second_call(hass)) for _ in range(3)]
+    await asyncio.sleep(0)
+    finish.set()
+    results = await asyncio.gather(first, *others)
+    assert all(result["versions"] == ["v0.12.40", "v0.12.39"] for result in results)
+    repository.update_repository.assert_awaited_once()
+    assert entity.calls == []
+
+
+@pytest.mark.parametrize("failure", ["provider", "empty", "malformed", "timeout"])
+async def test_failed_explicit_refresh_retains_catalog_without_retry_or_stale_install(
+    hass, monkeypatch, failure,
+):
+    _, repository, entity = await _hacs(hass)
+    clock = [100.0]
+    monkeypatch.setattr(adapter, "monotonic", lambda: clock[0])
+    previous = await adapter.async_hacs_catalog(hass)
+
+    async def refresh(**kwargs):
+        repository.releases.objects = []
+        if failure == "provider":
+            raise RuntimeError("Bearer PRIVATE at private host")
+        if failure == "malformed":
+            repository.data.published_tags = [None]
+        if failure == "timeout":
+            await asyncio.Event().wait()
+
+    repository.update_repository.side_effect = refresh
+    monkeypatch.setattr(adapter, "_CATALOG_REFRESH_TIMEOUT_SECONDS", 0.001)
+    for _ in range(2):
+        with pytest.raises(adapter.MaintenanceAdapterError) as error:
+            await adapter.async_refresh_hacs_catalog(hass)
+        assert str(error.value) in {"hacs_catalog_unsupported", "hacs_capability_unavailable"}
+        assert await adapter.async_hacs_catalog(hass) == previous
+    repository.update_repository.assert_awaited_once()
+    with pytest.raises(adapter.MaintenanceAdapterError):
+        await adapter.async_install(hass, "v0.12.40", Context())
+    assert not entity.calls
+    # A later explicit action, not a status read, may deliberately try again.
+    clock[0] = 130.0
+    repository.data.published_tags = ["v0.12.43"]
+
+    async def recover(**kwargs):
+        repository.releases.objects = [
+            SimpleNamespace(tag_name="v0.12.43", draft=False, prerelease=False),
+        ]
+
+    repository.update_repository.side_effect = recover
+    assert (await adapter.async_refresh_hacs_catalog(hass))["versions"] == ["v0.12.43"]
+    assert repository.update_repository.await_count == 2
+
+
+@pytest.mark.parametrize("after_success", [False, True])
+async def test_explicit_refresh_rejects_busy_install_even_during_cooldown(hass, after_success):
+    _, repository, entity = await _hacs(hass)
+    if after_success:
+        await adapter.async_refresh_hacs_catalog(hass)
+    calls_before = repository.update_repository.await_count
+    entity._attr_in_progress = True
+    with pytest.raises(adapter.MaintenanceAdapterError, match="hacs_install_busy"):
+        await adapter.async_refresh_hacs_catalog(hass)
+    assert repository.update_repository.await_count == calls_before
+    assert entity.calls == []
+
+
+async def test_install_starting_during_metadata_fetch_cannot_report_refresh_success(hass):
+    _, repository, entity = await _hacs(hass)
+
+    async def refresh(**kwargs):
+        entity._attr_in_progress = True
+
+    repository.update_repository.side_effect = refresh
+    with pytest.raises(adapter.MaintenanceAdapterError, match="hacs_install_busy"):
+        await adapter.async_refresh_hacs_catalog(hass)
+    repository.update_repository.assert_awaited_once()
+    assert entity.calls == []
+
+
+@pytest.mark.parametrize("change", ["repository", "entity", "provider"])
+async def test_explicit_refresh_revalidates_binding_after_native_await(hass, change):
+    hacs, repository, entity = await _hacs(hass)
+
+    async def refresh(**kwargs):
+        if change == "repository":
+            replacement = SimpleNamespace(**vars(repository))
+            hacs.repositories.get_by_full_name.return_value = replacement
+            entity.repository = replacement
+        elif change == "entity":
+            replacement = FakeHacsUpdate(repository)
+            replacement.entity_id = entity.entity_id
+            hass.data[DATA_COMPONENT].get_entity = Mock(return_value=replacement)
+        else:
+            hass.data["hacs"] = SimpleNamespace(**vars(hacs))
+
+    repository.update_repository.side_effect = refresh
+    with pytest.raises(adapter.MaintenanceAdapterError, match="hacs_entity_mismatch"):
+        await adapter.async_refresh_hacs_catalog(hass)
+    assert entity.calls == []
+
+
+@pytest.mark.parametrize("change", ["provider", "entity"])
+@pytest.mark.parametrize("soft_failure", [False, True])
+async def test_failed_refresh_catalog_cannot_cross_later_binding_replacement(
+    hass, change, soft_failure,
+):
+    hacs, repository, entity = await _hacs(hass)
+    await adapter.async_hacs_catalog(hass)
+
+    async def refresh(**kwargs):
+        repository.releases.objects = []
+        repository.data.releases = not soft_failure
+        raise RuntimeError("metadata failed")
+
+    repository.update_repository.side_effect = refresh
+    with pytest.raises(adapter.MaintenanceAdapterError, match="hacs_capability_unavailable"):
+        await adapter.async_refresh_hacs_catalog(hass)
+    assert (await adapter.async_hacs_catalog(hass))["versions"] == ["v0.12.40", "v0.12.39"]
+    if change == "provider":
+        hass.data["hacs"] = SimpleNamespace(**vars(hacs))
+    else:
+        replacement = FakeHacsUpdate(repository)
+        replacement.entity_id = entity.entity_id
+        hass.data[DATA_COMPONENT].get_entity = Mock(return_value=replacement)
+    with pytest.raises(adapter.MaintenanceAdapterError, match="hacs_capability_unavailable"):
+        await adapter.async_hacs_catalog(hass)
+    repository.update_repository.assert_awaited_once()
+    assert entity.calls == []
+
+
+async def test_parallel_status_cannot_replace_validated_catalog_with_partial_failed_fetch(hass):
+    _, repository, entity = await _hacs(hass)
+    previous = await adapter.async_hacs_catalog(hass)
+    entered, finish = asyncio.Event(), asyncio.Event()
+
+    async def refresh(**kwargs):
+        repository.data.published_tags = []  # A valid-looking partial native mutation.
+        entered.set()
+        await finish.wait()
+        raise RuntimeError("Bearer PRIVATE at private host")
+
+    repository.update_repository.side_effect = refresh
+    refresh_task = asyncio.create_task(adapter.async_refresh_hacs_catalog(hass))
+    await entered.wait()
+    status_task = asyncio.create_task(adapter.async_hacs_catalog(hass))
+    await asyncio.sleep(0)
+    assert not status_task.done()
+    finish.set()
+    with pytest.raises(adapter.MaintenanceAdapterError, match="hacs_capability_unavailable"):
+        await refresh_task
+    assert await status_task == previous
+    assert await adapter.async_hacs_catalog(hass) == previous
+    repository.update_repository.assert_awaited_once()
+    assert entity.calls == []
+
+
+async def test_cancelled_explicit_refresh_retains_choices_and_consumes_cooldown(hass):
+    _, repository, entity = await _hacs(hass)
+    previous = await adapter.async_hacs_catalog(hass)
+    entered = asyncio.Event()
+
+    async def refresh(**kwargs):
+        repository.releases.objects = []
+        entered.set()
+        await asyncio.Event().wait()
+
+    repository.update_repository.side_effect = refresh
+    task = asyncio.create_task(adapter.async_refresh_hacs_catalog(hass))
+    await entered.wait()
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    assert await adapter.async_hacs_catalog(hass) == previous
+    with pytest.raises(adapter.MaintenanceAdapterError, match="hacs_capability_unavailable"):
+        await adapter.async_refresh_hacs_catalog(hass)
+    repository.update_repository.assert_awaited_once()
+    assert entity.calls == []
+
+
+@pytest.mark.parametrize("tags", [None, (), {}, "v0.12.40", [None], ["v0.12.40", 42]])
+async def test_explicit_refresh_rejects_malformed_catalog_before_native_call(hass, tags):
+    _, repository, entity = await _hacs(hass)
+    repository.data.published_tags = tags
+    with pytest.raises(adapter.MaintenanceAdapterError, match="hacs_catalog_unsupported"):
+        await adapter.async_refresh_hacs_catalog(hass)
+    repository.update_repository.assert_not_called()
+    assert entity.calls == []
+
+
+async def test_explicit_refresh_retains_exact_stable_published_filters(hass):
+    _, repository, entity = await _hacs(hass)
+
+    async def refresh(**kwargs):
+        repository.data.published_tags = [
+            "v0.12.43", "v0.12.44", "v0.12.45", "v0.12.46rc1", "main", "v0.12.47",
+        ]
+        repository.releases.objects = [
+            SimpleNamespace(tag_name=tag, draft=draft, prerelease=prerelease)
+            for tag, draft, prerelease in [
+                ("v0.12.43", False, False), ("v0.12.44", True, False),
+                ("v0.12.45", False, True), ("v0.12.46rc1", False, False),
+                ("main", False, False), ("v0.12.48", False, False),
+                ("v0.12.47", None, False),
+            ]
+        ]
+
+    repository.update_repository.side_effect = refresh
+    assert (await adapter.async_refresh_hacs_catalog(hass))["versions"] == ["v0.12.43"]
+    assert entity.calls == []
+
+
+@pytest.mark.parametrize("soft_failure", [False, True])
+async def test_native_return_without_fresh_release_models_never_claims_checked_success(
+    hass, soft_failure,
+):
+    _, repository, entity = await _hacs(hass)
+    previous = await adapter.async_hacs_catalog(hass)
+    original_models = repository.releases.objects
+    original_tags = repository.data.published_tags
+
+    async def swallowed_or_noop(**kwargs):
+        # A swallowed HACS release-fetch error can return None, advance its
+        # last_fetched marker, and retain models/tags from an earlier fetch.
+        repository.last_fetched = 1790000000
+        if soft_failure:
+            repository.data.releases = False
+
+    repository.update_repository.side_effect = swallowed_or_noop
+    with pytest.raises(adapter.MaintenanceAdapterError) as error:
+        await adapter.async_refresh_hacs_catalog(hass)
+    assert error.value.code in {"hacs_capability_unavailable", "hacs_repository_mismatch"}
+    state = adapter._hydration(hass, repository)
+    assert state.last_checked is None
+    assert state.last_catalog == previous
+    assert repository.releases.objects is original_models
+    assert repository.data.published_tags is original_tags
+    assert await adapter.async_hacs_catalog(hass) == previous
+    if soft_failure:
+        with pytest.raises(adapter.MaintenanceAdapterError, match="hacs_repository_mismatch"):
+            await adapter.async_install(hass, "v0.12.40", Context())
+    assert entity.calls == []
+    repository.update_repository.assert_awaited_once_with(ignore_issues=True, force=True)
+
+
+async def test_unchanged_release_versions_with_new_native_models_is_a_verified_check(hass):
+    _, repository, entity = await _hacs(hass)
+    previous = await adapter.async_hacs_catalog(hass)
+    old_models = repository.releases.objects
+    result = await adapter.async_refresh_hacs_catalog(hass)
+    assert repository.releases.objects is not old_models
+    assert result["versions"] == previous["versions"]
+    assert result["release_last_checked"].endswith("+00:00")
+    assert entity.calls == []
+
+
+async def test_explicit_metadata_check_recovers_swallowed_hacs_release_failure(
+    hass, monkeypatch,
+):
+    _, repository, entity = await _hacs(hass)
+    clock = [100.0]
+    monkeypatch.setattr(adapter, "monotonic", lambda: clock[0])
+    previous = await adapter.async_hacs_catalog(hass)
+
+    async def soft_failure(**kwargs):
+        repository.data.releases = False
+
+    repository.update_repository.side_effect = soft_failure
+    with pytest.raises(adapter.MaintenanceAdapterError, match="hacs_capability_unavailable"):
+        await adapter.async_refresh_hacs_catalog(hass)
+    assert await adapter.async_hacs_catalog(hass) == previous
+    assert adapter._hydration(hass, repository).last_checked is None
+    with pytest.raises(adapter.MaintenanceAdapterError, match="hacs_repository_mismatch"):
+        await adapter.async_install(hass, "v0.12.40", Context())
+    with pytest.raises(adapter.MaintenanceAdapterError, match="hacs_capability_unavailable"):
+        await adapter.async_refresh_hacs_catalog(hass)
+    repository.update_repository.assert_awaited_once()
+    clock[0] = 130.0
+
+    async def recovery(**kwargs):
+        repository.data.releases = True
+        repository.data.published_tags = ["v0.12.43"]
+        repository.releases.objects = [
+            SimpleNamespace(tag_name="v0.12.43", draft=False, prerelease=False),
+        ]
+
+    repository.update_repository.side_effect = recovery
+    result = await adapter.async_refresh_hacs_catalog(hass)
+    assert result["versions"] == ["v0.12.43"]
+    assert result["release_last_checked"].endswith("+00:00")
+    assert (await adapter.async_hacs_catalog(hass))["versions"] == ["v0.12.43"]
+    assert repository.update_repository.await_count == 2
+    assert entity.calls == []
+
+
+async def test_release_false_without_exact_prior_catalog_cannot_use_or_autowarm_cache(hass):
+    _, repository, entity = await _hacs(hass)
+    repository.data.releases = False
+    with pytest.raises(adapter.MaintenanceAdapterError, match="hacs_capability_unavailable"):
+        await adapter.async_hacs_catalog(hass)
+    repository.update_repository.assert_not_called()
+    with pytest.raises(adapter.MaintenanceAdapterError, match="hacs_repository_mismatch"):
+        await adapter.async_install(hass, "v0.12.40", Context())
+    assert entity.calls == []
+    # Only an explicit metadata check can recover this known exact repository.
+    result = await adapter.async_refresh_hacs_catalog(hass)
+    assert result["versions"] == ["v0.12.40", "v0.12.39"]
+    assert repository.data.releases is True
+    repository.update_repository.assert_awaited_once()
+    assert entity.calls == []
 
 
 async def test_cold_boot_hydrates_native_hacs_cache_once(hass):

@@ -21,6 +21,14 @@ the native metadata read after exact installed-repository verification; malforme
 lists still fail closed. Persisted tag strings are not required to authorise a
 metadata read and are never sufficient to authorise installation.
 
+From v0.12.44, a separate administrator-only Check releases action can refresh
+warm metadata through the same native HACS provider. It requires compatible
+hub and node code, bounds the network wait, shares a short attempt cooldown and
+rejects concurrent HACS installation. It is independent of battery/EV activity:
+no backup, maintenance fence, policy pause, device command or restart is used.
+Normal status polling still does not fetch GitHub. Failed checks do not advance
+the last-success time or turn retained display choices into install authority.
+
 Remote targets require explicitly configured private origins and administrator
 credentials stored only on the hub. Monitoring accounts are not automatically
 elevated. Both the initiating hub user and node token must be current active

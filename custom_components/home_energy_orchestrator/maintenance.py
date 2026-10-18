@@ -133,6 +133,9 @@ class NodeMaintenance(DataUpdateCoordinator):
         )
         self._trusted = False
         self._restart_watchdog = None
+        self.release_refresh_state = "idle"
+        self.release_refresh_error = None
+        self.release_last_checked = None
 
     async def async_restore(self):
         """Read the audit only. Never reinstall, restart or fence on setup."""
@@ -225,7 +228,41 @@ class NodeMaintenance(DataUpdateCoordinator):
                 and not _same_version(catalog["installed_version"], self.running_version)
             ),
             "last_update": datetime.now(UTC).isoformat(),
+            **self._release_refresh_fields(),
         }
+
+    def _release_refresh_fields(self):
+        return {
+            "release_refresh_state": self.release_refresh_state,
+            "release_refresh_error": self.release_refresh_error,
+            "release_last_checked": self.release_last_checked,
+        }
+
+    async def async_refresh_releases(self, context):
+        """An administrator checks metadata, independent of active energy work."""
+        await async_require_admin(self.hass, context)
+        self.release_refresh_state = "checking"
+        self.release_refresh_error = None
+        self.async_set_updated_data((self.data or {}) | self._release_refresh_fields())
+        try:
+            result = await adapter.async_refresh_hacs_catalog(self.hass)
+        except asyncio.CancelledError:
+            self.release_refresh_state = "failed"
+            self.release_refresh_error = "hacs_capability_unavailable"
+            self.async_set_updated_data((self.data or {}) | self._release_refresh_fields())
+            raise
+        except adapter.MaintenanceAdapterError as failure:
+            self.release_refresh_state = "failed"
+            self.release_refresh_error = failure.code
+        except Exception:
+            self.release_refresh_state = "failed"
+            self.release_refresh_error = "hacs_capability_unavailable"
+        else:
+            self.release_refresh_state = "ready"
+            self.release_last_checked = result["release_last_checked"]
+        status = await self.async_status()
+        self.async_set_updated_data(status)
+        return status
 
     async def async_submit(
         self,

@@ -84,10 +84,27 @@ class MaintenanceButton(MaintenanceEntity, ButtonEntity):
     def __init__(self, hub, entry, target, action):
         self.target = target
         self.action = action
-        label = "Update & restart when safe" if action == "update_and_restart" else "Restart"
+        label = {
+            "update_and_restart": "Update & restart when safe",
+            "restart": "Restart",
+            "check_releases": "Check releases",
+        }[action]
         super().__init__(
             hub, entry, "button", f"fleet_{target['key']}_{action}", f"{target['name']} · {label}"
         )
 
     async def async_press(self):
+        if self.action == "check_releases":
+            from homeassistant.exceptions import HomeAssistantError
+
+            result = await self.coordinator.async_check_releases(self.target["key"], self._context)
+            if result.get("release_refresh_state") == "failed":
+                message = (
+                    "Update this site's HEO before using Check releases. "
+                    "Its existing release list is unchanged."
+                    if result.get("release_refresh_error") == "release_refresh_unsupported"
+                    else "Could not check releases. Check the site's HACS connection and try again."
+                )
+                raise HomeAssistantError(message)
+            return
         await self.coordinator.async_request(self.target["key"], self.action, self._context)

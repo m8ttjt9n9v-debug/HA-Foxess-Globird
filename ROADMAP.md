@@ -4,6 +4,12 @@ Status here describes behavioral parity, not merely the presence of code.
 
 ## Guarded per-site Fleet maintenance
 
+- [x] Add an explicit administrator-only per-site Check releases action through
+  native HACS, including warm-cache/new-publication regression coverage, bounded
+  shared cooldown, clear failures and old-node compatibility. Keep normal status
+  polling cache-only and metadata checks independent of update/restart policy.
+- [ ] Publish and qualify the explicit release check on the pilot and an
+  individually approved remote node; no automatic remote rollout.
 - [x] Add administrator-only backend dispatch, explicit trusted targets and
   native per-site release selection/update/restart entities, without extending
   the export dispatcher or creating a generic privileged-service proxy.

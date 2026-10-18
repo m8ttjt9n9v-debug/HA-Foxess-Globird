@@ -456,11 +456,10 @@ def build_controls_section() -> dict:
 
 
 def build_maintenance_card(site: str, label: str) -> dict:
-    """One optional node at a time; never repurpose the Fleet export dispatcher."""
+    """One quiet native text row; all privileged actions still use the node."""
     if not re.fullmatch(r"[a-z][a-z0-9_]{0,47}", site):
         raise ValueError("Use a configured maintenance site key")
     prefix = f"home_energy_fleet_{site}_"
-    status = f"sensor.{prefix}maintenance"
 
     def button(name: str, icon: str, action: str) -> dict:
         purpose = (
@@ -469,10 +468,11 @@ def build_maintenance_card(site: str, label: str) -> dict:
             else "restart Home Assistant"
         )
         return {
-            "type": "button",
+            "entity": f"button.{prefix}{action}",
             "name": name,
             "icon": icon,
-            "show_state": False,
+            "show_name": True,
+            "show_icon": False,
             "tap_action": {
                 "action": "perform-action",
                 "perform_action": "button.press",
@@ -485,39 +485,42 @@ def build_maintenance_card(site: str, label: str) -> dict:
                 },
             },
             "hold_action": {"action": "none"},
+            "double_tap_action": {"action": "none"},
         }
 
     return {
-        "type": "vertical-stack",
-        "cards": [
+        "type": "entities",
+        "show_header_toggle": False,
+        "state_color": False,
+        "entities": [
             {
-                "type": "markdown",
-                "title": "HEO maintenance",
-                "content": MAINTENANCE_CARD_TEMPLATE.replace("__SITE__", site),
-            },
-            {
-                "type": "conditional",
-                "conditions": [
-                    {"condition": "state", "entity": status, "state_not": value}
-                    for value in ("unknown", "unavailable", "initial_update_required")
+                "type": "buttons",
+                "entities": [
+                    {
+                        "entity": f"select.{prefix}release",
+                        "name": "Release",
+                        "show_name": True,
+                        "show_icon": False,
+                        "tap_action": {"action": "more-info"},
+                        "hold_action": {"action": "none"},
+                        "double_tap_action": {"action": "none"},
+                    },
+                    button("Update", "mdi:update", "update_and_restart"),
+                    button("Restart", "mdi:restart", "restart"),
+                    {
+                        "entity": f"button.{prefix}check_releases",
+                        "name": "Check releases",
+                        "show_name": True,
+                        "show_icon": False,
+                        "tap_action": {
+                            "action": "perform-action",
+                            "perform_action": "button.press",
+                            "target": {"entity_id": f"button.{prefix}check_releases"},
+                        },
+                        "hold_action": {"action": "none"},
+                        "double_tap_action": {"action": "none"},
+                    },
                 ],
-                "card": {
-                    "type": "vertical-stack",
-                    "cards": [
-                        {
-                            "type": "entities",
-                            "show_header_toggle": False,
-                            "entities": [{"entity": f"select.{prefix}release", "name": "Release"}],
-                        },
-                        {
-                            "type": "horizontal-stack",
-                            "cards": [
-                                button("Update & restart", "mdi:update", "update_and_restart"),
-                                button("Restart", "mdi:restart", "restart"),
-                            ],
-                        },
-                    ],
-                },
             },
         ],
     }

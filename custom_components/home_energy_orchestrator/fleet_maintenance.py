@@ -123,6 +123,16 @@ def _sanitize(value: object) -> dict[str, object]:
     error = value.get("error")
     if isinstance(error, str):
         result["error"] = error if error in _BLOCKERS else "node_reported_error"
+    refresh_state = value.get("release_refresh_state")
+    if isinstance(refresh_state, str) and refresh_state in {"idle", "checking", "ready", "failed"}:
+        result["release_refresh_state"] = refresh_state
+    if (checked := _timestamp(value.get("release_last_checked"))) is not None:
+        result["release_last_checked"] = checked
+    refresh_error = value.get("release_refresh_error")
+    if isinstance(refresh_error, str):
+        result["release_refresh_error"] = (
+            refresh_error if refresh_error in _BLOCKERS else "release_refresh_failed"
+        )
     return result
 
 
@@ -376,6 +386,56 @@ class FleetMaintenanceHub(DataUpdateCoordinator[dict[str, dict[str, object]]]):
             if generations[key] == self._generation[key] and not self._locks[key].locked():
                 data[key] = response
         return data
+
+    async def async_check_releases(self, key: str, context: Context) -> dict[str, object]:
+        """Explicit native HACS metadata check only; no maintenance admission/write."""
+        await async_require_admin(self.hass, context)
+        target = self._target(key)
+        lock = self._locks[key]
+        if lock.locked():
+            raise HomeAssistantError("HEO maintenance request is already in progress")
+        async with lock:
+            previous = dict(self.data[key])
+            self._generation[key] += 1
+            generation = self._generation[key]
+            self.async_set_updated_data(
+                self.data | {key: previous | {
+                    "release_refresh_state": "checking", "release_refresh_error": None,
+                }}
+            )
+            try:
+                if target["local"]:
+                    node = self.hass.data.get(_NODE)
+                    refresh = getattr(node, "async_refresh_releases", None)
+                    value = await refresh(context) if refresh is not None else {}
+                else:
+                    value = await self._remote(target, "maintenance_refresh_releases", {})
+                if value == {}:
+                    result = previous | {
+                        "release_refresh_state": "failed",
+                        "release_refresh_error": "release_refresh_unsupported",
+                    }
+                else:
+                    result = _sanitize(value)
+                    if result.get("schema_version") != 1 or result.get(
+                        "release_refresh_state"
+                    ) not in {"ready", "failed"}:
+                        raise ValueError("unusable_release_refresh")
+            except asyncio.CancelledError:
+                if self._generation[key] == generation:
+                    self.async_set_updated_data(self.data | {key: previous | {
+                        "release_refresh_state": "failed",
+                        "release_refresh_error": "release_refresh_failed",
+                    }})
+                raise
+            except Exception:
+                result = previous | {
+                    "release_refresh_state": "failed",
+                    "release_refresh_error": "release_refresh_failed",
+                }
+            if self._generation[key] == generation:
+                self.async_set_updated_data(self.data | {key: result})
+            return result
 
     async def async_request(self, key: str, action: str, context: Context) -> dict[str, object]:
         """Submit once; an ambiguous result is unknown, never permission to retry."""

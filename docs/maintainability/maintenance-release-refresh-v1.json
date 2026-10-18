@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "extension": "explicit_native_hacs_release_refresh_v1",
+  "scope": "Additive metadata-only Fleet control; original maintenance entities and audit journal remain unchanged.",
+  "entity_pattern_count": 1,
+  "entity_patterns": [
+    {
+      "class": "MaintenanceButton",
+      "scope": "configured_fleet_site",
+      "platform": "button",
+      "key_template": "fleet_{site_key}_check_releases",
+      "unique_id_template": "{config_entry_id}_fleet_{site_key}_check_releases",
+      "default_entity_id_template": "button.home_energy_fleet_{site_key}_check_releases"
+    }
+  ],
+  "node_status_attributes": [
+    "release_last_checked",
+    "release_refresh_error",
+    "release_refresh_state"
+  ],
+  "fleet_status_allowed_attributes": [
+    "release_last_checked",
+    "release_refresh_error",
+    "release_refresh_state"
+  ]
+}

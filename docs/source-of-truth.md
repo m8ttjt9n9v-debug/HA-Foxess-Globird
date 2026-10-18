@@ -39,6 +39,18 @@ rather than retried each status cycle. After the await, the exact binding is
 checked again. Stable tag syntax never replaces the published non-draft/
 non-prerelease metadata checks.
 
+From v0.12.44, an explicit administrator-only per-site **Check releases** action
+can refresh a populated catalogue through that exact site's existing HACS
+provider. Normal status polling remains cache-only. One shared repository lock,
+bounded native refresh and 30-second attempt cooldown prevent overlapping or
+repeated GitHub calls. Refresh state/error/last-success time are additive fields,
+not maintenance audit phases or permission to install. Failure preserves only
+validated choices under an unchanged trustworthy binding; it never authorises
+a download from stale data. Both hub and node support are required; old nodes
+report unsupported rather than receiving a generic remote service or fallback
+updater. This metadata-only action needs no battery/EV idle admission and does
+not acquire an actuator fence, change settings, install or restart anything.
+
 Every HEO entry on the target host must have trusted idle runtime/session and
 fresh physical evidence. Existing locks are drained and a short process-local
 write fence covers the backup/install/restart boundary; no stored control switch

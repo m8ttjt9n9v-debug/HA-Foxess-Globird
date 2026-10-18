@@ -92,9 +92,18 @@ calling the buttons or services directly.
 ## Dashboard controls
 
 The [reusable Fleet dashboard](../examples/fleet-dashboard.yaml) puts a small
-maintenance card beneath each site's existing monitoring card. It retains the
+single-line maintenance row beneath each site's existing monitoring card. It retains the
 separate manual Export/Stop controls at the top. Maintenance does not use that
 export dispatcher and has no **Update all** or **Restart all** action.
+
+The row uses small native text controls, without a heading or large buttons:
+**Release · Update · Restart · Check releases**. Release opens the site's release picker.
+Update still means update **and restart**, and both privileged actions retain their confirmation prompts and
+server-side administrator/safety checks. Controls do not bypass an unavailable
+site or missing initial installation. The detailed status Markdown template is
+retained for an optional diagnostic view, not displayed in the default row.
+Detailed progress is also available in the site's maintenance entity more-info
+dialog through Home Assistant's entity search; it does not occupy this row.
 
 For the example `alpha` target, the maintenance entities are:
 
@@ -104,12 +113,37 @@ For the example `alpha` target, the maintenance entities are:
 | `select.home_energy_fleet_alpha_release` | Select a release this site's HACS currently offers |
 | `button.home_energy_fleet_alpha_update_and_restart` | Back up, update and restart when safely idle |
 | `button.home_energy_fleet_alpha_restart` | Back up and restart when safely idle |
+| `button.home_energy_fleet_alpha_check_releases` | Ask this site's HACS to check GitHub for releases; no installation or restart |
 
 The other cards use their own configured keys. Confirm the final entity IDs;
 registered IDs and personal renames remain user-owned. The release selector is
 not a text box for branches, commit IDs or download addresses. The node checks
 the current HACS catalogue again before installation; it does not reinterpret
 the selection as whatever happens to be “latest” later.
+
+### Check for newly published releases
+
+Click **Check releases** when a new release is missing from the picker. Fleet
+asks that site's existing HACS integration to refresh its release information
+from GitHub, then updates the choices. This is only a metadata check: it does
+not select a version, download integration code, create a backup, restart Home
+Assistant, pause automation or issue battery/EV commands. Normal charging and
+export do not need to stop for this check.
+
+Both the hub and the target need v0.12.44 or newer for this action. An older
+site gives a clear update-first message and retains its existing choices;
+there is no alternate privileged remote-command route. Bootstrap through the
+site's normal HACS metadata refresh and controlled update once.
+
+Normal Fleet polling still reads status about every minute; it does not check
+GitHub every minute. Explicit checks share a short 30-second cooldown for the
+same HACS repository, including failed attempts. Connection failures are shown
+as failed checks, not successful refreshes. Last-known validated choices can
+remain visible while their exact HACS binding remains trustworthy; the installer
+independently verifies current published membership before any code download.
+The maintenance sensor's `release_refresh_state`, `release_refresh_error` and
+`release_last_checked` distinguish the release check from an update/restart.
+Checking releases never clears an existing maintenance warning or audit record.
 
 Before changing a deployed dashboard, fetch and back up its **fresh live
 configuration** and compare it with any local copy. Start from the live layout,

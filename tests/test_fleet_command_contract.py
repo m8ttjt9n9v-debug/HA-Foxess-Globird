@@ -17,6 +17,7 @@ from pytest_homeassistant_custom_component.test_util.aiohttp import AiohttpClien
 from scripts.fleet_command_contract import (
     ACK,
     DISPATCH,
+    MAINTENANCE_CARD_TEMPLATE,
     OPERATIONS,
     REQUEST,
     RESULTS,
@@ -133,22 +134,24 @@ def test_examples_are_sanitized_and_preserve_three_site_columns():
 @pytest.mark.parametrize("site", ["alpha", "bravo", "charlie"])
 def test_maintenance_buttons_are_per_site_confirmed_native_entities(site):
     card = build_maintenance_card(site, "Example site")
-    assert card["type"] == "vertical-stack"
-    status, conditional = card["cards"]
-    assert status["title"] == "HEO maintenance"
-    assert f"sensor.home_energy_fleet_{site}_maintenance" in status["content"]
-    assert [condition["state_not"] for condition in conditional["conditions"]] == [
-        "unknown",
-        "unavailable",
-        "initial_update_required",
+    assert card["type"] == "entities" and card["show_header_toggle"] is False
+    assert "title" not in card and "cards" not in card
+    assert len(card["entities"]) == 1
+    row = card["entities"][0]
+    assert row["type"] == "buttons"
+    release, update, restart, check = row["entities"]
+    assert [b["name"] for b in row["entities"]] == [
+        "Release", "Update", "Restart", "Check releases",
     ]
-    controls = conditional["card"]["cards"]
-    assert controls[0]["show_header_toggle"] is False
-    assert controls[0]["entities"] == [
-        {"entity": f"select.home_energy_fleet_{site}_release", "name": "Release"}
-    ]
-    buttons = controls[1]["cards"]
-    assert [button["name"] for button in buttons] == ["Update & restart", "Restart"]
+    assert all(b["show_name"] and not b["show_icon"] for b in row["entities"])
+    assert release["entity"] == f"select.home_energy_fleet_{site}_release"
+    assert release["tap_action"] == {"action": "more-info"}
+    assert check["tap_action"] == {
+        "action": "perform-action", "perform_action": "button.press",
+        "target": {"entity_id": f"button.home_energy_fleet_{site}_check_releases"},
+    }
+    assert "confirmation" not in check["tap_action"]
+    buttons = [update, restart]
     for button, action in zip(buttons, ("update_and_restart", "restart"), strict=True):
         tap = button["tap_action"]
         assert tap["perform_action"] == "button.press"
@@ -156,6 +159,7 @@ def test_maintenance_buttons_are_per_site_confirmed_native_entities(site):
         assert "Only this site" in tap["confirmation"]["text"]
         assert "60 minutes" in tap["confirmation"]["text"]
         assert button["hold_action"] == {"action": "none"}
+        assert button["double_tap_action"] == {"action": "none"}
     assert "rest_command" not in repr(card)
     assert "update.install" not in repr(card)
     assert "homeassistant.restart" not in repr(card)
@@ -175,8 +179,9 @@ async def test_maintenance_status_distinguishes_running_downloaded_and_backup(ha
             "blockers": ["battery_export_session_active", "ev_charge_switch_on"],
         },
     )
-    card = build_maintenance_card("bravo", "Remote site 1")["cards"][0]
-    content = Template(card["content"], hass).async_render(parse_result=False)
+    content = Template(MAINTENANCE_CARD_TEMPLATE.replace("__SITE__", "bravo"), hass).async_render(
+        parse_result=False
+    )
     assert "**Restart needs checking**" in content
     assert "| Running HEO | 0.12.39 |" in content
     assert "| Downloaded HEO | v0.12.40 |" in content
@@ -190,8 +195,9 @@ async def test_maintenance_status_distinguishes_running_downloaded_and_backup(ha
 @pytest.mark.parametrize("phase", ["unknown", "unavailable", "initial_update_required"])
 async def test_maintenance_status_does_not_invent_running_version_or_backup(hass, phase):
     hass.states.async_set("sensor.home_energy_fleet_alpha_maintenance", phase)
-    card = build_maintenance_card("alpha", "Local site")["cards"][0]
-    content = Template(card["content"], hass).async_render(parse_result=False)
+    content = Template(MAINTENANCE_CARD_TEMPLATE.replace("__SITE__", "alpha"), hass).async_render(
+        parse_result=False
+    )
     assert "| Running HEO | — |" in content
     assert "| Downloaded HEO | — |" in content
     assert "| Backup | — |" in content
@@ -211,8 +217,9 @@ async def test_maintenance_backup_false_and_unrecognised_codes_are_plain_languag
             "error": "node_reported_error",
         },
     )
-    card = build_maintenance_card("alpha", "Local site")["cards"][0]
-    content = Template(card["content"], hass).async_render(parse_result=False)
+    content = Template(MAINTENANCE_CARD_TEMPLATE.replace("__SITE__", "alpha"), hass).async_render(
+        parse_result=False
+    )
     assert "Waiting for a safe time" in content
     assert "Not yet verified" in content
     assert "An additional safety check" in content

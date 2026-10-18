@@ -99,6 +99,9 @@ def register_services(hass: HomeAssistant) -> None:
     async def maintenance_status(call):
         return await hass.data[NODE_KEY].async_status()
 
+    async def maintenance_refresh_releases(call):
+        return await hass.data[NODE_KEY].async_refresh_releases(call.context)
+
     async def maintenance_request(call):
         return await hass.data[NODE_KEY].async_submit(
             "update_and_restart" if call.service == "maintenance_update_and_restart" else "restart",
@@ -109,6 +112,10 @@ def register_services(hass: HomeAssistant) -> None:
     hass.services.async_register(
         DOMAIN, "maintenance_status", maintenance_status, vol.Schema({}),
         supports_response=SupportsResponse.ONLY,
+    )
+    hass.services.async_register(
+        DOMAIN, "maintenance_refresh_releases", maintenance_refresh_releases, vol.Schema({}),
+        supports_response=SupportsResponse.OPTIONAL,
     )
     for action in ("maintenance_update_and_restart", "maintenance_restart"):
         fields = {
@@ -132,6 +139,8 @@ def register_services(hass: HomeAssistant) -> None:
         if call.service == "fleet_maintenance_refresh":
             await hub.async_refresh()
             return {}
+        if call.service == "fleet_maintenance_check_releases":
+            return await hub.async_check_releases(call.data["site"], call.context)
         return await hub.async_request(
             call.data["site"],
             "update_and_restart" if call.service == "fleet_maintenance_update" else "restart",
@@ -139,7 +148,7 @@ def register_services(hass: HomeAssistant) -> None:
         )
 
     for action in ("fleet_maintenance_update", "fleet_maintenance_restart",
-                   "fleet_maintenance_refresh"):
+                   "fleet_maintenance_refresh", "fleet_maintenance_check_releases"):
         hass.services.async_register(
             DOMAIN, action, fleet_request,
             vol.Schema({} if action.endswith("refresh") else {vol.Required("site"): str}),
@@ -156,6 +165,7 @@ def unregister_services(hass: HomeAssistant) -> None:
     for name in (
         "maintenance_status", "maintenance_update_and_restart", "maintenance_restart",
         "fleet_maintenance_update", "fleet_maintenance_restart", "fleet_maintenance_refresh",
+        "maintenance_refresh_releases", "fleet_maintenance_check_releases",
     ):
         hass.services.async_remove(DOMAIN, name)
 

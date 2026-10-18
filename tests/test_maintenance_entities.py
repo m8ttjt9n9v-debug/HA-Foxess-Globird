@@ -44,6 +44,8 @@ SERVICES = (
     "fleet_maintenance_update",
     "fleet_maintenance_restart",
     "fleet_maintenance_refresh",
+    "maintenance_refresh_releases",
+    "fleet_maintenance_check_releases",
 )
 
 
@@ -236,7 +238,7 @@ async def test_explicit_yaml_local_hub_adds_exact_native_controls_without_comman
     assert hass.states.get(_id(hass, entry, "sensor", "fleet_alpha_maintenance")).state == "idle"
     release = hass.states.get(_id(hass, entry, "select", "fleet_alpha_release"))
     assert release.attributes["options"] == CATALOG["versions"]
-    for action in ("update_and_restart", "restart"):
+    for action in ("update_and_restart", "restart", "check_releases"):
         assert hass.states.get(_id(hass, entry, "button", f"fleet_alpha_{action}")) is not None
     assert hub.selected_versions == {}
     assert events == []
@@ -382,6 +384,7 @@ async def test_user_renamed_maintenance_entities_and_boot_identity_survive_reloa
         ("select", "fleet_alpha_release"),
         ("button", "fleet_alpha_update_and_restart"),
         ("button", "fleet_alpha_restart"),
+        ("button", "fleet_alpha_check_releases"),
     ]
     for index, (platform, key) in enumerate(identities):
         registry.async_update_entity(

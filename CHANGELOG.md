@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.12.44 — Check Fleet releases on demand
+
+- Add a small per-site Check releases button alongside the existing compact
+  Release, Update and Restart controls. It asks that site's verified native
+  HACS provider to refresh GitHub release metadata, then updates Fleet choices.
+  It does not select or install a version, restart Home Assistant, pause control
+  or issue battery/EV commands; normal charging need not stop for a check.
+- Keep normal minute-by-minute status polling cache-only. Explicit checks are
+  administrator-only, bounded and share a 30-second attempt cooldown with
+  concurrent checks. Recheck the exact provider/repository/entity binding after
+  a fetch, retain strict published stable-release filtering and keep final
+  installer validation separate. Failed checks remain visible, with only
+  trustworthy last-known choices retained and no automatic retry loop.
+- Expose additive release-check state, safe error and last-success time without
+  changing maintenance audit phases or persistent journals. Older nodes report
+  that a site update is needed rather than using a generic remote-command
+  fallback. Both hub and target need this capability. HACS code installation
+  does not replace live dashboards; import or merge the reusable compact row
+  separately. Add warm-cache, permission, concurrency and real HA button tests.
+
 ## 0.12.43 — Combined solar and battery EV backfill
 
 - When morning solar charging and pre-free backfill are both enabled, pace

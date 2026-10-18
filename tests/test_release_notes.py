@@ -30,6 +30,17 @@ def test_release_text_uses_only_the_matching_changelog_section() -> None:
     )
 
 
+def test_01244_describes_explicit_metadata_check_not_an_automatic_updater() -> None:
+    title, notes = release_text("v0.12.44", CHANGELOG_PATH.read_text(encoding="utf-8"))
+    assert title == "v0.12.44 — Check Fleet releases on demand"
+    assert "Check releases" in notes and "metadata" in notes
+    assert "30-second attempt cooldown" in notes
+    assert "normal charging need not stop" in notes
+    assert "Both hub and target" in notes and "Older nodes" in notes
+    assert "does not replace live dashboards" in notes
+    assert not Version("0.12.44").is_prerelease
+
+
 def test_01239_has_stable_recovery_and_readonly_fleet_notes() -> None:
     title, notes = release_text("v0.12.39", CHANGELOG_PATH.read_text(encoding="utf-8"))
     assert title == "v0.12.39 — Export restart recovery and Fleet versions"
