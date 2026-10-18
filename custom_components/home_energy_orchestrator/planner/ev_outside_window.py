@@ -11,6 +11,7 @@ from datetime import datetime, timedelta
 from math import floor, isfinite
 
 from .ev import (
+    NON_OVERRIDE_CHARGE_LIMIT_MAX_PERCENT,
     ChargeLimitInputs,
     EvCurrentDecision,
     estimate_vehicle_energy_to_target_kwh,
@@ -64,6 +65,7 @@ class MeasuredSolarAdjustmentState:
     changed_at: datetime | None = None
     pending_current_a: float | None = None
     pending_since: datetime | None = None
+    battery_current_a: float | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -84,6 +86,7 @@ def rate_limit_measured_solar_current(
     charger_minimum_a: float,
     current_step_a: float,
     immediate_curtailment: bool,
+    require_stable_target: bool = True,
 ) -> MeasuredSolarAdjustment:
     """Accept stable solar targets no more frequently than every 10 minutes.
 
@@ -92,7 +95,10 @@ def rate_limit_measured_solar_current(
     that alternates adjacent stepped currents cannot repeatedly command Tessie.
     A valid grid-import observation may reduce an active target immediately;
     any non-eligible solar decision is handled by the caller as an immediate
-    return to the protected baseline.
+    return to the protected baseline. Combined pre-free pacing instead takes
+    the latest target each interval: the moving energy/deadline must not
+    restart the pending clock indefinitely. Independent solar keeps its
+    original unchanged-target hysteresis by default.
     """
     values = (requested_current_a, charger_minimum_a, current_step_a)
     if (
@@ -137,7 +143,10 @@ def rate_limit_measured_solar_current(
     )
     if (
         now - state.changed_at >= MEASURED_SOLAR_ADJUSTMENT_INTERVAL
-        and now - pending_since >= MEASURED_SOLAR_ADJUSTMENT_INTERVAL
+        and (
+            not require_stable_target
+            or now - pending_since >= MEASURED_SOLAR_ADJUSTMENT_INTERVAL
+        )
     ):
         accepted = MeasuredSolarAdjustmentState(
             phase=policy_phase,
@@ -613,6 +622,48 @@ def plan_pre_free_current(inputs: PreFreeCurrentInputs) -> EvCurrentDecision:
         round(min(inputs.baseline_a + safe_additional, inputs.current_ceiling_a), 3),
         "pre_free_live_current",
     )
+
+
+def plan_combined_pre_free_current(
+    inputs: PreFreeCurrentInputs,
+    *,
+    solar_surplus_kw: float,
+    charger_minimum_a: float,
+    telemetry_valid: bool,
+) -> EvCurrentDecision:
+    """Add raw measured solar to already house-protected AC battery pacing.
+
+    Quantise once after combining power. The saved outside-window ceiling
+    continues to cap TOTAL EV power, not merely the battery contribution.
+    """
+    _validate_pre_free_current(inputs)
+    if not isfinite(solar_surplus_kw) or not isfinite(charger_minimum_a) or charger_minimum_a < 0:
+        raise ValueError("combined pre-free power and minimum must be finite")
+    if not telemetry_valid:
+        return EvCurrentDecision(inputs.baseline_a, "pre_free_combined_telemetry_unavailable")
+    if (
+        not inputs.session_active
+        or inputs.hours_until_free <= 0
+        or inputs.planned_energy_kwh <= 0
+        or inputs.vehicle_soc_percent
+        >= min(inputs.vehicle_soft_limit_percent, NON_OVERRIDE_CHARGE_LIMIT_MAX_PERCENT)
+    ):
+        return EvCurrentDecision(inputs.baseline_a, "pre_free_inactive")
+    total_a = (
+        inputs.baseline_a
+        + (inputs.planned_energy_kwh / inputs.hours_until_free + max(solar_surplus_kw, 0.0))
+        * 1000
+        / inputs.voltage_v
+        / inputs.phase_count
+    )
+    target = round(
+        floor(min(total_a, inputs.current_ceiling_a) / inputs.current_step_a)
+        * inputs.current_step_a,
+        3,
+    )
+    if target < charger_minimum_a:
+        target = inputs.baseline_a
+    return EvCurrentDecision(target, "pre_free_combined")
 
 
 def select_outside_window_current(

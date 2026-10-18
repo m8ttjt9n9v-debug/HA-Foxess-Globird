@@ -196,6 +196,11 @@ class EvPersistenceState:
                     if self.measured_solar_adjustment.pending_since is not None
                     else None
                 ),
+                **(
+                    {"battery_current_a": self.measured_solar_adjustment.battery_current_a}
+                    if self.measured_solar_adjustment.battery_current_a is not None
+                    else {}
+                ),
             },
             "daily_backfill": {
                 "cycle_ready_at": (
@@ -307,17 +312,24 @@ def _measured_solar_adjustment(
     changed_raw = payload.get("changed_at")
     pending_raw = payload.get("pending_current_a")
     pending_since_raw = payload.get("pending_since")
+    battery_raw = payload.get("battery_current_a")
     if phase is None and all(
         value is None
-        for value in (target_raw, changed_raw, pending_raw, pending_since_raw)
+        for value in (target_raw, changed_raw, pending_raw, pending_since_raw, battery_raw)
     ):
         return MeasuredSolarAdjustmentState()
+    if isinstance(battery_raw, bool):
+        raise ValueError
     target = float(target_raw) if target_raw is not None else None
     changed_at = datetime.fromisoformat(str(changed_raw)) if changed_raw else None
     pending = float(pending_raw) if pending_raw is not None else None
     pending_since = (
         datetime.fromisoformat(str(pending_since_raw)) if pending_since_raw else None
     )
+    try:
+        battery_current = float(battery_raw) if battery_raw is not None else None
+    except OverflowError as error:
+        raise ValueError from error
     if (
         phase not in {"solar_spill", "morning_solar"}
         or target is None
@@ -331,6 +343,8 @@ def _measured_solar_adjustment(
         and (not isfinite(pending) or pending <= 0)
         or pending_since is not None
         and (pending_since.tzinfo is None or pending_since > now or pending_since < changed_at)
+        or battery_current is not None
+        and (not isfinite(battery_current) or battery_current < 0)
     ):
         raise ValueError
     return MeasuredSolarAdjustmentState(
@@ -339,6 +353,7 @@ def _measured_solar_adjustment(
         changed_at=changed_at,
         pending_current_a=pending,
         pending_since=pending_since,
+        battery_current_a=battery_current,
     )
 
 

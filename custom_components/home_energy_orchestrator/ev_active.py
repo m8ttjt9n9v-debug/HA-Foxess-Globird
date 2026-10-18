@@ -5,8 +5,9 @@ from __future__ import annotations
 import asyncio
 import logging
 from contextvars import ContextVar
-from datetime import datetime, timedelta
-from math import ceil
+from dataclasses import replace
+from datetime import UTC, datetime, timedelta
+from math import ceil, floor, isfinite
 
 from homeassistant.components import persistent_notification
 from homeassistant.core import CALLBACK_TYPE, CoreState, HomeAssistant, callback
@@ -241,6 +242,7 @@ from .planner.ev_outside_window import (
     evaluate_outside_current_envelope,
     evaluate_pre_free_plan,
     evaluate_solar_spill_telemetry,
+    plan_combined_pre_free_current,
     plan_morning_solar_current,
     plan_pre_free_current,
     plan_solar_spill_current,
@@ -1848,9 +1850,7 @@ class ActiveEvController:
             return self._reject_outside_candidate("ev_actuator_metadata_unavailable")
         ceiling = self._path_ceiling_a()
         if ceiling <= 0:
-            return self._reject_outside_candidate(
-                "ev_physical_ceiling_uncommissioned"
-            )
+            return self._reject_outside_candidate("ev_physical_ceiling_uncommissioned")
         service_ceiling = self._outside_service_ceiling_a(
             ceiling,
             current_step=current_step,
@@ -1875,19 +1875,16 @@ class ActiveEvController:
         configured_baseline = envelope.configured_baseline_a
         baseline = envelope.protected_baseline_a
         pre_free_ceiling = envelope.pre_free_ceiling_a
-        vehicle_soc = self._mapped_number(
-            self.coordinator.runtime_config.ev_telemetry.soc_entity
-        )
+        vehicle_soc = self._mapped_number(self.coordinator.runtime_config.ev_telemetry.soc_entity)
         if vehicle_soc is None:
             return self._reject_outside_candidate("ev_soc_unavailable")
-        soft_limit = self._float(
-            CONF_EV_FREE_WINDOW_CHARGE_LIMIT, DEFAULT_EV_FREE_WINDOW_CHARGE_LIMIT
+        soft_limit = min(
+            self._float(CONF_EV_FREE_WINDOW_CHARGE_LIMIT, DEFAULT_EV_FREE_WINDOW_CHARGE_LIMIT),
+            NON_OVERRIDE_CHARGE_LIMIT_MAX_PERCENT,
         )
         charge_to_full = self._charge_to_full_requested()
         if charge_to_full and not envelope.service_supports_charging:
-            return self._reject_outside_candidate(
-                "charge_to_full_service_headroom_unavailable"
-            )
+            return self._reject_outside_candidate("charge_to_full_service_headroom_unavailable")
 
         # Paid charging is the explicit exception. Every automatic
         # outside-window policy otherwise yields immediately at the configured
@@ -1896,9 +1893,7 @@ class ActiveEvController:
         if outside_battery_reserve_reached(
             OutsideBatteryReserveEvidence(
                 charge_to_full=charge_to_full,
-                battery_soc_percent=(
-                    None if snapshot is None else snapshot.battery_soc
-                ),
+                battery_soc_percent=(None if snapshot is None else snapshot.battery_soc),
                 reserve_percent=self._float(
                     CONF_EV_OUTSIDE_BATTERY_RESERVE_PERCENT,
                     DEFAULT_EV_OUTSIDE_BATTERY_RESERVE_PERCENT,
@@ -1925,6 +1920,7 @@ class ActiveEvController:
             self.outside_stop_requested = abort.outside_stop_requested
             self.outside_control_active = abort.outside_control_active
             self.outside_stage_candidates = abort.candidates
+            self.measured_solar_adjustment = MeasuredSolarAdjustmentState()
             if abort.last_reason is not None:
                 self.last_reason = abort.last_reason
             return abort.continue_reconciliation
@@ -1993,9 +1989,7 @@ class ActiveEvController:
             and in_pre_free
         ):
             if snapshot is None or snapshot.battery_soc is None:
-                self.morning_solar = SolarSpillDecision(
-                    0.0, 0.0, "site_snapshot_unavailable"
-                )
+                self.morning_solar = SolarSpillDecision(0.0, 0.0, "site_snapshot_unavailable")
             else:
                 self.morning_solar = self._solar_spill_decision(
                     now,
@@ -2014,6 +2008,7 @@ class ActiveEvController:
 
         self.pre_free_plan = None
         self.pre_free_current_a = baseline
+        combined_pre_free = False
         pre_free_hold = self._pre_free_backfill_hold(now, free_start)
         if self.coordinator.runtime_config.ev_policy.pre_free_enabled and pre_free_hold is None:
             active_controller = getattr(self.coordinator, "active_controller", None)
@@ -2041,6 +2036,28 @@ class ActiveEvController:
             # the pure planner's compatibility branch.
             if explicit_capacity and capacity.value_kwh is None:
                 stored_energy = None
+            # Early battery pacing is an extension of the existing morning
+            # opportunity, not a new overnight request or another EV writer.
+            joint_policy = bool(
+                solar_configured
+                and self.coordinator.runtime_config.ev_policy.morning_solar_enabled
+                and in_pre_free
+                and not self.daily_backfill_active
+            )
+            combined_requested = bool(
+                joint_policy
+                and (
+                    self.morning_solar.phase in {"morning_solar_surplus", "below_charger_minimum"}
+                    and self.morning_solar.reconstructed_surplus_kw > 0
+                    or self.pre_free_session.active
+                    and self.measured_solar_adjustment.battery_current_a is not None
+                )
+            )
+            if joint_policy:
+                # This remains binding on subsequent rejected cycles too; a
+                # stale/missing solar or house source cannot fall back to the
+                # old latest-start battery branch after clearing the latch.
+                planned_export_energy = self._combined_pre_free_budget(now, planned_export_energy)
             planning = evaluate_pre_free_plan(
                 PreFreePlanningEvidence(
                     planned_export_energy_kwh=planned_export_energy,
@@ -2066,6 +2083,41 @@ class ActiveEvController:
             export_active = bool(
                 active_controller is not None and active_controller.export_session.phase != "idle"
             )
+            combined_inputs = PreFreeCurrentInputs(
+                session_active=True,
+                planned_energy_kwh=planned_energy,
+                hours_until_free=max(
+                    (free_start.astimezone(UTC) - now.astimezone(UTC)).total_seconds() / 3600,
+                    0.0,
+                ),
+                voltage_v=self._float(CONF_EV_VOLTAGE, DEFAULT_EV_VOLTAGE),
+                phase_count=int(self._float(CONF_EV_PHASE_COUNT, DEFAULT_EV_PHASE_COUNT)),
+                current_step_a=current_step,
+                baseline_a=baseline,
+                current_ceiling_a=pre_free_ceiling,
+                vehicle_soc_percent=vehicle_soc,
+                vehicle_soft_limit_percent=soft_limit,
+            )
+            combined = (
+                plan_combined_pre_free_current(
+                    combined_inputs,
+                    solar_surplus_kw=self.morning_solar.reconstructed_surplus_kw,
+                    charger_minimum_a=current_minimum,
+                    telemetry_valid=planned_export_energy is not None,
+                )
+                if combined_requested
+                else None
+            )
+            combined_pre_free = bool(
+                combined is not None
+                and combined.current_a > baseline
+                and combined.current_a >= current_minimum
+                and not export_active
+            )
+            if combined_pre_free:
+                planned_start = now
+            elif combined_requested:
+                planned_start = None
             transition = advance_pre_free_session(
                 self.pre_free_session,
                 now=now,
@@ -2078,6 +2130,7 @@ class ActiveEvController:
                 planned_start=planned_start,
             )
             self.pre_free_session = transition.state
+            combined_pre_free = combined_pre_free and self.pre_free_session.active
             self.pre_free_phase = transition.phase
             if (
                 self.pre_free_session.active
@@ -2104,6 +2157,16 @@ class ActiveEvController:
                     vehicle_soft_limit_percent=soft_limit,
                 )
             ).current_a
+            if combined_pre_free and self.pre_free_session.active:
+                if self.measured_solar_adjustment.battery_current_a is None:
+                    self.measured_solar_adjustment = MeasuredSolarAdjustmentState()
+                self.pre_free_current_a = self._combined_pre_free_adjustment(
+                    now,
+                    combined_inputs,
+                    combined.current_a,
+                    charger_minimum_a=current_minimum,
+                )
+                self.pre_free_phase = "combined_solar_and_battery"
         else:
             self.pre_free_session = PreFreeSessionState()
             self.pre_free_phase = (
@@ -2112,17 +2175,39 @@ class ActiveEvController:
                 else "disabled"
             )
 
-        if self.pre_free_session.active or self.daily_backfill_active:
+        if not combined_pre_free and self.measured_solar_adjustment.battery_current_a is not None:
+            # A solar-only successor must not inherit a total target containing
+            # a battery allowance that has just disappeared.
+            self.measured_solar_adjustment = MeasuredSolarAdjustmentState()
+        if not combined_pre_free and (self.pre_free_session.active or self.daily_backfill_active):
             # A pre-free session is deliberately fixed-current.  It owns the
             # handover completely rather than retaining a stale solar hold.
             self.measured_solar_adjustment = MeasuredSolarAdjustmentState()
-        else:
+        elif not combined_pre_free:
             self._apply_measured_solar_adjustment(
                 now,
                 snapshot=snapshot,
                 charger_minimum_a=current_minimum,
                 current_step_a=current_step,
             )
+
+        if (self.coordinator.runtime_config.ev_policy.pre_free_enabled
+                and self.coordinator.runtime_config.ev_policy.morning_solar_enabled):
+            # Solar-only is a legitimate successor to a lost battery budget,
+            # not a bypass around a rejected/zero service-headroom ceiling.
+            bounded_solar = min(self.morning_solar.current_a, service_ceiling)
+            if bounded_solar < current_minimum:
+                bounded_solar = 0.0
+            if bounded_solar != self.morning_solar.current_a:
+                self.morning_solar = SolarSpillDecision(
+                    bounded_solar, self.morning_solar.reconstructed_surplus_kw,
+                    "morning_solar_service_limited",
+                )
+                if not combined_pre_free:
+                    self.measured_solar_adjustment = (
+                        replace(self.measured_solar_adjustment, target_current_a=bounded_solar)
+                        if bounded_solar > 0 else MeasuredSolarAdjustmentState()
+                    )
 
         self.outside_stage_candidates = build_outside_stage_candidates(
             OutsideStageCandidateInputs(
@@ -2157,7 +2242,7 @@ class ActiveEvController:
             self.outside_stage_selection.target_current_a,
             self.outside_stage_selection.reason,
         )
-        if self.outside_stage_selection.stage not in {
+        if not combined_pre_free and self.outside_stage_selection.stage not in {
             "solar_spill",
             "morning_solar",
         }:
@@ -2215,8 +2300,85 @@ class ActiveEvController:
         self.target_current_a = selected.current_a
         self.target_limit_percent = limit.target_limit_percent
         self.decision_phase = selected.phase
+        if combined_pre_free and self.outside_stage_selection.stage == "pre_free":
+            self.decision_phase = "pre_free_combined"
         self.allowance_phase = "outside_free_window"
         return True
+
+    def _combined_pre_free_budget(
+        self, now: datetime, export_energy_kwh: float | None
+    ) -> float | None:
+        """Recheck live house-protected authority; retained plans are not energy."""
+        telemetry = self.coordinator.telemetry
+        data = getattr(self.coordinator, "data", None)
+        protected = getattr(self.coordinator, "learning_remaining_kwh", None)
+        available = getattr(data, "available_after_reserve_kwh", None)
+        if (
+            telemetry is None
+            or not telemetry.house_load.valid
+            or not telemetry.house_load.fresh
+            or not self._measured_ev_telemetry(now).telemetry_valid
+            or self.morning_solar.phase == "morning_battery_reserve_not_met"
+        ):
+            return None
+        values = (export_energy_kwh, protected, available)
+        if any(
+            isinstance(v, bool) or not isinstance(v, (int, float)) or not isfinite(v) or v < 0
+            for v in values
+        ):
+            return None
+        threshold = self.coordinator.runtime_config.nonnegative.zero_import_threshold_kw
+        if threshold is None or telemetry.grid_power.value > threshold:
+            return None
+        # These are ceilings on the same pool, not two cumulative deductions.
+        current_safe = max(
+            available
+            * self._float(CONF_DISCHARGE_EFFICIENCY_PERCENT, DEFAULT_DISCHARGE_EFFICIENCY_PERCENT)
+            / 100
+            - protected,
+            0.0,
+        )
+        return min(export_energy_kwh, current_safe)
+
+    def _combined_pre_free_adjustment(
+        self,
+        now: datetime,
+        inputs: PreFreeCurrentInputs,
+        raw_target_a: float,
+        *,
+        charger_minimum_a: float,
+    ) -> float:
+        """Keep solar stability, never hold a revoked battery allowance."""
+        battery_current = (
+            inputs.planned_energy_kwh
+            / inputs.hours_until_free
+            * 1000
+            / inputs.voltage_v
+            / inputs.phase_count
+        )
+        previous = self.measured_solar_adjustment
+        reduced = (
+            previous.battery_current_a is not None and battery_current < previous.battery_current_a
+        )
+        adjustment = rate_limit_measured_solar_current(
+            previous,
+            now=now,
+            policy_phase="morning_solar",
+            requested_current_a=raw_target_a,
+            charger_minimum_a=charger_minimum_a,
+            current_step_a=inputs.current_step_a,
+            immediate_curtailment=reduced,
+            require_stable_target=False,
+        )
+        target = min(adjustment.target_current_a, inputs.current_ceiling_a)
+        stepped = round(floor(round(target / inputs.current_step_a, 9)) * inputs.current_step_a, 3)
+        context = battery_current if adjustment.phase != "held" else previous.battery_current_a
+        self.measured_solar_adjustment = replace(
+            adjustment.state,
+            target_current_a=stepped,
+            battery_current_a=context,
+        )
+        return round(stepped, 3)
 
     def _apply_measured_solar_adjustment(
         self,

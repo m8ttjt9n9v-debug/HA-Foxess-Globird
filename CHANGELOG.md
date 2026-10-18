@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.12.43 — Combined solar and battery EV backfill
+
+- When morning solar charging and pre-free backfill are both enabled, pace
+  currently safe spare battery energy toward the exact free-power boundary
+  and add measured solar left after house use. A qualifying solar opportunity
+  can start before the old latest-start time. This uses one existing EV
+  controller, not two competing charging routines or a solar forecast.
+- Combine power before rounding to the charger's current step. Keep the saved
+  outside-window percentage as a limit on total EV power, plus connector and
+  service limits. House protection, battery cutoffs and the normal 90% EV
+  ceiling remain binding; constrained charging need not empty the spare budget.
+- Update the combined target no more often than every ten minutes, without
+  requiring a moving energy/deadline target to remain unchanged for ten
+  minutes. Retain the independent solar policy's original hysteresis and
+  immediately reduce when protected energy or electrical authority is lost. A solar-only successor
+  cannot inherit a held target that included battery power. Preserve cadence
+  and session ownership across restart with backward-compatible optional
+  battery-current context in the existing journal.
+- Preserve no-solar latest-start behaviour, Ready-by priority and handoff,
+  explicit paid Full/Trip overrides, independent free-window takeover and
+  existing policy switches. Installation turns no policy on and does not
+  replace dashboards. Add synthetic arithmetic, runtime-event, persistence
+  and Home Assistant setup/reload regression scenarios.
+
 ## 0.12.42 — Restore Fleet release choices after restart
 
 - Correct the remaining cold-start case in HACS 2.0.5, which saves published

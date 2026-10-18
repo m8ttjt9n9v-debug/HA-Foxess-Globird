@@ -88,6 +88,17 @@ def test_01242_covers_empty_restored_tags_without_adding_control_authority() -> 
     assert not Version("0.12.42").is_prerelease
 
 
+def test_01243_combined_policy_has_descriptive_stable_release_notes() -> None:
+    title, notes = release_text("v0.12.43", CHANGELOG_PATH.read_text(encoding="utf-8"))
+    assert title == "v0.12.43 — Combined solar and battery EV backfill"
+    assert "Combine power before rounding" in notes
+    assert "limit on total EV power" in notes
+    assert "solar-only successor" in notes and "backward-compatible" in notes
+    assert "Ready-by priority" in notes and "free-window takeover" in notes
+    assert "Installation turns no policy on" in notes
+    assert not Version("0.12.43").is_prerelease
+
+
 def test_release_text_requires_matching_nonempty_section() -> None:
     with pytest.raises(ValueError, match="no section"):
         release_text("v1.2.3", "# Changelog\n")

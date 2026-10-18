@@ -68,7 +68,7 @@ slow-capacity age limit does not relax any fast SoC/grid/power safety gate.
 | General learned limit and free-window SoC gain | Replace only the capacity input; preserve P85 history, rounding and policy ordering |
 | HACS Trip and older helper Trip | Use the same projected capacity and existing deficit/efficiency/max-power formula; preserve target, departure, ownership and cancellation |
 | Free-energy allowance | Use capacity times remaining SoC deficit; preserve house/battery projection and allowance guard |
-| Pre-free and ready-by backfill | Use the same vehicle energy-room input; preserve protected house/export budgets, timing, fixed-current latch and session journal |
+| Pre-free and ready-by backfill | Use the same vehicle energy-room input; preserve protected house/export budgets, timing authority, phase latch and session journal; the separately documented combined morning policy may pace one current target |
 
 With an explicit valid capacity, remaining-energy telemetry is no longer needed
 solely to infer that capacity; all other commissioned mappings and guards still

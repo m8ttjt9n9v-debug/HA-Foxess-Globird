@@ -1,8 +1,9 @@
 # EV backfill timing and daily ready-by allocation
 
 HEO retains the Working Single Phase Pilot Site's proven latest-start EV
-backfill as the explicit **Conservative** choice. **Ready by** is the default
-timing and uses currently available battery surplus before departure through the
+backfill as the no-solar path of the explicit **Conservative** choice.
+**Ready by** is the default timing and uses currently available battery surplus
+before departure through the
 existing daily ready-by planner and session, then retains the original late
 pre-free opportunity. It works with no fixed daily EV
 allocation. Both timing choices require the pre-free backfill policy to be
@@ -28,7 +29,9 @@ configuration extension, not a claim that the pilot already had this behavior.
 In **EV Charging policies**, select **Backfill timing**:
 
 - **Conservative — finish before free power** retains the original late
-  pre-free session when explicitly selected.
+  pre-free session without a measured morning-solar opportunity. Enabling both
+  morning solar and pre-free also permits the combined opportunity described
+  below; the daily allocation's Conservative arithmetic is unchanged.
 - **Ready by — use available surplus before departure** schedules currently
   discretionary battery energy toward the existing daily ready-by time.
   Charging may start overnight after midnight. It does not need a fixed daily
@@ -134,9 +137,27 @@ remain binding. The Ready by evidence checks also continue after its deadline;
 invalid timing or missing/stale inputs cannot grant fallback permission.
 
 Eligible measured morning solar can charge while late backfill is waiting.
-Once late backfill starts, it has exclusive current ownership; solar adjustments
-cannot modulate it. Free-window charging then takes over independently at its
-configured start. Charge to Full retains its separate paid override.
+With both morning solar and pre-free enabled, a fresh positive raw net-solar
+surplus and current protected battery budget can instead start a combined
+request before latest start. Battery power is paced over physical elapsed time
+until free start and added to measured net solar and the separately protected
+keepalive. The total is rounded down once and bounded by the saved outside-window
+inverter percentage, connector and service limits. The percentage is not a
+battery-only limit. A representable combined request can start even when solar
+alone is below the charger's minimum. No-solar latest-start behaviour remains;
+once admitted, passing clouds can leave battery pacing active with measured zero
+solar, but missing/stale authority cannot do so.
+
+This is one selected pre-free current owner, not two competing writers. It
+adopts the latest safe combined target on a ten-minute adjustment cadence,
+without requiring a moving energy/time candidate to stay unchanged for ten
+minutes. Standalone solar keeps its existing stable-target hysteresis. Immediate curtailment remains for
+reduced protected battery authority, import, service headroom, reserve/target or
+data/gate loss. It does not weaken Ready-by admission or its after-deadline
+evidence checks. Caps, time and vehicle room can leave safe battery energy
+unused. See the [combined pre-free contract](ev-combined-pre-free.md).
+Free-window charging takes over independently at its configured start. Charge
+to Full retains its separate paid override.
 
 Both opportunities use the existing controller and session state. A pending
 daily stop cannot interrupt an authorised successor, but remains effective if

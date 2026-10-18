@@ -207,9 +207,7 @@ async def test_disabled_backfill_stays_disabled_when_ready_by_becomes_default(ha
     assert controller.pre_free_phase == "disabled"
     # The existing learned SoC limit may update without authorising charging.
     assert all(
-        domain == "number"
-        and service == "set_value"
-        and data["entity_id"] == "number.car_limit"
+        domain == "number" and service == "set_value" and data["entity_id"] == "number.car_limit"
         for domain, service, data in calls
     )
     assert coordinator.config["ev_pre_free_backfill_enabled"] is False
@@ -374,8 +372,12 @@ async def test_late_pre_free_cannot_spend_a_retained_larger_export_plan(hass, av
 @pytest.mark.parametrize(
     "loss",
     [
-        "stale_house", "stale_grid", "missing_energy", "invalid_energy",
-        "grid_import", "invalid_ready",
+        "stale_house",
+        "stale_grid",
+        "missing_energy",
+        "invalid_energy",
+        "grid_import",
+        "invalid_ready",
     ],
 )
 async def test_late_pre_free_rechecks_ready_by_energy_authority(hass, baseline, loss):
@@ -483,9 +485,7 @@ async def test_ready_to_due_pre_free_handoff_does_not_send_a_stale_stop(hass):
 
 async def test_late_pre_free_preserves_next_ready_fixed_quota_and_delivery_ledger(hass):
     _services(hass)
-    coordinator, controller = _site(
-        hass, ev_daily_backfill_energy_kwh=3, ev_protected_baseline_a=1
-    )
+    coordinator, controller = _site(hass, ev_daily_backfill_energy_kwh=3, ev_protected_baseline_a=1)
     await controller.async_reconcile(_at())
     _charging(hass)
     controller.daily_backfill_delivered_kwh = 2
@@ -832,7 +832,7 @@ async def test_late_plug_in_delivers_partial_energy_then_honours_same_day_deadli
     assert calls[-1][:2] == ("switch", "turn_off")
 
 
-async def test_after_ready_morning_solar_takes_over_then_free_window_uses_maximum(hass):
+async def test_after_ready_combined_pre_free_takes_over_then_free_window_uses_maximum(hass):
     _services(hass)
     coordinator, controller = _site(
         hass,
@@ -849,7 +849,9 @@ async def test_after_ready_morning_solar_takes_over_then_free_window_uses_maximu
     )
     await controller.async_reconcile(_at(8))
     assert not controller.daily_backfill_active
-    assert not controller.pre_free_session.active
+    assert controller.pre_free_session.active
+    assert controller.decision_phase == "pre_free_combined"
+    assert controller.target_current_a == 8
 
     _charging(hass, 0)
     hass.states.async_set("switch.car_charge", "off")
@@ -860,9 +862,9 @@ async def test_after_ready_morning_solar_takes_over_then_free_window_uses_maximu
         battery_power=replace(coordinator.telemetry.battery_power, value=2.8),
     )
     await controller.async_reconcile(_at(8, 10))
-    assert controller.outside_stage_selection.stage == "morning_solar"
-    assert controller.target_current_a == 4
-    assert not controller.pre_free_session.active
+    assert controller.outside_stage_selection.stage == "pre_free"
+    assert controller.target_current_a == 8
+    assert controller.pre_free_session.active
     _fresh(coordinator, _at(12, 1))
     await controller.async_reconcile(_at(12, 1))
     assert controller.target_current_a == 16

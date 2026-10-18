@@ -1,7 +1,9 @@
 # EV solar-spill and pre-free policy provenance
 
-This policy is a mechanical port of the Working Single Phase Pilot Site
-v1.4.24 behavior. It does not use learned driving demand. The pilot's P85
+The underlying solar reconstruction and latest-start battery plan are ports of
+the Working Single Phase Pilot Site v1.4.24 behavior. Combined pre-free charging
+below is an explicit policy correction, not unchanged pilot parity. These
+planners do not use learned driving demand. The pilot's P85
 driving-energy model affects a separate general charge-limit target; the 1 A
 outside-window behavior is the direct-path protected baseline.
 
@@ -14,7 +16,7 @@ outside-window behavior is the direct-path protected baseline.
 | `configuration_v1.4.24.yaml:4862` | Require explicit home/cable/charging evidence and vehicle SoC below the soft free-window limit. |
 | `configuration_v1.4.24.yaml:4845` | Suppress spill capture during the configured boosted export window. |
 | `configuration_v1.4.24.yaml:4913` | Convert measured surplus to current, floor to the actuator step, reject values below its minimum, and cap at the commissioned connector ceiling. |
-| `configuration_v1.4.24.yaml:5084` | The pilot coupled active pre-free backfill to live spill. HEO preserves its proven pre-free allocation, but applies the separately documented safety extension: active pre-free has exclusive fixed-current ownership, so variable morning or post-free spill cannot modulate that session. |
+| `configuration_v1.4.24.yaml:5084` | The pilot selected the larger of active pre-free and solar targets; earlier HACS selected pre-free exclusively. The combined correction now adds permitted measured morning solar and protected battery pacing under one current owner when both policies are enabled. |
 
 The portable runtime requires an explicitly mapped signed battery-power
 sensor and sign convention. Grid power already has an explicit sign mapping.
@@ -56,9 +58,22 @@ The two configuration-backed dashboard controls are:
 Existing entries leave the policy off.  Until the reserve number is explicitly
 saved, its runtime value is the entry's already commissioned outside-window
 house-battery reserve; this avoids silently reducing a site's safety margin.
-When a scheduled latest-start pre-free session becomes active, it takes
-exclusive control at its fixed current.  Morning solar does not raise, lower,
-or otherwise modulate that session.
+When morning solar and pre-free are both enabled, fresh positive raw net solar
+plus a live protected battery budget may start one combined pre-free request
+before latest start. The request adds separately protected keepalive, current
+discretionary AC energy divided by physical UTC hours until free start, and raw
+measured net solar. It floors once and caps TOTAL EV current by the saved
+outside-window percentage, connector and current service limits. Solar alone
+need not reach the charger minimum if the combined current is representable.
+No-solar latest-start behaviour remains; an admitted combined session can pace
+safe battery energy through measured zero-solar clouds. Invalid or stale
+evidence is not equivalent to zero solar and cannot sustain permission.
+
+This deliberately supersedes the earlier exclusive fixed-current handoff, not
+the energy protections or single writer. Ready-by priority, its valid
+after-deadline handoff and invalid-evidence holds remain binding. Limits, time,
+house protection and car room may leave energy unused rather than reaching an
+exact house-battery reserve. See [combined pre-free](ev-combined-pre-free.md).
 
 Both measured-solar stages share a restart-safe adjustment hold. The first
 eligible current is accepted immediately, but any ordinary later change must
@@ -68,8 +83,16 @@ current commands.  Verified grid import may reduce a target immediately.
 The configured SoC threshold is a hard cutoff: the instant SoC falls below it,
 the held target is discarded and the EV returns to the protected baseline.
 Lost or stale telemetry, loss of the configured reserve, EV disconnection or
-limit, Safety Lock, and all other eligibility failures do the same. The hold is discarded at a
-pre-free, free-window, daily-backfill, or charge-to-full takeover.
+limit, Safety Lock, and all other eligibility failures do the same. Combined
+pre-free retains this journal under the existing `morning_solar` category with
+optional accepted battery-current context, but adopts the latest safe target
+on a ten-minute cadence without requiring an unchanged candidate for the whole
+interval. Its moving battery-energy/time deadline must not starve updates;
+standalone solar retains its original stable-target hysteresis. Reduced
+protected battery authority or service headroom also curtails immediately.
+Uncombined pre-free, free-window,
+daily-backfill and charge-to-full takeover discard the solar hold. No new store
+version, polling dependency, forecast service or device writer is introduced.
 
 ## Latest-start pre-free mapping
 
@@ -77,8 +100,10 @@ With **Ready by** timing, the daily ready-by session is an earlier opportunity.
 After its deadline, the retained pre-free planner below becomes eligible again,
 using the current protected energy ceiling rather than reusing the earlier
 allocation or tomorrow's ready-by schedule. Morning solar may continue while
-that planner waits; active pre-free backfill remains exclusive. With explicitly
-selected **Conservative** timing, the original arithmetic is unchanged. See
+that planner waits; the combined correction can use both contributions under
+one selected pre-free current owner when both policies are enabled. With
+explicitly selected **Conservative** timing, the no-solar latest-start and
+fixed daily-allocation arithmetic are unchanged. See
 [backfill handoff](ev-daily-ready-backfill.md#handoff-after-the-ready-time).
 
 | Pilot source | Preserved HEO decision |

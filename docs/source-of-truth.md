@@ -305,9 +305,11 @@ layers around the proven algorithm, not replacement algorithms.
   makes Ready by an additional earlier opportunity: after its deadline, the
   original pre-free planner is eligible against the upcoming free boundary.
   Its energy is capped by the current protected budget, never the earlier
-  allocation. Morning solar can run while it waits; active pre-free owns current
-  exclusively. Invalid Ready by evidence still fails closed, not into a less
-  protected fallback. Pending stops cannot overrule an authorised successor.
+  allocation. Morning solar can run while it waits; with both policies enabled,
+  a measured solar opportunity can start combined pre-free charging earlier.
+  The pre-free stage remains the sole selected current owner. Invalid Ready by
+  evidence still fails closed, not into a less protected fallback. Pending
+  stops cannot overrule an authorised successor.
   Late pre-free, paid Charge to Full and free-window charging do not count as
   next-ready-cycle delivery. Elapsed-time ready-by scheduling handles
   daylight-saving transitions. Automated regression coverage does not establish
@@ -372,25 +374,44 @@ layers around the proven algorithm, not replacement algorithms.
 - Solar spill reconstructs only measured surplus from EV power, signed grid
   flow (export positive and import negative), and signed battery flow. This
   prevents a carried-over high EV request from treating grid import as free
-  solar. Conservative pre-free backfill consumes no more than the local
-  protected export plan and the vehicle's wall-energy room, starts as late as
-  possible, and persists only its active phase and frozen start.
+  solar. Pre-free battery backfill consumes no more than the local protected
+  export plan and the vehicle's wall-energy room. Its no-solar path retains
+  the latest-start calculation and persisted active phase/frozen start.
 - Morning measured-solar EV capture is a separate default-off policy before
   the free-power window. It uses the same coherent measured-surplus equation
   but an independently configured house-battery reserve, rather than the
   post-free solar-spill full-battery threshold. The dashboard exposes its
   switch and reserve number. Existing entries keep the policy off and use their
   commissioned outside-window reserve until the new number is explicitly
-  saved. An active scheduled pre-free session has exclusive fixed-current
-  ownership and completely replaces variable morning solar capture.
+  saved. When morning solar and pre-free backfill are both enabled, fresh
+  positive raw net solar plus a valid protected battery budget can start one
+  combined pre-free request before latest start. It adds protected keepalive,
+  the current discretionary AC budget divided by physical UTC hours until free
+  power, and current measured net solar, then floors once and caps TOTAL EV
+  current by the saved outside-window percentage and physical/service limits.
+  Ready-by priority and evidence holds remain binding. An admitted session may
+  pace battery energy through zero-solar clouds; invalid authority is not zero
+  solar. This is an explicit correction, not pilot parity: the canonical source
+  used the larger target and earlier HACS used exclusive pre-free selection.
+  Caps, vehicle room and protection can leave energy unused; reaching an exact
+  house-battery reserve by free start is not guaranteed. See
+  [combined pre-free charging](ev-combined-pre-free.md).
 - Normal measured-solar EV-current changes are restart-safe and require a
   stable 10-minute target before Tessie is asked to change. Verified grid
   import may curtail immediately. The configured measured-solar SoC threshold
   is a hard cutoff: below it, the held spill target is discarded immediately
   and the EV returns to the protected baseline. Any other failed solar
   eligibility condition, including stale telemetry, reserve loss,
-  disconnection, EV limit or Safety Lock, also discards the hold. Pre-free,
-  free-window, daily-backfill and charge-to-full stages also discard it.
+  disconnection, EV limit or Safety Lock, also discards the hold. Combined
+  pre-free uses the same journal under its existing morning-solar category with
+  optional accepted battery-current context, but adopts the latest safe target
+  on a ten-minute adjustment cadence rather than requiring an unchanged
+  candidate for ten minutes. Otherwise a moving energy/time deadline can reset
+  the timer indefinitely and strand energy. Standalone measured-solar hysteresis
+  remains unchanged; a reduced protected battery component/budget still
+  curtails immediately. No new store version or writer is added. Uncombined
+  pre-free, free-window, daily-backfill and charge-to-full stages discard the
+  solar hold.
 - Solar-spill coherence applies to the fast electrical grid and effective
   battery sources. Rejected inactive-magnitude provenance cannot invalidate a
   fresh signed-battery fallback. Stable battery SoC and state-qualified Tessie
@@ -602,10 +623,11 @@ EV decision. HEO clears outside ownership and applies the configured free-window
 settlement policy at that boundary; the previous battery-backed current target
 must not persist until the ordinary decision interval.
 
-The configured outside-window inverter percentage limits both daily backfill
-and pre-free battery-backed EV charging. It is a percentage of commissioned
-inverter output, not a percentage of the EVSE current setting. Conversion uses
-configured EV voltage and phase count and rounds down to a supported step.
+The configured outside-window inverter percentage limits daily backfill and
+pre-free EV charging, including the total combined target rather than just its
+battery component. It is a percentage of commissioned inverter output, not a
+percentage of the EVSE current setting. Conversion uses configured EV voltage
+and phase count and rounds down to a supported step.
 
 Dashboard plan entities describe actions HEO is currently permitted to take,
 not merely an internal economic candidate. When EV-before-export or another

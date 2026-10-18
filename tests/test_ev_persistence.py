@@ -6,6 +6,8 @@ from copy import deepcopy
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 
+import pytest
+
 from custom_components.home_energy_orchestrator.planner.ev_persistence import (
     EvPersistenceState,
 )
@@ -101,6 +103,92 @@ def test_ev_persistence_migrates_old_payload_without_measured_solar_hold() -> No
 
     assert state.measured_solar_adjustment.phase is None
     assert state.measured_solar_adjustment.target_current_a is None
+
+
+@pytest.mark.parametrize("battery_current", [0.0, 1.0, 4.25])
+def test_combined_morning_budget_and_active_pre_free_round_trip(battery_current: float) -> None:
+    """A reload retains cadence and budget without introducing a new phase."""
+    payload = complete_payload()
+    payload["measured_solar_adjustment"].update(
+        phase="morning_solar", battery_current_a=battery_current
+    )
+
+    state = EvPersistenceState.from_payload(payload, NOW)
+
+    assert state.pre_free_session.active is True
+    assert state.measured_solar_adjustment.phase == "morning_solar"
+    assert state.measured_solar_adjustment.battery_current_a == battery_current
+    assert state.to_payload() == payload
+    assert state.validated_for_storage().to_payload() == payload
+
+
+def test_legacy_measured_solar_payload_does_not_gain_optional_budget_key() -> None:
+    payload = complete_payload()
+    original = deepcopy(payload)
+
+    state = EvPersistenceState.from_payload(payload, NOW)
+
+    assert state.measured_solar_adjustment.battery_current_a is None
+    assert state.to_payload() == original
+    assert state.validated_for_storage().to_payload() == original
+    assert "battery_current_a" not in state.to_payload()["measured_solar_adjustment"]
+    assert payload == original
+
+
+def test_missing_measured_solar_payload_keeps_legacy_evidence_without_budget() -> None:
+    payload = complete_payload()
+    payload.pop("measured_solar_adjustment")
+
+    state = EvPersistenceState.from_payload(payload, NOW)
+
+    assert state.pre_free_session.active is True
+    assert state.reconciliation.phase == "awaiting_feedback"
+    assert state.daily_backfill.delivered_kwh == 2.25
+    assert state.measured_solar_adjustment.battery_current_a is None
+    assert "battery_current_a" not in state.to_payload()["measured_solar_adjustment"]
+
+
+@pytest.mark.parametrize(
+    "battery_current",
+    [
+        -1, float("nan"), float("inf"), float("-inf"),
+        True, False, "invalid", {}, [], 10**400,
+    ],
+)
+def test_malformed_combined_morning_budget_fails_closed(battery_current) -> None:
+    payload = complete_payload()
+    payload["measured_solar_adjustment"].update(
+        phase="morning_solar", battery_current_a=battery_current
+    )
+
+    state = EvPersistenceState.from_payload(payload, NOW)
+
+    assert state.measured_solar_adjustment.battery_current_a is None
+    assert state.measured_solar_adjustment.phase is None
+    assert state.pre_free_session.active is False
+    assert state.reconciliation.phase == "idle"
+    assert state.daily_backfill.active is False
+    assert state.outside_control_active is False
+    assert state.charge_to_full_started_at is None
+    assert state.driving_snapshot.lifetime_energy_kwh == 1018.5
+
+
+def test_orphaned_combined_budget_does_not_authorize_a_solar_hold() -> None:
+    payload = complete_payload()
+    payload["measured_solar_adjustment"] = {
+        "phase": None,
+        "target_current_a": None,
+        "changed_at": None,
+        "pending_current_a": None,
+        "pending_since": None,
+        "battery_current_a": 2.0,
+    }
+
+    state = EvPersistenceState.from_payload(payload, NOW)
+
+    assert state.measured_solar_adjustment.phase is None
+    assert state.measured_solar_adjustment.battery_current_a is None
+    assert state.pre_free_session.active is False
 
 
 def test_ev_persistence_state_retains_driving_evidence_when_control_block_is_bad() -> None:

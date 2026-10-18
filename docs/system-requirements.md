@@ -268,7 +268,9 @@ ledger; paid Charge to Full and free-window charging are excluded from its
 delivery accounting. With the v0.12.30 handoff correction, Ready by ends at
 its deadline and the original pre-free planner becomes eligible again, using
 only current protected energy and the upcoming free-window boundary. Morning
-solar may run while pre-free waits; active pre-free owns current exclusively.
+solar may run while pre-free waits. With both policies enabled, an eligible
+measured-solar opportunity can start combined pre-free charging earlier; one
+pre-free stage still owns the resulting current request.
 The same Ready by freshness/authority checks remain required after the deadline,
 and late charging does not count toward tomorrow's fixed allocation. Free power
 retains independent takeover. **Ready by** is the default for new entries and
@@ -292,9 +294,19 @@ sign convention, battery SoC threshold, and coherent grid/battery/Tessie
 timestamps. The independent, default-off Morning Solar EV Charging policy uses
 the same evidence only before the free-power window; it has its own dashboard
 editable house-battery reserve SoC and does not use the post-free
-battery-full threshold. Latest-start pre-free backfill additionally requires
-the Local Modbus ZEROHERO export ledger and, when active, takes exclusive
-fixed-current ownership from either measured-solar stage. These
+battery-full threshold. Pre-free backfill additionally requires the Local Modbus
+ZEROHERO export ledger. With both policies enabled, fresh positive raw net solar
+and a valid protected battery budget may start a representable combined target
+before the old latest start. The request is protected keepalive plus current
+discretionary AC energy divided by physical UTC hours until free start plus
+current measured net solar, rounded down once. The saved outside-window
+inverter percentage caps the TOTAL request, alongside connector and service
+limits; it is not reinterpreted as a battery-only allowance. Ready-by priority,
+handoff and invalid-evidence holds remain binding. No-solar latest-start
+behaviour remains; once admitted, clouds may reduce measured solar to zero
+without inventing a new budget. The ledger protects house demand and reserves
+once, and limits/time/vehicle room can prevent reaching an exact reserve by
+free start. See [combined pre-free charging](ev-combined-pre-free.md). These
 outside-window stages are independently default-off and are rejected unless
 Local Modbus is selected as FoxESS owner.
 
@@ -308,10 +320,19 @@ opposite flow, or two nonzero magnitudes cannot use this timing fallback.
 Ready by, pre-free backfill and measured-solar stages use this same boundary;
 none gets a separate relaxed freshness rule.
 
-Measured-solar EV current changes are held until the candidate remains stable
-for 10 minutes. This rate limit persists across restart and prevents ordinary
-cloud-edge variation from producing repeated adjacent-current Tessie writes.
+Standalone measured-solar EV current changes are held until the candidate
+remains stable for 10 minutes. This rate limit persists across restart and
+prevents ordinary cloud-edge variation from producing repeated adjacent-current
+Tessie writes. Combined pre-free instead adopts its latest safe target on a
+ten-minute adjustment cadence: its moving battery-energy/time contribution
+must not continually reset an unchanged-candidate timer and strand energy.
+The standalone stable-target hysteresis remains unchanged.
 Verified grid import and any failed eligibility evidence curtail immediately.
+Combined pre-free also curtails immediately for a reduced protected battery
+component/budget or service headroom, rather than hiding lost authority behind
+the ten-minute hold. It reuses the existing morning-solar journal category with
+optional accepted battery-current context and the existing pre-free latch; no
+new store version, device writer or forecast dependency is required.
 The configured measured-solar SoC threshold is a hard cutoff, so the hold
 cannot preserve extra EV current below the house-battery boundary.
 

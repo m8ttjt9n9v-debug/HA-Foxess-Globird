@@ -373,9 +373,8 @@ request charging.
 - [x] Add a distinct, default-off Morning Solar EV Charging dashboard switch
   and independent house-battery reserve SoC number. The stage reuses coherent
   measured-surplus calculations before the free-power window, never uses the
-  post-free full-battery threshold, and yields exclusively to fixed pre-free
-  backfill. Existing entries retain their outside-window reserve as the
-  migration default until the new number is saved.
+  post-free full-battery threshold. Existing entries retain their
+  outside-window reserve as the migration default until the new number is saved.
 - [ ] Complete the remaining measured morning-solar lifecycle work without
   requiring a solar-forecast integration. Once the protected
   house-energy reserve is demonstrably in place, allocate measured solar
@@ -388,13 +387,10 @@ request charging.
   excessive current bouncing. Safety curtailment must remain immediate when
   grid import, lost/stale telemetry, loss of reserve, disconnection, vehicle
   limit, Safety Lock, or another commissioning gate makes the previous target
-  unsafe. Morning measured-solar charging is an earlier stage only: when the
-  scheduled pre-free backfill session starts, it takes exclusive control at
-  one fixed current selected and frozen at takeover, and completely replaces
-  the variable measured-solar target. That fixed pre-free backfill current is
-  retained for the session; solar-spill must not continue to raise, lower, or
-  otherwise modulate it, and the target must not be recomputed from changing
-  solar power while the pre-free session remains latched. Define the corresponding
+  unsafe. Morning solar alone remains a distinct stage; with both morning solar
+  and pre-free enabled, the combined policy below replaces the earlier exclusive
+  fixed-current handoff requirement. Keep one selected pre-free current owner,
+  not competing solar/backfill writers. Define the corresponding
   handovers with daily-backfill, free-window and export stages; preserve
   restart/reload state; expose the selected phase and measured allocation; and
   add full-day replay cases for gradual sunrise, cloud steps, changing house
@@ -402,6 +398,45 @@ request charging.
   ZEROCHARGE boundary. The feature must work without forecast data and must not
   create paid grid charging. A future optional forecast input may improve
   planning but is not a prerequisite for this measured-power path.
+
+## Policy correction — combined solar and battery pre-free EV charging
+
+- [x] Combine only the already-enabled morning-solar and pre-free policies.
+  Preserve no-solar latest-start behaviour, Ready-by priority, its after-deadline
+  handoff and all invalid-evidence holds. Admit an earlier opportunity from
+  fresh positive raw net solar plus the live protected battery budget when the
+  combined request reaches the charger minimum, even if solar alone does not.
+  Once active, pace remaining battery energy through zero-solar clouds; missing
+  or stale evidence is not equivalent to measured zero.
+- [x] Calculate one target from separately protected keepalive, current
+  discretionary AC kWh divided by physical UTC hours until configured free
+  start, and current raw measured net solar. Floor once and cap TOTAL EV
+  current by the saved outside-window inverter percentage, connector and
+  service headroom. Do not redefine the percentage, double-subtract house/EV
+  protection, assume future solar or promise exact reserve depletion.
+- [x] Reuse the existing pre-free latch, EV reconciler and `morning_solar`
+  adjustment journal with optional accepted battery-current context. Preserve
+  a ten-minute normal adjustment cadence that adopts the latest safe combined
+  target, rather than requiring an unchanged candidate for ten minutes, while
+  immediately curtailing reduced protected
+  battery authority, import, service limits, reserve/EV-target crossings and
+  data/gate loss. Add no store version, forecast service or second writer.
+- [x] Characterise dozens of pure and time-sequenced cases across one/three
+  phases, keepalive/zero baseline, sub-minimum and changing solar, house surges,
+  depleted/capped/invalid budgets, normal EV limits, Ready-by priority/holds,
+  restart, unplug/replug, exact free takeover and DST elapsed time. Add
+  minute-by-minute physical energy replays with the shrinking budget and moving
+  deadline, clouds and house surges; an update timer must not starve charging
+  compared with the retained latest-start path. Retain golden tests for
+  standalone solar hysteresis, independent policies and paid Full/Trip precedence.
+- [ ] Complete the full frozen suite, compatibility/release checks and approved
+  controlled pilot acceptance. A green scenario suite does not prove device
+  response or authorize changes to other sites.
+
+This is an explicit extension/correction, not unchanged pilot parity: the
+canonical source chose the larger of the solar and backfill targets, while
+earlier HACS pre-free selected its target exclusively. See the
+[combined pre-free contract](docs/ev-combined-pre-free.md).
 
 ## High-priority feature — P85-driven EV ready reserve
 
@@ -464,7 +499,8 @@ request charging.
   bounded reconciliation. The v0.12.30 policy-handoff correction preserves
   Ready by as an additional earlier opportunity, then re-enables original
   latest-start pre-free planning from the current protected budget. Morning
-  solar can run while it waits; active pre-free owns current exclusively.
+  solar can run while it waits; the combined policy can use both contributions
+  under one selected pre-free current owner when both policies are enabled.
   Invalid Ready by evidence cannot authorise a fallback. Late pre-free,
   Charge to Full and free-window charging do not enter ready-cycle delivery.
   See the [timing and fixed-allocation contract](docs/ev-daily-ready-backfill.md).
@@ -666,11 +702,13 @@ request charging.
   cutoff, returning immediately to the protected baseline below that boundary.
   Immediate downward curtailment remains permitted for grid import, lost/stale telemetry, loss of protected reserve,
   disconnection, vehicle limit, Safety Lock, or another safety/gating failure.
-  The 10-minute solar-spill hold ends when pre-free backfill starts. At that
-  handover, select and freeze one fixed backfill current for the active
-  session. Pre-free then has exclusive authority: do not take the maximum of
-  the solar and backfill targets, blend them, or continue variable-power solar
-  adjustments until the pre-free session ends.
+  Uncombined pre-free ends the solar hold. With both morning solar and pre-free
+  enabled, the combined correction above instead reuses the morning-solar journal
+  for a single summed target, adopting its latest safe value on a ten-minute
+  cadence without the standalone unchanged-candidate delay, and immediately
+  bounded by current protected battery
+  authority and normal safety gates. This explicitly supersedes the former
+  requirement to freeze one current and forbid blending during pre-free.
   Pure planner and runtime tests cover oscillation, a stable decrease,
   immediate import curtailment, inactive safety clearing, restart persistence,
   and exact pre-free takeover. A future full-day replay corpus remains part of
