@@ -138,3 +138,25 @@ def test_price_export_uses_existing_journal_with_three_explicit_fields() -> None
     assert payload["price_deadline"] == deadline.isoformat()
     assert payload["price_actuator_entities"] == list(state.price_actuator_entities)
     assert ExportSessionState.from_payload(payload) == state
+
+
+def test_grace_adds_only_optional_price_permission_boundary() -> None:
+    record = json.loads(
+        (ROOT / "docs/maintainability/export-session-payload-additions-price-grace-v1.json")
+        .read_text()
+    )
+    assert record["additional_optional_fields"] == ["price_permission_end"]
+    assert record["ordinary_zerohero_payload_unchanged"]
+    assert record["new_store_required"] is False
+    end = datetime(2026, 1, 1, 1, 7, 30, tzinfo=UTC)
+    state = ExportSessionState(
+        phase="active", requested_power_kw=4, authority_source="price", price_deadline=end,
+        price_actuator_entities=("select.mode", "number.charge", "number.discharge"),
+        price_permission_end=end,
+    )
+    payload = state.to_payload()
+    assert payload.pop("price_permission_end") == end.isoformat()
+    legacy = ExportSessionState.from_payload(payload)
+    assert legacy.price_permission_end is None
+    assert legacy.to_payload() == payload
+    assert ExportSessionState.from_payload(state.to_payload()) == state

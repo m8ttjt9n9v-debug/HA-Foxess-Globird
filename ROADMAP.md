@@ -269,6 +269,16 @@ completed trip is still consumed rather than becoming an ongoing SoC reserve.
 
 ## Optional price export extension
 
+- [x] Bridge confirmed-price publication gaps for at most 150 seconds after
+  the last observed interval ends. Keep current-price freshness truthful;
+  failed fetches, estimates and repeated reports cannot renew the deadline.
+  Renew a still-live price session only for a newer confirmed high block,
+  without stop/start cycling or increased latched power. Stop for a fresh low
+  price, market restriction, exhausted protected energy/cap or lost gates.
+  Preserve restart cleanup and original actuator ownership. Add delayed-report,
+  sustained-spike, expiry-timer, stale-callback and resource-bound regressions.
+  This v0.12.47 policy correction supersedes strict block-by-block stop/start
+  below; it does not implement automatic buying or prove retailer payment.
 - [x] Add an explicitly mapped native Amber confirmed five-minute wholesale
   source as primary, with the existing direct AEMO DispatchIS feed as fallback.
   Reuse native sensor updates and `spot_per_kwh`; do not add another API reader,

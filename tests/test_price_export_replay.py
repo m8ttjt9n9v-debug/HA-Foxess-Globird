@@ -58,7 +58,7 @@ def test_repeated_spikes_cannot_regrant_spent_energy(spend):
             continue
         assert price >= 3
         positive_starts += 1
-        assert state.price_deadline < end
+        assert state.price_deadline <= end
         seconds = (state.price_deadline - start).total_seconds()
         delivered = state.requested_power_kw * seconds / 3600
         assert delivered <= budget - exported + 1e-9

@@ -39,6 +39,7 @@ AEMO_DATA_SOURCE = "https://nemweb.com.au/Reports/Current/DispatchIS_Reports/"
 AEMO_SUMMARY_SOURCE = "https://visualisations.aemo.com.au/aemo/apps/api/report/ELEC_NEM_SUMMARY"
 EVENT_MARKET_OPPORTUNITY = f"{DOMAIN}_market_opportunity"
 AEMO_POLL_INTERVAL = timedelta(seconds=30)
+PRICE_PUBLICATION_GRACE = timedelta(seconds=150)
 AEMO_REQUEST_TIMEOUT = 15
 AEMO_HISTORY_LIMIT = 48
 _INTERVAL = timedelta(minutes=5)
@@ -549,6 +550,7 @@ class AemoMarketMonitor(DataUpdateCoordinator[AemoMonitorResult]):
         self.data = self._result
         self._aemo_result = self._result
         self._last_amber: AemoMonitorResult | None = None
+        self._confirmed_export_price: AemoMonitorResult | None = None
         self._amber_unsub: Callable[[], None] | None = None
         self._sources_started = False
         self._pending_history_change = False
@@ -579,6 +581,37 @@ class AemoMarketMonitor(DataUpdateCoordinator[AemoMonitorResult]):
                 return _empty(self.configuration, "stopped" if self._stopped else "awaiting_data")
             return self._select_source(dt_util.utcnow())
         return self._current_at(self._result, dt_util.utcnow())
+
+    @property
+    def export_result(self) -> AemoMonitorResult | None:
+        """Bounded last-confirmed evidence, never relabelled as a fresh price.
+
+        This volatile bridge is not restored from diagnostic history. Startup
+        still cleans up the old export journal before admitting new evidence.
+        """
+        self._remember_export_price(self.current_result)
+        result = self._confirmed_export_price
+        now = dt_util.utcnow()
+        if (
+            self._stopped or _configuration_status(self.configuration)
+            or result is None or result.interval_start is None or result.interval_end is None
+            or result.region != self.configuration.region
+            or not result.interval_start <= now < result.interval_end + PRICE_PUBLICATION_GRACE
+        ):
+            return None
+        return result
+
+    def _remember_export_price(self, result: AemoMonitorResult) -> None:
+        """Only an actually current confirmed observation can reset the bridge."""
+        if result.price_trigger_valid:
+            previous = self._confirmed_export_price
+            if previous is None or result.interval_end >= previous.interval_end:
+                self._confirmed_export_price = result
+        elif result.status in {
+            "market_suspended", "administered_pricing", "nonzero_intervention",
+            "source_replay", "provider_disagreement",
+        }:
+            self._confirmed_export_price = None
 
     def _amber_result(self, now: datetime) -> AemoMonitorResult:
         configuration = self.configuration
@@ -794,6 +827,7 @@ class AemoMarketMonitor(DataUpdateCoordinator[AemoMonitorResult]):
             self.configuration = configuration
             self._aemo_result = _empty(configuration, "awaiting_data")
             self._last_amber = None
+            self._confirmed_export_price = None
             self._bind_amber_listener()
             configuration_status = _configuration_status(configuration)
             self.update_interval = AEMO_POLL_INTERVAL if configuration_status is None else None
@@ -1047,6 +1081,7 @@ class AemoMarketMonitor(DataUpdateCoordinator[AemoMonitorResult]):
                 changed = True
         # No awaited I/O separates this eligibility check and event emission.
         result = self._current_at(result, dt_util.utcnow())
+        self._remember_export_price(result)
         previous = self._state.active_candidate
         if result.is_candidate:
             signature = result.observation_signature()

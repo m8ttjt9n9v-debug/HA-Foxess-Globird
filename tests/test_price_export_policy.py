@@ -61,6 +61,8 @@ def _advance(context, observation=SELF_USE):
         finish_requested=policy.finish_requested,
         authority_source=policy.authority_source,
         price_deadline=policy.price_deadline,
+        price_permission_end=context.price_interval_end if policy.authority_source == "price"
+        else None,
     )
     return policy, transition
 
@@ -80,7 +82,7 @@ def test_price_starts_immediately_outside_zerohero_with_identical_protections():
     assert policy.planned_start == NOW and policy.eligible
     assert policy.export_plan.sellable_energy_kwh == 24
     assert policy.export_plan.planned_export_energy_kwh <= 18
-    assert policy.price_deadline == END - timedelta(seconds=5)
+    assert policy.price_deadline == END
     assert transition.state.authority_source == "price"
     assert transition.state.price_deadline == policy.price_deadline
     assert transition.state.requested_power_kw == 10
@@ -155,7 +157,7 @@ def test_existing_normal_latch_ignores_price_changes_exactly_as_before():
     assert normal_on.state == normal and normal_on.reason == "latched"
 
 
-def test_consecutive_blocks_restore_then_reuse_remaining_cap_and_battery():
+def test_new_block_renews_live_session_but_still_shrinks_to_remaining_cap():
     first, start = _advance(_context(available_after_reserve_kwh=10, automatic_limit_kwh=3))
     assert first.export_plan.sellable_energy_kwh == 4
     active = replace(start.state, phase="active", attempts=0)
@@ -164,16 +166,48 @@ def test_consecutive_blocks_restore_then_reuse_remaining_cap_and_battery():
         price_interval_end=END + timedelta(minutes=5), session=active,
         available_after_reserve_kwh=9, exported_kwh=2.8, automatic_limit_kwh=3,
     )
-    expired, stopping = _advance(second_context, FORCED)
-    assert expired.price_deadline == active.price_deadline
-    assert stopping.state.phase == "stopping"
-    _, idle = _advance(replace(second_context, session=stopping.state), SELF_USE)
-    next_plan, next_start = _advance(replace(second_context, session=idle.state))
-    assert next_plan.export_plan.sellable_energy_kwh == 3
-    assert next_plan.automatic_remaining_kwh == pytest.approx(0.2)
-    assert next_plan.export_plan.planned_export_energy_kwh == pytest.approx(0.2)
-    assert next_start.state.authority_source == "price"
-    assert next_start.state.price_deadline < second_context.price_interval_end
+    # Real runtime passes an interval-end + 150s permission boundary.
+    active = replace(active, price_deadline=END + timedelta(seconds=150))
+    context = replace(second_context, session=active)
+    renewed, transition = _advance(context, FORCED)
+    assert renewed.export_plan.sellable_energy_kwh == 3
+    assert renewed.automatic_remaining_kwh == pytest.approx(0.2)
+    assert renewed.export_plan.planned_export_energy_kwh == pytest.approx(0.2)
+    assert transition.state.authority_source == "price"
+    assert transition.state.phase == "active" and not transition.plan.commands
+    assert transition.state.price_deadline < context.price_interval_end
+
+
+def test_same_block_cannot_extend_a_resource_shortened_deadline():
+    policy, started = _advance(_context(available_after_reserve_kwh=6.5))
+    owned = replace(started.state, phase="active", attempts=0)
+    later, transition = _advance(_context(
+        now=NOW + timedelta(seconds=30), session=owned, available_after_reserve_kwh=30,
+    ), FORCED)
+    assert later.price_deadline == transition.state.price_deadline == policy.price_deadline
+
+
+def test_a_new_block_cannot_revive_an_already_expired_or_stopping_session():
+    _, started = _advance(_context())
+    for phase in ("active", "stopping", "recovering"):
+        state = replace(started.state, phase=phase)
+        _, transition = _advance(_context(
+            now=END, price_interval_start=END, price_interval_end=END + timedelta(minutes=5),
+            session=state,
+        ), FORCED)
+        assert transition.state.phase == "stopping"
+        assert transition.state.price_deadline == state.price_deadline
+
+
+def test_permission_boundary_round_trip_and_invalid_values_fail_closed():
+    _, transition = _advance(_context())
+    state = replace(transition.state, price_actuator_entities=("select.x", "number.y", "number.z"))
+    payload = state.to_payload()
+    assert payload["price_permission_end"] == END.isoformat()
+    assert ExportSessionState.from_payload(payload) == state
+    for invalid in (NOW.isoformat(), END.replace(tzinfo=None).isoformat(), "bad"):
+        with pytest.raises(ValueError):
+            ExportSessionState.from_payload({**payload, "price_permission_end": invalid})
 
 
 @pytest.mark.parametrize("sellable", [0, 0.001, 0.05, 0.1])

@@ -203,23 +203,36 @@ layers around the proven algorithm, not replacement algorithms.
   GST exactly once. The supported native one-second-after-boundary start is
   normalized to its five-minute NEM block; other malformed intervals fail.
   Estimated, non-five-minute, stale, future and restored readings cannot grant
-  permission. Missing Amber market flags remain unknown;
+  new permission. From v0.12.47, a previously qualified, actually observed price
+  can bridge publication gaps until 150 seconds after its interval ends. This
+  volatile last-confirmed evidence is distinct from current-price freshness;
+  failed fetches, estimates and repeats never move its absolute expiry.
+  Missing Amber market flags remain unknown;
   affirmative current AEMO intervention, administered-pricing or suspension
   evidence vetoes admission and survives a failed fetch until a newer qualified
   official correction or the block's expiry. A valid low primary always outranks
   a high fallback.
   Contradictory same-interval fallback cannot revive withdrawn primary permission
-  when the correction order is unproven. Strict interval expiry and existing
-  non-extendable session deadlines remain binding across provider changes.
+  when the correction order is unproven. Current-price evidence still expires
+  at the exact block boundary; provider changes within one block cannot extend
+  its bounded export permission or a resource-shortened session deadline.
   This source extension still requires release validation and separately
   approved live acceptance. The operator threshold is not a retailer critical-event
   declaration or payment guarantee. Price admission reuses protected house/EV
   energy, battery floor/reserve, and the shared all-day measured export cap.
   Its existing session journal additionally binds price ownership to a
-  non-extendable deadline and original actuators. Lost permission or Sellable
+  bounded deadline and original actuators. A strictly newer confirmed high
+  block can renew only a still-live starting/active price session, after current
+  protected-energy/cap checks, without stopping or raising latched power.
+  The journal adds optional `price_permission_end` to distinguish a new block
+  from repeated same-block evidence. Old payloads remain readable and ordinary
+  journals unchanged; restart cleanup still precedes fresh admission.
+  Lost permission or Sellable
   requests Self Use and cleared targets; reducing cleanup survives missing
   ledger/numeric command feedback when original metadata and write gates are
-  valid. Consecutive blocks restore before fresh admission. Normal ZEROHERO
+  valid. Fresh low prices and affirmative restrictions withdraw permission
+  immediately. Expired/stopping sessions still finish cleanup before fresh
+  admission. Normal ZEROHERO
   latch semantics remain separate. Free charging, paid EV Full, and manual
   holds take priority. No automatic market-price buying, new event journal,
   reward accounting, or forecast credit is added. See the

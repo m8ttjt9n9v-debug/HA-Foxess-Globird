@@ -169,16 +169,17 @@ async def test_same_block_fallback_and_return_cannot_extend_owned_deadline(
     assert active.export_session.price_deadline == original_deadline
 
 
-async def test_both_providers_unavailable_restore_existing_price_session(amber_lifecycle):
+async def test_both_providers_unavailable_keep_only_original_bounded_permission(amber_lifecycle):
     rig = amber_lifecycle
+    deadline = rig.entry.runtime_data.active_controller.export_session.price_deadline
     rig.calls.clear()
     await rig.harness.set_unavailable(_AMBER_ENTITY)
     rig.feed.side_effect = TimeoutError
     await rig.entry.runtime_data.market_monitor.async_refresh()
     await rig.hass.async_block_till_done(wait_background_tasks=True)
     assert not rig.entry.runtime_data.market_monitor.current_result.price_trigger_valid
-    assert (MODE, "Self Use") in rig.calls
-    assert float(rig.hass.states.get(DISCHARGE).state) == 0
+    assert (MODE, "Self Use") not in rig.calls
+    assert rig.entry.runtime_data.active_controller.export_session.price_deadline == deadline
     assert (MODE, "Force Discharge") not in rig.calls
 
 

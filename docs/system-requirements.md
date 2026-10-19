@@ -100,6 +100,17 @@ retailer payment applies. The configurable sell threshold is inclusive:
 the current source price must be at or above it (default $3/kWh). Automatic
 price-triggered buying is not included.
 
+From v0.12.47 an actually observed qualifying price can bridge publication
+delays until 150 seconds after its five-minute interval ends. This does not
+relax electrical telemetry freshness or relabel an old market price as current.
+Failures/repeats/estimates cannot reset the clock; a fresh low price or known
+market restriction withdraws permission immediately. A newer confirmed high
+block can renew a still-live price session without an intervening stop, subject
+to current Sellable and all existing gates. An optional journal boundary keeps
+same-block reports from extending resource-shortened deadlines. Restart still
+cleans up old ownership before fresh admission. No settings or providers are
+automatically enabled, and installation does not prove live spike delivery.
+
 ## Required for the retained feature set
 
 - A supported Home Assistant installation and HACS custom-repository access.

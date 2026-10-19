@@ -31,6 +31,7 @@ class ExportSessionState:
     authority_source: str = "zerohero"
     price_deadline: datetime | None = None
     price_actuator_entities: tuple[str, str, str] | None = None
+    price_permission_end: datetime | None = None
 
     @classmethod
     def from_payload(cls, payload: dict[str, object] | None) -> ExportSessionState:
@@ -46,6 +47,8 @@ class ExportSessionState:
         deadline_raw = payload.get("price_deadline")
         deadline = datetime.fromisoformat(str(deadline_raw)) if deadline_raw else None
         mapping = _price_mapping(payload.get("price_actuator_entities"))
+        permission_raw = payload.get("price_permission_end")
+        permission_end = datetime.fromisoformat(str(permission_raw)) if permission_raw else None
         if phase not in {"idle", "starting", "active", "stopping", "recovering"}:
             raise ValueError("invalid export session phase")
         if power < 0 or attempts < 0:
@@ -63,7 +66,12 @@ class ExportSessionState:
             raise ValueError("price-owned journal must bind its original actuators")
         if authority == "zerohero" and mapping is not None:
             raise ValueError("ordinary journal cannot inherit price actuators")
-        return cls(phase, power, attempts, last_at, authority, deadline, mapping)
+        if permission_end is not None and (
+            authority != "price" or permission_end.tzinfo is None
+            or permission_end.utcoffset() is None or deadline > permission_end
+        ):
+            raise ValueError("invalid price permission boundary")
+        return cls(phase, power, attempts, last_at, authority, deadline, mapping, permission_end)
 
     def to_payload(self) -> dict[str, object]:
         """Return the unchanged Store payload."""
@@ -83,6 +91,8 @@ class ExportSessionState:
                 self.price_deadline.isoformat() if self.price_deadline else None
             )
             payload["price_actuator_entities"] = list(self.price_actuator_entities)
+            if self.price_permission_end is not None:
+                payload["price_permission_end"] = self.price_permission_end.isoformat()
         return payload
 
 
@@ -112,6 +122,7 @@ def advance_export_session(
     tolerance_kw: float = 0.01,
     authority_source: str = "zerohero",
     price_deadline: datetime | None = None,
+    price_permission_end: datetime | None = None,
 ) -> ExportSessionTransition:
     """Advance a latched session with bounded writes and restart recovery."""
     _validate_inputs(
@@ -142,6 +153,7 @@ def advance_export_session(
             tolerance_kw=tolerance_kw,
             authority_source=authority_source,
             price_deadline=price_deadline,
+            price_permission_end=price_permission_end,
         )
     _validate_authority(authority_source, price_deadline)
     new_session_desired = (
@@ -273,13 +285,16 @@ def _advance_price_session(state, observation, **kwargs):
     now = kwargs["now"]
     authority = kwargs.pop("authority_source")
     proposed_deadline = kwargs.pop("price_deadline")
+    permission_end = kwargs.pop("price_permission_end")
     _validate_authority(authority, proposed_deadline)
     latched = state.phase != "idle" and state.authority_source == "price"
     deadline = state.price_deadline if latched else proposed_deadline
     if latched and proposed_deadline is not None:
-        deadline = min(deadline, proposed_deadline)
+        renewing = price_permission_can_renew(state, now, permission_end)
+        deadline = proposed_deadline if renewing else min(deadline, proposed_deadline)
     plain = replace(
-        state, authority_source="zerohero", price_deadline=None, price_actuator_entities=None
+        state, authority_source="zerohero", price_deadline=None, price_actuator_entities=None,
+        price_permission_end=None,
     )
     permitted = (
         authority == "price" and deadline is not None and now < deadline
@@ -337,7 +352,24 @@ def _advance_price_session(state, observation, **kwargs):
         state=replace(
             transition.state, authority_source="price", price_deadline=deadline,
             price_actuator_entities=state.price_actuator_entities,
+            price_permission_end=(
+                max(state.price_permission_end, permission_end)
+                if state.price_permission_end is not None and permission_end is not None
+                else state.price_permission_end or permission_end
+            ),
         ),
+    )
+
+
+def price_permission_can_renew(
+    state: ExportSessionState, now: datetime, permission_end: datetime | None,
+) -> bool:
+    """A newer confirmed block can renew only a still-live running session."""
+    return (
+        state.authority_source == "price" and state.phase in {"starting", "active"}
+        and state.price_deadline is not None and now < state.price_deadline
+        and state.price_permission_end is not None and permission_end is not None
+        and permission_end > state.price_permission_end
     )
 
 

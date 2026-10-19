@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "extension": "price_publication_grace_v1",
+  "store": "export_session",
+  "additional_optional_fields": ["price_permission_end"],
+  "legacy_default": null,
+  "encoding": "Aware ISO timestamp of the accepted interval end plus 150 seconds, bounded by the next free window",
+  "semantics": "Only a strictly newer confirmed block may renew a still-live starting/active price session. Same-block reports cannot extend a resource-shortened deadline. The original actuator mapping and latched power remain binding.",
+  "restart": "Cleanup of restored price ownership precedes fresh admission; diagnostic history never restores the volatile price bridge.",
+  "ordinary_zerohero_payload_unchanged": true,
+  "new_store_required": false
+}

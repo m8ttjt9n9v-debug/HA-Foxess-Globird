@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 
 from .ev_before_export import EvBeforeExportDecision, decide_ev_before_export
 from .export import ExportPlan, calculate_export_plan, calculate_export_start
-from .export_session import ExportSessionState
+from .export_session import ExportSessionState, price_permission_can_renew
 
 PRICE_EXPORT_SETTLE_MARGIN = timedelta(seconds=5)
 PRICE_EXPORT_START_HORIZON = timedelta(seconds=35)
@@ -147,8 +147,13 @@ def evaluate_foxess_export_policy_base(
     if price_owned or (not latched and price_current):
         deadline = context.session.price_deadline if price_owned else None
         if price_current:
-            candidate = context.price_interval_end - PRICE_EXPORT_SETTLE_MARGIN
-            deadline = min(deadline, candidate) if deadline is not None else candidate
+            candidate = context.price_interval_end
+            renewing = price_permission_can_renew(
+                context.session, context.now, context.price_interval_end,
+            )
+            deadline = (
+                candidate if deadline is None or renewing else min(deadline, candidate)
+            )
         effective_enabled = price_current and decision.export_allowed
         permitted = (
             effective_enabled and deadline is not None and context.now < deadline

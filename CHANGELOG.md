@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.12.47 — Keep price-spike export running through report delays
+
+- Allow the last actually confirmed five-minute price to bridge publication
+  gaps for up to 150 seconds after its interval ends. Failed downloads,
+  estimates and repeated old reports cannot restart that clock. Current-price
+  freshness remains truthful; this does not relax electrical telemetry checks.
+- Renew a still-live export session when a newer confirmed high-price block
+  arrives, without repeatedly stopping and restarting the inverter. Fresh low
+  prices and affirmative market restrictions withdraw permission immediately.
+  Keep current Sellable, house/EV protection, shared daily cap, original actuator
+  ownership, latched power, Safety Lock and policy priorities unchanged.
+- Record an optional accepted permission boundary in the existing export
+  journal so same-block reports cannot extend a resource-shortened deadline.
+  Preserve legacy payloads and restart cleanup before fresh admission. Add
+  real Home Assistant delayed-report, sustained-spike and timer regressions.
+  Installation does not enable selling, select a provider or replace dashboards.
+
 ## 0.12.46 — Amber-first five-minute wholesale prices
 
 - Add optional native Amber price-sensor and region mappings. Use its confirmed

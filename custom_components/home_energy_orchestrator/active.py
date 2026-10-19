@@ -18,6 +18,7 @@ from homeassistant.core import CALLBACK_TYPE, HomeAssistant
 from homeassistant.helpers.event import async_track_point_in_utc_time, async_track_time_interval
 from homeassistant.util import dt as dt_util
 
+from .aemo_monitor import PRICE_PUBLICATION_GRACE
 from .const import (
     FOXESS_CONTROL_OWNER_CLOUD,
     FOXESS_CONTROL_OWNER_MODBUS,
@@ -328,16 +329,17 @@ class ActiveFoxessController:
         monitor = getattr(self.coordinator, "market_monitor", None)
         if not runtime.export.price_triggered_enabled or monitor is None:
             return None
-        config, result = runtime.aemo_monitor, monitor.current_result
+        config = runtime.aemo_monitor
+        result = monitor.export_result
         if (
             not config.enabled
+            or result is None
             or result.region != config.region
-            or not result.price_trigger_valid
             or result.price_per_kwh is None
             or not result.price_per_kwh >= config.export_threshold_per_kwh
             or result.interval_start is None
             or result.interval_end is None
-            or not result.interval_start <= now < result.interval_end
+            or not result.interval_start <= now < result.interval_end + PRICE_PUBLICATION_GRACE
         ):
             return None
         # Price export cannot replace ordinary free charging or a paid trip.
@@ -371,7 +373,7 @@ class ActiveFoxessController:
         next_free = now + timedelta(
             hours=hours_until_next_window(now, start=runtime.windows.effective_free_charge_start)
         )
-        return result.interval_start, min(result.interval_end, next_free)
+        return result.interval_start, min(result.interval_end + PRICE_PUBLICATION_GRACE, next_free)
 
     def _price_signature(self, window) -> tuple[object, ...]:
         runtime = self.coordinator.runtime_config
@@ -804,6 +806,8 @@ class ActiveFoxessController:
             finish_requested=policy.finish_requested,
             authority_source=policy.authority_source,
             price_deadline=policy.price_deadline,
+            price_permission_end=context.price_interval_end if policy.authority_source == "price"
+            else None,
         )
         if transition.state.authority_source == "price" and previous.phase == "idle":
             transition = replace(

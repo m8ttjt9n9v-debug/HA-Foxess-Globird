@@ -133,7 +133,14 @@ async def price_rig(hass, monkeypatch, freezer):
         region="NSW1", price_trigger_valid=True, price_per_kwh=4,
         interval_start=NOW, interval_end=NOW + timedelta(minutes=5),
     )
-    coordinator.market_monitor = SimpleNamespace(current_result=result)
+    class Monitor:
+        current_result = result
+
+        @property
+        def export_result(self):
+            return self.current_result if self.current_result.price_trigger_valid else None
+
+    coordinator.market_monitor = Monitor()
     active = ActiveFoxessController(hass, coordinator)
     coordinator.active_controller = active
     active._charge_storage_status = active._export_storage_status = "valid"

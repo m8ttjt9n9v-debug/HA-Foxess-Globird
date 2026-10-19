@@ -83,21 +83,27 @@ This controller limit is separate from any retailer reward allowance.
 
 ## When export ends
 
-An owned price session has a fixed deadline based on the current five-minute
-price block and the safe energy available. That deadline may be shortened but
-never extended. HEO begins restoration slightly before it expires. It also
-restores Self Use and clears both forced targets when the price falls, the
-feed expires or fails, safe Sellable runs out, or the price-export request is
-turned off.
+HEO keeps the last confirmed price usable for up to **150 seconds after its
+five-minute interval ends**. This bridges the delay before the next AEMO report
+arrives. It is not a claim that the old price is still the current price: the
+current-price sensor can show unavailable while this brief permission remains.
+Failed downloads, estimated prices and repeated old reports do not restart the
+clock. If no new confirmed price arrives, HEO starts restoring Self Use at the
+deadline and clears both forced targets. Communication and Home Assistant must
+be working for those commands to reach the inverter.
 
 A price falling to exactly the threshold still qualifies. Falling below it
 withdraws price permission; there is no extra price deadband or rounded-price
 comparison. The same inclusive rule applies after restart and report correction.
 
-Consecutive high-price blocks do not silently renew the old session. HEO first
-confirms Self Use and cleared targets, then rechecks current evidence before
-starting another session. This deliberately leaves a short gap rather than
-allowing stale price permission to keep exporting.
+Consecutive confirmed high-price blocks renew a still-live export session
+without stopping and restarting. Every renewal still checks current Sellable,
+house/EV protection, the shared daily export budget and electrical evidence.
+A shorter safe-energy deadline can still stop export before the price deadline.
+A repeat of the same block cannot extend that shorter deadline. A fresh price
+below the threshold or an affirmative market restriction stops price permission
+immediately; HEO does not wait out the grace period. An expired or stopping
+session must finish cleanup before another session can start.
 
 An ordinary ZEROHERO session keeps its existing fixed-power latch and finish
 rules. Price changes do not stop an already-owned ZEROHERO session, and a
@@ -134,10 +140,10 @@ If Amber is unavailable or unqualified, a qualifying current AEMO reading can
 take over without creating another export controller. A delayed or contradictory
 fallback cannot resurrect permission that a newer confirmed Amber price has
 withdrawn in the same interval. If HEO cannot establish which conflicting
-evidence is newer, it withholds permission. Both sources expire at the exact
-interval end; changing source never extends an existing export deadline or
-borrows the previous interval's price. Source changes and source failures remain
-visible in the price evidence.
+evidence is newer, it withholds permission. Both sources cease being current at
+the exact interval end. The separately bounded last-confirmed permission above
+can bridge publication gaps; changing provider within the same block never
+extends its expiry. Source changes and failures remain visible in price evidence.
 
 The existing export-session journal records price ownership, its deadline,
 and its original actuator mappings before a positive command. After restart,
