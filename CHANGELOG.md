@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.12.45 — Use spare morning energy before the car leaves
+
+- When morning solar and pre-free backfill are both enabled and eligible,
+  offer the already-protected spare battery energy sooner while the car is
+  connected, instead of spreading it to the free-power start. Do not increase
+  the energy budget, lower reserves or assume future sunshine. A slow charger
+  can use more of its permitted rate before an unplanned departure.
+- Anchor the spending horizon to the next existing ten-minute adjustment,
+  retaining the thirty-second control recheck. Recheck any held total current
+  against current solar and remaining battery authority; reduce promptly if
+  that budget or an electrical limit can no longer support it. Reuse existing
+  session/cadence persistence, with no new setting, helper, poller or EV writer.
+- Keep the outside-window inverter percentage as a cap on TOTAL EV power,
+  including three-phase sites and a solar-only successor after the spare
+  battery budget runs out. Standalone policies, no-solar latest start, Ready-by
+  priority, Full/Trip ownership, normal EV SoC limits and free-window takeover
+  retain their existing rules. Installation does not enable a policy or replace
+  dashboards. Add arithmetic, departure, energy-replay and lifecycle tests.
+
 ## 0.12.44 — Check Fleet releases on demand
 
 - Add a small per-site Check releases button alongside the existing compact

@@ -72,7 +72,7 @@ async def test_user_arrival_scenario_starts_combined_before_legacy_latest_start(
 
     assert controller.pre_free_session.active
     assert controller.pre_free_plan.planned_energy_kwh == 2
-    assert controller.target_current_a == 6
+    assert controller.target_current_a == 10
     assert controller.decision_phase == "pre_free_combined"
     assert not controller.daily_backfill_active
     assert controller.outside_stage_selection.stage == "pre_free"
@@ -80,7 +80,7 @@ async def test_user_arrival_scenario_starts_combined_before_legacy_latest_start(
     _assert_single_ev_writer(calls)
 
 
-@pytest.mark.parametrize("phases,expected", [(1, 16), (3, 6)])
+@pytest.mark.parametrize("phases,expected", [(1, 16), (3, 10)])
 async def test_same_power_policy_uses_configured_single_or_three_phase_conversion(
     hass, phases, expected
 ):
@@ -95,17 +95,17 @@ async def test_same_power_policy_uses_configured_single_or_three_phase_conversio
 
 async def test_house_load_reduces_available_solar_not_the_battery_budget_twice(hass):
     _services(hass)
-    coordinator, controller = _scenario(hass)
+    coordinator, controller = _scenario(hass, budget=0.2)
     _power(hass, coordinator, _at(11), surplus=2, house=1)
     await controller.async_reconcile(_at(11))
 
-    assert controller.pre_free_plan.planned_energy_kwh == 2
-    assert controller.target_current_a == 5
+    assert controller.pre_free_plan.planned_energy_kwh == 0.2
+    assert controller.target_current_a == 4
 
 
 async def test_solar_below_charger_minimum_can_start_with_protected_battery_contribution(hass):
     _services(hass)
-    coordinator, controller = _scenario(hass, budget=4.2)
+    coordinator, controller = _scenario(hass, budget=0.7)
     hass.states.async_set("number.car_current", "6", {"min": 6, "max": 16, "step": 1})
     _power(hass, coordinator, _at(11), surplus=0.1)
     await controller.async_reconcile(_at(11))
@@ -118,7 +118,7 @@ async def test_solar_below_charger_minimum_can_start_with_protected_battery_cont
 
 async def test_combined_rate_below_physical_minimum_does_not_invent_a_start(hass):
     calls = _services(hass)
-    coordinator, controller = _scenario(hass)
+    coordinator, controller = _scenario(hass, budget=0.5)
     hass.states.async_set("number.car_current", "6", {"min": 6, "max": 16, "step": 1})
     _power(hass, coordinator, _at(11), surplus=0.1)
     await controller.async_reconcile(_at(11))
@@ -140,28 +140,31 @@ async def test_no_solar_at_first_arrival_preserves_legacy_latest_start(hass):
     assert not any(service == "turn_on" for _, service, _ in calls)
 
 
-async def test_cloud_after_start_retains_one_owner_and_ten_minute_update_cadence(hass):
+async def test_cloud_after_start_curtails_safely_then_retains_one_owner_and_cadence(hass):
     _services(hass)
-    coordinator, controller = _scenario(hass)
+    coordinator, controller = _scenario(hass, budget=0.5)
     await controller.async_reconcile(_at(11))
-    _charging(hass, 6)
-    _power(hass, coordinator, _at(11, 1), surplus=0, current=6)
+    assert controller.target_current_a == 7
+    _charging(hass, 7)
+    _power(hass, coordinator, _at(11, 1), surplus=0, current=7)
     await controller.async_reconcile(_at(11, 1))
     assert controller.pre_free_session.active
-    assert controller.target_current_a == 6
+    assert controller.target_current_a == 4
     assert controller.decision_phase == "pre_free_combined"
 
-    # The moving deadline crosses a current step at 11:04. That must not reset
-    # the combined policy's ten-minute opportunity to adopt its latest target.
-    # Existing standalone measured-solar policies retain their stability filter.
+    # The cloud cannot spend the removed solar contribution from the battery.
+    # The safe downshift starts a fresh anchored hold, not rolling ten minutes.
+    _charging(hass, 4)
     for minute in range(2, 10):
-        _power(hass, coordinator, _at(11, minute), surplus=0, current=6)
+        coordinator.data.available_after_reserve_kwh = 1.5 - (minute - 1) * 2.76 / 60
+        _power(hass, coordinator, _at(11, minute), surplus=0, current=4)
         await controller.async_reconcile(_at(11, minute))
-        assert controller.target_current_a == 6
-    _power(hass, coordinator, _at(11, 10), surplus=0, current=6)
+        assert controller.target_current_a == 4
+    coordinator.data.available_after_reserve_kwh = 1.5 - 9 * 2.76 / 60
+    _power(hass, coordinator, _at(11, 10), surplus=0, current=4)
     await controller.async_reconcile(_at(11, 10))
     assert controller.pre_free_session.active
-    assert controller.target_current_a == 3
+    assert controller.target_current_a == 4
     assert not controller.daily_backfill_active
 
 
@@ -169,15 +172,13 @@ async def test_cloud_edge_reversals_do_not_chatter_current_commands(hass):
     calls = _services(hass)
     coordinator, controller = _scenario(hass)
     await controller.async_reconcile(_at(11))
-    _charging(hass, 6)
+    _charging(hass, 10)
     count = len(calls)
     for minute, solar in [(1, 1), (3, 2.5), (5, 1), (7, 2.5), (9, 1)]:
-        _power(hass, coordinator, _at(11, minute), surplus=solar, current=6)
+        _power(hass, coordinator, _at(11, minute), surplus=solar, current=10)
         await controller.async_reconcile(_at(11, minute))
-        assert controller.target_current_a == 6
-    assert not any(
-        data.get("entity_id") == "number.car_current" for _, _, data in calls[count:]
-    )
+        assert controller.target_current_a == 10
+    assert not any(data.get("entity_id") == "number.car_current" for _, _, data in calls[count:])
 
 
 @pytest.mark.parametrize("field", ["house_load", "grid_power", "battery_power"])
@@ -186,22 +187,20 @@ async def test_lost_evidence_cannot_fall_through_to_legacy_on_second_cycle(hass,
     calls = _services(hass)
     coordinator, controller = _scenario(hass, ev_pre_free_backfill_timing="conservative")
     await controller.async_reconcile(_at(11))
-    assert controller.target_current_a == 6
-    _charging(hass, 6)
+    assert controller.target_current_a == 10
+    _charging(hass, 10)
 
     # Well after the old latest start, neither the active combined latch nor a
     # fresh legacy fallback may bypass the same lost electrical/house evidence.
     for minute in (55, 56):
-        _power(hass, coordinator, _at(11, minute), current=6)
+        _power(hass, coordinator, _at(11, minute), current=10)
         sample = getattr(coordinator.telemetry, field)
         invalid = replace(
             sample,
             fresh=False,
             valid=loss != "missing",
             value=sample.value if loss == "stale" else None,
-            sources=tuple(
-                replace(source, updated_at=_at(10)) for source in sample.sources
-            ),
+            sources=tuple(replace(source, updated_at=_at(10)) for source in sample.sources),
             reason=f"source_{loss}",
         )
         coordinator.telemetry = replace(coordinator.telemetry, **{field: invalid})
@@ -269,7 +268,7 @@ async def test_large_solar_still_honours_total_outside_cap(hass):
 
 async def test_current_steps_apply_once_to_combined_rate(hass):
     _services(hass)
-    coordinator, controller = _scenario(hass)
+    coordinator, controller = _scenario(hass, budget=0.25)
     hass.states.async_set("number.car_current", "2", {"min": 2, "max": 16, "step": 2})
     _power(hass, coordinator, _at(11), surplus=1.5)
     await controller.async_reconcile(_at(11))
@@ -281,7 +280,7 @@ async def test_current_steps_apply_once_to_combined_rate(hass):
 
 async def test_fractional_current_step_does_not_lose_a_step_to_float_flooring(hass):
     _services(hass)
-    _, controller = _scenario(hass)
+    _, controller = _scenario(hass, budget=0.32)
     hass.states.async_set("number.car_current", "1", {"min": 1, "max": 16, "step": 0.1})
     await controller.async_reconcile(_at(11))
 
@@ -297,13 +296,13 @@ async def test_arrival_cannot_validate_retained16_as_solar(hass):
     await controller.async_reconcile(_at(11))
 
     assert controller.morning_solar.reconstructed_surplus_kw == pytest.approx(2.5)
-    assert controller.target_current_a == 6
+    assert controller.target_current_a == 10
     assert not any(
         data.get("entity_id") == "number.car_current" and data.get("value") == 16
         for _, _, data in calls
     )
     assert any(
-        data.get("entity_id") == "number.car_current" and data.get("value") == 6
+        data.get("entity_id") == "number.car_current" and data.get("value") == 10
         for _, _, data in calls
     )
 
@@ -339,7 +338,7 @@ async def test_home_then_cable_event_starts_only_after_both_arrive(hass):
     hass.states.async_set("binary_sensor.car_cable", "on")
     _power(hass, coordinator, _at(11, 1))
     await controller.async_reconcile(_at(11, 1))
-    assert controller.target_current_a == 6
+    assert controller.target_current_a == 10
     assert calls[-1][:2] == ("switch", "turn_on")
 
 
@@ -383,7 +382,7 @@ async def test_pending_stop_cannot_overrule_free_window_successor(hass):
     calls = _services(hass)
     coordinator, controller = _scenario(hass)
     await controller.async_reconcile(_at(11))
-    _charging(hass, 6)
+    _charging(hass, 10)
     controller.daily_backfill_stop_pending = True
     controller.daily_backfill_stop_attempts = 4
     _power(hass, coordinator, _at(12, 1), current=6)
@@ -406,10 +405,10 @@ async def test_restart_retains_combined_context_and_cloud_hold(hass):
     await restarted._async_restore()
     assert restarted.measured_solar_adjustment.battery_current_a is not None
     assert restarted.pre_free_session.active
-    _power(hass, coordinator, _at(11, 1), surplus=0, current=6)
+    _power(hass, coordinator, _at(11, 1), surplus=0, current=10)
     await restarted.async_reconcile(_at(11, 1))
 
-    assert restarted.target_current_a == 6
+    assert restarted.target_current_a == 10
     assert restarted.decision_phase == "pre_free_combined"
     assert restarted.pre_free_session.active
 
@@ -427,7 +426,7 @@ async def test_unplug_replug_replans_only_current_protected_budget(hass):
     assert not controller.pre_free_session.active
 
     # The old 2 kWh export plan is intentionally retained. Fresh protection
-    # leaves only 0.5 kWh; reconnect must not replay the previous 6 A budget.
+    # leaves only 0.5 kWh; reconnect must not replay the previous 10 A target.
     coordinator.data.available_after_reserve_kwh = 1.5
     hass.states.async_set("binary_sensor.car_cable", "on")
     hass.states.async_set("sensor.car_charging", "stopped")
@@ -435,7 +434,7 @@ async def test_unplug_replug_replans_only_current_protected_budget(hass):
     await controller.async_reconcile(_at(11, 2))
 
     assert controller.pre_free_plan.planned_energy_kwh == 0.5
-    assert controller.target_current_a == 4
+    assert controller.target_current_a == 7
     assert controller.decision_phase == "pre_free_combined"
 
 
@@ -449,7 +448,7 @@ async def test_live_protected_budget_loss_curtails_before_ten_minutes(hass):
     await controller.async_reconcile(_at(11, 1))
 
     assert controller.pre_free_plan.planned_energy_kwh == 0.5
-    assert controller.target_current_a == 4
+    assert controller.target_current_a == 7
     assert controller.decision_phase == "pre_free_combined"
 
 
@@ -473,7 +472,7 @@ async def test_zero_service_headroom_cannot_fall_back_to_positive_solar_candidat
     calls = _services(hass)
     coordinator, controller = _scenario(hass)
     await controller.async_reconcile(_at(11))
-    assert controller.target_current_a == 6
+    assert controller.target_current_a == 10
     _charging(hass, 6)
     _power(hass, coordinator, _at(11, 1), current=6)
     coordinator.telemetry = replace(
@@ -570,7 +569,7 @@ async def test_cap_below_physical_minimum_cannot_round_back_up_to_unsafe_current
     hass.states.async_set("number.car_current", "6", {"min": 6, "max": 16, "step": 1})
     _power(hass, coordinator, _at(11), surplus=0.1)
     await controller.async_reconcile(_at(11))
-    assert controller.target_current_a == 6
+    assert controller.target_current_a == 10
     _charging(hass, 6)
     hass.states.async_set("number.car_current", "6", {"min": 6, "max": 16, "step": 1})
     coordinator.update_config_value("ev_outside_inverter_percent", 20)
@@ -689,6 +688,6 @@ async def test_tiny_reconnect_gap_does_not_replay_old_solar_hold(hass):
     _power(hass, coordinator, reconnect_at)
     await controller.async_reconcile(reconnect_at)
 
-    assert controller.target_current_a == 4
+    assert controller.target_current_a == 7
     assert controller.pre_free_plan.planned_energy_kwh == 0.5
     assert controller.decision_phase == "pre_free_combined"

@@ -398,11 +398,11 @@ layers around the proven algorithm, not replacement algorithms.
   saved. When morning solar and pre-free backfill are both enabled, fresh
   positive raw net solar plus a valid protected battery budget can start one
   combined pre-free request before latest start. It adds protected keepalive,
-  the current discretionary AC budget divided by physical UTC hours until free
-  power, and current measured net solar, then floors once and caps TOTAL EV
+  the current discretionary AC budget divided by a bounded spending horizon,
+  and current measured net solar, then floors once and caps TOTAL EV
   current by the saved outside-window percentage and physical/service limits.
   Ready-by priority and evidence holds remain binding. An admitted session may
-  pace battery energy through zero-solar clouds; invalid authority is not zero
+  use battery energy through zero-solar clouds; invalid authority is not zero
   solar. This is an explicit correction, not pilot parity: the canonical source
   used the larger target and earlier HACS used exclusive pre-free selection.
   Caps, vehicle room and protection can leave energy unused; reaching an exact
@@ -424,6 +424,19 @@ layers around the proven algorithm, not replacement algorithms.
   curtails immediately. No new store version or writer is added. Uncombined
   pre-free, free-window, daily-backfill and charge-to-full stages discard the
   solar hold.
+  From v0.12.45, combined morning charging spends already-approved spare energy
+  over the next normal ten-minute adjustment opportunity rather than waiting
+  until free power. Between changes the UTC horizon is anchored to that accepted
+  target's next adjustment, with a floor of the existing thirty-second control
+  interval. Expected consumption therefore does not cause a rolling-horizon
+  staircase of current reductions. A held TOTAL target must fit current measured
+  solar plus the remaining budget through that horizon; a required decrease is
+  recalculated for its new full cadence before resetting the clock. No new
+  energy reservation or store version is added. Existing house, EV and battery
+  protection remain authoritative, and a solar-only successor under both
+  enabled policies retains the same total inverter-percentage cap. Independent
+  morning solar with pre-free disabled and no-solar latest-start admission are
+  unchanged. This is a separately approved pacing correction, not pilot parity.
 - Solar-spill coherence applies to the fast electrical grid and effective
   battery sources. Rejected inactive-magnitude provenance cannot invalidate a
   fresh signed-battery fallback. Stable battery SoC and state-qualified Tessie

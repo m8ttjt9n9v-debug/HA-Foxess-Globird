@@ -306,7 +306,7 @@ battery-full threshold. Pre-free backfill additionally requires the Local Modbus
 ZEROHERO export ledger. With both policies enabled, fresh positive raw net solar
 and a valid protected battery budget may start a representable combined target
 before the old latest start. The request is protected keepalive plus current
-discretionary AC energy divided by physical UTC hours until free start plus
+discretionary AC energy divided by the bounded spending horizon plus
 current measured net solar, rounded down once. The saved outside-window
 inverter percentage caps the TOTAL request, alongside connector and service
 limits; it is not reinterpreted as a battery-only allowance. Ready-by priority,
@@ -343,6 +343,18 @@ optional accepted battery-current context and the existing pre-free latch; no
 new store version, device writer or forecast dependency is required.
 The configured measured-solar SoC threshold is a hard cutoff, so the hold
 cannot preserve extra EV current below the house-battery boundary.
+
+From v0.12.45, the combined stage offers spare energy sooner while the car is
+connected, without enlarging the protected energy budget. The horizon ends at
+the accepted target's next normal ten-minute update, or free start if earlier,
+but is never shorter than the existing thirty-second control recheck. Compute
+elapsed time in UTC. A retained request may not exceed current measured solar
+plus the battery budget deliverable through that horizon. Safety reductions
+start a fresh cadence and must be affordable for that new interval, preventing
+both budget overspend and repeated reductions caused solely by normal energy
+consumption. Keep the total inverter-percentage cap during the combined-to-
+solar handoff as well. No-solar latest start, standalone solar, Ready-by,
+Full/Trip and free-window ownership remain separate and unchanged.
 
 The Working Single Phase Pilot Site uses Tessie entities for these roles.
 Portable code maps roles and never embeds that vehicle's entity IDs. See the

@@ -7,6 +7,9 @@ house demand is 0.5 kW except for the documented cloud/surge intervals. Current
 is realised immediately, electrical evidence is valid, service headroom is
 ample, and vehicle room is ample (44% with a 90% normal target). No efficiency
 is applied twice: the initial pool and EV delivery are both measured at AC.
+The sudden house-surge profile deliberately exceeds the protected house model:
+house-only deficit remains visible rather than being misreported as an EV
+command consuming more than its observed discretionary budget.
 
 Single-phase hardware is capped at 15 A; three-phase hardware at 16 A. Both
 retain the same 15 kW inverter / 50% TOTAL EV ceiling. The smallest current
@@ -36,6 +39,7 @@ from custom_components.home_energy_orchestrator.planner.ev_outside_window import
     calculate_pre_free_plan,
     plan_combined_pre_free_current,
     plan_pre_free_current,
+    pre_free_frontload_horizon_hours,
     rate_limit_measured_solar_current,
 )
 
@@ -48,6 +52,7 @@ class MinuteResult:
     minute: int
     current_a: float
     remaining_safe_ac_kwh: float
+    unprotected_house_shortfall_kwh: float
 
 
 @dataclass(frozen=True)
@@ -77,6 +82,7 @@ def _replay(*, phases, profile, combined):
     context = SimpleNamespace(measured_solar_adjustment=MeasuredSolarAdjustmentState())
     remaining, delivered, net_solar = 2.0, 0.0, 0.0
     active = False
+    house_shortfall = 0.0
     trace = []
     for minute in range(61):
         now = START + timedelta(minutes=minute)
@@ -101,11 +107,21 @@ def _replay(*, phases, profile, combined):
                 solar_surplus_kw=max(actual_surplus, 0),
                 charger_minimum_a=1,
                 telemetry_valid=True,
+                battery_spending_hours=pre_free_frontload_horizon_hours(
+                    context.measured_solar_adjustment,
+                    now=now,
+                    hours_until_free=inputs.hours_until_free,
+                ),
             ).current_a
             active = raw_target >= 1
             current = (
                 ActiveEvController._combined_pre_free_adjustment(
-                    context, now, inputs, raw_target, charger_minimum_a=1
+                    context,
+                    now,
+                    inputs,
+                    raw_target,
+                    charger_minimum_a=1,
+                    solar_surplus_kw=max(actual_surplus, 0),
                 )
                 if active
                 else 0.0
@@ -147,10 +163,19 @@ def _replay(*, phases, profile, combined):
                 context.measured_solar_adjustment = adjustment.state
 
         ev_kw = current * 0.230 * phases
+        # The controller cannot promise that unexpected house-only consumption
+        # never exceeds a previously protected estimate. It can and must avoid
+        # issuing EV energy beyond the positive budget it actually observes.
+        assert max(ev_kw - max(actual_surplus, 0), 0) / 60 <= budget + 1e-9
+        house_shortfall += max(-(remaining + min(actual_surplus, 0) / 60), 0) - max(-remaining, 0)
         delivered += ev_kw / 60
         net_solar += actual_surplus / 60
+        previous_remaining = remaining
         remaining -= (ev_kw - actual_surplus) / 60
-        trace.append(MinuteResult(minute, current, remaining))
+        if previous_remaining >= 0 and remaining < 0:
+            assert ev_kw == 0
+            assert actual_surplus < 0
+        trace.append(MinuteResult(minute, current, remaining, house_shortfall))
 
     return ReplayResult(tuple(trace), delivered, net_solar, ceiling)
 
@@ -174,7 +199,9 @@ def test_combined_replay_uses_at_least_as_much_safe_energy_without_exceeding_lim
             2 + result.net_solar_minus_house_kwh - result.delivered_ev_ac_kwh
         )
         for sample in result.trace:
-            assert sample.remaining_safe_ac_kwh >= -1e-9
+            assert sample.remaining_safe_ac_kwh >= -sample.unprotected_house_shortfall_kwh - 1e-9
+            if profile != "house_surge":
+                assert sample.remaining_safe_ac_kwh >= -1e-9
             assert 0 <= sample.current_a <= result.total_current_ceiling_a
             assert sample.current_a == floor(sample.current_a)
             assert sample.current_a * 0.230 * phases <= 7.5

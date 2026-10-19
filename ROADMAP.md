@@ -407,6 +407,15 @@ request charging.
 
 ## Policy correction — combined solar and battery pre-free EV charging
 
+- [x] Front-load the existing protected morning battery budget while the car
+  is connected, instead of assuming it remains available until free power.
+  Anchor the spending horizon to the next ten-minute normal adjustment, floor
+  it at the existing control tick and promptly bound held TOTAL current by
+  current solar and live battery authority. Retain all reserves, normal EV
+  limits, existing admission and ownership; preserve the inverter-percentage
+  cap during the solar-only successor, including three-phase/small-inverter sites.
+- [ ] Separately qualify the faster pacing on the approved pilot after frozen
+  tests, independent review, compatibility rehearsals and published-asset checks.
 - [x] Combine only the already-enabled morning-solar and pre-free policies.
   Preserve no-solar latest-start behaviour, Ready-by priority, its after-deadline
   handoff and all invalid-evidence holds. Admit an earlier opportunity from
@@ -415,8 +424,8 @@ request charging.
   Once active, pace remaining battery energy through zero-solar clouds; missing
   or stale evidence is not equivalent to measured zero.
 - [x] Calculate one target from separately protected keepalive, current
-  discretionary AC kWh divided by physical UTC hours until configured free
-  start, and current raw measured net solar. Floor once and cap TOTAL EV
+  discretionary AC kWh divided by the bounded spending horizon (originally
+  hours until free start), and current raw measured net solar. Floor once and cap TOTAL EV
   current by the saved outside-window inverter percentage, connector and
   service headroom. Do not redefine the percentage, double-subtract house/EV
   protection, assume future solar or promise exact reserve depletion.

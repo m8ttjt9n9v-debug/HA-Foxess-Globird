@@ -7,7 +7,7 @@ window decisions.  They contain no Home Assistant or actuator side effects.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from math import floor, isfinite
 
 from .ev import (
@@ -53,6 +53,7 @@ class SolarSpillDecision:
 # reconciliation loop. Ten minutes filters ordinary cloud-edge movement
 # without allowing a stale high solar target to persist for a quarter-hour.
 MEASURED_SOLAR_ADJUSTMENT_INTERVAL = timedelta(minutes=10)
+EV_CONTROL_INTERVAL = timedelta(seconds=30)
 _MEASURED_SOLAR_PHASES = frozenset({"solar_spill", "morning_solar"})
 
 
@@ -75,6 +76,37 @@ class MeasuredSolarAdjustment:
     target_current_a: float
     state: MeasuredSolarAdjustmentState
     phase: str
+
+
+def pre_free_frontload_horizon_hours(
+    state: MeasuredSolarAdjustmentState,
+    *,
+    now: datetime,
+    hours_until_free: float,
+) -> float:
+    """Spend live surplus by the next normal adjustment, not by free start.
+
+    Anchor the horizon to the accepted target's clock. A rolling ten-minute
+    divisor would mistake expected energy consumption for lost authority and
+    repeatedly reduce current. Never authorise energy faster than the existing
+    control tick can recheck it, including just before a cadence/free boundary.
+    """
+    _aware(now, "now")
+    if isinstance(hours_until_free, bool) or not isfinite(hours_until_free) or hours_until_free < 0:
+        raise ValueError("hours until free must be finite and non-negative")
+    if hours_until_free == 0:
+        return 0.0
+    horizon = MEASURED_SOLAR_ADJUSTMENT_INTERVAL.total_seconds() / 3600
+    if (
+        state.phase == "morning_solar"
+        and state.battery_current_a is not None
+        and state.changed_at is not None
+    ):
+        _aware(state.changed_at, "changed_at")
+        elapsed = (now.astimezone(UTC) - state.changed_at.astimezone(UTC)).total_seconds()
+        if 0 <= elapsed < MEASURED_SOLAR_ADJUSTMENT_INTERVAL.total_seconds():
+            horizon -= elapsed / 3600
+    return max(min(hours_until_free, horizon), EV_CONTROL_INTERVAL.total_seconds() / 3600)
 
 
 def rate_limit_measured_solar_current(
@@ -142,10 +174,12 @@ def rate_limit_measured_solar_current(
         else now
     )
     if (
-        now - state.changed_at >= MEASURED_SOLAR_ADJUSTMENT_INTERVAL
+        now.astimezone(UTC) - state.changed_at.astimezone(UTC)
+        >= MEASURED_SOLAR_ADJUSTMENT_INTERVAL
         and (
             not require_stable_target
-            or now - pending_since >= MEASURED_SOLAR_ADJUSTMENT_INTERVAL
+            or now.astimezone(UTC) - pending_since.astimezone(UTC)
+            >= MEASURED_SOLAR_ADJUSTMENT_INTERVAL
         )
     ):
         accepted = MeasuredSolarAdjustmentState(
@@ -630,15 +664,24 @@ def plan_combined_pre_free_current(
     solar_surplus_kw: float,
     charger_minimum_a: float,
     telemetry_valid: bool,
+    battery_spending_hours: float | None = None,
 ) -> EvCurrentDecision:
     """Add raw measured solar to already house-protected AC battery pacing.
 
+    An explicit spending horizon front-loads the same protected energy. Omitted
+    horizons retain the earlier pure planner's time-to-free characterisation.
     Quantise once after combining power. The saved outside-window ceiling
     continues to cap TOTAL EV power, not merely the battery contribution.
     """
     _validate_pre_free_current(inputs)
     if not isfinite(solar_surplus_kw) or not isfinite(charger_minimum_a) or charger_minimum_a < 0:
         raise ValueError("combined pre-free power and minimum must be finite")
+    if battery_spending_hours is not None and (
+        isinstance(battery_spending_hours, bool)
+        or not isfinite(battery_spending_hours)
+        or battery_spending_hours <= 0
+    ):
+        raise ValueError("battery spending horizon must be finite and positive")
     if not telemetry_valid:
         return EvCurrentDecision(inputs.baseline_a, "pre_free_combined_telemetry_unavailable")
     if (
@@ -649,9 +692,14 @@ def plan_combined_pre_free_current(
         >= min(inputs.vehicle_soft_limit_percent, NON_OVERRIDE_CHARGE_LIMIT_MAX_PERCENT)
     ):
         return EvCurrentDecision(inputs.baseline_a, "pre_free_inactive")
+    horizon = inputs.hours_until_free
+    if battery_spending_hours is not None:
+        horizon = max(
+            min(horizon, battery_spending_hours), EV_CONTROL_INTERVAL.total_seconds() / 3600
+        )
     total_a = (
         inputs.baseline_a
-        + (inputs.planned_energy_kwh / inputs.hours_until_free + max(solar_surplus_kw, 0.0))
+        + (inputs.planned_energy_kwh / horizon + max(solar_surplus_kw, 0.0))
         * 1000
         / inputs.voltage_v
         / inputs.phase_count

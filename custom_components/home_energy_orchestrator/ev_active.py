@@ -226,6 +226,7 @@ from .planner.ev_outside_state import (
     reconcile_outside_ownership,
 )
 from .planner.ev_outside_window import (
+    EV_CONTROL_INTERVAL,
     MeasuredSolarAdjustmentState,
     OutsideChargeLimitEvidence,
     OutsideCurrentEnvelopeEvidence,
@@ -246,6 +247,7 @@ from .planner.ev_outside_window import (
     plan_morning_solar_current,
     plan_pre_free_current,
     plan_solar_spill_current,
+    pre_free_frontload_horizon_hours,
     protected_baseline_current_a,
     rate_limit_measured_solar_current,
 )
@@ -419,7 +421,7 @@ class ActiveEvController:
             self._unsub_core_started = async_at_started(self.hass, self._async_core_started)
         if self._unsub_interval is None:
             self._unsub_interval = async_track_time_interval(
-                self.hass, self._async_tick, timedelta(seconds=30)
+                self.hass, self._async_tick, EV_CONTROL_INTERVAL
             )
         if self._unsub_driving_snapshot is None:
             start = self.coordinator._configured_time(  # noqa: SLF001
@@ -2058,6 +2060,16 @@ class ActiveEvController:
                 # stale/missing solar or house source cannot fall back to the
                 # old latest-start battery branch after clearing the latch.
                 planned_export_energy = self._combined_pre_free_budget(now, planned_export_energy)
+                held = self.measured_solar_adjustment
+                if (
+                    held.changed_at is not None
+                    and held.changed_at.astimezone(UTC) > now.astimezone(UTC)
+                ):
+                    # Persisted clocks are validated on restore; also avoid a
+                    # future in-process clock indefinitely holding an old target.
+                    self.measured_solar_adjustment = replace(
+                        held, changed_at=None, pending_current_a=None, pending_since=None
+                    )
             planning = evaluate_pre_free_plan(
                 PreFreePlanningEvidence(
                     planned_export_energy_kwh=planned_export_energy,
@@ -2085,7 +2097,9 @@ class ActiveEvController:
             )
             combined_inputs = PreFreeCurrentInputs(
                 session_active=True,
-                planned_energy_kwh=planned_energy,
+                # Three-decimal plan presentation must not round live energy
+                # authority upward when spending a tiny budget quickly.
+                planned_energy_kwh=min(planned_energy, planned_export_energy or 0.0),
                 hours_until_free=max(
                     (free_start.astimezone(UTC) - now.astimezone(UTC)).total_seconds() / 3600,
                     0.0,
@@ -2104,6 +2118,11 @@ class ActiveEvController:
                     solar_surplus_kw=self.morning_solar.reconstructed_surplus_kw,
                     charger_minimum_a=current_minimum,
                     telemetry_valid=planned_export_energy is not None,
+                    battery_spending_hours=pre_free_frontload_horizon_hours(
+                        self.measured_solar_adjustment,
+                        now=now,
+                        hours_until_free=combined_inputs.hours_until_free,
+                    ),
                 )
                 if combined_requested
                 else None
@@ -2165,8 +2184,20 @@ class ActiveEvController:
                     combined_inputs,
                     combined.current_a,
                     charger_minimum_a=current_minimum,
+                    solar_surplus_kw=self.morning_solar.reconstructed_surplus_kw,
                 )
-                self.pre_free_phase = "combined_solar_and_battery"
+                combined_pre_free = (
+                    self.pre_free_current_a > baseline
+                    and self.pre_free_current_a >= current_minimum
+                )
+                if combined_pre_free:
+                    self.pre_free_phase = "combined_solar_and_battery"
+                else:
+                    # Re-anchoring a safety reduction can make the request
+                    # sub-minimum. Withdraw ownership as well as the numeric
+                    # target so a zero baseline can actually stop the old charge.
+                    self.pre_free_session = PreFreeSessionState()
+                    self.pre_free_phase = "not_eligible"
         else:
             self.pre_free_session = PreFreeSessionState()
             self.pre_free_phase = (
@@ -2195,7 +2226,7 @@ class ActiveEvController:
                 and self.coordinator.runtime_config.ev_policy.morning_solar_enabled):
             # Solar-only is a legitimate successor to a lost battery budget,
             # not a bypass around a rejected/zero service-headroom ceiling.
-            bounded_solar = min(self.morning_solar.current_a, service_ceiling)
+            bounded_solar = min(self.morning_solar.current_a, pre_free_ceiling)
             if bounded_solar < current_minimum:
                 bounded_solar = 0.0
             if bounded_solar != self.morning_solar.current_a:
@@ -2347,18 +2378,39 @@ class ActiveEvController:
         raw_target_a: float,
         *,
         charger_minimum_a: float,
+        solar_surplus_kw: float,
     ) -> float:
-        """Keep solar stability, never hold a revoked battery allowance."""
+        """Use approved energy sooner without holding an unaffordable target."""
+        previous = self.measured_solar_adjustment
+        horizon = pre_free_frontload_horizon_hours(
+            previous, now=now, hours_until_free=inputs.hours_until_free
+        )
+        reduced = (
+            previous.target_current_a is not None and raw_target_a < previous.target_current_a
+        )
+        if reduced:
+            # A reduction starts a new cadence epoch. Recheck its target against
+            # that NEW full horizon before saving changed_at=now, otherwise the
+            # next tick would need to reduce it again after the horizon resets.
+            horizon = pre_free_frontload_horizon_hours(
+                MeasuredSolarAdjustmentState(), now=now, hours_until_free=inputs.hours_until_free
+            )
+            raw_target_a = min(
+                raw_target_a,
+                plan_combined_pre_free_current(
+                    inputs,
+                    solar_surplus_kw=solar_surplus_kw,
+                    charger_minimum_a=charger_minimum_a,
+                    telemetry_valid=True,
+                    battery_spending_hours=horizon,
+                ).current_a,
+            )
         battery_current = (
             inputs.planned_energy_kwh
-            / inputs.hours_until_free
+            / horizon
             * 1000
             / inputs.voltage_v
             / inputs.phase_count
-        )
-        previous = self.measured_solar_adjustment
-        reduced = (
-            previous.battery_current_a is not None and battery_current < previous.battery_current_a
         )
         adjustment = rate_limit_measured_solar_current(
             previous,

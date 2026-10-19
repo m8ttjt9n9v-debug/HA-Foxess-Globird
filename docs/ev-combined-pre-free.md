@@ -26,7 +26,7 @@ make the combined current usable.
 Without this solar opportunity, the existing latest-start plan is retained. If
 either policy is disabled, its existing independent behaviour is retained.
 Once a combined session has started, passing clouds can reduce solar to zero
-while the remaining safe battery budget continues to be paced toward free power.
+while the remaining safe battery budget continues to be available for charging.
 Zero measured solar is different from missing or stale electrical evidence.
 Positive measured surplus is the admission test, not proof of daylight; there
 is no additional universal wattage threshold or fixed sunrise time.
@@ -37,9 +37,17 @@ HEO works in wall-side AC energy and power:
 
 ```
 EV power = protected keepalive power
-         + current protected discretionary battery energy / hours until free power
+         + current protected discretionary battery energy / spending horizon
          + current measured net solar surplus
 ```
+
+From v0.12.45, HEO offers that spare energy sooner instead of assuming the car
+will stay plugged in until free power. The spending horizon normally ends at
+the next ten-minute current adjustment. Between updates it remains anchored to
+the accepted target's clock, so normal energy consumption does not continually
+restart a rolling ten-minute calculation. The free-power boundary shortens the
+horizon, but it is never shorter than the existing thirty-second control
+recheck. HEO does not knowingly spend a small budget faster than it can recheck.
 
 The time to free power is physical elapsed time between UTC instants, including
 daylight-saving changes. The boundary is the site's exact configured free-power
@@ -71,9 +79,14 @@ service headroom. The percentage remains a limit on total EV power, not a newly
 redefined limit on the battery component alone. It does not increase because
 solar is available.
 
-For example, with 2 kWh of safe battery energy, one hour until free power and
-2 kW of measured net solar, the candidate is 4 kW before keepalive and current
-rounding. It is not merely the larger of 2 kW battery power and 2 kW solar.
+For example, with 0.9 kWh of safe battery energy and ten minutes until the next
+adjustment, the battery contribution may be up to 5.4 kW before current limits.
+A 15 A single-phase charger would still receive no more than its roughly
+3.45 kW physical maximum at 230 V. A three-phase charger still respects the
+saved percentage of inverter output across all phases. This offers the same
+energy earlier; it does not reserve or manufacture another 0.9 kWh at each tick.
+Once the spare budget is exhausted, an eligible solar-only successor keeps the
+same total inverter-percentage ceiling while both policies remain enabled.
 
 ## Protection and smooth adjustments
 
@@ -88,6 +101,12 @@ protected battery budget/component, verified
 grid import or reduced service headroom can curtail immediately. Lost energy
 authority, invalid/stale electrical evidence, a house-battery cutoff, EV target,
 disconnect, closed control gate or Safety Lock cannot be hidden by the hold.
+In addition, a held TOTAL request must remain affordable from current solar and
+the remaining approved battery budget through its next adjustment. A lost solar
+contribution can be absorbed only while that budget supports it. If a decrease
+is required, HEO recalculates it for a fresh normal interval before resetting
+the clock; it must not save a target that needs another immediate decrease just
+because its horizon reset. Ordinary increases still wait for the existing cadence.
 
 The existing morning battery threshold and global outside-window EV battery
 cutoff remain distinct and binding. The existing normal EV charge-limit policy,
@@ -124,6 +143,7 @@ weakened merely to empty the battery before the window.
 | --- | --- |
 | Canonical pilot selected the larger of pre-free and measured-solar targets. | Combining their power is a separately identified correction, not a claim of pilot parity. |
 | Earlier HACS pre-free selected its target exclusively. | Both enabled policies can now contribute to one pre-free request. |
+| v0.12.43/44 spread discretionary energy until free power. | v0.12.45 separately corrects pacing to use the same budget sooner while connected; the no-solar latest-start branch remains characterised and unchanged. |
 | Protected export ledger and vehicle-room calculation. | Reused without a second reserve subtraction or invented energy budget. |
 | Ready-by planner, session and delivery ledger. | Priority, admission, invalid-evidence holds and after-deadline handoff retained. |
 | Measured-solar reconstruction and persistence. | Same signed, coherent evidence and journal; standalone solar keeps stable-target hysteresis, while combined pre-free adopts the latest safe target on the ten-minute cadence. Reduced battery authority adds an immediate downward bound. |
