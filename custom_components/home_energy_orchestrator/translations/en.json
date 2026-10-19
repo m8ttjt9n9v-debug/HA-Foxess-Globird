@@ -149,7 +149,9 @@
           "aemo_region": "AEMO market region",
           "aemo_export_threshold_per_kwh": "Export price threshold ($/kWh)",
           "aemo_import_threshold_per_kwh": "Consumption observation threshold ($/kWh)",
-          "critical_event_sell_enabled": "Automatic price-triggered export"
+          "critical_event_sell_enabled": "Automatic price-triggered export",
+          "amber_price_entity": "Amber price sensor (optional)",
+          "amber_price_region": "Amber account's NEM region"
         }
       },
       "reconfigure": {
@@ -317,7 +319,9 @@
           "aemo_region": "AEMO market region",
           "aemo_export_threshold_per_kwh": "Export price threshold ($/kWh)",
           "aemo_import_threshold_per_kwh": "Consumption observation threshold ($/kWh)",
-          "critical_event_sell_enabled": "Automatic price-triggered export"
+          "critical_event_sell_enabled": "Automatic price-triggered export",
+          "amber_price_entity": "Amber price sensor (optional)",
+          "amber_price_region": "Amber account's NEM region"
         }
       },
       "site": {
@@ -904,20 +908,24 @@
       },
       "reconfigure_aemo_monitor": {
         "title": "AEMO prices and export",
-        "description": "Observe AEMO prices independently of battery control. Automatic price-triggered export is a separate default-off request using the existing sellable-energy budget and inverter owner. Prices do not confirm retailer events or payments.",
+        "description": "Observe five-minute wholesale prices independently of battery control. Optionally use your existing Amber integration first, with AEMO as fallback. Automatic price-triggered export is a separate default-off request using the existing Sellable Energy budget and inverter owner. Prices do not confirm retailer events or payments.",
         "data": {
           "aemo_monitor_enabled": "AEMO price monitoring",
           "aemo_region": "AEMO market region",
           "aemo_export_threshold_per_kwh": "Export price threshold ($/kWh)",
           "aemo_import_threshold_per_kwh": "Consumption observation threshold ($/kWh)",
-          "critical_event_sell_enabled": "Automatic price-triggered export"
+          "critical_event_sell_enabled": "Automatic price-triggered export",
+          "amber_price_entity": "Amber price sensor (optional)",
+          "amber_price_region": "Amber account's NEM region"
         },
         "data_description": {
-          "aemo_monitor_enabled": "Observe official actual five-minute prices. Monitoring alone sends no device commands and does not confirm a retailer event or payment.",
+          "aemo_monitor_enabled": "Observe confirmed five-minute wholesale prices from the selected sources. Monitoring alone sends no device commands and does not confirm a retailer event or payment.",
           "aemo_region": "Choose the site's NEM region explicitly; no region is assumed.",
           "aemo_export_threshold_per_kwh": "Export becomes eligible at or above this operating threshold. The default $3/kWh is a chosen rule, not a verified retailer trigger.",
           "aemo_import_threshold_per_kwh": "Optional read-only consumption observation. No automatic buying is added and no surplus trigger is assumed; clear this value to disable the hint.",
-          "critical_event_sell_enabled": "Default off. Use the existing Sellable Energy and shared automatic-export budget while a current actual price is at or above the threshold. Local Modbus, commissioning, master and Safety Lock gates still apply."
+          "critical_event_sell_enabled": "Default off. Use the existing Sellable Energy and shared automatic-export budget while a current actual price is at or above the threshold. Local Modbus, commissioning, master and Safety Lock gates still apply.",
+          "amber_price_entity": "Optional sensor from Home Assistant's Amber Electric integration. HEO reads its confirmed five-minute wholesale spot_per_kwh attribute, not the displayed feed-in or import tariff, and removes GST once. AEMO remains the fallback. No second API key is needed; clear this sensor and its account region to use AEMO only.",
+          "amber_price_region": "Confirm the NEM region of this Amber account; it cannot be detected from the sensor. Amber is used only when this matches the AEMO market region above. A mismatch uses AEMO instead; it never changes the account binding automatically."
         }
       }
     },
@@ -962,6 +970,8 @@
       "invalid_aemo_region": "Choose a supported NEM region before enabling monitoring.",
       "invalid_aemo_export_threshold": "Use a finite positive export threshold.",
       "invalid_aemo_import_threshold": "Use a finite consumption threshold lower than the export threshold.",
+      "invalid_amber_price_entity": "Choose an Amber price sensor, or clear both the Amber sensor and account region.",
+      "invalid_amber_price_region": "Choose the Amber account's NEM region, or clear both the Amber sensor and account region.",
       "invalid_price_export_enabled": "Choose automatic price-triggered export on or off.",
       "price_export_requires_monitor": "Enable AEMO monitoring with an explicit region first.",
       "price_export_requires_local_modbus": "Choose commissioned Local Modbus inverter ownership first."

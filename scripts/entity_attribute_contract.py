@@ -32,6 +32,9 @@ MANUAL_ADDITIONS_PATH = (
 AEMO_ADDITIONS_PATH = (
     REPOSITORY_ROOT / "docs" / "maintainability" / "entity-attribute-additions-aemo-monitor-v1.json"
 )
+AMBER_ADDITIONS_PATH = (
+    REPOSITORY_ROOT / "docs" / "maintainability" / "entity-attribute-additions-amber-price-v1.json"
+)
 PRICE_ADDITIONS_PATH = (
     REPOSITORY_ROOT / "docs" / "maintainability" / "entity-attribute-additions-price-export-v1.json"
 )
@@ -241,6 +244,7 @@ def validate_against_release_baseline() -> None:
         for path in (
             MANUAL_ADDITIONS_PATH,
             AEMO_ADDITIONS_PATH,
+            AMBER_ADDITIONS_PATH,
             PRICE_ADDITIONS_PATH,
             TRIP_ADDITIONS_PATH,
             EV_CAPACITY_ADDITIONS_PATH,

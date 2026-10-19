@@ -269,6 +269,32 @@ completed trip is still consumed rather than becoming an ongoing SoC reserve.
 
 ## Optional price export extension
 
+- [x] Add an explicitly mapped native Amber confirmed five-minute wholesale
+  source as primary, with the existing direct AEMO DispatchIS feed as fallback.
+  Reuse native sensor updates and `spot_per_kwh`; do not add another API reader,
+  credential store or Amber polling loop. Bind `amber_price_entity` and
+  `amber_price_region` explicitly to the selected NEM region. Empty mappings
+  retain AEMO-only behaviour and no source configuration enables selling.
+- [x] Characterise the native dollars/kWh including-GST attribute separately
+  from its displayed tariff and the raw API's cents field. Remove GST exactly
+  once with decimal arithmetic; require confirmed current five-minute evidence,
+  valid native provenance, non-restored state and source freshness. Keep unknown
+  Amber market flags explicit and current adverse AEMO market flags as vetoes.
+- [x] Cover primary/fallback arrival races, valid low primary versus high
+  fallback, estimated/stale/future/30-minute values, same-interval corrections,
+  provider outages/recovery, region changes, reload/restart and journal
+  compatibility. A contradictory fallback must not resurrect permission already
+  withdrawn by the primary when correction order cannot be proven. Preserve
+  exact interval expiry, protected Sellable, shared cap, original actuator
+  ownership and non-extendable export deadlines through one existing controller.
+- [ ] Complete frozen release validation and separately approved pilot
+  acceptance of Amber-first price selection. Do not report publication,
+  installation, physical price-spike delivery or retailer payment from tests.
+
+  Local validation passes 3,281 tests, Ruff, additive compatibility checks and
+  v0.12.45/v0.12.26 upgrade/rollback rehearsals. Independent review passes the
+  118 Amber-focused cases. Publication alone does not establish live pilot
+  acceptance; no site is automatically configured or activated by installation.
 - [x] Make the configurable sell threshold inclusive: sell eligibility at or
   above the threshold (default $3/kWh), not strictly above. Apply the same rule
   to current observation, corrected/restored reports and live command guards.
@@ -293,6 +319,16 @@ completed trip is still consumed rather than becoming an ongoing SoC reserve.
 - [ ] Separately commission and verify physical high-price export before
   active-policy rollout. Baseline acceptance is not a claim of live price-event
   delivery. No retailer reward claim or critical-event buy control is included.
+
+### Future — full Amber tariff compatibility
+
+- [ ] Design separately commissioned Amber retail-tariff support beyond this
+  wholesale source adapter: variable import and feed-in tariffs, forecast versus
+  confirmed prices, billing/credit treatment and tariff-aware planning. Preserve
+  existing GloBird/free-window behaviour until deliberately configured. Do not
+  treat a wholesale spike as proof of a GloBird event or a $1/kWh payment, assume
+  both retailers have identical tariffs, or change cost accounting as part of
+  the Amber-first data-source correction.
 
 ## Price-triggered buying — withdrawn
 

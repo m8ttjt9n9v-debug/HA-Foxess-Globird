@@ -190,9 +190,29 @@ layers around the proven algorithm, not replacement algorithms.
   and ZEROHERO credit. See [estimate basis](trip-charge-wrapper.md#estimated-trip-impact).
 
 - A separately commissioned, default-off price request adds admission to the
-  existing protected export controller, not another inverter writer. Only a
-  current actual regional DispatchIS price at or above the configured threshold can
-  grant permission. The operator threshold is not a retailer critical-event
+  existing protected export controller, not another inverter writer. A qualified
+  current regional wholesale price at or above the configured threshold can
+  grant permission. Direct DispatchIS remains the default source. The v0.12.46
+  optional Amber adapter reads the installed native integration's confirmed
+  five-minute `spot_per_kwh` attribute as primary, with DispatchIS as fallback;
+  it adds no API reader, credentials or Amber polling loop. The two explicit
+  mappings, `amber_price_entity` and `amber_price_region`, must bind that source
+  to HEO's selected NEM region. Unmapped entries keep the existing path, and
+  configuring a source never enables monitoring or selling. The native attribute
+  is dollars/kWh including GST, not raw API cents; decimal conversion removes
+  GST exactly once. The supported native one-second-after-boundary start is
+  normalized to its five-minute NEM block; other malformed intervals fail.
+  Estimated, non-five-minute, stale, future and restored readings cannot grant
+  permission. Missing Amber market flags remain unknown;
+  affirmative current AEMO intervention, administered-pricing or suspension
+  evidence vetoes admission and survives a failed fetch until a newer qualified
+  official correction or the block's expiry. A valid low primary always outranks
+  a high fallback.
+  Contradictory same-interval fallback cannot revive withdrawn primary permission
+  when the correction order is unproven. Strict interval expiry and existing
+  non-extendable session deadlines remain binding across provider changes.
+  This source extension still requires release validation and separately
+  approved live acceptance. The operator threshold is not a retailer critical-event
   declaration or payment guarantee. Price admission reuses protected house/EV
   energy, battery floor/reserve, and the shared all-day measured export cap.
   Its existing session journal additionally binds price ownership to a

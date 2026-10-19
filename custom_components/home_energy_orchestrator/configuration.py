@@ -6,6 +6,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import time
 from math import isfinite
+from re import fullmatch
 from types import MappingProxyType
 from typing import cast
 
@@ -18,6 +19,8 @@ from .const import (
     CONF_AEMO_IMPORT_THRESHOLD,
     CONF_AEMO_MONITOR_ENABLED,
     CONF_AEMO_REGION,
+    CONF_AMBER_PRICE_ENTITY,
+    CONF_AMBER_PRICE_REGION,
     CONF_AUTOMATIC_CHARGE_ENABLED,
     CONF_AUTOMATIC_CONTROL_ENABLED,
     CONF_AUTOMATIC_EXPORT_ENABLED,
@@ -271,6 +274,23 @@ class AemoMonitorConfiguration:
     region: str | None
     export_threshold_per_kwh: float
     import_threshold_per_kwh: float | None
+    amber_price_entity: str | None = None
+    amber_price_region: str | None = None
+
+    @staticmethod
+    def _validate_amber_mapping(data: Mapping[str, object]) -> dict[str, str]:
+        """Validate an explicit optional account binding, never infer its region."""
+        entity = data.get(CONF_AMBER_PRICE_ENTITY)
+        region = data.get(CONF_AMBER_PRICE_REGION)
+        if entity is None and region is None:
+            return {}
+        if not isinstance(entity, str) or fullmatch(r"sensor\.[a-z0-9_]+", entity) is None:
+            return {CONF_AMBER_PRICE_ENTITY: "invalid_amber_price_entity"}
+        if not isinstance(region, str) or region not in AEMO_REGIONS:
+            return {CONF_AMBER_PRICE_REGION: "invalid_amber_price_region"}
+        # A later dashboard region change must retain the account binding but
+        # reject that Amber source at runtime, leaving AEMO fallback available.
+        return {}
 
     @staticmethod
     def validate_mapping(data: Mapping[str, object]) -> dict[str, str]:
@@ -299,11 +319,19 @@ class AemoMonitorConfiguration:
             )
             if imported is None or imported >= export:
                 return {CONF_AEMO_IMPORT_THRESHOLD: "invalid_aemo_import_threshold"}
-        return {}
+        return AemoMonitorConfiguration._validate_amber_mapping(data)
 
     @classmethod
     def from_mapping(cls, data: Mapping[str, object]) -> AemoMonitorConfiguration:
-        valid = not cls.validate_mapping(data)
+        # A malformed optional provider binding cannot disable valid AEMO
+        # fallback. Wizard submissions still reject it through validate_mapping.
+        base_mapping = {
+            key: value
+            for key, value in data.items()
+            if key not in {CONF_AMBER_PRICE_ENTITY, CONF_AMBER_PRICE_REGION}
+        }
+        valid = not cls.validate_mapping(base_mapping)
+        amber_valid = not cls._validate_amber_mapping(data)
         raw_region = data.get(CONF_AEMO_REGION)
         region = raw_region if isinstance(raw_region, str) and raw_region in AEMO_REGIONS else None
         export = _required_number(
@@ -318,6 +346,8 @@ class AemoMonitorConfiguration:
             if valid and export is not None
             else (DEFAULT_AEMO_EXPORT_THRESHOLD),
             import_threshold_per_kwh=imported if valid else None,
+            amber_price_entity=data.get(CONF_AMBER_PRICE_ENTITY) if amber_valid else None,
+            amber_price_region=data.get(CONF_AMBER_PRICE_REGION) if amber_valid else None,
         )
 
 

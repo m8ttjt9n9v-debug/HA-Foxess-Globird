@@ -30,6 +30,32 @@ evidence. HACS installs the entities, not an updated dashboard. Monitoring can
 remain on without granting any hardware control. Its optional import threshold
 is observation only; there is no price-triggered buying in this implementation.
 
+### Optional Amber source (v0.12.46)
+
+If Home Assistant already has the Amber Electric integration, HEO can use its
+confirmed five-minute wholesale price first and keep the existing direct AEMO
+feed as a fallback. This reuses the installed Amber integration: HEO does not
+ask for its API key, store another copy, or start another Amber polling loop.
+
+Map **Amber price sensor (optional)** (`amber_price_entity`) and confirm the
+**Amber account's NEM region** (`amber_price_region`). The region must
+match HEO's selected NEM region. HEO does not guess the region from an entity's
+name. Leave both fields empty to keep the existing AEMO-only path. Adding a
+mapping does not enable monitoring or automatic selling.
+
+The Amber sensor's main value is its feed-in or import tariff, not necessarily
+the wholesale price. HEO reads its separate `spot_per_kwh` attribute. In the
+supported native integration this attribute is already dollars per kWh and
+includes GST; HEO removes GST once, using decimal arithmetic, to compare it with
+the same wholesale threshold used for AEMO. Do not divide that native attribute
+by 100 as though it were the raw Amber API's cents value. A confirmed five-minute
+reading is usable; a 30-minute, forecast, estimated, expired or otherwise invalid
+reading is not.
+
+Installing this release does not select an Amber source or enable selling.
+Configure the two source fields explicitly, then verify the source evidence.
+Publication alone is not a claim that an installed site uses Amber for selling.
+
 ## What HEO does
 
 When a valid current price reaches or exceeds the threshold, HEO checks the same energy
@@ -80,13 +106,38 @@ expires.
 
 ## Data and failure handling
 
-HEO reads AEMO's public [DispatchIS reports](https://nemweb.com.au/Reports/Current/DispatchIS_Reports/).
-It accepts only the exact current interval for the selected region, with a
-firm price, no intervention, and no administered-pricing or market-suspension
+The default source is AEMO's public [DispatchIS reports](https://nemweb.com.au/Reports/Current/DispatchIS_Reports/).
+The optional Amber source above takes priority only when its native sensor,
+confirmed status, five-minute interval, region binding and freshness are valid.
+A valid low Amber price takes priority over a high fallback price too: this is
+not a rule that chooses whichever source would allow selling.
+
+For the direct AEMO source, HEO accepts only the exact current interval for the
+selected region, with a firm price, no intervention, and no administered-pricing or market-suspension
 flag. The public price is converted from dollars per MWh to dollars per kWh by
 dividing by 1,000. Market timestamps use fixed AEST and mark the interval end;
 HEO converts them to aware timestamps so daylight saving does not shift the
 rule. Cached summary pages and forecasts cannot grant export permission.
+
+Amber must explicitly report `estimate: false`, a current five-minute NEM block
+and a finite wholesale price. HEO accepts both an exact five-minute start/end
+pair and Amber's supported convention of starting one second after the block
+boundary; it uses the same five-minute block in either case. Restored
+placeholders and stale or future readings cannot grant permission. Amber does
+not expose every AEMO market flag; missing flags remain unknown, not relabelled
+`FIRM` or normal. If current AEMO evidence identifies intervention, administered
+pricing or market suspension,
+that evidence blocks Amber permission as well. A failed download does not clear
+a known restriction for that block; a newer valid official correction is needed.
+
+If Amber is unavailable or unqualified, a qualifying current AEMO reading can
+take over without creating another export controller. A delayed or contradictory
+fallback cannot resurrect permission that a newer confirmed Amber price has
+withdrawn in the same interval. If HEO cannot establish which conflicting
+evidence is newer, it withholds permission. Both sources expire at the exact
+interval end; changing source never extends an existing export deadline or
+borrows the previous interval's price. Source changes and source failures remain
+visible in the price evidence.
 
 The existing export-session journal records price ownership, its deadline,
 and its original actuator mappings before a positive command. After restart,

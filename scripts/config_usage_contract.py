@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from custom_components.home_energy_orchestrator import const
-from scripts.config_contract import ADDITIVE_CONFIG_KEYS, EV_CAPACITY_CONFIG_KEYS
+from scripts.config_contract import ADDITIVE_CONFIG_KEYS, AMBER_CONFIG_KEYS, EV_CAPACITY_CONFIG_KEYS
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 SOURCE_ROOT = REPOSITORY_ROOT / "custom_components" / "home_energy_orchestrator"
@@ -28,6 +28,9 @@ RELOCATIONS_PATH = (
 )
 CAPACITY_ADDITIONS_PATH = (
     REPOSITORY_ROOT / "docs" / "maintainability" / "config-usage-additions-ev-capacity-v1.json"
+)
+AMBER_ADDITIONS_PATH = (
+    REPOSITORY_ROOT / "docs" / "maintainability" / "config-usage-additions-amber-price-v1.json"
 )
 RECONFIGURE_TRANSITION_PATH = (
     REPOSITORY_ROOT / "docs" / "maintainability" / "config-usage-transition-reconfigure-v1.json"
@@ -205,6 +208,14 @@ def build_config_usage_contract(*, include_extensions: bool = False) -> dict[str
         ) != sorted(json.dumps(item, sort_keys=True) for item in capacity["accesses"]):
             raise ValueError("reviewed EV capacity configuration usage changed")
         for reviewed in capacity["accesses"]:
+            records.remove(reviewed)
+        amber = json.loads(AMBER_ADDITIONS_PATH.read_text(encoding="utf-8"))
+        amber_accesses = [item for item in records if item["key"] in AMBER_CONFIG_KEYS]
+        if amber.get("access_count") != len(amber["accesses"]) or sorted(
+            json.dumps(item, sort_keys=True) for item in amber_accesses
+        ) != sorted(json.dumps(item, sort_keys=True) for item in amber["accesses"]):
+            raise ValueError("reviewed Amber price configuration usage changed")
+        for reviewed in amber["accesses"]:
             records.remove(reviewed)
         # Preserve the fixed baseline while auditing the exact monitor extension
         # separately. No unknown or unrelated key is exempt from comparison.

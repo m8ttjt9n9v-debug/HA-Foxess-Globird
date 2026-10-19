@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "extension": "amber_price_v1",
+  "extension_note": "Existing AEMO-only wording in the retained market profile describes its DispatchIS branch. These additive fields define the independent Amber branch: source_kind='amber' uses native confirmation, not invented AEMO FIRM/APC/INTERVENTION/suspension flags. Price is normalized once to ex-GST AUD/kWh. For Amber, successful_fetch_at is the native source observation clock, not proof of a HEO HTTP fetch.",
+  "entity_count": 0,
+  "entities": [],
+  "attribute_profiles": {},
+  "attribute_profile_additions": {
+    "aemo_market_observation_v1": {
+      "source_entity": "Explicit native Amber Electric current-price entity when source_kind is amber; null for AEMO. Its displayed state is a household tariff and is not the wholesale trigger. Amber uses only confirmed five-minute spot_per_kwh, converted once from GST-inclusive dollars/kWh to the retained ex-GST wholesale basis. The existing AEMO entity identities and price units remain compatibility aliases for the selected source.",
+      "source_updated_at": "Aware native Amber state-update timestamp for the accepted wholesale evidence, or null for AEMO. It must fall inside the accepted current interval and cannot be in the future. In the Amber branch, successful_fetch_at also records this native source observation clock; it is not proof of a HEO HTTP fetch. Same-clock contradictory prices and older corrections cannot establish fresh permission; repeated reads do not advance this clock.",
+      "source_confirmed": "True only for a qualified native Amber sample with estimate explicitly false and duration five minutes. This is Amber confirmation, not fabricated AEMO FIRM/intervention/APC/suspension metadata: those unavailable flags remain null. Known current official AEMO market restrictions veto selling. False is the additive default for AEMO, whose independent existing quality flags remain authoritative.",
+      "amber_price_entity": "Optional saved Amber Electric sensor mapping; no discovery from an entity name, duplicate API client or additional API credential. Empty mapping retains the AEMO-only source path and does not enable monitoring or export.",
+      "amber_price_region": "Explicit operator binding for the Amber account's NEM region. The native entity cannot prove its region. A mismatch with the selected AEMO region rejects Amber and leaves valid regional AEMO fallback available; it never changes this saved account binding automatically.",
+      "amber_source_status": "Current qualification reason for the mapped native Amber source, or not_configured. A qualified Amber source is primary even below the threshold; a higher AEMO price cannot override it. Invalid, estimated, stale or unavailable Amber evidence may use qualified current AEMO fallback, subject to known restrictions and protection against same-block resurrection after a withdrawn primary price.",
+      "aemo_fallback_status": "Current status of the independent official AEMO fallback, not evidence that it is the selected provider. Neither source changes Sellable Energy, shared daily caps, fixed export deadlines, original actuator binding, write gates, manual priority or the absence of retailer event/payment confirmation. If neither source qualifies, no new export permission is granted and owned sessions retain their existing reducing cleanup."
+    }
+  }
+}

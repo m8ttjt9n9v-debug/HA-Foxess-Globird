@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "extension": "amber_price_v1",
+  "config_entry_version": 6,
+  "additional_config_keys": ["amber_price_entity", "amber_price_region"],
+  "default_source": "aemo_dispatchis",
+  "automatic_control_defaults_changed": false,
+  "electrical_direction_verification_changed": false,
+  "new_credentials_or_http_poller": false,
+  "region_binding": "explicit; mismatch rejects Amber without disabling AEMO fallback"
+}

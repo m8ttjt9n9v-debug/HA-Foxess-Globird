@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "extension": "amber_price_v1",
+  "access_count": 4,
+  "accesses": [
+    {"constant": "CONF_AMBER_PRICE_ENTITY", "key": "amber_price_entity", "source": "custom_components/home_energy_orchestrator/configuration.py", "scope": "AemoMonitorConfiguration._validate_amber_mapping", "receiver": "data", "access": "get", "kind": "raw_mapping", "layer": "boundary"},
+    {"constant": "CONF_AMBER_PRICE_REGION", "key": "amber_price_region", "source": "custom_components/home_energy_orchestrator/configuration.py", "scope": "AemoMonitorConfiguration._validate_amber_mapping", "receiver": "data", "access": "get", "kind": "raw_mapping", "layer": "boundary"},
+    {"constant": "CONF_AMBER_PRICE_ENTITY", "key": "amber_price_entity", "source": "custom_components/home_energy_orchestrator/configuration.py", "scope": "AemoMonitorConfiguration.from_mapping", "receiver": "data", "access": "get", "kind": "raw_mapping", "layer": "boundary"},
+    {"constant": "CONF_AMBER_PRICE_REGION", "key": "amber_price_region", "source": "custom_components/home_energy_orchestrator/configuration.py", "scope": "AemoMonitorConfiguration.from_mapping", "receiver": "data", "access": "get", "kind": "raw_mapping", "layer": "boundary"}
+  ]
+}

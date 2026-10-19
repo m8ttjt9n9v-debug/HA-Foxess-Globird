@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.12.46 — Amber-first five-minute wholesale prices
+
+- Add optional native Amber price-sensor and region mappings. Use its confirmed
+  current five-minute wholesale attribute first, with the existing direct AEMO
+  feed as fallback. Reuse installed sensor updates: no additional API reader,
+  authentication, credential storage or Amber polling loop. Unmapped entries
+  keep AEMO-only behaviour; installation enables no monitoring or selling.
+- Read the wholesale attribute rather than the displayed tariff, and remove
+  GST once from the native dollars/kWh value using decimal arithmetic. Reject
+  estimates, non-five-minute intervals, stale/future readings and restored
+  placeholders. Keep unavailable Amber market flags unknown; affirmative current
+  AEMO intervention, administered pricing or market suspension blocks selling.
+- Keep a valid low primary authoritative over a high fallback. Do not let an
+  unorderable contradictory same-interval fallback revive withdrawn permission.
+  Preserve exact interval expiry, existing Sellable protection, shared daily
+  cap, controller/session ownership and non-extendable export deadlines.
+- This work does not implement Amber retail-tariff accounting, automatic buying
+  or critical-event reward estimates. A wholesale threshold is not confirmation
+  of retailer participation or a $1/kWh payment. Installation does not select
+  an Amber source automatically; configure the optional sensor and account
+  region explicitly. Live installation and acceptance remain separate.
+
 ## 0.12.45 — Use spare morning energy before the car leaves
 
 - When morning solar and pre-free backfill are both enabled and eligible,

@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "extension": "amber_price_v1",
+  "field_count": 2,
+  "fields": [
+    {
+      "key": "amber_price_entity",
+      "page": "aemo_monitor",
+      "order": 6,
+      "required": false,
+      "has_default": false,
+      "default": null,
+      "input_kind": "entity",
+      "input_config": {
+        "filter": [{"domain": ["sensor"], "integration": "amberelectric"}],
+        "multiple": false,
+        "reorder": false
+      },
+      "setup_label": "Amber price sensor (optional)",
+      "reconfigure_label": "Amber price sensor (optional)"
+    },
+    {
+      "key": "amber_price_region",
+      "page": "aemo_monitor",
+      "order": 7,
+      "required": false,
+      "has_default": false,
+      "default": null,
+      "input_kind": "select",
+      "input_config": {
+        "custom_value": false,
+        "multiple": false,
+        "options": ["NSW1", "QLD1", "VIC1", "SA1", "TAS1"],
+        "sort": false
+      },
+      "setup_label": "Amber account's NEM region",
+      "reconfigure_label": "Amber account's NEM region"
+    }
+  ]
+}

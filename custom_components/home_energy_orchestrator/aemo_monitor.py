@@ -22,10 +22,14 @@ from aiohttp import ClientError, ClientTimeout
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
-from homeassistant.helpers.event import async_track_point_in_utc_time
+from homeassistant.helpers.event import (
+    async_track_point_in_utc_time,
+    async_track_state_change_event,
+)
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.util import dt as dt_util
 
+from .amber_price import capture_amber_price
 from .configuration import AemoMonitorConfiguration
 from .const import AEMO_REGIONS, DOMAIN
 from .persistence import create_typed_value_repository
@@ -108,6 +112,9 @@ class AemoMonitorResult:
     intervention: int | None = None
     source_kind: str = "unverified"
     source_url: str = AEMO_DATA_SOURCE
+    source_entity: str | None = None
+    source_updated_at: datetime | None = None
+    source_confirmed: bool = False
 
     @property
     def control_authority(self) -> bool:
@@ -137,14 +144,22 @@ class AemoMonitorResult:
     @property
     def price_trigger_valid(self) -> bool:
         """Current actual-price evidence; policy/ownership remain external gates."""
+        if not self.source_fresh or self.status not in {"watching", *_CANDIDATES}:
+            return False
+        if self.source_kind == "amber":
+            now = dt_util.utcnow()
+            return (
+                self.source_confirmed is True
+                and self.source_entity is not None
+                and self.source_updated_at is not None
+                and self.interval_start <= self.source_updated_at <= now < self.interval_end
+            )
         return (
-            self.source_fresh
-            and self.source_kind == "dispatchis"
+            self.source_kind == "dispatchis"
             and self.intervention == 0
             and self.price_status == "FIRM"
             and self.apc_flag == 0
             and self.market_suspended_flag == 0
-            and self.status in {"watching", *_CANDIDATES}
         )
 
     @property
@@ -172,6 +187,9 @@ class AemoMonitorResult:
             "data_source": self.data_source,
             "source_url": self.source_url,
             "source_kind": self.source_kind,
+            "source_entity": self.source_entity,
+            "source_updated_at": _iso(self.source_updated_at),
+            "source_confirmed": self.source_confirmed,
             "intervention": self.intervention,
             "source_fresh": self.source_fresh,
             "price_trigger_valid": self.price_trigger_valid,
@@ -203,7 +221,7 @@ class AemoMonitorResult:
                     else None
                 ),
             )
-        )
+        ) + (f"|{self.source_entity}" if self.source_kind == "amber" else "")
 
 
 def _empty(configuration: AemoMonitorConfiguration, status: str) -> AemoMonitorResult:
@@ -392,7 +410,15 @@ def parse_aemo_dispatch_csv(
             return replace(empty, status="duplicate_region")
         record = matching[0]
         if _csv_number(record["INTERVENTION"]) != 0:
-            return replace(empty, status="nonzero_intervention")
+            # Keep only the report's verified interval identity, not a price.
+            # A native primary must not hide an affirmative official veto.
+            identity = _dispatch_report_identity(source_url)
+            return replace(
+                empty, status="nonzero_intervention",
+                interval_start=identity[0] - _INTERVAL if identity else None,
+                interval_end=identity[0] if identity else None,
+                first_seen_at=now, successful_fetch_at=now,
+            )
         if _csv_number(record["RUNNO"]) != 1:
             return replace(empty, status="invalid_dispatch_run")
         end = datetime.strptime(record["SETTLEMENTDATE"], "%Y/%m/%d %H:%M:%S")
@@ -521,6 +547,11 @@ class AemoMarketMonitor(DataUpdateCoordinator[AemoMonitorResult]):
             configuration, _configuration_status(configuration) or "awaiting_data"
         )
         self.data = self._result
+        self._aemo_result = self._result
+        self._last_amber: AemoMonitorResult | None = None
+        self._amber_unsub: Callable[[], None] | None = None
+        self._sources_started = False
+        self._pending_history_change = False
         self._state = _MonitorState()
         self._lock = asyncio.Lock()
         self.settings_lock = asyncio.Lock()
@@ -543,7 +574,124 @@ class AemoMarketMonitor(DataUpdateCoordinator[AemoMonitorResult]):
     @property
     def current_result(self) -> AemoMonitorResult:
         """Never expose a current numeric price beyond its exact interval end."""
+        if self.configuration.amber_price_entity:
+            if self._stopped or not self._sources_started:
+                return _empty(self.configuration, "stopped" if self._stopped else "awaiting_data")
+            return self._select_source(dt_util.utcnow())
         return self._current_at(self._result, dt_util.utcnow())
+
+    def _amber_result(self, now: datetime) -> AemoMonitorResult:
+        configuration = self.configuration
+        sample = capture_amber_price(
+            self.hass, configuration.amber_price_entity, configuration.amber_price_region,
+            configuration.region, now,
+        )
+        result = replace(
+            _empty(configuration, sample.status), source_kind="amber",
+            source_url="homeassistant://" + (configuration.amber_price_entity or "unconfigured"),
+            source_entity=configuration.amber_price_entity,
+        )
+        price = sample.price_per_kwh
+        if price is None:
+            return result
+        if not isfinite(price * 1000):
+            return replace(result, status="invalid_wholesale_price")
+        status = "watching"
+        if price >= configuration.export_threshold_per_kwh:
+            status = "possible_export_event"
+        elif (
+            configuration.import_threshold_per_kwh is not None
+            and price < configuration.import_threshold_per_kwh
+        ):
+            status = "possible_import_event"
+        return replace(
+            result, status=status, price_per_kwh=price, price_per_mwh=price * 1000,
+            interval_start=sample.interval_start, interval_end=sample.interval_end,
+            first_seen_at=now, successful_fetch_at=sample.updated_at,
+            latency_seconds=(now - sample.interval_start).total_seconds(),
+            source_updated_at=sample.updated_at, source_confirmed=True,
+        )
+
+    def _select_source(self, now: datetime) -> AemoMonitorResult:
+        """Amber first, not the highest price; exact-interval AEMO is the fallback."""
+        configuration = self.configuration
+        if status := _configuration_status(configuration):
+            return _empty(configuration, status)
+        fallback = self._current_at(self._aemo_result, now)
+        if not configuration.amber_price_entity:
+            return fallback
+        primary = self._amber_result(now)
+        # An official known restriction remains a veto. Amber does not expose
+        # these flags, so unknown flags are never relabelled as normal/FIRM.
+        official = []
+        for record in (*self._state.observations, fallback):
+            identity = _dispatch_report_identity(record.source_url)
+            if (
+                record.source_kind == "dispatchis" and record.region == configuration.region
+                and identity is not None and identity[0] - _INTERVAL <= now < identity[0]
+                and (
+                    record.status == "nonzero_intervention"
+                    or (
+                        record.price_per_mwh is not None and record.intervention == 0
+                        and record.price_status == "FIRM" and record.apc_flag in (0, 1)
+                        and record.market_suspended_flag in (0, 1)
+                    )
+                )
+            ):
+                official.append((identity[1], record))
+        restricted_statuses = {"market_suspended", "administered_pricing", "nonzero_intervention"}
+        restriction = max(
+            official, key=lambda item: (item[0], item[1].status in restricted_statuses)
+        )[1] if official else None
+        prior = self._last_amber
+        if prior is None:
+            prior = next((
+                record for record in reversed(self._state.observations)
+                if record.source_kind == "amber"
+                and record.source_entity == configuration.amber_price_entity
+                and record.region == configuration.region
+                and record.interval_start is not None and record.interval_end is not None
+                and record.interval_start <= now < record.interval_end
+            ), None)
+        if primary.price_per_kwh is not None:
+            if (
+                prior is not None and prior.interval_end == primary.interval_end
+                and prior.source_updated_at is not None
+                and (
+                    primary.source_updated_at < prior.source_updated_at
+                    or (
+                        primary.source_updated_at == prior.source_updated_at
+                        and primary.price_per_kwh != prior.price_per_kwh
+                    )
+                )
+            ):
+                return replace(
+                    primary, status="source_replay", price_per_mwh=None, price_per_kwh=None,
+                )
+            self._last_amber = primary
+            if prior is not None and prior.interval_end == primary.interval_end:
+                primary = replace(
+                    primary, first_seen_at=prior.first_seen_at,
+                    latency_seconds=prior.latency_seconds,
+                )
+                self._last_amber = primary
+        if restriction is not None and restriction.status in restricted_statuses:
+            return replace(restriction, price_per_mwh=None, price_per_kwh=None)
+        if primary.price_per_kwh is not None:
+            return primary
+        if (
+            fallback.price_trigger_valid
+            and prior is not None and prior.interval_end == fallback.interval_end
+            and prior.price_per_kwh is not None
+            and prior.price_per_kwh < configuration.export_threshold_per_kwh
+            and fallback.price_per_kwh >= configuration.export_threshold_per_kwh
+        ):
+            # Providers have no shared correction sequence. A failed primary
+            # cannot resurrect permission it already withdrew in this block.
+            return replace(
+                fallback, status="provider_disagreement", price_per_mwh=None, price_per_kwh=None,
+            )
+        return fallback
 
     @staticmethod
     def _current_at(result: AemoMonitorResult, now: datetime) -> AemoMonitorResult:
@@ -565,6 +713,11 @@ class AemoMarketMonitor(DataUpdateCoordinator[AemoMonitorResult]):
             **self.current_result.attributes(),
             "recent_observation_count": len(self._state.observations),
             "persistence_status": self._persistence_status,
+            "amber_price_entity": self.configuration.amber_price_entity,
+            "amber_price_region": self.configuration.amber_price_region,
+            "amber_source_status": self._amber_result(dt_util.utcnow()).status
+            if self.configuration.amber_price_entity else "not_configured",
+            "aemo_fallback_status": self._current_at(self._aemo_result, dt_util.utcnow()).status,
         }
 
     async def async_restore_history(self) -> None:
@@ -585,8 +738,38 @@ class AemoMarketMonitor(DataUpdateCoordinator[AemoMonitorResult]):
     async def async_start(self) -> None:
         """Fetch once without making feed availability an HEO setup requirement."""
         await self._async_ensure_polling()
+        self._sources_started = True
+        self._bind_amber_listener()
+        if self.configuration.amber_price_entity:
+            await self._async_amber_changed(self._configuration_generation)
         if not self._stopped:
             await self.async_refresh()
+
+    def _bind_amber_listener(self) -> None:
+        if self._amber_unsub is not None:
+            self._amber_unsub()
+            self._amber_unsub = None
+        if self._stopped or _configuration_status(self.configuration):
+            return
+        entity_id = self.configuration.amber_price_entity
+        if entity_id:
+            generation = self._configuration_generation
+
+            async def changed(_event):
+                await self._async_amber_changed(generation)
+
+            self._amber_unsub = async_track_state_change_event(self.hass, [entity_id], changed)
+
+    async def _async_amber_changed(self, generation: int) -> None:
+        async with self._lock:
+            if (
+                self._stopped or not self._sources_started
+                or generation != self._configuration_generation
+            ):
+                return
+            await self._async_commit_result(self._select_source(dt_util.utcnow()))
+            if not self._stopped and generation == self._configuration_generation:
+                self.async_set_updated_data(self.current_result)
 
     async def _async_ensure_polling(self) -> None:
         if self._stopped or _configuration_status(self.configuration) is not None:
@@ -609,6 +792,9 @@ class AemoMarketMonitor(DataUpdateCoordinator[AemoMonitorResult]):
             self._configuration_generation += 1
             generation = self._configuration_generation
             self.configuration = configuration
+            self._aemo_result = _empty(configuration, "awaiting_data")
+            self._last_amber = None
+            self._bind_amber_listener()
             configuration_status = _configuration_status(configuration)
             self.update_interval = AEMO_POLL_INTERVAL if configuration_status is None else None
             self._async_unsub_refresh()
@@ -649,6 +835,9 @@ class AemoMarketMonitor(DataUpdateCoordinator[AemoMonitorResult]):
     async def async_stop(self) -> None:
         """Stop polling and exact-boundary listeners without clearing saved evidence."""
         self._stopped = True
+        if self._amber_unsub is not None:
+            self._amber_unsub()
+            self._amber_unsub = None
         if self._expiry_unsub is not None:
             self._expiry_unsub()
             self._expiry_unsub = None
@@ -662,6 +851,9 @@ class AemoMarketMonitor(DataUpdateCoordinator[AemoMonitorResult]):
     async def async_shutdown(self) -> None:
         """Cancel independent expiry when HA shuts down the coordinator."""
         self._stopped = True
+        if self._amber_unsub is not None:
+            self._amber_unsub()
+            self._amber_unsub = None
         self._configuration_generation += 1
         pending_refresh = self._cancel_configuration_refresh()
         if self._expiry_unsub is not None:
@@ -765,13 +957,58 @@ class AemoMarketMonitor(DataUpdateCoordinator[AemoMonitorResult]):
                 result = replace(source, status="stale", price_per_mwh=None, price_per_kwh=None)
             else:
                 result = self._current_at(result, dt_util.utcnow())
+                self._aemo_result = self._prevent_dispatch_replay(result)
+            if self.configuration.amber_price_entity:
+                if expired_interval_end is None:
+                    self._remember_provider(self._aemo_result)
+                # Re-read native evidence after every network await. A slow
+                # AEMO response must not overwrite a newer Amber state change.
+                result = self._select_source(dt_util.utcnow())
             await self._async_commit_result(result)
             return True
+
+    def _remember_provider(self, result: AemoMonitorResult) -> None:
+        """Retain each source's corrections even while another source is selected."""
+        official = (
+            result.source_kind == "dispatchis"
+            and _dispatch_report_identity(result.source_url) is not None
+            and (result.price_per_mwh is not None or result.status == "nonzero_intervention")
+        )
+        native = (
+            result.source_kind == "amber" and result.source_confirmed is True
+            and result.source_entity == self.configuration.amber_price_entity
+            and result.region == self.configuration.region
+            and result.price_per_kwh is not None and result.interval_start is not None
+            and result.interval_end is not None
+            and result.interval_start <= dt_util.utcnow() < result.interval_end
+        )
+        if not official and not native:
+            return
+        prior = next((
+            record for record in reversed(self._state.observations)
+            if record.source_kind == result.source_kind and record.region == result.region
+            and record.interval_end == result.interval_end
+            and record.source_entity == result.source_entity
+        ), None)
+        if prior is not None:
+            if (
+                prior.observation_signature() == result.observation_signature()
+                and prior.source_url == result.source_url
+            ):
+                return
+            result = replace(result, first_seen_at=prior.first_seen_at,
+                             latency_seconds=prior.latency_seconds)
+        self._state.observations.append(result)
+        self._state.observations = self._state.observations[-AEMO_HISTORY_LIMIT:]
+        self._pending_history_change = True
 
     async def _async_commit_result(self, result: AemoMonitorResult) -> None:
         """Commit current evidence while the caller holds the state lock."""
         result = self._prevent_dispatch_replay(result)
-        changed = False
+        if self.configuration.amber_price_entity and self._last_amber is not None:
+            self._remember_provider(self._last_amber)
+        changed = self._pending_history_change
+        self._pending_history_change = False
         event: dict[str, object] | None = None
         if result.price_per_mwh is not None:
             prior = next(
@@ -789,12 +1026,20 @@ class AemoMarketMonitor(DataUpdateCoordinator[AemoMonitorResult]):
                     latency_seconds=prior.latency_seconds,
                 )
             signature = result.observation_signature()
+            previous_provider = next((
+                record for record in reversed(self._state.observations)
+                if record.source_kind == result.source_kind and record.region == result.region
+                and record.interval_end == result.interval_end
+                and record.source_entity == result.source_entity
+            ), None) if self.configuration.amber_price_entity else (
+                self._state.observations[-1] if self._state.observations else None
+            )
             if (
-                not self._state.observations
-                or self._state.observations[-1].observation_signature() != signature
+                previous_provider is None
+                or previous_provider.observation_signature() != signature
                 or (
                     result.source_kind == "dispatchis"
-                    and self._state.observations[-1].source_url != result.source_url
+                    and previous_provider.source_url != result.source_url
                 )
             ):
                 self._state.observations.append(result)
@@ -948,6 +1193,36 @@ class AemoMarketMonitor(DataUpdateCoordinator[AemoMonitorResult]):
     def _restore_observation(self, payload: object) -> AemoMonitorResult | None:
         if not isinstance(payload, dict) or payload.get("region") not in AEMO_REGIONS:
             return None
+        if payload.get("source_kind") == "amber":
+            return self._restore_amber_observation(payload)
+        if (
+            payload.get("source_kind") == "dispatchis"
+            and payload.get("status") == "nonzero_intervention"
+        ):
+            try:
+                source_url = payload["source_url"]
+                identity = _dispatch_report_identity(source_url)
+                seen = datetime.fromisoformat(str(payload["first_seen_at"]))
+                fetched = datetime.fromisoformat(str(payload["successful_fetch_at"]))
+                threshold = _number(payload.get("export_threshold_per_kwh"))
+                imported = _number(payload.get("import_threshold_per_kwh"))
+                if (
+                    identity is None or seen.tzinfo is None or fetched.tzinfo is None
+                    or not identity[0] - _INTERVAL <= seen <= fetched < identity[0]
+                    or payload.get("interval_end") != _iso(identity[0])
+                    or threshold is None or threshold <= 0
+                    or (payload.get("import_threshold_per_kwh") is not None and imported is None)
+                    or (imported is not None and imported >= threshold)
+                ):
+                    return None
+                return AemoMonitorResult(
+                    "nonzero_intervention", payload["region"], threshold,
+                    imported, source_kind="dispatchis",
+                    source_url=source_url, first_seen_at=seen, successful_fetch_at=fetched,
+                    interval_start=identity[0] - _INTERVAL, interval_end=identity[0],
+                )
+            except (KeyError, TypeError, ValueError):
+                return None
         try:
             export_threshold = _number(payload["export_threshold_per_kwh"])
             import_threshold = _number(payload["import_threshold_per_kwh"])
@@ -992,6 +1267,54 @@ class AemoMarketMonitor(DataUpdateCoordinator[AemoMonitorResult]):
                 if payload.get("source_kind") == "dispatchis"
                 else "summary",
                 source_url=str(payload.get("data_source", AEMO_SUMMARY_SOURCE)),
+            )
+        except (KeyError, OverflowError, TypeError, ValueError):
+            return None
+
+    def _restore_amber_observation(self, payload: dict[str, object]) -> AemoMonitorResult | None:
+        """Restore bounded history only, never current numeric permission at startup."""
+        try:
+            price = _number(payload.get("price_per_kwh"))
+            price_mwh = _number(payload.get("price_per_mwh"))
+            threshold = _number(payload.get("export_threshold_per_kwh"))
+            imported = _number(payload.get("import_threshold_per_kwh"))
+            entity_id = payload.get("source_entity")
+            start = datetime.fromisoformat(str(payload["interval_start"]))
+            end = datetime.fromisoformat(str(payload["interval_end"]))
+            seen = datetime.fromisoformat(str(payload["first_seen_at"]))
+            updated = datetime.fromisoformat(str(payload["source_updated_at"]))
+            fetched = datetime.fromisoformat(str(payload["successful_fetch_at"]))
+            if (
+                price is None or price_mwh is None or threshold is None or threshold <= 0
+                or price_mwh != price * 1000
+                or (payload.get("import_threshold_per_kwh") is not None and imported is None)
+                or (imported is not None and imported >= threshold)
+                or not isinstance(entity_id, str) or not entity_id.startswith("sensor.")
+                or payload.get("data_source") != "homeassistant://" + entity_id
+                or payload.get("source_confirmed") is not True
+                or any(payload.get(key) is not None for key in (
+                    "price_status", "apc_flag", "market_suspended_flag", "intervention"
+                ))
+                or any(value.tzinfo is None or value.utcoffset() is None for value in (
+                    start, end, seen, updated, fetched
+                ))
+                or end - start != _INTERVAL or end.minute % 5 or end.second or end.microsecond
+                or not start <= updated == fetched < end
+                or not start <= seen < end
+            ):
+                return None
+            status = "watching"
+            if price >= threshold:
+                status = "possible_export_event"
+            elif imported is not None and price < imported:
+                status = "possible_import_event"
+            return AemoMonitorResult(
+                status, payload["region"], threshold, imported,
+                price_per_mwh=price_mwh, price_per_kwh=price,
+                interval_start=start, interval_end=end, first_seen_at=seen,
+                successful_fetch_at=fetched, latency_seconds=(seen - start).total_seconds(),
+                source_kind="amber", source_url="homeassistant://" + entity_id,
+                source_entity=entity_id, source_updated_at=updated, source_confirmed=True,
             )
         except (KeyError, OverflowError, TypeError, ValueError):
             return None

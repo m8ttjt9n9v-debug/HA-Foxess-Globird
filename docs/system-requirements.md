@@ -77,7 +77,23 @@ Optional [price-triggered export](price-triggered-export.md) needs outbound
 HTTPS access to AEMO's current DispatchIS report index and ZIP reports, an
 explicit NEM region, fresh commissioned electrical/house/SoC telemetry, and
 native force-power number entities in kW. It needs no third-party price
-integration. Observation and automatic export are separate default-off
+integration for the default AEMO-only path. The v0.12.46 optional Amber source
+requires an already-installed native Home Assistant Amber Electric integration,
+an explicitly mapped price sensor (`amber_price_entity`) and an account-region
+binding (`amber_price_region`) matching HEO's selected NEM region. HEO reuses the
+sensor's confirmed five-minute wholesale attribute, not its displayed tariff;
+it adds no Amber authentication, credential storage or polling loop. The native
+`spot_per_kwh` attribute is dollars/kWh including GST and is converted once to
+the existing ex-GST wholesale basis. Its current interval, explicit non-estimate
+status, native provenance and freshness must all qualify. The supported native
+one-second-after-boundary start is normalized to its five-minute NEM block.
+Missing market flags are unknown, while affirmative current AEMO intervention, administered-pricing
+or suspension evidence vetoes selling. AEMO remains the fallback, but conflicting
+same-interval evidence cannot revive withdrawn primary permission without a
+proven correction order. Empty mappings preserve the existing source; no
+monitoring or control request is activated by installation or configuration.
+Publication and installation do not establish live acceptance. Observation and
+automatic export are separate default-off
 requests. Exclusive Local Modbus ownership and the existing control gates
 remain mandatory; a price reading cannot prove a VPP is disabled or that a
 retailer payment applies. The configurable sell threshold is inclusive:

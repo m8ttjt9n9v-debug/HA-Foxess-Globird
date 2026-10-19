@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "extension": "amber_price_v1",
+  "entity_count": 0,
+  "entities": [],
+  "attribute_addition_count": 2,
+  "attribute_additions": [
+    {
+      "entity_key": "aemo_market_status",
+      "default_entity_id": "sensor.home_energy_aemo_market_status",
+      "custom_attributes": [
+        "aemo_fallback_status",
+        "amber_price_entity",
+        "amber_price_region",
+        "amber_source_status",
+        "source_confirmed",
+        "source_entity",
+        "source_updated_at"
+      ]
+    },
+    {
+      "entity_key": "aemo_spot_price",
+      "default_entity_id": "sensor.home_energy_aemo_spot_price",
+      "custom_attributes": [
+        "aemo_fallback_status",
+        "amber_price_entity",
+        "amber_price_region",
+        "amber_source_status",
+        "source_confirmed",
+        "source_entity",
+        "source_updated_at"
+      ]
+    }
+  ]
+}

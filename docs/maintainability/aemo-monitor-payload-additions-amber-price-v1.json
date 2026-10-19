@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "extension": "amber_price_v1",
+  "storage_version": 1,
+  "storage_key_expression": "f'{DOMAIN}.{entry_id}.aemo_monitor'",
+  "additional_stores": [],
+  "additional_root_keys": [],
+  "retained_root_keys": ["active_candidate", "last_notified_signature", "observations"],
+  "additional_observation_fields": ["source_confirmed", "source_entity", "source_updated_at"],
+  "additional_source_kind": "amber",
+  "missing_aemo_flags_are_unknown": true,
+  "restored_history_grants_current_permission": false,
+  "known_official_restrictions_retained": [
+    "administered_pricing", "market_suspended", "nonzero_intervention"
+  ],
+  "export_session_schema_changed": false
+}

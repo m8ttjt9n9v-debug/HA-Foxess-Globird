@@ -26,6 +26,9 @@ ADDITIONS_PATH = (
 CAPACITY_ADDITIONS_PATH = (
     REPOSITORY_ROOT / "docs" / "maintainability" / "config-field-additions-ev-capacity-v1.json"
 )
+AMBER_ADDITIONS_PATH = (
+    REPOSITORY_ROOT / "docs" / "maintainability" / "config-field-additions-amber-price-v1.json"
+)
 
 _EV_PAGES = {"car", "charger", "ev_policies", "recovery"}
 
@@ -87,7 +90,7 @@ def rendered_catalogue() -> str:
     page_order = list(dict.fromkeys(field["page"] for field in contract["fields"]))
     fields = list(contract["fields"])
     known = {field["key"] for field in fields}
-    for path in (ADDITIONS_PATH, CAPACITY_ADDITIONS_PATH):
+    for path in (ADDITIONS_PATH, CAPACITY_ADDITIONS_PATH, AMBER_ADDITIONS_PATH):
         additions = json.loads(path.read_text(encoding="utf-8"))
         if additions["field_count"] != len(additions["fields"]):
             raise ValueError("field catalogue additions have an invalid count")

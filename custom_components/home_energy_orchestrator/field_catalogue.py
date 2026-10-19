@@ -175,6 +175,8 @@ FIELD_SPECS: tuple[FieldSpec, ...] = (
     FieldSpec(key='aemo_export_threshold_per_kwh', value_type='float', default=3, has_default=True, selector_kind='number', selector_config_json='{"coerce":"float"}', page='aemo_monitor', order=3, required=True, applicability='always', redaction='retain', translation_key='aemo_export_threshold_per_kwh'),
     FieldSpec(key='aemo_import_threshold_per_kwh', value_type='float', default=None, has_default=False, selector_kind='number', selector_config_json='{"coerce":"float"}', page='aemo_monitor', order=4, required=False, applicability='always', redaction='retain', translation_key='aemo_import_threshold_per_kwh'),
     FieldSpec(key='critical_event_sell_enabled', value_type='bool', default=False, has_default=True, selector_kind='boolean', selector_config_json=None, page='aemo_monitor', order=5, required=True, applicability='always', redaction='retain', translation_key='critical_event_sell_enabled'),
+    FieldSpec(key='amber_price_entity', value_type='entity_id', default=None, has_default=False, selector_kind='entity', selector_config_json='{"filter":[{"domain":["sensor"],"integration":"amberelectric"}],"multiple":false,"reorder":false}', page='aemo_monitor', order=6, required=False, applicability='always', redaction='omit', translation_key='amber_price_entity'),
+    FieldSpec(key='amber_price_region', value_type='str', default=None, has_default=False, selector_kind='select', selector_config_json='{"custom_value":false,"multiple":false,"options":["NSW1","QLD1","VIC1","SA1","TAS1"],"sort":false}', page='aemo_monitor', order=7, required=False, applicability='always', redaction='retain', translation_key='amber_price_region'),
 )
 FIELD_SPECS_BY_KEY = MappingProxyType(
     {spec.key: spec for spec in FIELD_SPECS}

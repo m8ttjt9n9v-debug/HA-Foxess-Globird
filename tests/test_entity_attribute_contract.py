@@ -10,6 +10,7 @@ import pytest
 from scripts import entity_attribute_contract
 from scripts.entity_attribute_contract import (
     AEMO_ADDITIONS_PATH,
+    AMBER_ADDITIONS_PATH,
     BASELINE_PATH,
     EV_CAPACITY_ADDITIONS_PATH,
     EV_FEEDBACK_ADDITIONS_PATH,
@@ -32,6 +33,7 @@ def test_entity_attribute_contract_matches_reviewed_release_baseline() -> None:
     assert baseline["entity_count"] == 16
     manual = json.loads(MANUAL_ADDITIONS_PATH.read_text(encoding="utf-8"))
     monitor = json.loads(AEMO_ADDITIONS_PATH.read_text(encoding="utf-8"))
+    amber = json.loads(AMBER_ADDITIONS_PATH.read_text(encoding="utf-8"))
     price = json.loads(PRICE_ADDITIONS_PATH.read_text(encoding="utf-8"))
     trip = json.loads(TRIP_ADDITIONS_PATH.read_text(encoding="utf-8"))
     capacity = json.loads(EV_CAPACITY_ADDITIONS_PATH.read_text(encoding="utf-8"))
@@ -72,7 +74,7 @@ def test_entity_attribute_contract_matches_reviewed_release_baseline() -> None:
             baseline["entities"] + monitor["entities"] + trip["entities"] + capacity["entities"]
         )
     }
-    for extension in (manual, price, impact, resume, startup, feedback):
+    for extension in (manual, price, impact, resume, startup, feedback, amber):
         for record in extension["attribute_additions"]:
             retained = expected[record["entity_key"]]
             retained["custom_attributes"] = sorted(
