@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.12.50 — Correct multi-inverter Solis readings
+
+- Keep the explicitly selected inverter's complete native published frame
+  instead of assuming Solis's account-wide last-read cache belongs to it.
+  Another inverter cannot replace the measurement or renew its timestamp.
+- Use the existing native read-only subscription interface; no extra provider
+  requests, credentials, timers, entities or control settings. Unload/rebind
+  removes only HEO's observer and invalidates old provider evidence.
+- Preserve serial/value/unit binding, invalid-publication rejection, the real
+  measurement clock and existing 600-second house-estimate bound. Fast local
+  grid/battery and EV solar freshness remain unchanged. Startup may wait for
+  the selected inverter's next genuine publication; it cannot guess a frame.
+
 ## 0.12.49 — EV idle recovery and solar diagnostics
 
 - Retire an unowned direct-EVSE command episode only when fresh mapped feedback

@@ -8,7 +8,10 @@ import pytest
 from homeassistant.config_entries import ConfigEntryState
 
 from custom_components.home_energy_orchestrator import solar_provider
-from custom_components.home_energy_orchestrator.solar_provider import capture_solis_solar
+from custom_components.home_energy_orchestrator.solar_provider import (
+    SolisPublishedFrames,
+    capture_solis_solar,
+)
 from custom_components.home_energy_orchestrator.telemetry import normalize_power_sample
 
 NOW = datetime(2026, 10, 1, 12, tzinfo=UTC)
@@ -92,7 +95,7 @@ def rig(monkeypatch):
 
 def qualified(rig, now=NOW):
     return normalize_power_sample(
-        capture_solis_solar(rig.hass, ENTITY),
+        capture_solis_solar(rig.hass, ENTITY, cached_frame=rig.api._data),
         now=now,
         max_age_seconds=600,
         multiplier=1,
@@ -194,24 +197,31 @@ def test_offline_display_override_is_not_mistaken_for_measured_zero(rig):
 @pytest.mark.parametrize("field", ["serial", "pacUnit", "acPower", "timestampUpdate", "state"])
 def test_diagnostics_identify_rejected_frame_without_changing_capture(rig, field):
     rig.cache.pop(field)
-    expected = capture_solis_solar(rig.hass, ENTITY)
+    expected = capture_solis_solar(rig.hass, ENTITY, cached_frame=rig.api._data)
     evidence = {}
-    assert capture_solis_solar(rig.hass, ENTITY, diagnostics=evidence) == expected
+    assert (
+        capture_solis_solar(rig.hass, ENTITY, cached_frame=rig.api._data, diagnostics=evidence)
+        == expected
+    )
     assert evidence["capture_accepted"] is False
     assert evidence["frame_fields"][field]["present"] is False
     assert evidence["reason"] in {
-        "native_frame_identity_or_unit_mismatch", "native_frame_value_types_invalid",
+        "native_frame_identity_or_unit_mismatch",
+        "native_frame_value_types_invalid",
     }
 
 
-@pytest.mark.parametrize("fault,reason", [
-    ("binding", "native_entity_identity_mismatch"),
-    ("provider", "native_cache_unavailable"),
-    ("unit", "native_frame_identity_or_unit_mismatch"),
-    ("value", "native_entity_value_or_unit_mismatch"),
-    ("timestamp", "native_frame_value_types_invalid"),
-    ("state", "native_frame_value_types_invalid"),
-])
+@pytest.mark.parametrize(
+    "fault,reason",
+    [
+        ("binding", "native_entity_identity_mismatch"),
+        ("provider", "native_cache_unavailable"),
+        ("unit", "native_frame_identity_or_unit_mismatch"),
+        ("value", "native_entity_value_or_unit_mismatch"),
+        ("timestamp", "native_frame_value_types_invalid"),
+        ("state", "native_frame_value_types_invalid"),
+    ],
+)
 def test_diagnostic_reasons_are_bounded_and_pure(rig, fault, reason):
     if fault == "binding":
         rig.registry.unique_id = "different_property"
@@ -226,8 +236,11 @@ def test_diagnostic_reasons_are_bounded_and_pure(rig, fault, reason):
     else:
         rig.cache["state"] = None
     evidence = {}
-    expected = capture_solis_solar(rig.hass, ENTITY)
-    assert capture_solis_solar(rig.hass, ENTITY, diagnostics=evidence) == expected
+    expected = capture_solis_solar(rig.hass, ENTITY, cached_frame=rig.api._data)
+    assert (
+        capture_solis_solar(rig.hass, ENTITY, cached_frame=rig.api._data, diagnostics=evidence)
+        == expected
+    )
     assert evidence["reason"] == reason and evidence["capture_accepted"] is False
     json.dumps(evidence, allow_nan=False)
 
@@ -236,19 +249,29 @@ def test_diagnostics_expose_no_provider_identity_credentials_or_arbitrary_cache(
     rig.cache["password"] = "DO_NOT_EXPORT_SECRET"
     rig.cache["private_extra_key"] = {"url": "PRIVATE_PROVIDER_URL"}
     evidence = {}
-    expected = capture_solis_solar(rig.hass, ENTITY)
-    assert capture_solis_solar(rig.hass, ENTITY, diagnostics=evidence) == expected
+    expected = capture_solis_solar(rig.hass, ENTITY, cached_frame=rig.api._data)
+    assert (
+        capture_solis_solar(rig.hass, ENTITY, cached_frame=rig.api._data, diagnostics=evidence)
+        == expected
+    )
     assert evidence["capture_accepted"] is True
     assert evidence["reason"] == "accepted_frame"
     assert evidence["frame_power_w"] == 4920
     assert evidence["measurement_at"] == NOW.isoformat()
     serialized = json.dumps(evidence, allow_nan=False)
-    for private in [SERIAL, ENTITY, rig.entry.entry_id, "DO_NOT_EXPORT_SECRET",
-                    "PRIVATE_PROVIDER_URL", "private_extra_key", "password"]:
+    for private in [
+        SERIAL,
+        ENTITY,
+        rig.entry.entry_id,
+        "DO_NOT_EXPORT_SECRET",
+        "PRIVATE_PROVIDER_URL",
+        "private_extra_key",
+        "password",
+    ]:
         assert private not in serialized
     rig.cache["pacUnit"] = "DO_NOT_EXPORT_SECRET"
     evidence = {}
-    capture_solis_solar(rig.hass, ENTITY, diagnostics=evidence)
+    capture_solis_solar(rig.hass, ENTITY, cached_frame=rig.api._data, diagnostics=evidence)
     assert evidence["frame_unit"] == "unsupported"
     assert "DO_NOT_EXPORT_SECRET" not in json.dumps(evidence)
 
@@ -256,10 +279,233 @@ def test_diagnostics_expose_no_provider_identity_credentials_or_arbitrary_cache(
 def test_diagnostics_do_not_renew_or_fabricate_source_freshness(rig):
     rig.cache["timestampUpdate"] = (NOW - timedelta(seconds=601)).timestamp()
     evidence = {}
-    source = capture_solis_solar(rig.hass, ENTITY, diagnostics=evidence)
+    source = capture_solis_solar(rig.hass, ENTITY, cached_frame=rig.api._data, diagnostics=evidence)
     assert evidence["capture_accepted"] is True  # Shape acceptance is not age permission.
-    assert normalize_power_sample(
-        source, now=NOW, max_age_seconds=600, multiplier=1,
-        positive_direction="generation_positive",
-    ).fresh is False
+    assert (
+        normalize_power_sample(
+            source,
+            now=NOW,
+            max_age_seconds=600,
+            multiplier=1,
+            positive_direction="generation_positive",
+        ).fresh
+        is False
+    )
     assert source.updated_at == NOW - timedelta(seconds=601)
+
+
+class _Publisher:
+    """Characterise native 4.0.x synchronous per-inverter dispatch, no I/O."""
+
+    def __init__(self, rig):
+        self.rig, self._api, self._subscriptions = rig, rig.api, {}
+
+    def subscribe(self, subscriber, serial, attribute):
+        self._subscriptions.setdefault(serial, {}).setdefault(attribute, []).append(subscriber)
+
+    def publish(self, frame):
+        self._api._data = dict(frame)
+        serial = frame.get("serial")
+        for subscriber in tuple(self._subscriptions.get(serial, {}).get("serial", [])):
+            subscriber.data_updated(serial, NOW)
+        # The actual native serial callback runs before AC power is written.
+        if serial == SERIAL and "acPower" in frame:
+            self.rig.state.state = str(0 if frame.get("state") == 2 else frame["acPower"])
+
+
+@pytest.fixture
+def published(rig):
+    rig.service = _Publisher(rig)
+    rig.hass.data["solis"][rig.entry.entry_id] = rig.service
+    collector = SolisPublishedFrames(rig.hass)
+    collector.ensure_source(ENTITY)
+    return rig, collector
+
+
+def _published_source(rig, collector):
+    return capture_solis_solar(rig.hass, ENTITY, cached_frame=collector.current_frame())
+
+
+def test_two_inverters_keep_only_the_selected_published_frame(published):
+    rig, collector = published
+    selected = {**rig.cache, "acPower": 4100}
+    other = {**rig.cache, "serial": "DIFFERENT_INVERTER", "acPower": 9900}
+    rig.service.publish(selected)
+    rig.service.publish(other)
+    # The old shared-cache reader correctly rejects the other serial, but
+    # loses this entity's valid measurement. The new binding retains its frame.
+    assert capture_solis_solar(rig.hass, ENTITY, cached_frame=rig.api._data).raw_value is None
+    source = _published_source(rig, collector)
+    assert source.raw_value == 4100 and source.updated_at == NOW
+    evidence = {}
+    assert (
+        capture_solis_solar(
+            rig.hass,
+            ENTITY,
+            cached_frame=collector.current_frame(),
+            diagnostics=evidence,
+        )
+        == source
+    )
+    assert evidence["frame_origin"] == "selected_inverter_publication"
+    assert evidence["frame_serial_matches"] is True
+
+
+@pytest.mark.parametrize("field", ["pacUnit", "acPower", "timestampUpdate", "state"])
+def test_partial_selected_publication_invalidates_old_frame(published, field):
+    rig, collector = published
+    frame = {**rig.cache}
+    frame.pop(field)
+    rig.service.publish(frame)
+    assert _published_source(rig, collector).raw_value is None
+    rig.service.publish(rig.cache)
+    assert _published_source(rig, collector).raw_value == 4920
+
+
+@pytest.mark.parametrize("power", [0, 4920])
+def test_constant_selected_power_renews_only_on_real_measurement(published, power):
+    rig, collector = published
+    rig.service.publish({**rig.cache, "acPower": power})
+    rig.service.publish(
+        {
+            **rig.cache,
+            "serial": "OTHER",
+            "timestampUpdate": (NOW + timedelta(minutes=5)).timestamp(),
+        }
+    )
+    source = _published_source(rig, collector)
+    assert source.raw_value == power and source.updated_at == NOW
+    expired = normalize_power_sample(
+        source,
+        now=NOW + timedelta(seconds=601),
+        max_age_seconds=600,
+        multiplier=1,
+        positive_direction="generation_positive",
+    )
+    assert expired.value is None and not expired.fresh
+    rig.service.publish(
+        {**rig.cache, "acPower": power, "timestampUpdate": (NOW + timedelta(minutes=5)).timestamp()}
+    )
+    assert _published_source(rig, collector).updated_at == NOW + timedelta(minutes=5)
+
+
+def test_seed_waits_for_selected_inverter_and_does_not_poll(rig):
+    rig.service = _Publisher(rig)
+    rig.hass.data["solis"][rig.entry.entry_id] = rig.service
+    rig.api._data = {**rig.cache, "serial": "OTHER"}
+    collector = SolisPublishedFrames(rig.hass)
+    collector.ensure_source(ENTITY)
+    assert collector.current_frame() is None
+    assert _published_source(rig, collector).raw_value is None
+    rig.service.publish(rig.cache)
+    assert _published_source(rig, collector).raw_value == 4920
+
+
+def test_subscription_is_idempotent_and_unload_removes_only_own_listener(published):
+    rig, collector = published
+    marker = object()
+    callbacks = rig.service._subscriptions[SERIAL]["serial"]
+    callbacks.append(marker)
+    for _ in range(10):
+        collector.ensure_source(ENTITY)
+    assert len(callbacks) == 2
+    stale = callbacks[0]
+    collector.close()
+    assert callbacks == [marker] and collector.current_frame() is None
+    stale.data_updated(SERIAL, NOW)
+    assert collector.current_frame() is None
+
+
+@pytest.mark.parametrize("fault", ["entry", "provider", "api", "registry", "restored"])
+def test_replacement_and_invalid_binding_cannot_reuse_old_frame(published, fault):
+    rig, collector = published
+    stale = collector._listener
+    if fault == "entry":
+        rig.entry.state = ConfigEntryState.NOT_LOADED
+    elif fault == "provider":
+        rig.service = _Publisher(rig)
+        rig.hass.data["solis"][rig.entry.entry_id] = rig.service
+    elif fault == "api":
+        rig.service._api = SimpleNamespace(_data={**rig.cache, "serial": "OTHER"})
+    elif fault == "registry":
+        rig.registry.unique_id = "different"
+    else:
+        rig.state.attributes["restored"] = True
+    assert collector.current_frame() is None
+    collector.ensure_source(ENTITY)
+    # A new provider may seed only a matching current frame, never an old callback.
+    current = collector.current_frame()
+    stale.data_updated(SERIAL, NOW)
+    assert collector.current_frame() == current
+
+
+def test_unsupported_native_publisher_has_no_shared_cache_fallback(rig):
+    collector = SolisPublishedFrames(rig.hass)
+    collector.ensure_source(ENTITY)
+    assert collector.current_frame() is None
+    assert _published_source(rig, collector).raw_value is None
+
+
+def test_subscription_failure_removes_partial_registration(published):
+    rig, collector = published
+    collector.close()
+    native_subscribe = rig.service.subscribe
+
+    def broken(*args):
+        native_subscribe(*args)
+        raise RuntimeError("synthetic publisher failure")
+
+    rig.service.subscribe = broken
+    collector.ensure_source(ENTITY)
+    assert collector.current_frame() is None
+    assert rig.service._subscriptions[SERIAL]["serial"] == []
+
+
+def test_snapshot_is_immutable_and_invalid_publication_cannot_keep_old_zero(published):
+    rig, collector = published
+    frame = collector.current_frame()
+    with pytest.raises(TypeError):
+        frame["acPower"] = 0
+    rig.service.publish({**rig.cache, "state": 2})
+    assert _published_source(rig, collector).raw_value is None
+    rig.service.publish({**rig.cache, "state": 2, "acPower": 0})
+    assert _published_source(rig, collector).raw_value == 0
+
+
+def test_separate_owners_unload_without_disturbing_other_subscribers(published):
+    rig, first = published
+    second = SolisPublishedFrames(rig.hass)
+    second.ensure_source(ENTITY)
+    assert len(rig.service._subscriptions[SERIAL]["serial"]) == 2
+    first.ensure_source(None)
+    assert first.current_frame() is None
+    assert len(rig.service._subscriptions[SERIAL]["serial"]) == 1
+    rig.service.publish({**rig.cache, "acPower": 4800})
+    assert _published_source(rig, second).raw_value == 4800
+    assert first.current_frame() is None
+    second.close()
+    assert rig.service._subscriptions[SERIAL]["serial"] == []
+
+
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("timestampUpdate", True),
+        ("timestampUpdate", float("nan")),
+        ("timestampUpdate", NOW.timestamp() * 1000),
+        ("acPower", float("inf")),
+        ("state", True),
+        ("pacUnit", "kW"),
+    ],
+)
+def test_bad_selected_frame_never_reuses_last_good_measurement(published, field, value):
+    rig, collector = published
+    rig.service.publish({**rig.cache, field: value})
+    result = normalize_power_sample(
+        _published_source(rig, collector),
+        now=NOW,
+        max_age_seconds=600,
+        multiplier=1,
+        positive_direction="generation_positive",
+    )
+    assert result.value is None and not result.valid

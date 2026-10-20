@@ -397,6 +397,14 @@ Portable code maps roles and never embeds that vehicle's entity IDs. See the
 
 ## Optional equipment and integrations
 
+The optional SolisCloud house estimate requires the supported native
+InverterService read-only publication interface. HEO observes the explicitly
+selected inverter's complete frame; an account-wide cache may belong to another
+inverter. Missing/unsupported publication capability stays unavailable, not a
+global-cache or HA-timestamp guess. The observer adds no network requests or
+timer, has no control access, and is removed on unload or source replacement.
+Existing actual-measurement and fast local-input age bounds remain unchanged.
+
 - The Working Single Phase Pilot Site uses an eWeLink-provided switch for its
   smart-socket charging path, but HEO depends only on the explicitly mapped
   on/off switch capability, not the vendor name.

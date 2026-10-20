@@ -41,6 +41,14 @@ frame, bound to the loaded native entry/device. An equal power value may remain
 valid when that frame's measurement time advances; a cached or attributes-only
 HA report cannot renew it. Partial/unsupported/mismatched frames fail closed;
 there is no new API request, companion-timestamp guess or HA-clock fallback.
+From v0.12.50 the frame is captured during the selected inverter's native
+publication, because the account-wide API cache is reused for other inverters.
+A lifecycle-owned read-only subscriber retains only that complete immutable
+frame. Other inverter publications cannot replace it or renew its clock. A
+malformed selected publication invalidates it; no new publication leaves only
+the original bounded measurement, not a renewed lease. Source/provider changes
+and unload remove only HEO's observer and discard its frame. Startup may wait
+for a genuine selected-inverter publication. No polling or stored schema is added.
 Grid/battery/current retain their normal
 fast limits, as does canonical solar used by EV tracking. The oldest accepted
 balance clock remains visible. Price-export rechecks that explicit house bound

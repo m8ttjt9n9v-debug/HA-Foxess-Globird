@@ -2,13 +2,23 @@
 
 Status here describes behavioral parity, not merely the presence of code.
 
+## Selected-inverter Solis measurement correction
+
+- [x] Characterise native account-wide cache replacement across multiple
+  inverters; retain a complete selected-inverter publication through a native
+  read-only observer, without relaxing identities, values, clocks or age limits.
+- [x] Test invalid/partial publications, constant zero/clipped power, expiry,
+  rebind, unload, unsupported publishers and independent observer ownership.
+- [ ] Complete versioned release checks and separately approved real provider
+  acceptance. A working software estimate does not repair a physical CT.
+
 ## Solar source rejection diagnostics
 
 - [x] Preserve capture acceptance while exposing the exact rejected boundary
   through the existing, read-only, redacted diagnostics download. Characterise
   missing/invalid fields, mismatch, privacy and unchanged age permission.
-- [ ] Complete versioned release checks and controlled diagnostic acceptance
-  before claiming an underlying provider compatibility correction.
+- [x] Complete versioned release checks and publication in v0.12.49. Underlying
+  provider correction and its live acceptance remain separate.
 
 ## Disconnected EV acknowledgement correction
 

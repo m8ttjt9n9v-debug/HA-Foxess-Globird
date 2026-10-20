@@ -32,6 +32,7 @@ async def async_get_config_entry_diagnostics(
     if power_sources.house_load_source == "power_balance_cloud_solar":
         capture_solis_solar(
             hass, power_sources.solar_entity, diagnostics=solar_provider,
+            cached_frame=coordinator.solis_frames.current_frame(),
         )
     return {
         "entry": {"version": entry.version, "options": {"mode": "observe"}},

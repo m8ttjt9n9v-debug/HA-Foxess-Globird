@@ -102,7 +102,7 @@ def capture_telemetry_source(
 
 def capture_site_telemetry(
     hass: HomeAssistant, entity_ids: TelemetryEntityIds,
-    *, balance_mode: bool = False, cloud_solar: bool = False,
+    *, balance_mode: bool = False, cloud_solar: bool = False, solis_frame=None,
 ) -> SiteTelemetrySources:
     """Capture all raw sources without applying units or sign conventions."""
     return SiteTelemetrySources(
@@ -119,7 +119,7 @@ def capture_site_telemetry(
             hass, entity_ids.battery_discharge_power, reject_restored=balance_mode,
         ),
         solar_power=(
-            capture_solis_solar(hass, entity_ids.solar_power)
+            capture_solis_solar(hass, entity_ids.solar_power, cached_frame=solis_frame)
             if cloud_solar else capture_telemetry_source(
                 hass, entity_ids.solar_power, reject_restored=balance_mode,
             )

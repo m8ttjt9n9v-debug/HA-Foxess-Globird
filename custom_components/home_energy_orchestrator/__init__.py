@@ -212,6 +212,7 @@ async def async_migrate_entry(hass: HomeAssistant, entry: EnergyConfigEntry) -> 
 async def async_setup_entry(hass: HomeAssistant, entry: EnergyConfigEntry) -> bool:
     """Set up a configured observer."""
     coordinator = EnergyCoordinator(hass, {**entry.data, **entry.options}, entry.entry_id)
+    entry.async_on_unload(coordinator.solis_frames.close)
     coordinator.maintenance = hass.data[NODE_KEY]
     hub = hass.data.get(FLEET_KEY)
     if hub is not None and hub.owner_entry_id is None:

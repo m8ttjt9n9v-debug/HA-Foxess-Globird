@@ -218,7 +218,7 @@ async def test_selected_solar_provider_diagnostics_are_readonly_and_redacted(has
     await hass.async_block_till_done()
     captures = []
 
-    def capture(_hass, entity_id, *, diagnostics):
+    def capture(_hass, entity_id, *, diagnostics, cached_frame):
         captures.append(entity_id)
         diagnostics.update(reason="native_cache_unavailable", capture_accepted=False)
         return None

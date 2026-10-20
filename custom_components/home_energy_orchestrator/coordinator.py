@@ -139,6 +139,7 @@ from .planner.meter_cycle import (
     MeterCheckpointState,
     advance_accounting_meters,
 )
+from .solar_provider import SolisPublishedFrames
 from .telemetry import (
     NormalizedTelemetry,
     TelemetryNormalizationConfiguration,
@@ -169,6 +170,7 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
         self.config = config
         self.runtime_config = RuntimeConfiguration.from_mapping(config)
         self.entry_id = entry_id
+        self.solis_frames = SolisPublishedFrames(hass)
         self.active_controller = None
         self.ev_controller = None
         self.snapshot: SiteSnapshot | None = None
@@ -905,6 +907,11 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
         battery = self.runtime_config.battery
         site = self.runtime_config.site
         electrical = self.runtime_config.electrical
+        cloud_solar = (
+            power_sources.house_load_source == "power_balance_cloud_solar"
+            and site.solar_configured
+        )
+        self.solis_frames.ensure_source(power_sources.solar_entity if cloud_solar else None)
         sources = capture_site_telemetry(
             self.hass,
             TelemetryEntityIds(
@@ -921,7 +928,8 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
                 phase_grid_voltage=site.phase_voltage_entities,
             ),
             balance_mode=power_sources.house_load_source != "sensor",
-            cloud_solar=power_sources.house_load_source == "power_balance_cloud_solar",
+            cloud_solar=cloud_solar,
+            solis_frame=self.solis_frames.current_frame() if cloud_solar else None,
         )
         return normalize_site_telemetry(
             sources,
