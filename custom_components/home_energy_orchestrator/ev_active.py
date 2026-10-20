@@ -575,6 +575,7 @@ class ActiveEvController:
             # Retirement is a read-only lifecycle transition, including while
             # control is disabled or phase-current telemetry is unavailable.
             await self._async_retire_disconnected_reconciliation(now)
+            await self._async_complete_baseline_handoff(now)
             vehicle_soc = self._mapped_number(
                 self.coordinator.runtime_config.ev_telemetry.soc_entity
             )
@@ -1000,6 +1001,7 @@ class ActiveEvController:
                 self.outside_control_active = runtime.outside_control_active
                 if runtime.save_ownership_release:
                     await self._async_save(now)
+                await self._async_complete_baseline_handoff(now)
                 return
             try:
                 self.last_actions = await self._adapter.async_execute(transition.plan)  # type: ignore[union-attr]
@@ -1024,6 +1026,100 @@ class ActiveEvController:
             self.last_write_at = now
             self.last_reason = "ev_commands_sent_awaiting_feedback"
             await self._async_save(now)
+
+    async def _async_complete_baseline_handoff(self, now: datetime) -> None:
+        """Retire a backfill stop only after the protected baseline is proved.
+
+        A powered baseline finishes backfill without switching the car off.
+        Keep its outside ownership and all energy accounting; a true zero-
+        baseline stop still requires the existing switch-off acknowledgement.
+        """
+        feedback = _CYCLE_FEEDBACK.get()
+        trip = getattr(self.coordinator, "trip_charge", None)
+        baseline = self._float(CONF_EV_PROTECTED_BASELINE_A, DEFAULT_EV_PROTECTED_BASELINE_A)
+        if (
+            not self.daily_backfill_stop_pending or feedback is None
+            or not isfinite(baseline) or baseline <= 0
+            or self.coordinator.runtime_config.ev_policy.charge_path == EV_CHARGE_PATH_SMART_SOCKET
+            or self._free_window(now)[0] or not self._connected_at_home()[0]
+            or self.pre_free_session.active or self.daily_backfill_active
+            or self.outside_target_active or not self.outside_control_active
+            or self._charge_to_full_requested() or self.charge_to_full_started_at is not None
+            or self.smart_recovery.phase != "idle"
+            or self.smart_stage_started_at is not None or self.smart_stage_target_a is not None
+            or trip is not None and (
+                trip.owns_full or trip._state.cleanup_pending
+                or not trip._loaded or trip._invalid_storage or trip._storage_error or trip._dirty
+            )
+            or self.reconciliation.phase != "confirmed"
+        ):
+            return
+        maximum_age = self._float(
+            CONF_EV_TELEMETRY_MAX_AGE_SECONDS, DEFAULT_EV_TELEMETRY_MAX_AGE_SECONDS,
+        )
+        required = [feedback.current_limit, feedback.charge_limit]
+        if ev_home_presence_required(
+            location_mode=self.coordinator.runtime_config.ev_connection.location_mode,
+        ):
+            required.append(feedback.at_home)
+        physical = feedback.physical_observation(now=now, max_age_seconds=maximum_age)
+        observation = feedback.direct_observation
+        if (
+            not physical.available or observation is None
+            or feedback.charging_state.available_state != "charging"
+            or any(not item.fresh(now, maximum_age) for item in required)
+            or feedback.current_limit.unit not in {None, "A"}
+        ):
+            return
+        minimum = self._physical_charging_minimum_a(observation)
+        step = observation.current_step_a
+        if (
+            minimum is None or not isfinite(minimum) or minimum < 0
+            or step is None or not isfinite(step) or step <= 0
+        ):
+            return
+        ceiling = self._path_ceiling_a()
+        if not isfinite(ceiling) or ceiling <= 0:
+            return
+        expected = protected_baseline_current_a(
+            configured_baseline_a=baseline, physical_minimum_a=minimum,
+            current_step_a=step, physical_ceiling_a=ceiling,
+        )
+        expected = ceil(expected / step) * step
+        values = (
+            self.target_current_a, self.reconciliation.target_current_a,
+            observation.requested_current_a, physical.actual_current_a,
+        )
+        if (
+            expected <= 0 or expected > ceiling
+            or any(isinstance(value, bool) or not isinstance(value, (int, float))
+                   or not isfinite(value) or abs(value - expected) > 0.01 for value in values)
+            or self.target_limit_percent != self.reconciliation.target_limit_percent
+        ):
+            return
+        try:
+            plan = plan_direct_evse_commands(
+                observation, target_current_a=expected,
+                target_limit_percent=self.target_limit_percent,
+                physical_ceiling_a=ceiling, start_allowed=True, charge_to_full=False,
+            )
+        except (TypeError, ValueError):
+            return
+        if plan.commands or plan.reason != "direct_path_ready":
+            return
+        prior = self._daily_backfill_cycle_state()
+        prior_outside_stop = self.outside_stop_requested
+        self._apply_daily_backfill_cycle_state(replace(
+            prior, stop_pending=False, stop_attempts=0, last_stop_at=None,
+        ))
+        self.outside_stop_requested = False
+        try:
+            await self._async_save(now)
+        except Exception:
+            # A failed checkpoint must not expose a false completed handoff.
+            self._apply_daily_backfill_cycle_state(prior)
+            self.outside_stop_requested = prior_outside_stop
+            raise
 
     async def _async_retire_disconnected_reconciliation(self, now: datetime) -> None:
         """Retire only an obsolete, unowned direct episode after proved unplug.
@@ -1217,6 +1313,7 @@ class ActiveEvController:
             return
         self.reconciliation = transition.state
         await self._async_execute_ev_plan(transition.plan, now)
+        await self._async_complete_baseline_handoff(now)
 
     async def _async_reconcile_outside_stop(
         self,

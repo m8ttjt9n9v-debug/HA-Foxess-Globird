@@ -23,6 +23,20 @@ retains the final decision. It does not authorise monitoring jobs or deployments
 - [ ] Complete publication and controlled pilot acceptance. A wholesale spike
   or startup test is not retailer payment proof.
 
+## Verified backfill-to-keepalive handoff correction — v0.12.53
+
+- [x] Retire only an ended backfill stop after fresh direct-EVSE feedback
+  confirms its configured positive protected baseline, without stopping the
+  connector or releasing the baseline's outside ownership.
+- [x] Checkpoint the existing lifecycle fields immediately and restore them on
+  save failure. Keep zero-baseline switch-off duties, unknown/stale feedback,
+  successor sessions, Full/Trip and smart-socket recovery protected.
+- [x] Characterize real controller handoff, restart, checkpoint failure and
+  negative evidence; run full validation before any separately approved release
+  or installation. No maintenance-admission bypass is part of this correction.
+- [ ] Publish a separately approved release and complete its controlled pilot
+  installation. The existing immutable release does not contain this repair.
+
 ## EV-before-export protected charging — v0.12.51
 
 - [x] Extend the existing opt-in and target through the current EV outside

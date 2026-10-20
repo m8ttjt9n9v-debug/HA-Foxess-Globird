@@ -180,6 +180,28 @@ is reconciled instead of stopping the connector. Free-window charging and paid
 Charge to Full charging do not count as ready-by delivery. Late pre-free
 charging also does not consume tomorrow's fixed ready-by allocation ledger.
 
+### Confirmed return to a powered baseline
+
+Ending backfill is not always a request to switch the car off. If a positive
+protected baseline is configured, the completed handoff is fresh confirmation
+that requested and actual current match that representable baseline, the car
+is connected and charging, its switch is on, and its limit/target feedback
+agrees with the existing direct-EVSE planner. No active surplus, Full/Trip or
+recovery owner may be discarded. Missing, stale, restored or contradictory
+feedback leaves the pending obligation intact.
+
+HEO retires only the old daily-stop fields and checkpoints them immediately;
+it retains keepalive ownership and delivered-energy accounting. Failed storage
+restores the pending fields before the cycle can proceed. The zero-baseline
+path remains a real stop requiring switch-off acknowledgement. This lifecycle
+repair is not permission to restart during charging or bypass maintenance.
+
+| Existing source | Retained meaning in this correction |
+| --- | --- |
+| Pilot `configuration_v1.4.24.yaml` current-target fallback | Outside charging returns to its configured protected baseline, not an invented stop/start. |
+| `end_daily_backfill_session` and `_async_restore_ready_by_baseline` | Keep the pending duty until the existing direct reconciliation and fresh physical feedback prove handoff. |
+| Existing version-one EV store and zero-baseline stop reconciliation | Persist cleanup with rollback on failure; retain true switch-off duties and all energy/session state. |
+
 ## Ownership
 
 The fixed daily allocation writes Tessie only, so it can operate with FoxCloud

@@ -129,6 +129,17 @@ This does not excuse connected keepalive, pending
 sessions/reconciliation/recovery, invalid targets or missing/stale evidence.
 No existing freshness threshold or charging policy changes.
 
+An ended backfill session may retain a stop latch while the configured direct
+path intentionally keeps charging at a positive protected baseline. Completing
+that handoff requires fresh, non-restored cable/charging/switch/current and
+actuator feedback, the same confirmed runtime target, and no active surplus,
+Full/Trip or recovery owner. The existing representable baseline and actuator
+planner are authoritative, not an assumption that every site uses 1 A. Once
+proved, only the daily stop fields are retired and immediately checkpointed;
+keepalive ownership and energy accounting remain. Save failure restores the
+pending duty. A zero baseline still needs switch-off confirmation, and a
+connected keepalive remains active for ordinary maintenance admission.
+
 An obsolete, unowned direct-EVSE command episode is retired to the existing
 `idle` state only after that same immutable, fresh disconnected-idle observation.
 Retirement is not acknowledgement that its former target was applied. It clears

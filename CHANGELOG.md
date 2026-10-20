@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.12.53 — Complete verified EV keepalive handoffs
+
+- Complete an ended backfill session's pending stop obligation when fresh
+  current, switch, actuator and ownership feedback confirms the configured
+  nonzero protected baseline. Keep the intended keepalive running without a
+  stop/start, retain its outside ownership, and immediately checkpoint cleanup.
+- Retain genuine zero-baseline stops, uncertain feedback and active successor
+  or recovery duties. Restore the pending obligation if saving fails. No new
+  setting, controller, meter, helper or storage schema; maintenance still needs
+  its existing explicit approval and safety checks.
+
 ## 0.12.52 — Count paid export toward the daily cap
 
 - Exclude zero-rate solar overflow from the automatic daily export cap. Count
