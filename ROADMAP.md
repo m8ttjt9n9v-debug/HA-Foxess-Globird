@@ -2,6 +2,14 @@
 
 Status here describes behavioral parity, not merely the presence of code.
 
+## Solar source rejection diagnostics
+
+- [x] Preserve capture acceptance while exposing the exact rejected boundary
+  through the existing, read-only, redacted diagnostics download. Characterise
+  missing/invalid fields, mismatch, privacy and unchanged age permission.
+- [ ] Complete versioned release checks and controlled diagnostic acceptance
+  before claiming an underlying provider compatibility correction.
+
 ## Disconnected EV acknowledgement correction
 
 - [x] Reproduce an obsolete unowned direct-EVSE feedback wait surviving unplug

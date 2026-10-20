@@ -53,6 +53,13 @@ topology before re-confirming direction verification. A broken CT is not fixed
 by this software estimate. See `docs/fleet-monitoring.md` for commissioning,
 quality limits, dashboard preservation and downgrade precautions.
 
+The diagnostics download includes an on-demand, redacted `solar_provider`
+report only for the explicitly selected cloud-solar profile. It runs the same
+capture checks and records the rejected boundary, known cache-field types and
+presence, and finite power/measurement evidence when available. No arbitrary
+cache content, identity, credential or extra API call is exposed. Capture shape
+acceptance is not freshness or control permission; all existing bounds remain.
+
 ## Optional Fleet maintenance extension
 
 The separately configured Fleet maintenance wrapper uses HACS as its sole

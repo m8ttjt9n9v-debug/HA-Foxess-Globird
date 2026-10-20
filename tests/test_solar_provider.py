@@ -1,5 +1,6 @@
 """Same-frame native Solis measurement timestamps, without additional polling."""
 
+import json
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 
@@ -188,3 +189,77 @@ def test_offline_display_override_is_not_mistaken_for_measured_zero(rig):
     assert qualified(rig).value == 0  # Complete frame actually measures zero.
     rig.cache.pop("acPower")
     assert qualified(rig).value is None
+
+
+@pytest.mark.parametrize("field", ["serial", "pacUnit", "acPower", "timestampUpdate", "state"])
+def test_diagnostics_identify_rejected_frame_without_changing_capture(rig, field):
+    rig.cache.pop(field)
+    expected = capture_solis_solar(rig.hass, ENTITY)
+    evidence = {}
+    assert capture_solis_solar(rig.hass, ENTITY, diagnostics=evidence) == expected
+    assert evidence["capture_accepted"] is False
+    assert evidence["frame_fields"][field]["present"] is False
+    assert evidence["reason"] in {
+        "native_frame_identity_or_unit_mismatch", "native_frame_value_types_invalid",
+    }
+
+
+@pytest.mark.parametrize("fault,reason", [
+    ("binding", "native_entity_identity_mismatch"),
+    ("provider", "native_cache_unavailable"),
+    ("unit", "native_frame_identity_or_unit_mismatch"),
+    ("value", "native_entity_value_or_unit_mismatch"),
+    ("timestamp", "native_frame_value_types_invalid"),
+    ("state", "native_frame_value_types_invalid"),
+])
+def test_diagnostic_reasons_are_bounded_and_pure(rig, fault, reason):
+    if fault == "binding":
+        rig.registry.unique_id = "different_property"
+    elif fault == "provider":
+        rig.hass.data = {}
+    elif fault == "unit":
+        rig.cache["pacUnit"] = "kW"
+    elif fault == "value":
+        rig.state.state = "100"
+    elif fault == "timestamp":
+        rig.cache["timestampUpdate"] = float("nan")
+    else:
+        rig.cache["state"] = None
+    evidence = {}
+    expected = capture_solis_solar(rig.hass, ENTITY)
+    assert capture_solis_solar(rig.hass, ENTITY, diagnostics=evidence) == expected
+    assert evidence["reason"] == reason and evidence["capture_accepted"] is False
+    json.dumps(evidence, allow_nan=False)
+
+
+def test_diagnostics_expose_no_provider_identity_credentials_or_arbitrary_cache(rig):
+    rig.cache["password"] = "DO_NOT_EXPORT_SECRET"
+    rig.cache["private_extra_key"] = {"url": "PRIVATE_PROVIDER_URL"}
+    evidence = {}
+    expected = capture_solis_solar(rig.hass, ENTITY)
+    assert capture_solis_solar(rig.hass, ENTITY, diagnostics=evidence) == expected
+    assert evidence["capture_accepted"] is True
+    assert evidence["reason"] == "accepted_frame"
+    assert evidence["frame_power_w"] == 4920
+    assert evidence["measurement_at"] == NOW.isoformat()
+    serialized = json.dumps(evidence, allow_nan=False)
+    for private in [SERIAL, ENTITY, rig.entry.entry_id, "DO_NOT_EXPORT_SECRET",
+                    "PRIVATE_PROVIDER_URL", "private_extra_key", "password"]:
+        assert private not in serialized
+    rig.cache["pacUnit"] = "DO_NOT_EXPORT_SECRET"
+    evidence = {}
+    capture_solis_solar(rig.hass, ENTITY, diagnostics=evidence)
+    assert evidence["frame_unit"] == "unsupported"
+    assert "DO_NOT_EXPORT_SECRET" not in json.dumps(evidence)
+
+
+def test_diagnostics_do_not_renew_or_fabricate_source_freshness(rig):
+    rig.cache["timestampUpdate"] = (NOW - timedelta(seconds=601)).timestamp()
+    evidence = {}
+    source = capture_solis_solar(rig.hass, ENTITY, diagnostics=evidence)
+    assert evidence["capture_accepted"] is True  # Shape acceptance is not age permission.
+    assert normalize_power_sample(
+        source, now=NOW, max_age_seconds=600, multiplier=1,
+        positive_direction="generation_positive",
+    ).fresh is False
+    assert source.updated_at == NOW - timedelta(seconds=601)

@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased — Retire obsolete disconnected EV acknowledgements
+## 0.12.49 — EV idle recovery and solar diagnostics
 
 - Retire an unowned direct-EVSE command episode only when fresh mapped feedback
   positively confirms disconnected and idle. Save its retirement immediately
@@ -11,6 +11,11 @@
   restored feedback, active sessions, Full/Trip intent, stop duties and smart
   recovery blocking as before. No new commands, control permissions, settings,
   storage schema or historical maintenance-audit changes.
+- Add a redacted, on-demand Solis source rejection report to HEO's existing
+  diagnostics download. It exposes only bounded validation reasons, known field
+  presence/types and numeric measurement evidence. No provider request, private
+  identity, credential, arbitrary cached payload or relaxed source acceptance
+  is introduced. An accepted frame still needs normal age/coherence checks.
 
 ## 0.12.48 — Correct Fleet house and EV power readings
 

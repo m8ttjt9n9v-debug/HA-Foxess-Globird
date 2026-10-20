@@ -195,6 +195,7 @@ async def test_setup_observes_normalised_values_and_never_calls_services(hass):
     assert hass.states.get("sensor.home_energy_ev_solar_spill_status").state == "disabled"
     assert hass.states.get("sensor.home_energy_ev_pre_free_status").state == "disabled"
     diagnostics = await async_get_config_entry_diagnostics(hass, entry)
+    assert diagnostics["solar_provider"] == {"reason": "not_selected"}
     assert diagnostics["actuators"]["foxess_automatic_control_enabled"] is False
     assert diagnostics["actuators"]["free_charge_schedule_confirmed"] is False
     assert diagnostics["actuators"]["foxess_control_owner"] == "observer_only"
@@ -203,6 +204,35 @@ async def test_setup_observes_normalised_values_and_never_calls_services(hass):
     diagnostics = await async_get_config_entry_diagnostics(hass, entry)
     assert diagnostics["actuators"]["foxess_automatic_control_enabled"] is True
     assert service_calls == []
+
+
+async def test_selected_solar_provider_diagnostics_are_readonly_and_redacted(hass, monkeypatch):
+    from custom_components.home_energy_orchestrator import diagnostics as diagnostic_module
+
+    entry = MockConfigEntry(domain=DOMAIN, title="Test Site", data={
+        **ENTRY_DATA, "house_load_source": "power_balance_cloud_solar",
+        "solar_power_entity": "sensor.native_ac_power",
+    })
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    captures = []
+
+    def capture(_hass, entity_id, *, diagnostics):
+        captures.append(entity_id)
+        diagnostics.update(reason="native_cache_unavailable", capture_accepted=False)
+        return None
+
+    monkeypatch.setattr(diagnostic_module, "capture_solis_solar", capture)
+    calls = []
+    hass.bus.async_listen(EVENT_CALL_SERVICE, calls.append)
+    value = await async_get_config_entry_diagnostics(hass, entry)
+    assert captures == ["sensor.native_ac_power"]
+    assert value["solar_provider"] == {
+        "reason": "native_cache_unavailable", "capture_accepted": False,
+    }
+    assert "sensor.native_ac_power" not in json.dumps(value)
+    assert calls == []
 
 
 async def test_setup_preserves_user_owned_entity_ids_and_names(hass):
