@@ -53,7 +53,7 @@ MONITOR_CARD_TEMPLATE = """\
 | Installed HEO | **{{ r('heo_version') }}** |
 | Battery | **{{ a('battery_soc') }}%** · {{ a('battery_power_kw') }} kW |
 | Grid / Solar | {{ a('grid_power_kw') }} / {{ a('solar_power_kw') }} kW |
-| House / EV load | {{ r('house_load', ' kW') }} / {{ r('ev_load', ' kW') }} |
+| House / EV (est.) | {{ a('house_load_excluding_ev_kw') }} / {{ a('ev_charging_power_kw') }} kW |
 | Free import today | **{{ r('free_import_today', ' kWh') }}** |
 | Solar today | **{{ r('solar_today', ' kWh') }}** |
 | EV battery | **{{ r('ev_soc', '%') }}** |

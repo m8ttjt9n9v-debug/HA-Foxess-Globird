@@ -107,6 +107,7 @@ from .const import (
     CONF_HOUSE_LEARNING_FALLBACK,
     CONF_HOUSE_LOAD,
     CONF_HOUSE_LOAD_INCLUDES_EV,
+    CONF_HOUSE_LOAD_SOURCE,
     CONF_HOUSE_OCCUPANCY_MODE,
     CONF_INVERTER_CHARGE_LIMIT_KW,
     CONF_INVERTER_DISCHARGE_LIMIT_KW,
@@ -727,6 +728,7 @@ class PowerSourceSettings:
     battery_entity: str | None
     solar_entity: str | None
     house_load_entity: str | None
+    house_load_source: str = "sensor"
 
 
 @dataclass(frozen=True, slots=True)
@@ -973,6 +975,11 @@ class RuntimeConfiguration:
         )
         if not isfinite(max_telemetry_age) or max_telemetry_age <= 0:
             max_telemetry_age = DEFAULT_TELEMETRY_MAX_AGE_SECONDS
+        house_source = str(data.get(CONF_HOUSE_LOAD_SOURCE, "sensor"))
+        ev_configured = bool(data.get(
+            CONF_CONFIGURE_EV,
+            data.get(CONF_EV_CONTROL_COMMISSIONED, DEFAULT_EV_CONTROL_COMMISSIONED),
+        ))
         return cls(
             aemo_monitor=AemoMonitorConfiguration.from_mapping(data),
             automation=AutomationSettings(
@@ -1042,15 +1049,7 @@ class RuntimeConfiguration:
                 ),
             ),
             ev_connection=EvConnectionSettings(
-                configured=bool(
-                    data.get(
-                        CONF_CONFIGURE_EV,
-                        data.get(
-                            CONF_EV_CONTROL_COMMISSIONED,
-                            DEFAULT_EV_CONTROL_COMMISSIONED,
-                        ),
-                    )
-                ),
+                configured=ev_configured,
                 explicitly_disabled=data.get(CONF_CONFIGURE_EV) is False,
                 control_commissioned=ev_control_commissioned,
                 location_mode=str(
@@ -1185,12 +1184,14 @@ class RuntimeConfiguration:
                         DEFAULT_HOUSE_OCCUPANCY_MODE,
                     )
                 ),
-                load_includes_ev=bool(
+                load_includes_ev=(ev_configured if house_source in {
+                    "power_balance", "power_balance_cloud_solar",
+                } else bool(
                     data.get(
                         CONF_HOUSE_LOAD_INCLUDES_EV,
                         DEFAULT_HOUSE_LOAD_INCLUDES_EV,
                     )
-                ),
+                )),
                 away_confirmation_hours=_optional_number(
                     data,
                     CONF_HOUSE_AWAY_CONFIRMATION_HOURS,
@@ -1416,6 +1417,7 @@ class RuntimeConfiguration:
                 battery_entity=_entity_id(battery_power_entity),
                 solar_entity=_entity_id(solar_power_entity),
                 house_load_entity=_entity_id(house_load_entity),
+                house_load_source=house_source,
             ),
             electrical=ElectricalSettings(
                 verified=bool(

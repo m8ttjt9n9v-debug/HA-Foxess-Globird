@@ -92,6 +92,13 @@ class EnergySensor(CoordinatorEntity[EnergyCoordinator], SensorEntity):
         return read_model.sensor_values()[self.entity_description.key]
 
     @property
+    def available(self) -> bool:
+        """An unsupported load split must not masquerade as zero demand."""
+        if self.entity_description.key in {"ev_charging_power", "house_load_excluding_ev"}:
+            return super().available and self.native_value is not None
+        return super().available
+
+    @property
     def extra_state_attributes(self):
         if self.entity_description.key == "fleet_summary":
             return self._fleet_summary_attributes()

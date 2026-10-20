@@ -1,5 +1,60 @@
 # Read-only multi-site fleet monitoring
 
+## House and EV power
+
+From v0.12.48, `ev_charging_power_kw`, `house_load_excluding_ev_kw` and
+`load_power_reason` are additive attributes on Fleet Summary. Add these three
+names to each remote summary REST sensor's `json_attributes` allowlist before
+using the new rows in `examples/fleet-dashboard.yaml`. A missing attribute on
+an older node is unavailable, not zero. Local cards can read the native summary
+directly. No private Tesla helper is required. Both power figures are estimates:
+EV power uses actual current with commissioned voltage/phases, not live voltage.
+
+An EV-inclusive mapped load is reduced exactly once. An already EV-exclusive
+sensor is not reduced. An explicitly commissioned whole-site balance includes
+EV irrespective of the saved sensor-specific flag. For a site with no EV,
+EV power is zero and house power is unchanged. Invalid negative source demand
+or an impossible subtraction is unavailable; diagnostics retain the raw input.
+
+For external AC solar missing from the inverter's load meter, first verify the
+measurement topology. Reconfigure **Solar** to map the measured AC generation
+source and its sign; then **House usage and learning → House-load calculation**
+offers the normal mapped sensor, fast power balance, or bounded cloud-solar
+balance. Review and re-confirm electrical directions after a source change.
+Balance = normalized grid import + AC solar generation - battery charging.
+Battery discharge and grid export therefore have negative signed values in
+that equation. Do not use an inverter's DC PV power as external AC generation.
+DC battery readings make this an estimate owing to conversion losses.
+
+Cloud-solar mode is an explicit quality tradeoff, not a repair to CT hardware.
+It accepts at most ten minutes since the actual measurement in the explicitly
+mapped native SolisCloud AC power frame; Solis may normally update about every
+five minutes. HEO reads the already-fetched frame without API calls, matching
+its inverter serial, AC power, units and measurement time to the loaded native
+entry/device. Equal power (including zero) remains valid when the actual frame
+timestamp advances; unchanged/cached HA reports and attribute-only changes
+cannot renew it. The supported contract is hultenvp/solis-sensor 4.0.x's
+SolisCloud InverterService cache, not a search across integrations or inverters.
+An empty cache during fetch/failure, another inverter's frame, mismatched
+native value or an unsupported provider is unavailable, never a fallback to a
+fresh HA timestamp. If a provider stops producing fresh measurements overnight,
+the estimate correctly becomes unavailable; repairing the CT provides continuous
+local measurement. Missing, restored,
+future, wrong-unit or negative resulting consumption never becomes zero.
+Grid/battery/current keep their fast limits; normal EV solar tracking does not
+gain the relaxed cloud age. Price-export checks use the explicit house bound,
+keep independent local grid/battery/SoC freshness, and clean up on expiry.
+
+Existing learning and controller storage are unchanged. Upgrading does not
+select a source or change policies. A normal mapped-source downgrade is
+storage-compatible. Before downgrading a site using power balance, commission a
+known-valid mapped house source (or repair its CT) and explicitly select Sensor:
+older releases ignore the new option and may accept the original bad meter.
+Do not silently return a broken source to automatic control during rollback.
+
+Always fetch and back up the latest live dashboard before applying only the
+approved row changes. Never replace a personal dashboard from this example.
+
 HEO exposes `sensor.home_energy_fleet_summary` as a compact monitoring payload.
 Its state is the commissioned orchestrator mode and its attributes contain the
 small set of power, plan, financial, scorecard, and learning values useful on a

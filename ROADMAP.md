@@ -2,6 +2,17 @@
 
 Status here describes behavioral parity, not merely the presence of code.
 
+## Qualified Fleet house / EV readings
+
+- [x] Reproduce missing private EV-helper dependency and invalid negative native
+  house consumption. Add native qualified EV/house-only estimates and additive
+  Fleet attributes without changing existing meter-topology entity meanings.
+- [x] Add explicit external AC-solar balance source, whole-site EV topology,
+  bounded cloud-solar profile and raw diagnostic provenance. Keep fast local
+  protections and default mapped source; no zero/absolute-value concealment.
+- [ ] Complete release gates and qualify the pilot before any approved remote
+  source commissioning. A software estimate does not repair CT hardware.
+
 ## Guarded per-site Fleet maintenance
 
 - [x] Add an explicit administrator-only per-site Check releases action through

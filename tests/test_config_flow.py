@@ -1637,6 +1637,26 @@ async def test_reconfigure_resets_sign_verification_when_a_source_changes(hass):
     assert await hass.config_entries.async_unload(entry.entry_id)
 
 
+@pytest.mark.parametrize("source", ["power_balance", "power_balance_cloud_solar"])
+async def test_reconfigure_balance_requires_sign_review_and_preserves_sensor_topology(hass, source):
+    entry = MockConfigEntry(domain=DOMAIN, title="Source change", version=6,
+        data={**ENTRY_DATA, "sign_conventions_verified": True, "house_load_includes_ev": False})
+    entry.add_to_hass(hass)
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": SOURCE_RECONFIGURE, "entry_id": entry.entry_id},
+        data={"name": "Source change", **entry.data, "house_load_source": source},
+    )
+    assert result["type"] is FlowResultType.ABORT
+    await hass.async_block_till_done()
+    assert entry.data["house_load_source"] == source
+    assert entry.data["sign_conventions_verified"] is False
+    assert entry.data["house_load_includes_ev"] is False
+    assert entry.runtime_data.runtime_config.house.load_includes_ev is (
+        entry.runtime_data.runtime_config.ev_connection.configured
+    )
+    assert await hass.config_entries.async_unload(entry.entry_id)
+
+
 async def test_reconfigure_reviews_direction_verification_after_source_change(hass):
     entry = MockConfigEntry(
         domain=DOMAIN,

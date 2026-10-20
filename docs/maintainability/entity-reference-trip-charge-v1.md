@@ -5,7 +5,7 @@ to the reviewed semantic worksheet. It records the current names, including
 the retained naming approvals and versioned revisions. Edit the catalogue or semantic
 worksheet, then regenerate this file; do not edit rows by hand.
 
-Total entities: **124**.
+Total entities: **126**.
 
 ## Binary Sensor
 
@@ -73,6 +73,7 @@ Total entities: **124**.
 | `sensor.home_energy_ev_applied_charge_limit` | EV Applied Charge Limit | actuator_setting | advanced | % | `EnergySensor.native_value['ev_applied_charge_limit']` | coordinator_and_projection | retain | Charge-limit percentage currently reported by the mapped EV actuator. |
 | `sensor.home_energy_ev_before_export_status` | EV Before Export Status | session_state | primary | — | `EnergySensor.native_value['ev_before_export_status']` | coordinator_and_projection | retain | Current reason explaining whether EV-before-export policy permits or withholds automatic export. |
 | `sensor.home_energy_ev_charge_limit_target` | EV Charge Limit Target | target | advanced | % | `EnergySensor.native_value['ev_charge_limit_target']` | coordinator_and_projection | retain | Charge-limit percentage currently selected by HEO policy for the EV actuator. |
+| `sensor.home_energy_ev_charging_power` | EV Charging Power (Estimate) | calculation | primary | kW | `EnergySensor.native_value['ev_charging_power']` | coordinator_and_projection | retain | Read-only EV input-power estimate from state-qualified actual current times commissioned voltage and phases. Not requested current, charger maximum or a revenue-grade measurement. Zero when no EV is configured or a fresh explicit non-charging state is observed; unknown is not zero. |
 | `sensor.home_energy_ev_control_status` | EV Control Status | session_state | primary | — | `EnergySensor.native_value['ev_control_status']` | coordinator_and_projection | retain | Primary machine-readable reason for the latest EV controller decision, gate, reconciliation or fault outcome. |
 | `sensor.home_energy_ev_current_target` | EV Current Target | target | primary | A | `EnergySensor.native_value['ev_current_target']` | coordinator_and_projection | retain | Charging current currently selected by HEO after policy priority and electrical limits. |
 | `sensor.home_energy_ev_daily_backfill_current_target` | EV Daily Backfill Current Target | target | advanced | A | `EnergySensor.native_value['ev_daily_backfill_current_target']` | coordinator_and_projection | retain | Maximum charging current selected for the current daily ready-by EV backfill plan. |
@@ -118,6 +119,7 @@ Total entities: **124**.
 | `sensor.home_energy_grid_power` | Grid Power (Import Positive) | canonical_measurement | primary | kW | `EnergySensor.native_value['grid_power']` | coordinator_and_projection | retain | Canonical instantaneous site exchange with the grid; positive values mean import and negative values mean export. |
 | `sensor.home_energy_heater_learning_samples` | Heater Learning Samples | learning_output | diagnostic | — | `EnergySensor.native_value['heater_learning_samples']` | coordinator_and_projection | retain | Count of retained valid separately metered heater-energy samples used in the protected house budget. |
 | `sensor.home_energy_house_load` | House Load | canonical_measurement | primary | kW | `EnergySensor.native_value['house_load']` | coordinator_and_projection | retain | Canonical instantaneous whole-house consumption used by HEO after configured normalization. |
+| `sensor.home_energy_house_load_excluding_ev` | House Load Excluding EV (Estimate) | calculation | primary | kW | `EnergySensor.native_value['house_load_excluding_ev']` | coordinator_and_projection | retain | Read-only house consumption excluding EV exactly once. Sensor topology uses its saved includes-EV flag; an explicitly selected whole-site power balance necessarily includes EV. Negative source or subtraction is invalid, not absolute value or zero. |
 | `sensor.home_energy_house_occupancy_state` | House Energy Occupancy State | calculation | primary | — | `EnergySensor.native_value['house_occupancy_state']` | coordinator_and_projection | retain | Current effective home/away classification used to select the protected house-energy budget. |
 | `sensor.home_energy_learned_base_house_energy` | Learned Base House Energy P80 | learning_output | advanced | kWh | `EnergySensor.native_value['learned_base_house_energy']` | coordinator_and_projection | retain | P80 retained protected-cycle energy for base house load excluding separately learned heater demand. |
 | `sensor.home_energy_learned_heater_energy` | Learned Heater Energy P80 | learning_output | advanced | kWh | `EnergySensor.native_value['learned_heater_energy']` | coordinator_and_projection | retain | P80 retained protected-cycle energy attributable to the separately metered heater load. |

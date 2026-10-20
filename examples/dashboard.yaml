@@ -35,6 +35,12 @@ views:
             entity: sensor.home_energy_house_load
             name: House load
           - type: tile
+            entity: sensor.home_energy_house_load_excluding_ev
+            name: House only (estimate)
+          - type: tile
+            entity: sensor.home_energy_ev_charging_power
+            name: EV power (estimate)
+          - type: tile
             entity: sensor.home_energy_grid_import
             name: Grid import
           - type: tile

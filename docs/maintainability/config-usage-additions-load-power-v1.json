@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "extension": "load_power_v1",
+  "access_count": 3,
+  "accesses": [{
+    "constant": "CONF_HOUSE_LOAD_SOURCE", "key": "house_load_source",
+    "source": "custom_components/home_energy_orchestrator/configuration.py",
+    "scope": "RuntimeConfiguration.from_mapping", "receiver": "data",
+    "access": "get", "kind": "raw_mapping", "layer": "boundary"
+  }, {
+    "constant": "CONF_HOUSE_LOAD_SOURCE", "key": "house_load_source",
+    "source": "custom_components/home_energy_orchestrator/config_flow.py",
+    "scope": "ConfigFlow._schema", "receiver": "defaults",
+    "access": "get", "kind": "raw_mapping", "layer": "boundary"
+  }, {
+    "constant": "CONF_HOUSE_LOAD_SOURCE", "key": "house_load_source",
+    "source": "custom_components/home_energy_orchestrator/config_flow.py",
+    "scope": "ConfigFlow._validate_input", "receiver": "data",
+    "access": "get", "kind": "raw_mapping", "layer": "boundary"
+  }]
+}

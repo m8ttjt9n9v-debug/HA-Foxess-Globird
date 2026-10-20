@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "extension": "load_power_v1",
+  "field_count": 1,
+  "fields": [{
+    "key": "house_load_source", "page": "house", "order": 8,
+    "required": true, "has_default": true, "default": "sensor",
+    "input_kind": "select",
+    "input_config": {
+      "options": ["sensor", "power_balance", "power_balance_cloud_solar"], "custom_value": false,
+      "multiple": false, "sort": false, "translation_key": "house_load_source"
+    },
+    "setup_label": "House-load calculation",
+    "reconfigure_label": "House-load calculation"
+  }]
+}

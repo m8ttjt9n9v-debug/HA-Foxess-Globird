@@ -1,0 +1,9 @@
+{
+  "schema_version": 1, "extension": "load_power_v1",
+  "entity_count": 0, "entities": [], "attribute_addition_count": 1,
+  "attribute_additions": [{
+    "entity_key": "fleet_summary",
+    "default_entity_id": "sensor.home_energy_fleet_summary",
+    "custom_attributes": ["ev_charging_power_kw", "house_load_excluding_ev_kw", "load_power_reason"]
+  }]
+}

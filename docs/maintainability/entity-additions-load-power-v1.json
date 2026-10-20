@@ -1,0 +1,21 @@
+{
+  "schema_version": 1, "extension": "load_power_v1", "entity_count": 2,
+  "entities": [
+    {
+      "platform": "sensor", "key": "ev_charging_power",
+      "unique_id_template": "{config_entry_id}_ev_charging_power",
+      "default_entity_id": "sensor.home_energy_ev_charging_power",
+      "name": "EV Charging Power (Estimate)", "translation_key": null,
+      "unit": "kW", "device_class": "power", "state_class": "measurement",
+      "entity_category": null, "enabled_by_default": true
+    },
+    {
+      "platform": "sensor", "key": "house_load_excluding_ev",
+      "unique_id_template": "{config_entry_id}_house_load_excluding_ev",
+      "default_entity_id": "sensor.home_energy_house_load_excluding_ev",
+      "name": "House Load Excluding EV (Estimate)", "translation_key": null,
+      "unit": "kW", "device_class": "power", "state_class": "measurement",
+      "entity_category": null, "enabled_by_default": true
+    }
+  ]
+}

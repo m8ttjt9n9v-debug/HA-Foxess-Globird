@@ -15,6 +15,44 @@ changed; this file records the authority order, supported behavior, and rules
 future work must preserve. Site addresses, credentials, incident chronology,
 and private operational evidence belong only in the local private record.
 
+## Qualified load readings
+
+Fleet house/EV power has one read-only composition in `load_power.py`, exposed
+through the shared read model and native sensors. EV power is an **estimate**
+using state-qualified actual current, commissioned voltage and commissioned
+phases, not requested current or maximum charge rate. A fresh explicit stopped
+state means zero; unknown/stale/restored feedback is not zero. House-only power
+subtracts EV exactly once only if its source includes EV. Existing `house_load`
+and `house_load_kw` retain their configured meter-topology meanings.
+
+The default `house_load_source=sensor` preserves the existing mapped source
+and saved includes-EV flag for valid non-negative power. Negative consumption
+is invalid canonical evidence, not a positive value or a learned zero. For a
+commissioned external AC-solar topology, explicit `power_balance` calculates
+import-positive grid + generation-positive AC solar - charge-positive battery.
+All dependencies must qualify independently. A whole-site balance necessarily
+includes EV; it uses that topology without rewriting the saved sensor flag.
+
+The separately selected `power_balance_cloud_solar` profile permits a bounded
+solar estimate from the explicitly mapped native SolisCloud AC power entity:
+at most 600 seconds since the provider's actual measurement timestamp. HEO
+reads power, units, serial and timestamp from one already-fetched matching
+frame, bound to the loaded native entry/device. An equal power value may remain
+valid when that frame's measurement time advances; a cached or attributes-only
+HA report cannot renew it. Partial/unsupported/mismatched frames fail closed;
+there is no new API request, companion-timestamp guess or HA-clock fallback.
+Grid/battery/current retain their normal
+fast limits, as does canonical solar used by EV tracking. The oldest accepted
+balance clock remains visible. Price-export rechecks that explicit house bound
+and retains its existing conservative age-energy margin and reducing cleanup;
+it never relaxes grid, battery or SoC checks. DC battery-side power makes the
+balance approximate because conversion losses are not separately metered.
+
+No source is selected automatically. Verify units, signs and whole-site AC
+topology before re-confirming direction verification. A broken CT is not fixed
+by this software estimate. See `docs/fleet-monitoring.md` for commissioning,
+quality limits, dashboard preservation and downgrade precautions.
+
 ## Optional Fleet maintenance extension
 
 The separately configured Fleet maintenance wrapper uses HACS as its sole

@@ -72,6 +72,7 @@ from .planner.foxess_ownership import (
 )
 from .planner.foxess_recovery import mark_foxess_source_unavailable
 from .planner.ledger import calculate_ledger
+from .telemetry import CLOUD_SOLAR_BALANCE_MAX_AGE_SECONDS
 from .telemetry_adapter import capture_telemetry_source
 
 _LOGGER = logging.getLogger(__name__)
@@ -400,7 +401,13 @@ class ActiveFoxessController:
             if at is None or not isfinite(sample.value):
                 return None
             age = (now - at).total_seconds()
-            if not 0 <= age <= runtime.telemetry.max_age_seconds:
+            maximum_age = runtime.telemetry.max_age_seconds
+            if (
+                name == "house_load"
+                and runtime.power_sources.house_load_source == "power_balance_cloud_solar"
+            ):
+                maximum_age = CLOUD_SOLAR_BALANCE_MAX_AGE_SECONDS
+            if not 0 <= age <= maximum_age:
                 return None
             ages.append(age)
         source = capture_telemetry_source(self.hass, runtime.battery.soc_entity)

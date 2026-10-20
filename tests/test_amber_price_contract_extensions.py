@@ -18,6 +18,7 @@ from scripts.config_contract import (
     AMBER_ADDITIONS_PATH,
     AMBER_CONFIG_KEYS,
     EV_CAPACITY_CONFIG_KEYS,
+    LOAD_CONFIG_KEYS,
     PRICE_EXPORT_CONFIG_KEYS,
     build_config_contract,
 )
@@ -53,13 +54,14 @@ def test_amber_price_configuration_is_only_its_separate_two_key_extension():
         "amber_price_entity", "amber_price_region",
     }
     assert ADDITIVE_CONFIG_KEYS == (
-        AEMO_CONFIG_KEYS | PRICE_EXPORT_CONFIG_KEYS | EV_CAPACITY_CONFIG_KEYS | AMBER_CONFIG_KEYS
+        AEMO_CONFIG_KEYS | PRICE_EXPORT_CONFIG_KEYS | EV_CAPACITY_CONFIG_KEYS
+        | AMBER_CONFIG_KEYS | LOAD_CONFIG_KEYS
     )
     retained = build_config_contract()
     current = build_config_contract(include_extensions=True)
     assert retained["config_entry_version"] == current["config_entry_version"] == 6
     assert retained["page_field_count"] == 135
-    assert current["page_field_count"] == 145
+    assert current["page_field_count"] == 146
     assert set(current["declared_config_keys"]) - set(retained["declared_config_keys"]) == (
         ADDITIVE_CONFIG_KEYS
     )

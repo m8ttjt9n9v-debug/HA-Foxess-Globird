@@ -920,6 +920,8 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
                 phase_grid_power=site.phase_power_entities,
                 phase_grid_voltage=site.phase_voltage_entities,
             ),
+            balance_mode=power_sources.house_load_source != "sensor",
+            cloud_solar=power_sources.house_load_source == "power_balance_cloud_solar",
         )
         return normalize_site_telemetry(
             sources,
@@ -938,6 +940,7 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
                 ),
                 site_phase_count=site.phase_count,
                 voltage_v=self.runtime_config.ev_connection.configured_voltage_v,
+                house_load_source=power_sources.house_load_source,
                 battery_pair_max_skew_seconds=self.runtime_config.ev_numbers.value(
                     CONF_EV_TELEMETRY_MAX_SKEW_SECONDS,
                     DEFAULT_EV_TELEMETRY_MAX_SKEW_SECONDS,

@@ -133,6 +133,7 @@ from .const import (
     CONF_HOUSE_LEARNING_FALLBACK,
     CONF_HOUSE_LOAD,
     CONF_HOUSE_LOAD_INCLUDES_EV,
+    CONF_HOUSE_LOAD_SOURCE,
     CONF_HOUSE_OCCUPANCY_MODE,
     CONF_INVERTER_CHARGE_LIMIT_KW,
     CONF_INVERTER_DISCHARGE_LIMIT_KW,
@@ -400,6 +401,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             CONF_SOLAR_POWER,
             CONF_SOLAR_POWER_DIRECTION,
             CONF_HOUSE_LOAD,
+            CONF_HOUSE_LOAD_SOURCE,
             CONF_SITE_GRID_CURRENT,
             CONF_SITE_GRID_CURRENT_DIRECTION,
             *CONF_SITE_PHASE_POWER_ENTITIES,
@@ -1390,6 +1392,13 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 ): vol.Coerce(float),
                 optional_entity(CONF_HOUSE_LOAD): ENTITY,
                 vol.Required(
+                    CONF_HOUSE_LOAD_SOURCE,
+                    default=defaults.get(CONF_HOUSE_LOAD_SOURCE, "sensor"),
+                ): selector.SelectSelector(selector.SelectSelectorConfig(
+                    options=["sensor", "power_balance", "power_balance_cloud_solar"],
+                    translation_key="house_load_source",
+                )),
+                vol.Required(
                     CONF_HOUSE_LOAD_INCLUDES_EV,
                     default=defaults.get(
                         CONF_HOUSE_LOAD_INCLUDES_EV,
@@ -2313,6 +2322,10 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     def _validate_input(self, data: dict[str, object]) -> dict[str, str]:
         """Reject malformed IDs and unsafe physical limits before saving them."""
+        if data.get(CONF_HOUSE_LOAD_SOURCE, "sensor") not in {
+            "sensor", "power_balance", "power_balance_cloud_solar",
+        }:
+            return {CONF_HOUSE_LOAD_SOURCE: "invalid_house_load_source"}
         if not str(data.get(CONF_NAME, "")).strip():
             return {CONF_NAME: "invalid_name"}
         if data.get(CONF_FOXESS_CONTROL_OWNER) not in FOXESS_CONTROL_OWNERS:

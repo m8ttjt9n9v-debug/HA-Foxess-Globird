@@ -32,6 +32,9 @@ APPROVED_DISPLAY_NAMES = {
     "zerohero_planned_start": "Automatic Export Planned Start",
     "zerohero_sellable_energy": "Sellable Battery Energy",
 }
+LOAD_ADDITIONS_PATH = (
+    REPOSITORY_ROOT / "docs" / "maintainability" / "entity-additions-load-power-v1.json"
+)
 
 
 def _json_value(value: Any) -> Any:
@@ -87,7 +90,7 @@ def validate_against_release_baseline() -> None:
     baseline = json.loads(BASELINE_PATH.read_text(encoding="utf-8"))
     additions = [
         json.loads(path.read_text(encoding="utf-8"))
-        for path in (ADDITIONS_PATH, PRICE_ADDITIONS_PATH, TRIP_ADDITIONS_PATH)
+        for path in (ADDITIONS_PATH, PRICE_ADDITIONS_PATH, TRIP_ADDITIONS_PATH, LOAD_ADDITIONS_PATH)
     ]
     for extension in additions:
         if extension.get("schema_version") != baseline.get("schema_version"):

@@ -43,6 +43,7 @@
           "inverter_discharge_limit_kw": "Inverter discharge limit (kW; 0 if not commissioned)",
           "house_load_entity": "Protected house-load sensor (optional; non-heater base load at the Working Single Phase Pilot Site)",
           "house_load_includes_ev": "Mapped house-load sensor includes EV charging",
+          "house_load_source": "House-load calculation",
           "heater_power_entity": "Separately metered heater power sensor (optional)",
           "solar_power_entity": "AC-coupled solar power sensor (optional)",
           "solar_power_generation_direction": "Solar sensor generation direction",
@@ -213,6 +214,7 @@
           "inverter_discharge_limit_kw": "Inverter discharge limit (kW; 0 if not commissioned)",
           "house_load_entity": "Protected house-load sensor (optional; non-heater base load at the Working Single Phase Pilot Site)",
           "house_load_includes_ev": "Mapped house-load sensor includes EV charging",
+          "house_load_source": "House-load calculation",
           "heater_power_entity": "Separately metered heater power sensor (optional)",
           "solar_power_entity": "AC-coupled solar power sensor (optional)",
           "solar_power_generation_direction": "Solar sensor generation direction",
@@ -452,10 +454,11 @@
         },
       "house": {
           "title": "House usage and learning",
-          "description": "Map house load and configure the ported protected-energy learning policy.",
+          "description": "Normally use your mapped house-load sensor. If it omits external AC solar, explicitly select a power-balance estimate: grid import + solar generation - battery charging. Map and verify each sign first. Balance always includes EV; HEO subtracts EV exactly once. Native SolisCloud balance accepts a verified measurement for at most 10 minutes, but local grid/battery/current keep their fast limits. Only a newer matching measurement can renew cloud data; repair the CT for continuous fast measurement.",
           "data": {
             "house_load_entity": "Protected house-load sensor (optional; non-heater base load at the Working Single Phase Pilot Site)",
             "house_load_includes_ev": "Mapped house-load sensor includes EV charging",
+            "house_load_source": "House-load calculation",
             "heater_power_entity": "Separately metered heater power sensor (optional)",
             "house_learning_fallback_kwh": "Occupied protected-cycle fallback (kWh)",
             "house_away_fallback_kwh": "Away protected-cycle fallback (kWh)",
@@ -731,10 +734,11 @@
         },
       "reconfigure_house": {
           "title": "Reconfigure: House usage and learning",
-          "description": "Map house load and configure the ported protected-energy learning policy.",
+          "description": "Normally use your mapped house-load sensor. If it omits external AC solar, explicitly select a power-balance estimate: grid import + solar generation - battery charging. Map and verify each sign first. Balance always includes EV; HEO subtracts EV exactly once. Native SolisCloud balance accepts a verified measurement for at most 10 minutes, but local grid/battery/current keep their fast limits. Only a newer matching measurement can renew cloud data; repair the CT for continuous fast measurement.",
           "data": {
             "house_load_entity": "Protected house-load sensor (optional; non-heater base load at the Working Single Phase Pilot Site)",
             "house_load_includes_ev": "Mapped house-load sensor includes EV charging",
+            "house_load_source": "House-load calculation",
             "heater_power_entity": "Separately metered heater power sensor (optional)",
             "house_learning_fallback_kwh": "Occupied protected-cycle fallback (kWh)",
             "house_away_fallback_kwh": "Away protected-cycle fallback (kWh)",
@@ -944,6 +948,7 @@
       "multiphase_current_mapping_required": "Commissioned multiphase EV control needs either a signed most-loaded phase current sensor (A) or all three matching grid CT power and voltage pairs.",
       "invalid_ev_location_mode": "Choose Auto, Home, or Away EV location policy.",
       "invalid_house_occupancy_mode": "Choose Auto, Home, or Away house-energy occupancy policy.",
+      "invalid_house_load_source": "Choose the mapped house sensor or the explicitly commissioned power-balance calculation.",
       "invalid_ev_priority": "Choose house-battery or EV free-window priority.",
       "invalid_ev_charge_path": "Choose direct EVSE or smart socket.",
       "incomplete_smart_socket_mapping": "Commissioned smart-socket control requires its switch mapping and a current limit at least as high as the commissioned EV minimum.",
@@ -982,6 +987,13 @@
     }
   },
   "selector": {
+    "house_load_source": {
+      "options": {
+        "sensor": "Mapped house-load sensor (existing behaviour)",
+        "power_balance": "Power balance (fast local sensors)",
+        "power_balance_cloud_solar": "Power balance with native SolisCloud (estimate; measurement expires after 10 minutes)"
+      }
+    },
     "grid_power_positive_direction": {
       "options": {
         "positive_import": "Positive means importing; negative means exporting",

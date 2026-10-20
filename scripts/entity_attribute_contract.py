@@ -70,6 +70,9 @@ _TELEMETRY_KEYS = (
     "site_grid_current",
     "solar_power",
 )
+LOAD_ADDITIONS_PATH = (
+    REPOSITORY_ROOT / "docs" / "maintainability" / "entity-attribute-additions-load-power-v1.json"
+)
 _SCORECARD_KEYS = (
     "forecast_error_yesterday",
     "forecast_scorecard_status",
@@ -252,6 +255,7 @@ def validate_against_release_baseline() -> None:
             TRIP_RESUME_ADDITIONS_PATH,
             EV_STARTUP_ADDITIONS_PATH,
             EV_FEEDBACK_ADDITIONS_PATH,
+            LOAD_ADDITIONS_PATH,
         )
     ]
     for extension in additions:

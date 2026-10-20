@@ -9,9 +9,11 @@ from typing import Protocol
 
 from homeassistant.core import HomeAssistant, State
 
+from .ev_observation_adapter import capture_ev_entity_feedback
 from .normalise import energy_to_kwh, power_to_kw
 from .planner.forecast import RetailerScorecardObservation
 from .planner.learning import OccupancyPerson
+from .solar_provider import capture_solis_solar
 from .telemetry import (
     SiteTelemetrySources,
     TelemetrySource,
@@ -45,11 +47,42 @@ def state_reported_at(state: State) -> datetime:
     return getattr(state, "last_reported", state.last_updated)
 
 
+def display_ev_current_a(
+    hass: HomeAssistant, charging_entity: str | None, current_entity: str | None,
+    *, now: datetime, max_age_seconds: float,
+) -> float | None:
+    """Retain pilot state-qualified current without granting write authority.
+
+    Stable current is a retained provider value, not a fast polling clock.
+    The charging-state observation itself must be fresh and non-restored.
+    Unknown state is not a stopped car; requested current is never substituted.
+    """
+    charging = hass.states.get(charging_entity) if charging_entity else None
+    if charging is None or charging.attributes.get("restored", False):
+        return None
+    age = (now - state_reported_at(charging)).total_seconds()
+    if not 0 <= age <= max_age_seconds:
+        return None
+    state = charging.state.lower()
+    if state in {"stopped", "complete", "disconnected", "no_power", "starting"}:
+        return 0.0
+    if state != "charging":
+        return None
+    current = hass.states.get(current_entity) if current_entity else None
+    if current is None or current.attributes.get("restored", False):
+        return None
+    if state_reported_at(current) > now:
+        return None
+    value = capture_ev_entity_feedback(hass, current_entity).current_a
+    return value if value is not None and value >= 0 else None
+
+
 def capture_telemetry_source(
     hass: HomeAssistant,
     entity_id: object,
     *,
     reported_at: StateTimestamp = state_reported_at,
+    reject_restored: bool = False,
 ) -> TelemetrySource | None:
     """Capture one configured source without interpreting unit or sign."""
     if not isinstance(entity_id, str) or not entity_id:
@@ -57,6 +90,8 @@ def capture_telemetry_source(
     state = hass.states.get(entity_id)
     if state is None:
         return TelemetrySource(entity_id, None, None, None)
+    if reject_restored and state.attributes.get("restored", False):
+        return TelemetrySource(entity_id, None, state.attributes.get("unit_of_measurement"), None)
     return TelemetrySource(
         entity_id=entity_id,
         raw_value=state.state,
@@ -66,21 +101,29 @@ def capture_telemetry_source(
 
 
 def capture_site_telemetry(
-    hass: HomeAssistant, entity_ids: TelemetryEntityIds
+    hass: HomeAssistant, entity_ids: TelemetryEntityIds,
+    *, balance_mode: bool = False, cloud_solar: bool = False,
 ) -> SiteTelemetrySources:
     """Capture all raw sources without applying units or sign conventions."""
     return SiteTelemetrySources(
-        grid_power=capture_telemetry_source(hass, entity_ids.grid_power),
+        grid_power=capture_telemetry_source(
+            hass, entity_ids.grid_power, reject_restored=balance_mode,
+        ),
         signed_battery_power=capture_telemetry_source(
-            hass, entity_ids.signed_battery_power
+            hass, entity_ids.signed_battery_power, reject_restored=balance_mode,
         ),
         battery_charge_power=capture_telemetry_source(
-            hass, entity_ids.battery_charge_power
+            hass, entity_ids.battery_charge_power, reject_restored=balance_mode,
         ),
         battery_discharge_power=capture_telemetry_source(
-            hass, entity_ids.battery_discharge_power
+            hass, entity_ids.battery_discharge_power, reject_restored=balance_mode,
         ),
-        solar_power=capture_telemetry_source(hass, entity_ids.solar_power),
+        solar_power=(
+            capture_solis_solar(hass, entity_ids.solar_power)
+            if cloud_solar else capture_telemetry_source(
+                hass, entity_ids.solar_power, reject_restored=balance_mode,
+            )
+        ),
         house_load=capture_telemetry_source(hass, entity_ids.house_load),
         site_grid_current=capture_telemetry_source(
             hass, entity_ids.site_grid_current

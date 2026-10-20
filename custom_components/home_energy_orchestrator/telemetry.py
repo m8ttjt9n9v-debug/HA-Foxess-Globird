@@ -18,6 +18,10 @@ from .const import (
 )
 from .normalise import current_to_a, power_to_kw
 
+# Explicit opt-in estimate profile: at most two five-minute solar reports.
+# This never relaxes the grid, battery, phase-current or EV solar inputs.
+CLOUD_SOLAR_BALANCE_MAX_AGE_SECONDS = 600
+
 
 @dataclass(frozen=True, slots=True)
 class TelemetrySource:
@@ -40,10 +44,13 @@ class NormalizedSample:
     valid: bool
     fresh: bool
     reason: str
+    accepted_updated_at: datetime | None = None
 
     @property
     def updated_at(self) -> datetime | None:
         """Return the accepted value's clock, not rejected fallback provenance."""
+        if self.accepted_updated_at is not None:
+            return self.accepted_updated_at
         if self.reason in {"signed_fallback_pair_stale", "signed_fallback_pair_incoherent"}:
             return self.sources[-1].updated_at if self.sources else None
         timestamps = [source.updated_at for source in self.sources if source.updated_at]
@@ -89,6 +96,7 @@ class TelemetryNormalizationConfiguration:
     site_phase_count: float | None
     voltage_v: float | None
     battery_pair_max_skew_seconds: float | None = None
+    house_load_source: str = "sensor"
 
 
 def unavailable_sample(
@@ -103,6 +111,46 @@ def unavailable_sample(
         valid=False,
         fresh=False,
         reason=reason,
+    )
+
+
+def house_load_from_balance(
+    grid: NormalizedSample, solar: NormalizedSample, battery: NormalizedSample,
+    *, max_skew_seconds: float,
+) -> NormalizedSample:
+    """Explicit AC-solar topology: import + generation - battery charging.
+
+    This is an estimate when battery power is measured on the DC side. Every
+    dependency must independently pass the existing freshness boundary; a
+    recent template update must never freshen cached external generation.
+    """
+    samples = {"grid": grid, "solar": solar, "battery": battery}
+    sources = tuple(source for sample in samples.values() for source in sample.sources)
+    for name, sample in samples.items():
+        if sample.value is None or not sample.valid or not sample.fresh:
+            return unavailable_sample(
+                unit="kW", positive_direction="positive_consumption",
+                reason=f"power_balance_{name}_{sample.reason}", sources=sources,
+            )
+    clocks = [sample.updated_at for sample in samples.values() if sample.sources]
+    if not clocks or any(clock is None for clock in clocks) or (
+        max(clocks) - min(clocks)
+    ).total_seconds() > max_skew_seconds:
+        return unavailable_sample(
+            unit="kW", positive_direction="positive_consumption",
+            reason="power_balance_incoherent", sources=sources,
+        )
+    value = grid.value + solar.value - battery.value
+    if value < 0:
+        return unavailable_sample(
+            unit="kW", positive_direction="positive_consumption",
+            reason="negative_house_load", sources=sources,
+        )
+    return NormalizedSample(
+        value=value, unit="kW", sources=sources,
+        positive_direction="positive_consumption", valid=True, fresh=True,
+        reason="derived_from_power_balance",
+        accepted_updated_at=min(clocks),
     )
 
 
@@ -476,6 +524,30 @@ def normalize_site_telemetry(
         direction="positive_consumption",
         positive_direction="positive_consumption",
     )
+    if configuration.house_load_source in {"power_balance", "power_balance_cloud_solar"}:
+        balance_age = configuration.max_age_seconds
+        balance_solar = solar
+        if configuration.house_load_source == "power_balance_cloud_solar":
+            balance_age = CLOUD_SOLAR_BALANCE_MAX_AGE_SECONDS
+            if configuration.solar_configured:
+                balance_solar = _configured_power_sample(
+                    sources.solar_power, now=now, max_age_seconds=balance_age,
+                    direction=configuration.solar_generation_direction,
+                    positive_direction=SOLAR_GENERATION_POSITIVE,
+                )
+        house = house_load_from_balance(
+            grid, balance_solar, battery, max_skew_seconds=balance_age,
+        )
+    elif configuration.house_load_source != "sensor":
+        house = unavailable_sample(
+            unit="kW", positive_direction="positive_consumption",
+            reason="invalid_house_load_source", sources=house.sources,
+        )
+    elif house.value is not None and house.value < 0:
+        house = unavailable_sample(
+            unit="kW", positive_direction="positive_consumption",
+            reason="negative_house_load", sources=house.sources,
+        )
 
     current = None
     if sources.site_grid_current is not None:

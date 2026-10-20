@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.12.48 — Correct Fleet house and EV power readings
+
+- Provide HACS-owned read-only EV power and house-only power estimates. Use
+  state-qualified actual EV current with commissioned voltage and phases;
+  subtract EV exactly once for an EV-inclusive source. Do not depend on a
+  private dashboard helper, requested current or the charger's maximum power.
+- Reject negative house consumption at the telemetry boundary rather than
+  learning it as zero or hiding it with an absolute value. Keep raw evidence
+  and report unavailable inputs honestly.
+- Add an explicitly selected power-balance source for external AC solar missing
+  from a native load meter. Default mapped-sensor behaviour stays unchanged.
+  The optional native Solis cloud estimate expires ten minutes after its actual
+  measurement timestamp; local grid, battery and phase-current retain their fast
+  limits. Preserve the oldest accepted source clock and normal export cleanup.
+  No new polling, device commands, automatic source selection or policy activation.
+- Keep existing entities, options, learning and session storage compatible.
+  Document source commissioning and safe rollback; installation never replaces
+  personal dashboards. Reusable Fleet rows use the shared qualified load split.
+
 ## 0.12.47 — Keep price-spike export running through report delays
 
 - Allow the last actually confirmed five-minute price to bridge publication

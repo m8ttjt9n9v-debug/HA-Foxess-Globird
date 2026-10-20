@@ -9,9 +9,16 @@ from typing import TYPE_CHECKING
 
 from homeassistant.util import dt as dt_util
 
-from .const import DOMAIN, FOXESS_CONTROL_OWNER_CLOUD
+from .const import (
+    CONF_EV_TELEMETRY_MAX_AGE_SECONDS,
+    DEFAULT_EV_TELEMETRY_MAX_AGE_SECONDS,
+    DOMAIN,
+    FOXESS_CONTROL_OWNER_CLOUD,
+)
 from .ev_adapter import ev_control_gate_status
+from .load_power import split_house_ev_load
 from .planner.export import ExportPlan
+from .telemetry_adapter import display_ev_current_a
 
 if TYPE_CHECKING:
     from .coordinator import EnergyCoordinator
@@ -748,6 +755,9 @@ class SiteReadModel:
     export_authority_source: str = "zerohero"
     export_price_deadline: str | None = None
     price_triggered_export_enabled: bool = False
+    ev_charging_power_kw: float | None = None
+    house_load_excluding_ev_kw: float | None = None
+    load_power_reason: str = "unavailable"
 
     @property
     def ledger_status(self) -> str:
@@ -779,6 +789,8 @@ class SiteReadModel:
             "grid_power": self.grid_power_kw,
             "solar_power": self.solar_power_kw,
             "house_load": self.house_load_kw,
+            "ev_charging_power": self.ev_charging_power_kw,
+            "house_load_excluding_ev": self.house_load_excluding_ev_kw,
             "forecast_yesterday_cost": self.scorecard.forecast_cost,
             "globird_yesterday_actual_cost": self.scorecard.actual_cost,
             "forecast_error_yesterday": self.scorecard.forecast_error,
@@ -808,6 +820,9 @@ class SiteReadModel:
             "grid_power_kw": _rounded(self.grid_power_kw),
             "solar_power_kw": _rounded(self.solar_power_kw),
             "house_load_kw": _rounded(self.house_load_kw),
+            "ev_charging_power_kw": _rounded(self.ev_charging_power_kw),
+            "house_load_excluding_ev_kw": _rounded(self.house_load_excluding_ev_kw),
+            "load_power_reason": self.load_power_reason,
             "sellable_energy_kwh": _rounded(self.sellable_energy_kwh),
             "planned_export_kwh": _rounded(self.planned_export_kwh),
             "orchestrator_status": self.orchestrator_status,
@@ -1430,6 +1445,24 @@ def build_site_read_model(
         status=manual_test.status,
         remaining_minutes=manual_test.remaining_minutes,
     )
+    connection = coordinator.runtime_config.ev_connection
+    ev_telemetry = coordinator.runtime_config.ev_telemetry
+    actual_current = None
+    if connection.configured and (hass := getattr(coordinator, "hass", None)) is not None:
+        actual_current = display_ev_current_a(
+            hass, ev_telemetry.charging_state_entity, ev_telemetry.actual_current_entity,
+            now=now,
+            max_age_seconds=coordinator.runtime_config.ev_numbers.value(
+                CONF_EV_TELEMETRY_MAX_AGE_SECONDS, DEFAULT_EV_TELEMETRY_MAX_AGE_SECONDS,
+            ),
+        )
+    loads = split_house_ev_load(
+        house_kw=None if snapshot is None else snapshot.house_load_kw,
+        includes_ev=coordinator.runtime_config.house.load_includes_ev,
+        ev_configured=connection.configured, current_a=actual_current,
+        voltage_v=connection.configured_voltage_v,
+        phase_count=connection.phase_count if connection.phase_count_valid else None,
+    )
     return SiteReadModel(
         orchestrator_status=control_mode(coordinator),
         battery_soc=None if snapshot is None else snapshot.battery_soc,
@@ -1476,4 +1509,11 @@ def build_site_read_model(
             else controller.export_session.price_deadline.isoformat()
         ),
         price_triggered_export_enabled=coordinator.runtime_config.export.price_triggered_enabled,
+        ev_charging_power_kw=loads.ev_power_kw,
+        house_load_excluding_ev_kw=loads.house_power_kw,
+        load_power_reason=(
+            telemetry.house_load.reason
+            if telemetry is not None and telemetry.house_load.value is None
+            else loads.reason
+        ),
     )

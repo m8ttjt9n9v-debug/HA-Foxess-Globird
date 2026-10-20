@@ -28,14 +28,19 @@ EV_CAPACITY_CONFIG_KEYS = frozenset({
     const.CONF_EV_CAPACITY_FALLBACK_KWH,
 })
 AMBER_CONFIG_KEYS = frozenset({const.CONF_AMBER_PRICE_ENTITY, const.CONF_AMBER_PRICE_REGION})
+LOAD_CONFIG_KEYS = frozenset({const.CONF_HOUSE_LOAD_SOURCE})
 ADDITIVE_CONFIG_KEYS = (
     AEMO_CONFIG_KEYS | PRICE_EXPORT_CONFIG_KEYS | EV_CAPACITY_CONFIG_KEYS | AMBER_CONFIG_KEYS
+    | LOAD_CONFIG_KEYS
 )
 CAPACITY_ADDITIONS_PATH = (
     REPOSITORY_ROOT / "docs" / "maintainability" / "config-additions-ev-capacity-v1.json"
 )
 AMBER_ADDITIONS_PATH = (
     REPOSITORY_ROOT / "docs" / "maintainability" / "config-additions-amber-price-v1.json"
+)
+LOAD_ADDITIONS_PATH = (
+    REPOSITORY_ROOT / "docs" / "maintainability" / "config-additions-load-power-v1.json"
 )
 
 
@@ -44,6 +49,7 @@ def build_config_contract(*, include_extensions: bool = False) -> dict[str, obje
     for path, keys in (
         (CAPACITY_ADDITIONS_PATH, EV_CAPACITY_CONFIG_KEYS),
         (AMBER_ADDITIONS_PATH, AMBER_CONFIG_KEYS),
+        (LOAD_ADDITIONS_PATH, LOAD_CONFIG_KEYS),
     ):
         addition = json.loads(path.read_text(encoding="utf-8"))
         if (

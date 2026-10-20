@@ -163,6 +163,16 @@ SENSOR_DESCRIPTIONS = (
     ),
     SensorEntityDescription(key="ev_control_status", name="EV Control Status"),
     SensorEntityDescription(
+        key="ev_charging_power", name="EV Charging Power (Estimate)",
+        native_unit_of_measurement=UnitOfPower.KILO_WATT,
+        device_class="power", state_class="measurement", suggested_display_precision=2,
+    ),
+    SensorEntityDescription(
+        key="house_load_excluding_ev", name="House Load Excluding EV (Estimate)",
+        native_unit_of_measurement=UnitOfPower.KILO_WATT,
+        device_class="power", state_class="measurement", suggested_display_precision=2,
+    ),
+    SensorEntityDescription(
         key="ev_current_target",
         name="EV Current Target",
         native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,

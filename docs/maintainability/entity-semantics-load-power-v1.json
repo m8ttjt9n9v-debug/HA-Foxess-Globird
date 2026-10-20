@@ -1,0 +1,35 @@
+{
+  "schema_version": 1, "extension": "load_power_v1", "entity_count": 2,
+  "entities": [
+    {
+      "key": "ev_charging_power",
+      "definition": "Read-only EV input-power estimate from state-qualified actual current times commissioned voltage and phases. Not requested current, charger maximum or a revenue-grade measurement. Zero when no EV is configured or a fresh explicit non-charging state is observed; unknown is not zero.",
+      "producer": "SiteReadModel via split_house_ev_load and native mapped EV observations",
+      "role": "calculation", "unit_and_sign": "kW, non-negative consumption",
+      "time_basis": "Fresh non-restored charging-state report; actual current is a retained provider value. Commissioned voltage is an estimate, not live voltage.",
+      "availability": "Coordinator healthy and qualified numeric projection; missing, restored, future or invalid evidence is unavailable",
+      "state_vocabulary": "Non-negative finite number or unavailable",
+      "audience": "primary", "equivalents": {"foxess": null, "globird": null, "tessie": null},
+      "consumers": ["Fleet load presentation"], "decision": "retain", "review_status": "engineering_draft"
+    },
+    {
+      "key": "house_load_excluding_ev",
+      "definition": "Read-only house consumption excluding EV exactly once. Sensor topology uses its saved includes-EV flag; an explicitly selected whole-site power balance necessarily includes EV. Negative source or subtraction is invalid, not absolute value or zero.",
+      "producer": "SiteReadModel via split_house_ev_load and canonical house telemetry",
+      "role": "calculation", "unit_and_sign": "kW, non-negative consumption",
+      "time_basis": "Current canonical house sample and state-qualified EV estimate; opt-in cloud-solar balance has a separately bounded solar age",
+      "availability": "Coordinator healthy and qualified numeric projection; includes-EV source needs qualified EV evidence",
+      "state_vocabulary": "Non-negative finite number or unavailable",
+      "audience": "primary", "equivalents": {"foxess": null, "globird": null, "tessie": null},
+      "consumers": ["Fleet load presentation"], "decision": "retain", "review_status": "engineering_draft"
+    }
+  ],
+  "attribute_profiles": {},
+  "attribute_profile_additions": {
+    "fleet_summary_v1": {
+      "ev_charging_power_kw": "Read-only EV input-power estimate from qualified actual current, commissioned voltage and phases. Null means unknown, not stopped. Zero for a non-EV site. Does not grant command authority.",
+      "house_load_excluding_ev_kw": "Read-only house-only estimate after topology-qualified EV subtraction exactly once. Null for invalid negative data, unavailable dependencies or impossible subtraction. Retained house_load_kw keeps its previous mapped-topology meaning.",
+      "load_power_reason": "Qualification of the house/EV split or canonical house-source failure. Raw invalid inputs and original source timestamps remain in existing telemetry diagnostics; no absolute-value or zero-clamp repair."
+    }
+  }
+}

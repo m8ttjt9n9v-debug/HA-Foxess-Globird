@@ -156,6 +156,45 @@ async def price_rig(hass, monkeypatch, freezer):
     await hass.async_block_till_done(wait_background_tasks=True)
 
 
+@pytest.mark.parametrize("mode,age,allowed", [
+    ("sensor", 91, False), ("power_balance", 91, False),
+    ("power_balance_cloud_solar", 300, True),
+    ("power_balance_cloud_solar", 600, True),
+    ("power_balance_cloud_solar", 601, False),
+])
+async def test_price_export_rechecks_explicit_balance_age_without_changing_fast_gates(
+    price_rig, mode, age, allowed,
+):
+    rig = price_rig
+    rig.config["house_load_source"] = mode
+    rig.coordinator.runtime_config = RuntimeConfiguration.from_mapping(rig.config)
+    rig.coordinator.telemetry.house_load.updated_at = NOW - timedelta(seconds=age)
+    assert (rig.active._price_available_energy(NOW, 15) is not None) is allowed
+    await rig.active.async_reconcile()
+    assert (rig.active.export_session.phase in {"starting", "exporting"}) is allowed
+    if allowed:
+        rig.coordinator.telemetry.house_load.updated_at = NOW - timedelta(seconds=601)
+        await rig.active.async_reconcile()
+        assert rig.calls[-2:] == [(MODE, "Self Use"), (DISCHARGE, 0)]
+
+
+@pytest.mark.parametrize("source", ["grid_power", "battery_power", "soc"])
+async def test_cloud_balance_cannot_relax_fast_price_protection(price_rig, freezer, source):
+    rig = price_rig
+    rig.config["house_load_source"] = "power_balance_cloud_solar"
+    rig.coordinator.runtime_config = RuntimeConfiguration.from_mapping(rig.config)
+    rig.coordinator.telemetry.house_load.updated_at = NOW-timedelta(seconds=300)
+    if source == "soc":
+        freezer.move_to(NOW + timedelta(seconds=91))
+        check_at = NOW + timedelta(seconds=91)
+        for key in ("grid_power", "battery_power"):
+            getattr(rig.coordinator.telemetry, key).updated_at = check_at
+    else:
+        getattr(rig.coordinator.telemetry, source).updated_at = NOW-timedelta(seconds=91)
+        check_at = NOW
+    assert rig.active._price_available_energy(check_at, 15) is None
+
+
 @pytest.mark.parametrize("price", [3, 3.00001, 4])
 async def test_price_starts_outside_normal_window_and_fall_restores_same_owner(price_rig, price):
     rig = price_rig

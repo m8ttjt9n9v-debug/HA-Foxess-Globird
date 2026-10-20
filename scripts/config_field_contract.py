@@ -39,6 +39,9 @@ CAPACITY_ADDITIONS_PATH = (
 AMBER_ADDITIONS_PATH = (
     REPOSITORY_ROOT / "docs" / "maintainability" / "config-field-additions-amber-price-v1.json"
 )
+LOAD_ADDITIONS_PATH = (
+    REPOSITORY_ROOT / "docs" / "maintainability" / "config-field-additions-load-power-v1.json"
+)
 
 
 def _json_value(value: Any) -> Any:
@@ -132,7 +135,9 @@ def validate_against_release_baseline() -> None:
     baseline = json.loads(BASELINE_PATH.read_text(encoding="utf-8"))
     extensions = [
         json.loads(path.read_text(encoding="utf-8"))
-        for path in (ADDITIONS_PATH, CAPACITY_ADDITIONS_PATH, AMBER_ADDITIONS_PATH)
+        for path in (
+            ADDITIONS_PATH, CAPACITY_ADDITIONS_PATH, AMBER_ADDITIONS_PATH, LOAD_ADDITIONS_PATH,
+        )
     ]
     extension = {"schema_version": baseline["schema_version"], "fields": []}
     for addition in extensions:
