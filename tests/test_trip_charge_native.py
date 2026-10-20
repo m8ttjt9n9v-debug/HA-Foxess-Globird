@@ -17,6 +17,7 @@ from custom_components.home_energy_orchestrator.const import DOMAIN
 from custom_components.home_energy_orchestrator.coordinator import EnergyCoordinator
 from custom_components.home_energy_orchestrator.ev_active import ActiveEvController
 from custom_components.home_energy_orchestrator.ev_adapter import EvServiceAdapter
+from custom_components.home_energy_orchestrator.planner.ev import DirectEvseReconciliationState
 from custom_components.home_energy_orchestrator.trip_charge import TripChargeController
 
 from .test_ev_active import _controller_config, _set_ev_states
@@ -838,6 +839,36 @@ async def test_verified_absence_pauses_request_and_reconnect_reacquires_owned_fu
     assert site.trip.attributes["full_generation"] > old_generation
     assert site.trip.attributes["first_started_at"] == original["first_started_at"]
     assert site.trip.attributes["timeout_at"] == original["timeout_at"]
+
+
+async def test_trip_pause_retires_only_old_direct_episode_then_resumes_original_request(trip_site):
+    site = await trip_site()
+    await _start(site)
+    original = site.trip.attributes
+    site.ev.reconciliation = DirectEvseReconciliationState(
+        target_current_a=8, target_limit_percent=100, attempts=2,
+        last_command_at=site.freezer.time_to_freeze.replace(tzinfo=UTC),
+        phase="awaiting_feedback",
+    )
+    site.hass.states.async_set("binary_sensor.car_cable", "off")
+    site.hass.states.async_set("sensor.car_charging", "disconnected")
+    site.hass.states.async_set("switch.car_charge", "off")
+    site.hass.states.async_set("sensor.car_actual_current", 2, {"unit_of_measurement": "A"})
+    calls = list(site.calls)
+    await _reconcile(site)
+    await site.ev.async_reconcile()
+    assert site.trip.armed and site.trip.status == "paused" and not site.trip.owns_full
+    assert site.ev.reconciliation.phase == "idle"
+    assert site.calls == calls
+    site.hass.states.async_set("binary_sensor.car_cable", "on")
+    site.hass.states.async_set("sensor.car_charging", "stopped")
+    await _reconcile(site)
+    assert site.trip.armed and site.trip.owns_full and site.ev._charge_to_full_requested()
+    resumed = site.trip.attributes
+    assert resumed["full_generation"] > original["full_generation"]
+    assert resumed["first_started_at"] == original["first_started_at"]
+    assert resumed["timeout_at"] == original["timeout_at"]
+    assert site.trip.departure == DUE and site.trip.target_soc == 90
 
 
 async def test_paused_request_survives_reload_but_not_expired_departure(trip_site):

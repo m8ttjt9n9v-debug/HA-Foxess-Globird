@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased — Retire obsolete disconnected EV acknowledgements
+
+- Retire an unowned direct-EVSE command episode only when fresh mapped feedback
+  positively confirms disconnected and idle. Save its retirement immediately
+  and replan after reconnect; never call retirement confirmation of the old
+  command. Disabled control does not prevent this read-only lifecycle cleanup.
+- Use the same qualified observation for Fleet idle checks when Tessie retains
+  positive raw current after unplug. Keep connected activity, unknown/stale or
+  restored feedback, active sessions, Full/Trip intent, stop duties and smart
+  recovery blocking as before. No new commands, control permissions, settings,
+  storage schema or historical maintenance-audit changes.
+
 ## 0.12.48 — Correct Fleet house and EV power readings
 
 - Provide HACS-owned read-only EV power and house-only power estimates. Use

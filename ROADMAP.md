@@ -2,6 +2,19 @@
 
 Status here describes behavioral parity, not merely the presence of code.
 
+## Disconnected EV acknowledgement correction
+
+- [x] Reproduce an obsolete unowned direct-EVSE feedback wait surviving unplug
+  and restart, plus retained raw current incorrectly blocking idle maintenance.
+- [x] Share one immutable fresh disconnected-idle observation between targeted
+  episode retirement and maintenance. Preserve unknown/stale/restored feedback,
+  connected activity, Full/Trip intent, stop duties, smart recovery and all gates.
+  Checkpoint retirement immediately and force a fresh decision after reconnect.
+- [x] Complete local validation and independent lifecycle/persistence review:
+  full frozen suite, focused stop/reconnect cases and upgrade/rollback rehearsals.
+- [ ] Versioned release validation, publication and controlled live acceptance. No
+  maintenance-audit reset, device command or control activation is included.
+
 ## Qualified Fleet house / EV readings
 
 - [x] Reproduce missing private EV-helper dependency and invalid negative native

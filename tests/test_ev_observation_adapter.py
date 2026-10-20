@@ -1,9 +1,11 @@
 """Tests for the side-effect-free mapped EV entity boundary."""
 
 from dataclasses import FrozenInstanceError
+from datetime import timedelta
 from math import isnan
 
 import pytest
+from homeassistant.util import dt as dt_util
 
 from custom_components.home_energy_orchestrator.configuration import RuntimeConfiguration
 from custom_components.home_energy_orchestrator.ev_observation_adapter import (
@@ -47,6 +49,8 @@ def test_capture_preserves_state_metadata_and_normalized_interpretations(hass) -
     assert result.unit == "mA"
     assert result.last_changed == source.last_changed
     assert result.last_updated == source.last_updated
+    assert result.last_reported == source.last_reported
+    assert result.restored is False
 
 
 @pytest.mark.parametrize("reported", ["unknown", "unavailable", "UNKNOWN", ""])
@@ -73,6 +77,110 @@ def test_missing_or_unmapped_entity_is_an_explicit_empty_snapshot(hass) -> None:
         assert result.available_state is None
         assert result.last_changed is None
         assert result.last_updated is None
+        assert result.last_reported is None
+        assert result.restored is False
+
+
+def _physical_feedback(hass):
+    hass.states.async_set("binary_sensor.cable", "off")
+    hass.states.async_set("sensor.charging", "disconnected")
+    hass.states.async_set("sensor.current", 2, {"unit_of_measurement": "A"})
+    hass.states.async_set("switch.charge", "off")
+    return EvObservationEntityMap(
+        cable_connected_entity="binary_sensor.cable",
+        charging_state_entity="sensor.charging",
+        actual_current_entity="sensor.current",
+        charge_switch_entity="switch.charge",
+    )
+
+
+async def test_physical_idle_uses_qualified_retained_current_from_one_capture(hass):
+    entities = _physical_feedback(hass)
+    feedback = capture_ev_feedback(hass, entities)
+    hass.states.async_set("switch.charge", "on")
+
+    observation = feedback.physical_observation(now=dt_util.utcnow(), max_age_seconds=90)
+
+    assert feedback.actual_current.current_a == 2
+    assert observation.available and observation.disconnected_idle
+    assert observation.actual_current_a == 0
+    assert not capture_ev_feedback(hass, entities).physical_observation(
+        now=dt_util.utcnow(), max_age_seconds=90,
+    ).disconnected_idle
+
+
+@pytest.mark.parametrize("entity,state,attributes", [
+    ("binary_sensor.cable", "unknown", {}),
+    ("sensor.charging", "unavailable", {}),
+    ("sensor.charging", "not_a_charge_state", {}),
+    ("sensor.current", "unknown", {"unit_of_measurement": "A"}),
+    ("sensor.current", -1, {"unit_of_measurement": "A"}),
+    ("sensor.current", "nan", {"unit_of_measurement": "A"}),
+    ("sensor.current", 2, {"unit_of_measurement": "kW"}),
+    ("switch.charge", "unknown", {}),
+])
+async def test_physical_unknown_is_not_idle(hass, entity, state, attributes):
+    entities = _physical_feedback(hass)
+    hass.states.async_set(entity, state, attributes)
+    observation = capture_ev_feedback(hass, entities).physical_observation(
+        now=dt_util.utcnow(), max_age_seconds=90,
+    )
+    assert not observation.available and not observation.disconnected_idle
+    assert observation.actual_current_a is None
+
+
+@pytest.mark.parametrize("entity", [
+    "binary_sensor.cable", "sensor.charging", "sensor.current", "switch.charge",
+])
+@pytest.mark.parametrize("fault", ["restored", "stale", "future"])
+async def test_physical_feedback_requires_each_native_clock(hass, freezer, entity, fault):
+    entities = _physical_feedback(hass)
+    if fault == "restored":
+        source = hass.states.get(entity)
+        hass.states.async_set(entity, source.state, {**source.attributes, "restored": True})
+    elif fault == "stale":
+        freezer.tick(timedelta(seconds=91))
+        for source in hass.states.async_all():
+            if source.entity_id != entity:
+                hass.states.async_set(source.entity_id, source.state, dict(source.attributes))
+    else:
+        freezer.tick(timedelta(seconds=1))
+        source = hass.states.get(entity)
+        hass.states.async_set(entity, source.state, dict(source.attributes))
+        freezer.tick(timedelta(seconds=-1))
+    observation = capture_ev_feedback(hass, entities).physical_observation(
+        now=dt_util.utcnow(), max_age_seconds=90,
+    )
+    assert not observation.available and not observation.disconnected_idle
+
+
+@pytest.mark.parametrize("entity,state", [
+    ("binary_sensor.cable", "on"),
+    ("sensor.charging", "charging"),
+    ("switch.charge", "on"),
+])
+async def test_physical_contradictions_cannot_prove_disconnected_idle(hass, entity, state):
+    entities = _physical_feedback(hass)
+    source = hass.states.get(entity)
+    hass.states.async_set(entity, state, dict(source.attributes))
+    observation = capture_ev_feedback(hass, entities).physical_observation(
+        now=dt_util.utcnow(), max_age_seconds=90,
+    )
+    assert observation.available and not observation.disconnected_idle
+    if state == "charging":
+        assert observation.actual_current_a == 2
+
+
+async def test_native_equal_value_reports_renew_physical_feedback(hass, freezer):
+    entities = _physical_feedback(hass)
+    original = hass.states.get("sensor.current")
+    freezer.tick(timedelta(seconds=91))
+    for source in hass.states.async_all():
+        hass.states.async_set(source.entity_id, source.state, dict(source.attributes))
+    assert hass.states.get("sensor.current").last_updated == original.last_updated
+    assert capture_ev_feedback(hass, entities).physical_observation(
+        now=dt_util.utcnow(), max_age_seconds=90,
+    ).disconnected_idle
 
 
 def test_numeric_energy_and_actuator_metadata_keep_legacy_distinctions(hass) -> None:

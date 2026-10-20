@@ -167,8 +167,12 @@ update, restart, inverter or EV command.
   maintenance even when an app happens to show 0 A.
   A remembered positive current target can be treated as inactive only when fresh
   readings positively confirm the car is unplugged, not charging, its charge
-  switch is off and actual current is zero. Missing or stale readings cannot
+  switch is off and state-qualified actual current is zero. A valid retained raw
+  current alone does not imply charging under that complete proof. Missing or stale readings cannot
   qualify; pending sessions, reconciliation and recovery still block maintenance.
+  HEO can retire an obsolete unowned direct-command episode after qualified
+  unplug, save that retirement and replan after reconnect. This is not command
+  confirmation and does not clear an interrupted maintenance audit.
 - **Fresh evidence** uses the actual Home Assistant report clock for measured
   power, inverter mode and EV feedback. A stable battery percentage is a level,
   and FoxESS force-power numbers are saved target settings, not continuously

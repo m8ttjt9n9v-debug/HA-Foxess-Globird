@@ -137,7 +137,7 @@ async def _cycle(harness, entry, at):
     status, target = harness.states(
         ["sensor.home_energy_ev_control_status", "sensor.home_energy_ev_current_target"]
     )
-    return status, float(target.state)
+    return status, None if target.state == "unknown" else float(target.state)
 
 
 async def _close(harness, entry):
@@ -209,8 +209,10 @@ async def test_unplug_replug_then_real_reload_preserves_combined_journal(
 
     freezer.move_to(_at(11, 1))
     await _inputs(harness, _at(11, 1), connected=False)
-    absent, _ = await _cycle(harness, entry, _at(11, 1))
+    absent, absent_target = await _cycle(harness, entry, _at(11, 1))
     assert not absent.attributes["pre_free_session_active"]
+    assert absent_target is None
+    assert absent.attributes["reconciliation_phase"] == "idle"
     harness.clear_service_calls()
     await _cycle(harness, entry, _at(11, 1))
     assert harness.service_calls == ()

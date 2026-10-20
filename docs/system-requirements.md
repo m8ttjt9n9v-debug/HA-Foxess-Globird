@@ -39,9 +39,17 @@ Admission is host-wide and fail-closed for active battery/EV/Trip/diagnostic or
 manual export, recovery/reconciliation, invalid storage and missing/stale
 physical feedback. There is no implicit exemption for idle keepalive charging.
 A remembered positive EV target can be disregarded only when fresh feedback
-positively confirms unplugged, not charging, charge switch off and actual zero
-current. Connected keepalive and pending work still block; missing/stale readings
+positively confirms unplugged, not charging, charge switch off and state-qualified
+zero current. A valid retained positive raw current is disregarded only under
+that complete proof. Connected keepalive and pending work still block; missing/stale readings
 are not an exemption and existing freshness limits remain unchanged.
+The EV controller may retire an obsolete unowned direct-command episode under
+the same proof without enabling control or sending a command. It immediately
+saves the idle episode and clears its old targets/cadence so reconnect replans.
+Active Full/Trip, session and smart-recovery duties are preserved. An unconfirmed
+stop remains pending after unplug; the shared fresh idle proof can complete its
+existing switch-off transition before retiring the old direct episode. Failed
+storage retains pending state, and no historical maintenance audit is cleared.
 Freshness applies to measured power, mode and EV feedback using native report
 clocks, not cached REST serialization. Stable SoC and saved force-power targets
 are checked for valid available values, not time since their last change;

@@ -107,9 +107,25 @@ measurements fresh or change control permission.
 
 Remembered positive EV current targets count as inactive for maintenance only
 when fresh mapped feedback positively proves unplugged, non-charging, charge switch off
-and actual current zero. This does not excuse connected keepalive, pending
+and state-qualified actual current zero. A valid retained positive raw current
+is not charging evidence under that complete disconnected-idle proof; connected
+or contradictory feedback retains the existing conservative activity checks.
+This does not excuse connected keepalive, pending
 sessions/reconciliation/recovery, invalid targets or missing/stale evidence.
 No existing freshness threshold or charging policy changes.
+
+An obsolete, unowned direct-EVSE command episode is retired to the existing
+`idle` state only after that same immutable, fresh disconnected-idle observation.
+Retirement is not acknowledgement that its former target was applied. It clears
+the old active targets and decision cadence and checkpoints immediately, including
+while automatic EV control is disabled or service-current feedback is missing.
+A failed checkpoint retains the pending episode. Full/Trip intent, active
+sessions, unconfirmed stop duties and smart-socket staging/recovery prevent this
+retirement. Fresh disconnected-and-switch-off proof may first complete the
+existing stop-feedback transition; unplug alone cannot clear that duty.
+Reconnection makes a fresh
+policy decision. No command, new permission, storage schema or maintenance-audit
+change is introduced. See [the bounded correction](maintainability/work-item-ev-disconnected-ack.md).
 
 Downloaded files do not establish loaded version. A private version-one host
 audit tracks identity, phase, intended version, original rollback backup,

@@ -137,6 +137,7 @@ from .planner.control_windows import (
     window_position,
 )
 from .planner.ev import (
+    DIRECT_EVSE_RECONCILIATION_PHASES,
     NON_OVERRIDE_CHARGE_LIMIT_MAX_PERCENT,
     AllowanceProjectionInputs,
     ChargeLimitInputs,
@@ -524,12 +525,11 @@ class ActiveEvController:
             now = now or dt_util.now()
             if maintenance_writes_blocked(self.hass):
                 return
-            _CYCLE_FEEDBACK.set(
-                capture_ev_feedback(
-                    self.hass,
-                    ev_observation_entity_map(self.coordinator.runtime_config),
-                )
+            feedback = capture_ev_feedback(
+                self.hass,
+                ev_observation_entity_map(self.coordinator.runtime_config),
             )
+            _CYCLE_FEEDBACK.set(feedback)
             self.capacity_evidence(now)
             trip = getattr(self.coordinator, "trip_charge", None)
             if trip is not None and not await trip.async_reconcile_before_ev_locked(now):
@@ -561,6 +561,9 @@ class ActiveEvController:
                 self.requested_current_a = observation.requested_current_a
                 self.applied_limit_percent = observation.charge_limit_percent
                 self.charge_switch_on = observation.charge_switch_on
+            # Retirement is a read-only lifecycle transition, including while
+            # control is disabled or phase-current telemetry is unavailable.
+            await self._async_retire_disconnected_reconciliation(now)
             vehicle_soc = self._mapped_number(
                 self.coordinator.runtime_config.ev_telemetry.soc_entity
             )
@@ -627,6 +630,16 @@ class ActiveEvController:
                 )
                 return
             if not connected:
+                if (self.daily_backfill_stop_pending or self.outside_stop_requested) and not (
+                    feedback.physical_observation(
+                        now=now, max_age_seconds=self._float(
+                            CONF_EV_TELEMETRY_MAX_AGE_SECONDS, DEFAULT_EV_TELEMETRY_MAX_AGE_SECONDS,
+                        ),
+                    ).disconnected_idle
+                ):
+                    # Losing eligibility is not acknowledgement of a stop.
+                    self.last_reason = "daily_backfill_stop_feedback_unavailable"
+                    return
                 cleanup = cleanup_disconnected_ev(
                     self._daily_backfill_cycle_state(),
                     charge_to_full_started=self.charge_to_full_started_at is not None,
@@ -653,6 +666,7 @@ class ActiveEvController:
                     else "disabled",
                 )
                 self.measured_solar_adjustment = MeasuredSolarAdjustmentState()
+                await self._async_retire_disconnected_reconciliation(now)
                 if self.eligibility_route.route == "disconnected_smart_socket":
                     await self._async_reconcile_disconnected_smart_socket(
                         now,
@@ -989,6 +1003,77 @@ class ActiveEvController:
             self.last_write_at = now
             self.last_reason = "ev_commands_sent_awaiting_feedback"
             await self._async_save(now)
+
+    async def _async_retire_disconnected_reconciliation(self, now: datetime) -> None:
+        """Retire only an obsolete, unowned direct episode after proved unplug.
+
+        This is not acknowledgement of the old target. All genuine owners,
+        stop/recovery duties and charging gates retain their existing lifecycle.
+        """
+        feedback = _CYCLE_FEEDBACK.get()
+        trip = getattr(self.coordinator, "trip_charge", None)
+        stop_pending = self.daily_backfill_stop_pending or self.outside_stop_requested
+        if (
+            feedback is None
+            or self.coordinator.runtime_config.ev_policy.charge_path == EV_CHARGE_PATH_SMART_SOCKET
+            or self.pre_free_session.active or self.daily_backfill_active
+            or self.outside_control_active and not stop_pending
+            or self.outside_target_active
+            or self._charge_to_full_requested() or self.charge_to_full_started_at is not None
+            or self.smart_recovery.phase != "idle"
+            or self.smart_stage_started_at is not None or self.smart_stage_target_a is not None
+            or trip is not None and (
+                trip.owns_full or trip._state.cleanup_pending
+                or not trip._loaded or trip._invalid_storage or trip._storage_error or trip._dirty
+            )
+            or self.reconciliation.phase not in DIRECT_EVSE_RECONCILIATION_PHASES
+            or any(value is not None and (
+                isinstance(value, bool) or not isinstance(value, (int, float))
+                or not isfinite(value) or value < 0
+            ) for value in (self.target_current_a, self.target_limit_percent,
+                            self.reconciliation.target_current_a,
+                            self.reconciliation.target_limit_percent))
+            or not feedback.physical_observation(
+                now=now, max_age_seconds=self._float(
+                    CONF_EV_TELEMETRY_MAX_AGE_SECONDS, DEFAULT_EV_TELEMETRY_MAX_AGE_SECONDS,
+                ),
+            ).disconnected_idle
+        ):
+            return
+        prior = (self.reconciliation, self.target_current_a, self.target_limit_percent,
+                 self.last_decision_at, self._decision_fingerprint, self._previous_policy_route)
+        if not stop_pending and prior == (
+            DirectEvseReconciliationState(), None, None, None, None, None,
+        ):
+            return
+        prior_stop = DailyBackfillStopState(
+            pending=self.daily_backfill_stop_pending,
+            attempts=self.daily_backfill_stop_attempts,
+            last_attempt_at=self.daily_backfill_last_stop_at,
+            outside_control_active=self.outside_control_active,
+        )
+        prior_stop_requested = self.outside_stop_requested
+        if stop_pending:
+            # The same qualified cohort positively proves switch off. Complete
+            # the existing stop transition before retiring the now-unowned episode.
+            stopped = reconcile_daily_backfill_stop(
+                prior_stop, charge_switch_on=False, now=now,
+                retry_interval=DAILY_BACKFILL_STOP_RETRY_INTERVAL,
+            )
+            self._apply_daily_backfill_stop_state(stopped.state)
+            self.outside_stop_requested = False
+        self.reconciliation = DirectEvseReconciliationState()
+        self.target_current_a = self.target_limit_percent = None
+        self.last_decision_at = self._decision_fingerprint = self._previous_policy_route = None
+        try:
+            await self._async_save(now)
+        except Exception:
+            # A failed checkpoint must not publish a false idle opportunity.
+            (self.reconciliation, self.target_current_a, self.target_limit_percent,
+             self.last_decision_at, self._decision_fingerprint, self._previous_policy_route) = prior
+            self._apply_daily_backfill_stop_state(prior_stop)
+            self.outside_stop_requested = prior_stop_requested
+            raise
 
     async def _async_reconcile_missing_multiphase_current(
         self,

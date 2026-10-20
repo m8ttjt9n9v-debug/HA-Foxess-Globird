@@ -211,27 +211,13 @@ def _ev_feedback(hass: Any, runtime: Any, now: datetime, blockers: set[str]) -> 
     max_age = runtime.ev_numbers.value(
         CONF_EV_TELEMETRY_MAX_AGE_SECONDS, DEFAULT_EV_TELEMETRY_MAX_AGE_SECONDS
     )
-    required = (feedback.cable_connected, feedback.charging_state,
-                feedback.actual_current, feedback.charge_switch)
-    if any(not item.entity_id or not _fresh(hass.states.get(item.entity_id), now, max_age)
-           or item.available_state is None for item in required):
+    physical = feedback.physical_observation(now=now, max_age_seconds=max_age)
+    if not physical.available:
         blockers.add("ev_feedback_unavailable")
         return False
-    if feedback.cable_connected.available_state not in {"on", "off", "connected", "disconnected"}:
-        blockers.add("ev_feedback_unavailable")
-    if feedback.charging_state.available_state not in {
-        "charging", "stopped", "complete", "disconnected", "nopower", "no_power",
-    }:
-        blockers.add("ev_feedback_unavailable")
-    if feedback.charge_switch.available_state not in {"on", "off"}:
-        blockers.add("ev_feedback_unavailable")
-    if feedback.actual_current.current_a is None or feedback.actual_current.current_a < 0:
-        blockers.add("ev_feedback_unavailable")
-    elif feedback.actual_current.current_a > 0:
+    if physical.charging_activity:
         blockers.add("ev_physically_charging")
-    if feedback.charging_state.available_state == "charging":
-        blockers.add("ev_physically_charging")
-    if feedback.charge_switch.available_state == "on":
+    if physical.charge_switch_on:
         blockers.add("ev_charge_switch_on")
     legacy = runtime.ev_preferences.legacy_charge_to_full_entity
     if legacy:
@@ -240,12 +226,7 @@ def _ev_feedback(hass: Any, runtime: Any, now: datetime, blockers: set[str]) -> 
             blockers.add("ev_full_feedback_unavailable")
         elif state.state == "on":
             blockers.add("ev_full_charge_active")
-    return (
-        feedback.cable_connected.available_state in {"off", "disconnected"}
-        and feedback.charging_state.available_state in {"stopped", "complete", "disconnected"}
-        and feedback.charge_switch.available_state == "off"
-        and feedback.actual_current.current_a == 0
-    )
+    return physical.disconnected_idle
 
 
 def _restored(state: Any) -> bool:

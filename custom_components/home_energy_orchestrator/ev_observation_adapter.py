@@ -33,6 +33,26 @@ class EvEntityFeedback:
     unit: str | None
     last_changed: datetime | None
     last_updated: datetime | None
+    last_reported: datetime | None
+    restored: bool
+
+    def fresh(self, now: datetime, max_age_seconds: float) -> bool:
+        """Qualify the native report clock without rereading Home Assistant."""
+        if self.restored or self.last_reported is None or not isfinite(max_age_seconds):
+            return False
+        age = (now - self.last_reported).total_seconds()
+        return 0 <= age <= max_age_seconds
+
+
+@dataclass(frozen=True, slots=True)
+class EvPhysicalObservation:
+    """Qualified feedback for idle admission, never permission to actuate."""
+
+    available: bool
+    actual_current_a: float | None
+    charging_activity: bool
+    charge_switch_on: bool
+    disconnected_idle: bool
 
 
 @dataclass(frozen=True, slots=True)
@@ -71,6 +91,49 @@ class EvFeedbackSnapshot:
     smart_socket: EvEntityFeedback
     legacy_charge_to_full: EvEntityFeedback
     battery_soc: EvEntityFeedback
+
+    def physical_observation(
+        self, *, now: datetime, max_age_seconds: float,
+    ) -> EvPhysicalObservation:
+        """Use one fresh cohort and the pilot's stopped-current qualification.
+
+        Tessie may retain positive raw current while explicitly disconnected.
+        This never excuses missing/invalid current, a live charge switch,
+        charging feedback, or uncertain connection/state observations.
+        """
+        cable = self.cable_connected.available_state
+        charging = self.charging_state.available_state
+        switch = self.charge_switch.available_state
+        current = self.actual_current.current_a
+        available = (
+            all(item.fresh(now, max_age_seconds) for item in (
+                self.cable_connected, self.charging_state,
+                self.actual_current, self.charge_switch,
+            ))
+            and cable in {"on", "off", "connected", "disconnected"}
+            and charging in {"charging", "stopped", "complete", "disconnected",
+                             "nopower", "no_power"}
+            and switch in {"on", "off"}
+            and current is not None and current >= 0
+        )
+        qualified_current = (
+            (current if charging == "charging" else 0.0) if available else None
+        )
+        disconnected_idle = (
+            available and cable in {"off", "disconnected"}
+            and charging in {"stopped", "complete", "disconnected"}
+            and switch == "off" and qualified_current == 0
+        )
+        return EvPhysicalObservation(
+            available=available,
+            actual_current_a=qualified_current,
+            charging_activity=(
+                charging == "charging"
+                or current is not None and current > 0 and not disconnected_idle
+            ),
+            charge_switch_on=switch == "on",
+            disconnected_idle=disconnected_idle,
+        )
 
     def for_entity(self, entity_id: str | None) -> EvEntityFeedback | None:
         """Return captured feedback for an explicitly mapped entity ID."""
@@ -176,6 +239,10 @@ def capture_ev_entity_feedback(
         ),
         last_changed=state.last_changed if state is not None else None,
         last_updated=state.last_updated if state is not None else None,
+        last_reported=(
+            getattr(state, "last_reported", state.last_updated) if state is not None else None
+        ),
+        restored=state is not None and state.attributes.get("restored") is True,
     )
 
 

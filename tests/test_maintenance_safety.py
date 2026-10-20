@@ -370,7 +370,6 @@ async def test_confirmed_disconnection_excludes_only_historical_ev_targets(hass,
     ("sensor.alpha_charging", "unavailable", {}),
     ("switch.alpha_charge", "on", {}),
     ("switch.alpha_charge", "unknown", {}),
-    ("sensor.alpha_current", 1, {"unit_of_measurement": "A"}),
     ("sensor.alpha_current", 0, {"unit_of_measurement": "kW"}),
 ])
 async def test_unproven_disconnection_keeps_historical_target_block(
@@ -380,6 +379,45 @@ async def test_unproven_disconnection_keeps_historical_target_block(
     _remember_prior_ev_targets(hass, coordinator)
     hass.states.async_set(entity, value, attributes)
     assert "ev_charging_target_active" in maintenance_blockers(hass, [coordinator])
+
+
+async def test_disconnected_retained_raw_current_is_not_physical_charging(hass, idle_host):
+    coordinator = await idle_host()
+    _remember_prior_ev_targets(hass, coordinator)
+    hass.states.async_set("sensor.alpha_current", 2, {"unit_of_measurement": "A"})
+    assert maintenance_blockers(hass, [coordinator]) == ()
+    # Admission remains read-only and cannot retire a pending command episode.
+    coordinator.ev_controller.reconciliation = replace(
+        coordinator.ev_controller.reconciliation, phase="awaiting_feedback",
+    )
+    assert "ev_reconciliation_pending" in maintenance_blockers(hass, [coordinator])
+
+
+async def test_disabled_ev_controller_retires_only_idle_orphan_for_maintenance(hass, idle_host):
+    coordinator = await idle_host()
+    coordinator.update_config_value("ev_automatic_control_enabled", False)
+    _remember_prior_ev_targets(hass, coordinator)
+    ev = coordinator.ev_controller
+    ev.reconciliation = replace(ev.reconciliation, phase="awaiting_feedback", attempts=2)
+    hass.states.async_set("sensor.alpha_current", 2, {"unit_of_measurement": "A"})
+    assert "ev_reconciliation_pending" in maintenance_blockers(hass, [coordinator])
+    await ev.async_reconcile()
+    assert ev.gate_status == "disabled" and ev.writes_performed == 0
+    assert ev.reconciliation.phase == "idle"
+    assert maintenance_blockers(hass, [coordinator]) == ()
+
+
+async def test_external_charge_still_blocks_when_ev_controller_disabled(hass, idle_host):
+    coordinator = await idle_host()
+    coordinator.update_config_value("ev_automatic_control_enabled", False)
+    hass.states.async_set("sensor.alpha_charging", "charging")
+    hass.states.async_set("switch.alpha_charge", "on")
+    hass.states.async_set("sensor.alpha_current", 2, {"unit_of_measurement": "A"})
+    await coordinator.ev_controller.async_reconcile()
+    assert coordinator.ev_controller.writes_performed == 0
+    assert {"ev_physically_charging", "ev_charge_switch_on"}.issubset(
+        maintenance_blockers(hass, [coordinator]),
+    )
 
 
 @pytest.mark.parametrize("entity", ["binary_sensor.alpha_cable", "sensor.alpha_charging",
