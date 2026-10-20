@@ -30,6 +30,10 @@ class TypedStoreRepository[StateT: RestorableState]:
 
     store: Store[dict[str, object]]
 
+    async def async_load_payload(self) -> dict[str, object] | None:
+        """Read an additive state's payload when absence has migration meaning."""
+        return await self.store.async_load()
+
     async def async_restore(self, state: StateT, now: datetime) -> RestoreStatus:
         """Restore state, falling back safely for an invalid outer payload."""
         payload = await self.store.async_load()

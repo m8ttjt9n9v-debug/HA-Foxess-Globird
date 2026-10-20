@@ -139,6 +139,7 @@ from .planner.meter_cycle import (
     MeterCheckpointState,
     advance_accounting_meters,
 )
+from .planner.paid_export import PaidExportAccumulator
 from .solar_provider import SolisPublishedFrames
 from .telemetry import (
     NormalizedTelemetry,
@@ -182,6 +183,13 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
         self._zero_import_tracker = ZeroImportDurationTracker()
         self.daily_import = DailyImportAccumulator()
         self.daily_export = DailyImportAccumulator()
+        self.paid_export = PaidExportAccumulator()
+        self._paid_export_storage_ready = False
+        self._paid_export_store: Store[dict[str, object]] = Store(
+            hass, 1, f"{DOMAIN}.{entry_id}.paid_export", private=True
+        )
+        self._paid_export_repository = TypedStoreRepository(self._paid_export_store)
+        self._paid_export_last_saved: float | None = None
         self.standard_rate_export = WindowImportAccumulator(
             window_start=self._configured_time(
                 CONF_EXPORT_RATE_WINDOW_START, DEFAULT_EXPORT_RATE_WINDOW_START
@@ -360,6 +368,94 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
         await self._peak_import_repository.async_restore(self.peak_import, now)
         await self._zerohero_import_repository.async_restore(self.zerohero_import, now)
         await self._zerohero_export_repository.async_restore(self.zerohero_export, now)
+        # A missing new counter is not evidence that today's old exports were
+        # unpaid. Preserve the legacy total for this upgrade day only.
+        payload = await self._paid_export_repository.async_load_payload()
+        self.paid_export.restore(payload, now)
+        if self.paid_export.needs_legacy_seed:
+            legacy = await self._daily_export_repository.async_load_payload()
+            total = None
+            if legacy is None:
+                total = 0.0
+            elif isinstance(legacy, dict):
+                try:
+                    legacy_day = date.fromisoformat(str(legacy["date"]))
+                    if legacy_day < now.date():
+                        total = 0.0
+                    elif legacy_day == now.date() and self.daily_export.last_at is not None:
+                        anchor = datetime.fromisoformat(str(legacy["last_at"]))
+                        raw = legacy["imported_kwh"]
+                        value = float(raw)
+                        if (
+                            not isinstance(raw, bool) and isfinite(value) and value >= 0
+                            and anchor.tzinfo is not None and anchor.utcoffset() is not None
+                            and anchor <= now and anchor.astimezone(now.tzinfo).date() == now.date()
+                        ):
+                            total = self.daily_export.imported_kwh
+                except (KeyError, TypeError, ValueError):
+                    pass
+            self.paid_export.seed_legacy(total, now)
+        await self._paid_export_repository.async_save(self.paid_export)
+        self._paid_export_last_saved = self.paid_export.imported_kwh
+        self._paid_export_storage_ready = (
+            self.paid_export.valid and self._paid_export_last_saved is not None
+        )
+
+    async def _async_advance_paid_export(self, export_kw: float | None, now: datetime) -> None:
+        """Count paid net export once, before the independent bonus meter moves."""
+        self._paid_export_storage_ready = False
+        session = getattr(self.active_controller, "export_session", None)
+        price_start = price_end = None
+        if (
+            session is not None and session.authority_source == "price"
+            and session.phase in {"starting", "active", "stopping", "recovering"}
+        ):
+            price_start = session.last_command_at
+            price_end = session.price_permission_end or session.price_deadline
+            # A cleanup command after expiry is not a new paid interval.
+            if (
+                price_start is None or price_end is None
+                or price_start.tzinfo is None or price_end.tzinfo is None
+                or price_start >= price_end or price_start > now
+            ):
+                price_start = price_end = None
+        changed = self.paid_export.observe(
+            export_kw, now,
+            standard_window=(
+                self.standard_rate_export.window_start, self.standard_rate_export.window_end
+            ),
+            standard_rate=self._configured_nonnegative(CONF_EXPORT_RATE, DEFAULT_EXPORT_RATE),
+            offpeak_rate=self._configured_nonnegative(
+                CONF_OFFPEAK_EXPORT_RATE, DEFAULT_OFFPEAK_EXPORT_RATE
+            ),
+            bonus_window=(self.zerohero_export.window_start, self.zerohero_export.window_end),
+            bonus_rate=self._configured_nonnegative(
+                CONF_SUPER_EXPORT_RATE, DEFAULT_SUPER_EXPORT_RATE
+            ),
+            bonus_allowance_remaining_kwh=max(
+                self._configured_nonnegative(
+                    CONF_EXPORT_ALLOWANCE_KWH, DEFAULT_EXPORT_ALLOWANCE_KWH
+                ) - (
+                    self.zerohero_export.imported_kwh
+                    if self.zerohero_export.local_date == now.date() else 0.0
+                ), 0.0,
+            ),
+            price_start=price_start, price_end=price_end,
+        )
+        total = self.paid_export.imported_kwh
+        previous = self._paid_export_last_saved
+        if changed and (
+            previous is None or total < previous or total - previous >= 0.01
+            or self.paid_export.checkpoint_required
+        ):
+            # Keep a mandatory checkpoint pending if its write fails, even
+            # when the next sample has less than the coalescing energy step.
+            self._paid_export_last_saved = None
+            await self._paid_export_repository.async_save(self.paid_export)
+            self._paid_export_last_saved = total
+        self._paid_export_storage_ready = (
+            self.paid_export.valid and self._paid_export_last_saved is not None
+        )
 
     async def async_load_forecast_feedback(self) -> None:
         """Load forecast-only calibration and comparison history."""
@@ -973,6 +1069,7 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
         self.telemetry = self._normalized_telemetry(now)
         grid = self.telemetry.grid_power.value
         export_kw = None if grid is None else max(-grid, 0.0)
+        await self._async_advance_paid_export(export_kw, now)
         await advance_accounting_meters(
             AccountingMeterSet(
                 daily_import=self.daily_import,
@@ -1044,7 +1141,12 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
                 ev_max_power_kw=0,
                 reason=REASON_INVALID_CONFIGURATION,
             )
-        ledger = self._apply_tariff_guard(calculate_ledger(self.snapshot))
+        ledger = replace(
+            self._apply_tariff_guard(calculate_ledger(self.snapshot)),
+            paid_export_kwh=(
+                self.paid_export.imported_kwh if self._paid_export_storage_ready else None
+            ),
+        )
         await self._async_sample_house_load()
         return ledger
 

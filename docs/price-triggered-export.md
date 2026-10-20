@@ -76,10 +76,15 @@ the master control switch, and Safety Lock still apply. Price export has its
 own request switch; turning ordinary ZEROHERO export off does not turn this
 separate request off.
 
-The daily automatic-export cap is shared. Measured export earlier in the day,
-including solar export and manual export, reduces its remaining budget. A new
-price block, reload, or switch toggle does not grant another daily allowance.
-This controller limit is separate from any retailer reward allowance.
+The daily automatic-export cap is shared and counts qualifying paid net export,
+not zero-rate solar overflow. Positive configured base tariffs, eligible bonus
+energy and actually owned bounded price-export opportunities count once even
+when they overlap. Solar or manual export during a paid tariff counts too; the
+source of the exported energy is not the distinction. A new price block,
+reload or switch toggle does not grant another allowance. The first upgrade
+conservatively retains that day's old total, because earlier price events cannot
+be reconstructed; clean paid-only counting begins next local midnight. This
+controller estimate is separate from retailer reward eligibility or payment.
 
 ## When export ends
 

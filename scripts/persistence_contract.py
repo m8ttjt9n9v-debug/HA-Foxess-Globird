@@ -27,6 +27,9 @@ TRIP_ADDITIONS_PATH = (
 MAINTENANCE_ADDITIONS_PATH = (
     REPOSITORY_ROOT / "docs" / "maintainability" / "persistence-additions-maintenance-v1.json"
 )
+PAID_EXPORT_ADDITIONS_PATH = (
+    REPOSITORY_ROOT / "docs" / "maintainability" / "persistence-additions-paid-export-v1.json"
+)
 
 
 def _assigned_name(node: ast.AnnAssign | ast.Assign) -> str:
@@ -115,6 +118,7 @@ def validate_against_release_baseline() -> None:
             AEMO_ADDITIONS_PATH,
             TRIP_ADDITIONS_PATH,
             MAINTENANCE_ADDITIONS_PATH,
+            PAID_EXPORT_ADDITIONS_PATH,
         )
     ]
     for extension in additions:

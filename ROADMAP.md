@@ -2,13 +2,26 @@
 
 Status here describes behavioral parity, not merely the presence of code.
 
-## Paid-export daily cap clarification
+## Settling-in period after the paid-cap correction
 
-- [ ] Change the automatic daily export cap's accounting from all-day physical
-  export to qualifying paid export, excluding unpaid solar overflow. Keep the
-  total-export meter and the separate tariff bonus allowance intact. Define
-  paid-window/price-event eligibility and overlapping-window accounting before
-  implementation; a wholesale spike alone is not proof of retailer payment.
+The owner requests a week or more of stability and observation of real price
+spikes after this correction. Before proposing or accepting more non-critical
+features, remind the owner of that preference and suggest deferral unless a
+change is critical or makes a major difference. This is advisory: the owner
+retains the final decision. It does not authorise monitoring jobs or deployments.
+
+## Paid-export daily cap correction — v0.12.52
+
+- [x] Keep total physical export and the separate tariff bonus allowance intact;
+  add a persisted paid-cap union of positive configured tariffs, eligible bonus
+  energy and owned bounded price-event export, without overlap double-counting.
+- [x] Preserve legacy same-day consumption conservatively on upgrade; paid-only
+  counting starts at next midnight. Missing/corrupt/unsaved evidence cannot
+  grant new authority; cap exhaustion withdraws existing export safely.
+- [x] Complete frozen3,726 tests, Ruff, compatibility and v51/v26 upgrade/rollback
+  rehearsals, including independent review and permanent failure regressions.
+- [ ] Complete publication and controlled pilot acceptance. A wholesale spike
+  or startup test is not retailer payment proof.
 
 ## EV-before-export protected charging — v0.12.51
 

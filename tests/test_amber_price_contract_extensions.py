@@ -168,7 +168,8 @@ async def test_amber_journal_provenance_uses_existing_store_and_no_new_root_auth
     assert restored.observations[0].intervention is None
     assert not monitor.current_result.price_trigger_valid
     stores = build_persistence_contract()["stores"]
-    assert len(stores) == 17
+    # The separate paid-cap extension adds one counter, not Amber authority.
+    assert len(stores) == 18
     assert [record for record in stores if record["source"].endswith("aemo_monitor.py")] == [{
         "attribute": "self._store", "private": True,
         "source": "custom_components/home_energy_orchestrator/aemo_monitor.py",

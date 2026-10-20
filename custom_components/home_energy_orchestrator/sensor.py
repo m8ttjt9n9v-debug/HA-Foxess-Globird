@@ -103,6 +103,8 @@ class EnergySensor(CoordinatorEntity[EnergyCoordinator], SensorEntity):
         if self.entity_description.key == "fleet_summary":
             return self._fleet_summary_attributes()
         read_model = build_site_read_model(self.coordinator)
+        if self.entity_description.key == "daily_export":
+            return read_model.operational.paid_export_attributes()
         if attributes := read_model.telemetry.entity_attributes(
             self.entity_description.key
         ):

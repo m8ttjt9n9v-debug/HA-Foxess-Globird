@@ -288,7 +288,7 @@ layers around the proven algorithm, not replacement algorithms.
   This source extension still requires release validation and separately
   approved live acceptance. The operator threshold is not a retailer critical-event
   declaration or payment guarantee. Price admission reuses protected house/EV
-  energy, battery floor/reserve, and the shared all-day measured export cap.
+  energy, battery floor/reserve, and the shared daily paid-export cap.
   Its existing session journal additionally binds price ownership to a
   bounded deadline and original actuators. A strictly newer confirmed high
   block can renew only a still-live starting/active price session, after current
@@ -342,7 +342,18 @@ layers around the proven algorithm, not replacement algorithms.
   receives the configured additional ZEROHERO boost up to the lesser of
   measured window export, measured daily export, and the boosted daily
   allowance. The independently configured automatic-export cap
-  limits controller energy without changing tariff eligibility. Existing
+  limits controller energy without changing tariff eligibility. From v0.12.52
+  it consumes one separately persisted union of measured net export during
+  positive configured base tariffs, eligible positive bonus energy and owned
+  bounded price-export opportunities. Overlap counts once; zero-rate solar
+  overflow does not consume it. Total physical export and revenue remain
+  unchanged. The missing new Store conservatively seeds the upgrade day's old
+  total; paid-only accounting starts at next local midnight. Malformed same-day
+  state or an unsaved checkpoint cannot grant allowance, and exhausted/missing
+  paid evidence requests existing cleanup even for an ordinary latched session.
+  The price classification is an HEO cap estimate, not a retailer event or
+  payment guarantee. See [paid-cap accounting](tariff-meters.md).
+  Existing
   entries migrate the old shared allowance into that cap to preserve behavior.
   Measured net cost is gross cost minus measured export revenue and any credit
   already qualified by HEO. The separate daily forecast is deliberately

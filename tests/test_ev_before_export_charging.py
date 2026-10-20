@@ -82,6 +82,7 @@ def _case(hass, now, **changes):
     coordinator.data = SimpleNamespace(
         available_after_reserve_kwh=24,
         daily_export_kwh=0,
+        paid_export_kwh=0,
         free_energy_remaining_kwh=50,
     )
     coordinator.zerohero_export = SimpleNamespace(imported_kwh=0)
@@ -126,13 +127,14 @@ async def test_spare_energy_top_up_does_not_wait_for_solar_or_a_deadline(hass, f
     assert not controller.pre_free_session.active
 
 
-async def test_daily_export_cap_is_not_an_ev_spare_energy_cap(hass, freezer):
+async def test_paid_export_cap_is_not_an_ev_spare_energy_cap(hass, freezer):
     now = _now()
     freezer.move_to(now)
     calls = _services(hass)
     coordinator, controller = _case(hass, now)
     coordinator.active_controller.export_plan = ExportPlan(19, 0, 0, "no_protected_energy")
     coordinator.data.daily_export_kwh = 30
+    coordinator.data.paid_export_kwh = 30
     await controller.async_reconcile(now)
     assert controller.decision_phase == "ev_before_export_charging"
     assert _above_baseline(calls)

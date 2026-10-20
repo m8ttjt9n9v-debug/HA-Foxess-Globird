@@ -220,6 +220,7 @@ def evaluate_foxess_export_policy(
     export_plan: ExportPlan | None = None
     planned_start: datetime | None = None
     eligible = False
+    cap_available = False
     deadline = base.price_deadline
     try:
         remaining = evaluate_automatic_export_remaining(
@@ -228,6 +229,10 @@ def evaluate_foxess_export_policy(
             previous_remaining_kwh=context.previous_automatic_remaining_kwh,
         )
         automatic_remaining_kwh = remaining.remaining_kwh
+        cap_available = (
+            remaining.valid and automatic_remaining_kwh is not None
+            and automatic_remaining_kwh > 0
+        )
         if not remaining.valid:
             raise ValueError
         protected_ev_kwh = context.protected_ev_kwh
@@ -306,9 +311,9 @@ def evaluate_foxess_export_policy(
         latched=base.latched,
         should_advance=should_advance,
         session_window_active=(base.session_window_active and eligible) if price
-        else base.session_window_active,
+        else base.session_window_active and cap_available,
         finish_requested=(base.finish_requested or not eligible) if price
-        else base.finish_requested,
+        else base.finish_requested or not cap_available,
         authority_source=base.authority_source,
         price_deadline=deadline,
     )

@@ -71,6 +71,7 @@ def validate_presentation_contract() -> None:
         "build_site_read_model",
         "read_model.telemetry.entity_attributes",
         "read_model.operational.zerohero_import_attributes",
+        "read_model.operational.paid_export_attributes",
         "read_model.cost.export_revenue_attributes",
         "read_model.cost.sensor_attributes",
         "read_model.scorecard.sensor_attributes",

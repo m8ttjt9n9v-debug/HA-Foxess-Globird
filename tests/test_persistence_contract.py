@@ -23,7 +23,7 @@ def test_persistence_contract_matches_reviewed_release_baseline() -> None:
 def test_baseline_and_extension_stores_remain_private_and_version_one() -> None:
     contract = build_persistence_contract()
     stores = contract["stores"]
-    assert contract["store_count"] == 17
+    assert contract["store_count"] == 18
     baseline = json.loads(BASELINE_PATH.read_text(encoding="utf-8"))
     assert baseline["store_count"] == 13
     assert all(record in stores for record in baseline["stores"])
@@ -32,7 +32,9 @@ def test_baseline_and_extension_stores_remain_private_and_version_one() -> None:
 
 
 @pytest.mark.parametrize(
-    "source", ["active.py", "manual_inverter.py", "trip_charge.py", "maintenance.py"]
+    "source", [
+        "active.py", "manual_inverter.py", "trip_charge.py", "maintenance.py", "coordinator.py"
+    ]
 )
 def test_reviewed_addition_does_not_allow_storage_drift(monkeypatch, source) -> None:
     current = deepcopy(build_persistence_contract())

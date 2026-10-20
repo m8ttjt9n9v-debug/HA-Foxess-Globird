@@ -186,6 +186,10 @@ class ActiveFoxessController:
             "active",
         } and not self._ev_before_export_handoff_ready(dt_util.now()):
             return False
+        if self.export_session.phase in {"starting", "active"}:
+            paid = self._paid_exported_kwh()
+            if paid is None or paid >= runtime.export.automatic_limit_kwh:
+                return False
         if self._price_write_deadline is None:
             return True
         now = dt_util.now()
@@ -450,6 +454,17 @@ class ActiveFoxessController:
         except (TypeError, ValueError):
             return None
 
+    def _paid_exported_kwh(self) -> float | None:
+        """Only a qualified, checkpoint-ready paid counter can grant allowance."""
+        if not getattr(self.coordinator, "_paid_export_storage_ready", True):
+            return None
+        raw = getattr(self.coordinator.data, "paid_export_kwh", None)
+        try:
+            value = float(raw)
+        except (TypeError, ValueError):
+            return None
+        return value if not isinstance(raw, bool) and isfinite(value) and value >= 0 else None
+
     def _export_context(self, feedback, now: datetime) -> FoxessExportPolicyContext:
         """One protected export calculation for ordinary and price admission."""
         runtime = self.coordinator.runtime_config
@@ -470,13 +485,9 @@ class ActiveFoxessController:
         )
         ledger = self.coordinator.data
         available = getattr(ledger, "available_after_reserve_kwh", None)
-        # The existing all-day meter counts earlier spikes as well as normal
-        # exports. It is not reset by a new price interval or switch toggle.
-        exported = getattr(ledger, "daily_export_kwh", None)
-        if exported is None and window is None and self.export_session.authority_source != "price":
-            exported = getattr(
-                getattr(self.coordinator, "zerohero_export", None), "imported_kwh", None
-            )
+        # One paid-only counter is shared by ordinary and price export. Total
+        # physical export and the separate tariff bonus allowance stay intact.
+        exported = self._paid_exported_kwh()
         price_path = self.export_session.authority_source == "price" or (
             window is not None and self.export_session.phase == "idle"
         )

@@ -92,6 +92,7 @@ def _coordinator(**config):
         data=SimpleNamespace(
             available_after_reserve_kwh=0.0,
             free_energy_remaining_kwh=50.0,
+            paid_export_kwh=0.0,
         ),
         _configured_time=lambda key, default: time.fromisoformat(
             str(values.get(key, default))
@@ -554,7 +555,7 @@ async def test_automatic_export_cap_is_independent_of_boosted_tariff_cap(
         "expected_protected_ev",
     ),
     [
-        ("invalid", 4.0, 7.0, 3.0),
+        ("invalid", 4.0, None, 0.0),
         (0.0, "invalid", 20.0, 0.0),
     ],
 )
@@ -563,7 +564,7 @@ async def test_malformed_export_inputs_preserve_partial_publication_order(
     monkeypatch,
     exported_kwh: object,
     protected_house_kwh: object,
-    expected_remaining: float,
+    expected_remaining: float | None,
     expected_protected_ev: float,
 ) -> None:
     calls = []
@@ -592,7 +593,9 @@ async def test_malformed_export_inputs_preserve_partial_publication_order(
             CONF_AUTOMATIC_EXPORT_LIMIT_KWH: 20.0,
         }
     )
-    coordinator.zerohero_export.imported_kwh = exported_kwh
+    # Paid-meter corruption is now rejected at the accounting boundary, not
+    # parsed as legacy total-export input that preserves a cached allowance.
+    coordinator.data.paid_export_kwh = exported_kwh
     coordinator.learning_remaining_kwh = protected_house_kwh
     coordinator.data.available_after_reserve_kwh = 30.0
     controller = _loaded_controller(hass, coordinator)

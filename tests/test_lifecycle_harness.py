@@ -2383,8 +2383,19 @@ async def test_ordinary_day_has_restart_equivalent_command_obligations(
     assert entry.runtime_data.active_controller.charge_session.phase == "idle"
 
     now[0] = datetime(2026, 9, 17, 18, 45, tzinfo=UTC)
+    # The paid meter needs a real fresh measurement after the simulated
+    # eighteen-hour jump; an old zero must not stand in for current evidence.
     await harness.set_state(
-        "sensor.test_battery_soc", "100", {"unit_of_measurement": "%"}
+        "sensor.test_grid_power", "0", {"unit_of_measurement": "kW"},
+        observed_at=now[0],
+    )
+    await harness.set_state(
+        "sensor.test_house_load", "0.8", {"unit_of_measurement": "kW"},
+        observed_at=now[0],
+    )
+    await harness.set_state(
+        "sensor.test_battery_soc", "100", {"unit_of_measurement": "%"},
+        observed_at=now[0],
     )
     await entry.runtime_data.active_controller.async_reconcile()
     controller = entry.runtime_data.active_controller

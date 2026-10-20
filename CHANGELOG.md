@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.12.52 — Count paid export toward the daily cap
+
+- Exclude zero-rate solar overflow from the automatic daily export cap. Count
+  measured net export once across positive configured feed-in tariffs, eligible
+  bonus energy and HEO-owned bounded price-event exports. Normal evening and
+  price-triggered selling share one allowance; overlapping opportunities do not
+  double-count the same energy.
+- Preserve total grid-export history, tariff revenue meters, the separate
+  retailer bonus allowance, Sellable protection and existing session writers.
+  Exhausted or unavailable paid evidence ends owned export through normal Self
+  Use cleanup; recheck allowance between positive staged commands.
+- Persist a separate paid-cap counter. First upgrade conservatively retains
+  today's old total because prior paid/unpaid price events cannot be recovered;
+  paid-only counting begins cleanly at the next local midnight. Reloads,
+  restarts and toggles cannot grant a fresh allowance. Invalid stored evidence
+  blocks rather than resets the current day's cap. No new setting or entity.
+
 ## 0.12.51 — EV charging before evening export
 
 - Extend the existing opt-in EV-before-export policy: when the car is home,

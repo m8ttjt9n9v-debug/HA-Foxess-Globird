@@ -437,7 +437,7 @@ Every installation must supply its own values. Never copy a reference site's
 service rating or a target site's multi-phase rating as a default control fact.
 Configure phase count, per-phase or aggregate limits as the model requires,
 EV phases/current/voltage, inverter and battery limits, tariff
-allowances/windows/rates, automatic export-energy cap, ZEROHERO finish
+allowances/windows/rates, automatic paid-export-energy cap, ZEROHERO finish
 offset, reserve, and efficiency. HEO derives automatic discharge power from the
 commissioned inverter limit and actuator maximum rather than asking for a
 separate operator estimate.

@@ -203,6 +203,16 @@ class OperationalReadModel:
     zerohero_export_window_kwh: float
     ledger_status: str
     tariff_status: str
+    paid_export_kwh: float | None = None
+    paid_cap_conservative_day: bool = False
+
+    def paid_export_attributes(self) -> dict[str, object]:
+        """Explain the cap separately from the retained physical total."""
+        return {
+            "paid_export_kwh": self.paid_export_kwh,
+            "automatic_export_cap_basis": "paid_export",
+            "conservative_upgrade_day": self.paid_cap_conservative_day,
+        }
 
     def sensor_values(self) -> dict[str, object]:
         """Project existing operational sensor states."""
@@ -1412,6 +1422,13 @@ def build_site_read_model(
         daily_import_kwh=ledger.daily_import_kwh,
         free_window_import_kwh=ledger.free_window_import_kwh,
         daily_export_kwh=ledger.daily_export_kwh,
+        paid_export_kwh=(
+            getattr(ledger, "paid_export_kwh", None)
+            if getattr(coordinator, "_paid_export_storage_ready", True) else None
+        ),
+        paid_cap_conservative_day=getattr(
+            getattr(coordinator, "paid_export", None), "legacy_seeded", False
+        ),
         standard_export_window_kwh=ledger.standard_window_export_kwh,
         offpeak_export_kwh=ledger.offpeak_rate_export_kwh,
         free_charge_allowed_kwh=ledger.free_charge_allowed_kwh,

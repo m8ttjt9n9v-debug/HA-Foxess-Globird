@@ -114,7 +114,8 @@ async def price_rig(hass, monkeypatch, freezer):
         entry_id="price-active-test", runtime_config=RuntimeConfiguration.from_mapping(config),
         snapshot=SiteSnapshot(80, 40, 10, 2, 0, 0.8, export_limit_kw=15),
         data=SimpleNamespace(
-            available_after_reserve_kwh=25, daily_export_kwh=0, free_energy_remaining_kwh=50,
+            available_after_reserve_kwh=25, daily_export_kwh=0, paid_export_kwh=0,
+            free_energy_remaining_kwh=50,
         ),
         telemetry=SimpleNamespace(
             grid_power=sample(0), battery_power=sample(0), house_load=sample(0.8),
@@ -259,7 +260,7 @@ async def test_legacy_paid_full_on_during_settlement_fences_price_force_mode(
 
 
 @pytest.mark.parametrize(
-    "problem", ["below_three", "zero", "stale", "sellable_zero", "cap", "daily_missing", "unit"]
+    "problem", ["below_three", "zero", "stale", "sellable_zero", "cap", "paid_missing", "unit"]
 )
 async def test_price_admission_fails_closed_from_current_evidence(price_rig, problem):
     rig = price_rig
@@ -272,9 +273,9 @@ async def test_price_admission_fails_closed_from_current_evidence(price_rig, pro
     elif problem == "sellable_zero":
         rig.coordinator.data.available_after_reserve_kwh = 4
     elif problem == "cap":
-        rig.coordinator.data.daily_export_kwh = 25
-    elif problem == "daily_missing":
-        rig.coordinator.data.daily_export_kwh = None
+        rig.coordinator.data.paid_export_kwh = 25
+    elif problem == "paid_missing":
+        rig.coordinator.data.paid_export_kwh = None
     else:
         state = rig.hass.states.get(DISCHARGE)
         rig.hass.states.async_set(DISCHARGE, "0", {**state.attributes, "unit_of_measurement": "W"})
@@ -282,9 +283,9 @@ async def test_price_admission_fails_closed_from_current_evidence(price_rig, pro
     assert rig.calls == []
 
 
-async def test_all_day_cap_cannot_reset_by_toggle_or_new_price_block(price_rig, freezer):
+async def test_paid_export_cap_cannot_reset_by_toggle_or_new_price_block(price_rig, freezer):
     rig = price_rig
-    rig.coordinator.data.daily_export_kwh = 25
+    rig.coordinator.data.paid_export_kwh = 25
     for requested in (False, True):
         rig.config["critical_event_sell_enabled"] = requested
         rig.coordinator.runtime_config = RuntimeConfiguration.from_mapping(rig.config)
@@ -304,10 +305,10 @@ async def test_normal_export_uses_shared_daily_cap_without_price_authority(price
     freezer.move_to(dt_util.as_utc(dt_util.now().replace(hour=20, minute=0)))
     rig.config.update(automatic_export_enabled=True, critical_event_sell_enabled=False)
     rig.coordinator.runtime_config = RuntimeConfiguration.from_mapping(rig.config)
-    rig.coordinator.data.daily_export_kwh = 25
+    rig.coordinator.data.paid_export_kwh = 25
     await rig.active.async_reconcile()
     assert not rig.calls
-    rig.coordinator.data.daily_export_kwh = 0
+    rig.coordinator.data.paid_export_kwh = 0
     await rig.active.async_reconcile()
     assert (MODE, "Force Discharge") in rig.calls
     assert rig.active.export_session.authority_source == "zerohero"
@@ -522,7 +523,7 @@ async def test_active_price_exhaustion_restores_then_new_block_keeps_daily_cap(p
     rig = price_rig
     await rig.active.async_reconcile()
     await rig.active.async_reconcile()
-    rig.coordinator.data.daily_export_kwh = 25
+    rig.coordinator.data.paid_export_kwh = 25
     rig.calls.clear()
     await rig.active.async_reconcile()
     await rig.active.async_reconcile()
