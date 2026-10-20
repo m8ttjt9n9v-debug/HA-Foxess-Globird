@@ -213,6 +213,16 @@ break the connection.
 
 ## Required for Tessie EV automation
 
+The optional direct-Tessie EV-before-export top-up reuses its existing switch
+and SoC target. Smart-socket top-up remains unsupported; its older independent
+policies are unchanged.
+It additionally needs exclusive Local Modbus/master authority, idle battery
+sessions, fresh Self Use/zero force feedback and qualified protected Sellable
+energy. Charging begins through the normal EV writer, not an inverter command.
+All ordinary EV gates, outside-window caps, battery reserves and the normal SoC
+ceiling apply. Target crossing hands current back to baseline/off before
+automatic export can begin. There is no new helper, API key or schedule.
+
 Restored active Full/Trip intent waits for completed Home Assistant startup
 and its initial vehicle/actuator feedback before becoming ready. The original
 timeout still counts; missing startup data is not a new permission to charge.

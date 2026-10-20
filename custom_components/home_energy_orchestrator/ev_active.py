@@ -126,12 +126,15 @@ from .ev_observation_adapter import (
     capture_ev_feedback,
     ev_observation_entity_map,
 )
+from .foxess_adapter import FoxessEntityMap
+from .foxess_observation_adapter import capture_foxess_feedback
 from .maintenance_barrier import maintenance_writes_blocked
 from .models import SiteSnapshot
 from .persistence import create_typed_value_repository
 from .planner.control_windows import (
     boosted_window_active,
     daily_ready_cycle_bounds,
+    hours_until_next_window,
     pre_free_window_position,
     window_duration_hours,
     window_position,
@@ -157,6 +160,7 @@ from .planner.ev import (
     SmartSocketStageState,
     cap_direct_charge_limit_target,
     charging_path_ceiling_a,
+    estimate_vehicle_energy_to_target_kwh,
     evaluate_allowance_projection,
     evaluate_ev_decision_cadence,
     evaluate_free_window_target,
@@ -175,6 +179,12 @@ from .planner.ev import (
     reconcile_smart_socket_recovery,
     reconcile_smart_socket_stage,
     reset_smart_state_for_path,
+)
+from .planner.ev_before_export import (
+    calculate_protected_keepalive_energy_kwh,
+    compose_protected_ev_energy_kwh,
+    decide_ev_before_export,
+    plan_ev_before_export_current,
 )
 from .planner.ev_candidates import (
     EvConnectionDecision,
@@ -258,6 +268,7 @@ from .planner.ev_persistence import (
 )
 from .planner.ev_power_constraints import inverter_backed_current_ceiling
 from .planner.learning import DemandHistory
+from .planner.ledger import calculate_ledger
 from .planner.timed_average import TimedAverageWindow
 
 _LOGGER = logging.getLogger(__name__)
@@ -745,6 +756,10 @@ class ActiveEvController:
                     solar_spill_enabled=policy.solar_spill_enabled,
                     morning_solar_enabled=policy.morning_solar_enabled,
                     pre_free_enabled=policy.pre_free_enabled,
+                    before_export_enabled=(
+                        self.coordinator.runtime_config.ev_preferences.before_export_enabled
+                        and not smart_path
+                    ),
                 )
             )
             self.policy_route = select_ev_policy_route(
@@ -885,7 +900,13 @@ class ActiveEvController:
             if not startup_telemetry_hold and cadence.defer_soc_redecision:
                 self.decision_phase = "ev_current_transition_hold"
                 self.allowance_phase = "transition_hold"
-            if not startup_telemetry_hold and cadence.should_decide:
+            before_export_recheck = (
+                not in_window and (
+                    self.coordinator.runtime_config.ev_preferences.before_export_enabled
+                    or self.decision_phase.startswith("ev_before_export_")
+                )
+            )
+            if not startup_telemetry_hold and (cadence.should_decide or before_export_recheck):
                 try:
                     calculated = (
                         self._calculate_target(
@@ -1963,8 +1984,6 @@ class ActiveEvController:
         baseline = envelope.protected_baseline_a
         pre_free_ceiling = envelope.pre_free_ceiling_a
         vehicle_soc = self._mapped_number(self.coordinator.runtime_config.ev_telemetry.soc_entity)
-        if vehicle_soc is None:
-            return self._reject_outside_candidate("ev_soc_unavailable")
         soft_limit = min(
             self._float(CONF_EV_FREE_WINDOW_CHARGE_LIMIT, DEFAULT_EV_FREE_WINDOW_CHARGE_LIMIT),
             NON_OVERRIDE_CHARGE_LIMIT_MAX_PERCENT,
@@ -2011,6 +2030,16 @@ class ActiveEvController:
             if abort.last_reason is not None:
                 self.last_reason = abort.last_reason
             return abort.continue_reconciliation
+
+        before_export = self._calculate_before_export_target(
+            now, observation, vehicle_soc=vehicle_soc, soft_limit=soft_limit,
+            baseline=baseline, ceiling=pre_free_ceiling, minimum=current_minimum,
+            step=current_step,
+        ) if not charge_to_full and not self.daily_backfill_active else None
+        if before_export is not None:
+            return before_export
+        if vehicle_soc is None:
+            return self._reject_outside_candidate("ev_soc_unavailable")
 
         self.daily_backfill_plan = None
         self.daily_backfill_hold_reason = None
@@ -2420,6 +2449,216 @@ class ActiveEvController:
             self.decision_phase = "pre_free_combined"
         self.allowance_phase = "outside_free_window"
         return True
+
+    def _calculate_before_export_target(
+        self, now, observation, *, vehicle_soc, soft_limit, baseline, ceiling, minimum, step,
+    ) -> bool | None:
+        """Offer already-Sellable energy through the existing outside writer.
+
+        None leaves prior policies untouched. A below-target request instead
+        owns either its qualified top-up or a baseline/stop: unavailable energy
+        cannot fall through into a cached pre-free battery target.
+        """
+        runtime = self.coordinator.runtime_config
+        preference = runtime.ev_preferences
+        if runtime.ev_policy.charge_path == EV_CHARGE_PATH_SMART_SOCKET:
+            return None  # Its existing no-pause path has no general direct stop authority.
+        decision = decide_ev_before_export(
+            enabled=preference.before_export_enabled,
+            ev_soc_percent=vehicle_soc,
+            target_soc_percent=preference.before_export_soc_target,
+        )
+        if decision.export_allowed:
+            return None
+        valid_soc = vehicle_soc is not None and 0 <= vehicle_soc <= 100
+        valid_target = isfinite(preference.before_export_soc_target) and (
+            0 <= preference.before_export_soc_target <= 100
+        )
+        target = (
+            min(preference.before_export_soc_target, soft_limit) if valid_target else soft_limit
+        )
+        budget = self._before_export_energy_budget(now)
+        result = EvCurrentDecision(baseline, "ev_before_export_energy_unavailable")
+        if not valid_soc or not valid_target:
+            result = EvCurrentDecision(baseline, "ev_before_export_soc_unavailable")
+        elif vehicle_soc >= target:
+            result = EvCurrentDecision(baseline, "ev_before_export_normal_soc_limit")
+        elif self.daily_backfill_stop_pending:
+            result = EvCurrentDecision(baseline, "ev_before_export_stop_pending")
+        elif budget is not None:
+            capacity = self.capacity_evidence(now)
+            explicit = runtime.ev_capacity.source != "legacy_ratio"
+            stored = self._mapped_energy(runtime.ev_telemetry.stored_energy_entity)
+            if capacity.value_kwh is not None:
+                room = estimate_vehicle_energy_to_target_kwh(
+                    stored_energy_kwh=stored, current_soc_percent=vehicle_soc,
+                    target_soc_percent=target,
+                    charge_efficiency_percent=self._float(
+                        CONF_EV_CHARGE_EFFICIENCY, DEFAULT_EV_CHARGE_EFFICIENCY,
+                    ),
+                    planning_capacity_kwh=capacity.value_kwh if explicit else None,
+                )
+                result = plan_ev_before_export_current(
+                    sellable_kwh=budget, vehicle_room_kwh=room,
+                    baseline_a=baseline, current_ceiling_a=ceiling,
+                    charger_minimum_a=minimum, voltage_v=self._float(
+                        CONF_EV_VOLTAGE, DEFAULT_EV_VOLTAGE,
+                    ), phase_count=int(self._float(CONF_EV_PHASE_COUNT, DEFAULT_EV_PHASE_COUNT)),
+                    current_step_a=step, vehicle_soc=vehicle_soc, target_soc=target,
+                )
+        active = result.phase == "ev_before_export_charging"
+        ownership = reconcile_outside_ownership(
+            self._daily_backfill_cycle_state(), charge_to_full=False, pre_free_active=False,
+            solar_current_a=0, physical_minimum_a=minimum, baseline_a=baseline,
+            configured_baseline_a=self._float(CONF_EV_PROTECTED_BASELINE_A, 0),
+            charge_switch_on=observation.charge_switch_on,
+            outside_control_active=self.outside_control_active,
+            before_export_current_a=result.current_a if active else 0,
+        )
+        self._apply_daily_backfill_cycle_state(ownership.daily_state)
+        self.outside_target_active = ownership.outside_target_active
+        self.outside_control_active = ownership.outside_control_active
+        self.outside_stop_requested = ownership.outside_stop_requested
+        self.pre_free_session = PreFreeSessionState()
+        self.pre_free_phase = "ev_before_export_selected"
+        self.measured_solar_adjustment = MeasuredSolarAdjustmentState()
+        self.outside_stage_candidates = (build_ev_stage_candidate(
+            "ev_before_export", eligible=active, reason=result.phase,
+            target_current_a=result.current_a, target_limit_percent=target,
+            command_intent=("reconcile_current", "reconcile_charge_limit") if active else (),
+        ),)
+        self.decision_phase = result.phase
+        self.allowance_phase = "outside_free_window"
+        self.target_current_a = result.current_a
+        self.target_limit_percent = evaluate_outside_charge_limit(OutsideChargeLimitEvidence(
+            charge_to_full=False, outside_target_active=active,
+            soft_limit_percent=target if active else soft_limit,
+            learned_limit_percent=None, current_limit_percent=observation.charge_limit_percent,
+            vehicle_soc_percent=vehicle_soc, protected_baseline_a=baseline,
+            direct_limit_headroom_percent=self._float(
+                CONF_EV_DIRECT_LIMIT_HEADROOM, DEFAULT_EV_DIRECT_LIMIT_HEADROOM,
+            ), minimum_percent=observation.limit_minimum_percent,
+            maximum_percent=observation.limit_maximum_percent,
+            step_percent=observation.limit_step_percent,
+        )).target_limit_percent if valid_soc else cap_direct_charge_limit_target(
+            observation.charge_limit_percent, charge_to_full=False,
+        )
+        if not self.outside_target_active and not self.outside_control_active:
+            self.last_reason = result.phase
+            return False
+        return True
+
+    def _before_export_energy_budget(self, now: datetime) -> float | None:
+        """Recheck the same reserve/house/EV ledger against current evidence."""
+        runtime = self.coordinator.runtime_config
+        active = getattr(self.coordinator, "active_controller", None)
+        snapshot, data = self.coordinator.snapshot, self.coordinator.data
+        telemetry = self.coordinator.telemetry
+        if (
+            runtime.automation.control_owner != FOXESS_CONTROL_OWNER_MODBUS
+            or not runtime.automation.master_enabled
+            or active is None or snapshot is None or data is None or telemetry is None
+            or getattr(getattr(active, "export_session", None), "phase", None) != "idle"
+            or getattr(getattr(active, "charge_session", None), "phase", None) != "idle"
+            or bool(getattr(getattr(active, "manual", None), "is_active", False))
+            or bool(getattr(getattr(self.coordinator, "manual_test", None), "is_active", False))
+        ):
+            return None
+        samples = [telemetry.grid_power, telemetry.battery_power, telemetry.house_load]
+        if self._float(CONF_SERVICE_IMPORT_LIMIT_A, DEFAULT_SERVICE_IMPORT_LIMIT_A) > 0:
+            samples.append(telemetry.site_grid_current)
+        for sample in samples:
+            if (
+                not sample.valid or not sample.fresh or sample.value is None
+                or not isfinite(sample.value) or sample.updated_at is None
+                or not 0 <= (now - sample.updated_at).total_seconds()
+                <= runtime.telemetry.max_age_seconds
+            ):
+                return None
+        if not self._measured_ev_telemetry(now).telemetry_valid:
+            return None
+        import_threshold = runtime.nonnegative.zero_import_threshold_kw
+        if import_threshold is None or telemetry.grid_power.value > import_threshold:
+            return None
+        feedback = _CYCLE_FEEDBACK.get()
+        if feedback is None:
+            return None
+        max_age = self._float(
+            CONF_EV_TELEMETRY_MAX_AGE_SECONDS, DEFAULT_EV_TELEMETRY_MAX_AGE_SECONDS,
+        )
+        if not feedback.physical_observation(now=now, max_age_seconds=max_age).available:
+            return None
+        required = [
+            feedback.soc, feedback.current_limit, feedback.charge_limit, feedback.battery_soc,
+            feedback.cable_connected, feedback.charging_state,
+            feedback.actual_current, feedback.charge_switch,
+        ]
+        if runtime.ev_connection.location_mode == "auto":
+            required.append(feedback.at_home)
+        if any(not v.fresh(now, max_age) for v in required):
+            return None
+        if feedback.current_limit.unit != "A" or feedback.current_limit.current_a is None:
+            return None
+        mapping = runtime.inverter
+        if not mapping.actuator_mapping_complete:
+            return None
+        mode = self._entity_feedback(mapping.work_mode_entity)
+        if not mode.fresh(now, runtime.telemetry.max_age_seconds):
+            return None
+        for entity in (mapping.force_charge_power_entity, mapping.force_discharge_power_entity):
+            source = self._entity_feedback(entity)
+            if source.restored or source.available_state is None or (
+                source.last_reported is None or source.last_reported > now
+            ):
+                return None
+        fox = capture_foxess_feedback(self.hass, FoxessEntityMap(
+            mapping.work_mode_entity, mapping.force_charge_power_entity,
+            mapping.force_discharge_power_entity,
+        ))
+        if fox.mode != "Self Use" or fox.charge_power_kw != 0 or fox.discharge_power_kw != 0:
+            return None
+        plan = getattr(active, "export_plan", None)
+        values = (
+            getattr(plan, "sellable_energy_kwh", None),
+            getattr(data, "available_after_reserve_kwh", None),
+            getattr(self.coordinator, "learning_remaining_kwh", None),
+            getattr(active, "export_protected_ev_kwh", None),
+            feedback.battery_soc.number,
+        )
+        if any(isinstance(v, bool) or not isinstance(v, (int, float))
+               or not isfinite(v) or v < 0 for v in values):
+            return None
+        sellable, cached, house, protected_ev, soc = values
+        connection = runtime.ev_connection
+        keepalive = calculate_protected_keepalive_energy_kwh(
+            ev_configured=connection.configured,
+            control_commissioned=connection.control_commissioned,
+            protected_baseline_a=connection.protected_baseline_a,
+            home_state=feedback.at_home.available_state,
+            cable_state=feedback.cable_connected.available_state,
+            hours_until_free=hours_until_next_window(
+                now, start=runtime.windows.effective_free_charge_start,
+            ), voltage_v=connection.voltage_v, phase_count=connection.phase_count,
+        )
+        live_protected_ev = compose_protected_ev_energy_kwh(
+            keepalive_kwh=keepalive, daily_backfill_kwh=self.daily_backfill_protection_kwh(now),
+        )
+        if live_protected_ev is None:
+            return None
+        protected_ev = max(protected_ev, live_protected_ev)
+        if soc > 100 or soc <= self._float(
+            CONF_EV_OUTSIDE_BATTERY_RESERVE_PERCENT, DEFAULT_EV_OUTSIDE_BATTERY_RESERVE_PERCENT,
+        ):
+            return None
+        fresh = calculate_ledger(replace(snapshot, battery_soc=soc)).available_after_reserve_kwh
+        if fresh is None:
+            return None
+        ac = min(cached, fresh) * self._float(
+            CONF_DISCHARGE_EFFICIENCY_PERCENT, DEFAULT_DISCHARGE_EFFICIENCY_PERCENT,
+        ) / 100
+        # Cached Sellable and the fresh ledger are ceilings on the SAME pool,
+        # not cumulative deductions. New plug-in keepalive cannot be omitted.
+        return min(sellable, max(ac - house - protected_ev, 0))
 
     def _combined_pre_free_budget(
         self, now: datetime, export_energy_kwh: float | None
@@ -3263,8 +3502,53 @@ class ActiveEvController:
                 smart_socket_entity=actuators.smart_socket_entity,
             ),
             allow_writes=True,
-            write_guard=lambda: self.gate_status == "ready",
+            write_guard=self._writes_still_authorized,
         )
+
+    def _writes_still_authorized(self) -> bool:
+        """Keep reducing reconciliation open; recheck a positive top-up live."""
+        if self.gate_status != "ready":
+            return False
+        if self.decision_phase != "ev_before_export_charging":
+            return True
+        now = dt_util.now()
+        runtime = self.coordinator.runtime_config
+        preference = runtime.ev_preferences
+        token = _CYCLE_FEEDBACK.set(capture_ev_feedback(
+            self.hass, ev_observation_entity_map(runtime),
+        ))
+        try:
+            soc = self._mapped_number(runtime.ev_telemetry.soc_entity)
+            if (
+                not preference.before_export_enabled or soc is None
+                or soc >= min(preference.before_export_soc_target, self._float(
+                    CONF_EV_FREE_WINDOW_CHARGE_LIMIT, DEFAULT_EV_FREE_WINDOW_CHARGE_LIMIT,
+                ), NON_OVERRIDE_CHARGE_LIMIT_MAX_PERCENT)
+                or self._free_window(now)[0] or self._charge_to_full_requested()
+                or not self._connected_at_home()[0]
+            ):
+                return False
+            budget = self._before_export_energy_budget(now)
+            observation = self._observation()
+            if budget is None or observation is None or observation.current_step_a is None:
+                return False
+            ceiling = min(
+                self._outside_service_ceiling_a(
+                    self._path_ceiling_a(), current_step=observation.current_step_a,
+                ),
+                self._outside_inverter_ceiling_a(
+                    self._path_ceiling_a(), current_step=observation.current_step_a,
+                ),
+            )
+            baseline = self._float(CONF_EV_PROTECTED_BASELINE_A, 0)
+            required = max((self.target_current_a or 0) - baseline, 0) * self._float(
+                CONF_EV_VOLTAGE, DEFAULT_EV_VOLTAGE,
+            ) * self._float(CONF_EV_PHASE_COUNT, DEFAULT_EV_PHASE_COUNT) / 1000 * 3 / 60
+            return self.target_current_a is not None and self.target_current_a <= ceiling and (
+                budget >= required
+            )
+        finally:
+            _CYCLE_FEEDBACK.reset(token)
 
     def _mapped_state(self, entity_id: str | None) -> str | None:
         """Return one mapped entity state, excluding unreadable values."""

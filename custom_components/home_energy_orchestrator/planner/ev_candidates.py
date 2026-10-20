@@ -57,6 +57,7 @@ class EvPolicyAvailabilityEvidence:
     solar_spill_enabled: bool
     pre_free_enabled: bool
     morning_solar_enabled: bool = False
+    before_export_enabled: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -88,6 +89,7 @@ def evaluate_ev_policy_availability(
                 evidence.solar_spill_enabled
                 or evidence.morning_solar_enabled
                 or evidence.pre_free_enabled
+                or evidence.before_export_enabled
             )
         )
     )

@@ -12,7 +12,7 @@ import asyncio
 import logging
 from dataclasses import replace
 from datetime import datetime, time, timedelta
-from math import isfinite
+from math import ceil, isfinite
 
 from homeassistant.core import CALLBACK_TYPE, HomeAssistant
 from homeassistant.helpers.event import async_track_point_in_utc_time, async_track_time_interval
@@ -24,7 +24,11 @@ from .const import (
     FOXESS_CONTROL_OWNER_MODBUS,
 )
 from .coordinator import EnergyCoordinator
-from .ev_observation_adapter import capture_ev_entity_feedback
+from .ev_observation_adapter import (
+    capture_ev_entity_feedback,
+    capture_ev_feedback,
+    ev_observation_entity_map,
+)
 from .foxess_adapter import FoxessEntityMap, FoxessServiceAdapter, FoxessWriteBlocked
 from .foxess_observation_adapter import (
     FoxessFeedbackSnapshot,
@@ -47,6 +51,7 @@ from .planner.ev_before_export import (
     compose_protected_ev_energy_kwh,
     protected_keepalive_requires_evidence,
 )
+from .planner.ev_outside_window import protected_baseline_current_a
 from .planner.export import ExportPlan
 from .planner.export_session import ExportSessionState, advance_export_session
 from .planner.foxess import (
@@ -174,8 +179,15 @@ class ActiveFoxessController:
             and not bool(manual_test is not None and manual_test.is_active)
             and not self.manual.is_active
         )
-        if not allowed or self._price_write_deadline is None:
-            return allowed
+        if not allowed:
+            return False
+        if self.export_session.phase in {
+            "starting",
+            "active",
+        } and not self._ev_before_export_handoff_ready(dt_util.now()):
+            return False
+        if self._price_write_deadline is None:
+            return True
         now = dt_util.now()
         if now >= self._price_write_deadline:
             return False
@@ -501,6 +513,71 @@ class ActiveFoxessController:
             price_interval_end=window[1] if window else None,
         )
 
+    def _ev_before_export_handoff_ready(self, now: datetime) -> bool:
+        """Confirm the EV is no longer spending surplus before export takes it.
+
+        This uses physical feedback, not the EV controller's callback order or
+        remembered target. A positively disconnected car may retain requested
+        and raw current; only the shared complete disconnected-idle proof
+        permits disregarding those values.
+        """
+        runtime = self.coordinator.runtime_config
+        connection = runtime.ev_connection
+        if (
+            not runtime.ev_preferences.before_export_enabled
+            or not connection.configured
+            or not connection.control_commissioned
+        ):
+            return True
+        feedback = capture_ev_feedback(self.hass, ev_observation_entity_map(runtime))
+        maximum_age = runtime.telemetry.max_age_seconds
+        physical = feedback.physical_observation(now=now, max_age_seconds=maximum_age)
+        if not physical.available:
+            return False
+        if physical.disconnected_idle:
+            return True
+        if feedback.cable_connected.available_state not in {"on", "connected"}:
+            return False
+        # An off, non-charging connected car needs no reduced-current command.
+        # Positive connected raw current remains contradictory, not stopped
+        # proof merely because the state-qualified projection reports zero.
+        if not physical.charge_switch_on and not physical.charging_activity:
+            return True
+        current = feedback.current_limit
+        values = (
+            current.current_a,
+            current.minimum,
+            current.maximum,
+            current.step,
+            connection.configured_max_current_a,
+            connection.protected_baseline_a,
+            feedback.actual_current.current_a,
+        )
+        if not current.fresh(now, maximum_age) or any(
+            value is None or not isfinite(value) for value in values
+        ):
+            return False
+        requested, minimum, maximum, step, ceiling, configured, actual = values
+        assert all(value is not None for value in values)
+        if minimum < 0 or step <= 0 or maximum < minimum or ceiling <= 0:
+            return False
+        ceiling = min(ceiling, maximum)
+        baseline = protected_baseline_current_a(
+            configured_baseline_a=configured,
+            physical_minimum_a=minimum if minimum > 0 else step,
+            current_step_a=step,
+            physical_ceiling_a=ceiling,
+        )
+        baseline = ceil(baseline / step) * step
+        return (
+            physical.charge_switch_on
+            and baseline > 0
+            and minimum <= baseline
+            and baseline <= ceiling
+            and minimum <= requested <= baseline
+            and 0 <= actual <= baseline
+        )
+
     async def async_reconcile(self) -> None:
         """Evaluate and, only after every gate passes, execute one plan."""
         await self.manual.async_restore_handoff()
@@ -790,6 +867,22 @@ class ActiveFoxessController:
         """Apply either permission through the same protected export session."""
         context = self._export_context(feedback, now)
         policy = evaluate_foxess_export_policy(context)
+        if (
+            policy.before_export_decision.export_allowed
+            and not self._ev_before_export_handoff_ready(now)
+        ):
+            # Preserve the reducer and its persisted cleanup duty. Admission is
+            # withheld until actual/requested EV current has handed energy back;
+            # reaching the SoC target alone cannot start overlapping export.
+            policy = replace(
+                policy,
+                before_export_decision=EvBeforeExportDecision(False, "ev_handoff_pending"),
+                effective_enabled=False,
+                eligible=False,
+                should_advance=policy.latched,
+                session_window_active=False,
+                finish_requested=True,
+            )
         self.ev_before_export_decision = policy.before_export_decision
         self.export_effective_enabled = policy.effective_enabled
         self.automatic_export_remaining_kwh = policy.automatic_remaining_kwh

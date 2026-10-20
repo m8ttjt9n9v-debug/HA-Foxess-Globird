@@ -1,14 +1,42 @@
 """Minimal opt-in EV-before-export arbitration.
 
-This layer changes only whether automatic export is currently permitted. It
-does not start EV charging, alter the user's saved export request, or decide
-where later EV charging energy should come from.
+Export permission and protected top-up planning share the existing opt-in.
+Neither function writes devices or alters the saved export request.
 """
 
 from __future__ import annotations
 
 import math
 from dataclasses import dataclass
+
+from .ev import EvCurrentDecision
+from .ev_outside_window import PreFreeCurrentInputs, plan_pre_free_current
+
+
+def plan_ev_before_export_current(
+    *, sellable_kwh: float, vehicle_room_kwh: float, baseline_a: float,
+    current_ceiling_a: float, charger_minimum_a: float, voltage_v: float,
+    phase_count: int, current_step_a: float, vehicle_soc: float, target_soc: float,
+) -> EvCurrentDecision:
+    """Offer protected spare energy now, within the normal decision horizon.
+
+    Reuse the existing battery-energy/current conversion rather than inventing
+    another pacing algorithm. Live authority is rechecked every control tick;
+    three minutes of funding bounds a small budget between normal decisions.
+    """
+    if not all(math.isfinite(v) and v >= 0 for v in (sellable_kwh, vehicle_room_kwh)):
+        raise ValueError("EV-before-export energy must be finite and non-negative")
+    decision = plan_pre_free_current(PreFreeCurrentInputs(
+        session_active=True,
+        planned_energy_kwh=min(sellable_kwh, vehicle_room_kwh),
+        hours_until_free=3 / 60,
+        voltage_v=voltage_v, phase_count=phase_count, current_step_a=current_step_a,
+        baseline_a=baseline_a, current_ceiling_a=current_ceiling_a,
+        vehicle_soc_percent=vehicle_soc, vehicle_soft_limit_percent=target_soc,
+    ))
+    if decision.current_a <= baseline_a or decision.current_a < charger_minimum_a:
+        return EvCurrentDecision(baseline_a, "ev_before_export_insufficient_energy")
+    return EvCurrentDecision(decision.current_a, "ev_before_export_charging")
 
 
 @dataclass(frozen=True, slots=True)

@@ -2,6 +2,27 @@
 
 Status here describes behavioral parity, not merely the presence of code.
 
+## Paid-export daily cap clarification
+
+- [ ] Change the automatic daily export cap's accounting from all-day physical
+  export to qualifying paid export, excluding unpaid solar overflow. Keep the
+  total-export meter and the separate tariff bonus allowance intact. Define
+  paid-window/price-event eligibility and overlapping-window accounting before
+  implementation; a wholesale spike alone is not proof of retailer payment.
+
+## EV-before-export protected charging — v0.12.51
+
+- [x] Extend the existing opt-in and target through the current EV outside
+  writer, using Sellable before export cap/window clipping and no solar or
+  deadline requirement. Preserve reserves, normal power/SoC limits and active
+  daily/Full/Trip/free authority; inactive daily-ready does not credit top-up.
+- [x] Add fresh physical ownership and baseline handoffs between the existing
+  EV/export controllers, with reducing cleanup open and no new stored schema.
+- [x] Complete frozen3,601-test suite,100 new runtime/handoff cases, Ruff,
+  v50/v26 upgrade/rollback rehearsals and independent fresh review.
+- [ ] Complete release and controlled pilot acceptance. Physical completion of
+  a natural top-up/export cycle is separate.
+
 ## Selected-inverter Solis measurement correction
 
 - [x] Characterise native account-wide cache replacement across multiple
@@ -1200,11 +1221,25 @@ Working Single Phase Pilot Site parity.
   ZEROHERO export or stop an HEO-owned active one without changing the saved
   export request. Fail closed on invalid EV SoC, expose integration-owned
   controls/status, and leave existing behavior untouched when disabled.
-- [ ] Extend EV-before-export only after separately specifying home/connected
+- [x] Extend EV-before-export after separately specifying home/connected
   qualification, EV charge activation, eligible energy sources, protected and
   paid-grid boundaries, hysteresis, withheld-energy accounting, and interaction
   with the daily-ready allocation. The simple gate must not silently grow into
   an unreviewed energy-transfer controller.
+  Owner-approved v0.12.51 extension: with this policy enabled and the EV below
+  its threshold, promptly use already-discretionary Sellable energy when the
+  vehicle is confirmed home and connected. Do not wait for daily ready-by or
+  pre-free latest-start timing, or require solar. Reuse the existing EV writer
+  and total outside-window inverter-percentage/current limits; retain house
+  forecast/reserves, battery cutoff, normal EV SoC ceiling and all safety gates.
+  End this top-up when the EV reaches the threshold or eligible energy runs
+  out; then re-evaluate the remaining normal evening export opportunity without
+  extending its window or guaranteeing an immediate export start. Preserve
+  Free/Trip/Full priority, avoid simultaneous conflicting export/EV owners and
+  do not reserve or spend the same EV energy twice. Characterise disconnect/
+  reconnect, restart, insufficient surplus, target crossing and window-boundary
+  scenarios before release. See the protected charging work item; publication
+  and live cycle acceptance remain separate from local implementation.
 - [ ] Add an opt-in weekly **EV ready-by target** policy with three user-facing
   modes: **Off**, **Learned with overrides**, and **User schedule**. Each weekday
   has an optional ready time and desired SoC; an unset day means no departure

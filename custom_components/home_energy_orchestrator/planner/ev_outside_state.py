@@ -104,6 +104,7 @@ def reconcile_outside_ownership(
     charge_switch_on: bool,
     outside_control_active: bool,
     morning_solar_current_a: float = 0.0,
+    before_export_current_a: float = 0.0,
 ) -> OutsideOwnershipTransition:
     """Preserve outside ownership and stop obligations after stage selection."""
     target_active = bool(
@@ -112,6 +113,7 @@ def reconcile_outside_ownership(
         or pre_free_active
         or solar_current_a >= physical_minimum_a
         or morning_solar_current_a >= physical_minimum_a
+        or before_export_current_a >= physical_minimum_a
     )
     control_active = outside_control_active
     stop_requested = False
@@ -124,6 +126,7 @@ def reconcile_outside_ownership(
         and not pre_free_active
         and solar_current_a < physical_minimum_a
         and morning_solar_current_a < physical_minimum_a
+        and before_export_current_a < physical_minimum_a
     ):
         stop_requested = True
         control_active = True

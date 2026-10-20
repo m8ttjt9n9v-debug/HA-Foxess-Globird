@@ -569,8 +569,8 @@
             "ev_backfill_buffer_minutes": "Start daily ready-by charging this many minutes early to allow for delays.",
             "ev_telemetry_max_age_seconds": "Reject outside-window power readings older than this when setting EV current.",
             "ev_telemetry_max_skew_seconds": "Reject power readings whose timestamps differ by more than this.",
-            "ev_before_export_enabled": "Hold back automatic battery export while the EV is below the target SoC below.",
-            "ev_before_export_soc_target_percent": "Car SoC below which HEO protects energy for the EV instead of automatic export."
+            "ev_before_export_enabled": "Before selling, use spare battery energy to charge a home, plugged-in car towards the target below. Normal outside-window limits and house reserves still apply.",
+            "ev_before_export_soc_target_percent": "EV top-up target before selling. Export stays on hold below this level; charging stops at the normal EV limit if it is lower."
           }
         },
       "recovery": {
@@ -849,8 +849,8 @@
             "ev_backfill_buffer_minutes": "Start daily ready-by charging this many minutes early to allow for delays.",
             "ev_telemetry_max_age_seconds": "Reject outside-window power readings older than this when setting EV current.",
             "ev_telemetry_max_skew_seconds": "Reject power readings whose timestamps differ by more than this.",
-            "ev_before_export_enabled": "Hold back automatic battery export while the EV is below the target SoC below.",
-            "ev_before_export_soc_target_percent": "Car SoC below which HEO protects energy for the EV instead of automatic export."
+            "ev_before_export_enabled": "Before selling, use spare battery energy to charge a home, plugged-in car towards the target below. Normal outside-window limits and house reserves still apply.",
+            "ev_before_export_soc_target_percent": "EV top-up target before selling. Export stays on hold below this level; charging stops at the normal EV limit if it is lower."
           }
         },
       "reconfigure_recovery": {

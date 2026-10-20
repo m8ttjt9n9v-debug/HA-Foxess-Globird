@@ -733,11 +733,32 @@ represents this policy; its detailed mapping is in
 `docs/zerohero-export-policy.md`.
 
 The default-off EV-before-export threshold is a separately identified
-extension, not pilot parity. Its first stage changes only effective export
-permission: EV SoC below the adjustable target prevents or ends HEO automatic
-export while preserving the user's saved export request. It neither starts EV
-charging nor selects an energy source. Invalid or unavailable EV SoC withholds
-export only while the opt-in is enabled.
+extension, not pilot parity. Below the adjustable target it prevents or ends
+HEO automatic export while preserving the saved request. From v0.12.51, a
+confirmed home/connected direct-Tessie vehicle may use already-Sellable battery
+energy through the existing outside-window EV writer; no solar, ready-by or
+latest-start condition is required. This uses Sellable before export-cap/window
+clipping, not the hidden/zero planned export. Current live floor/reserve,
+learned house and protected EV energy remain deducted once. Missing/stale
+electrical/house/vehicle evidence or material grid import withdraws the top-up.
+The usual total outside-window inverter percentage, service/connector limits,
+battery cutoff and normal EV ceiling remain. Tiny budgets are paced using the
+retained three-minute energy/current calculation and rechecked each control
+tick. A top-up never creates another fixed EV reservation or credits itself to
+the daily-ready allocation. An already-active daily-ready session is retained;
+Free/Trip/Full preserve their existing priority.
+
+Top-up waits for idle HEO battery sessions, no manual/diagnostic owner and fresh
+Self Use/zero force targets. At the target, or when its authority disappears,
+it returns to the ordinary baseline/stop/successor path. Export waits for fresh
+physical EV baseline/off feedback before starting, including startup before EV
+restoration and between positive export commands. The smart-socket path keeps
+its previous independent authority; this release does not add top-up authority
+to a path without a general direct stop. Unknown is not idle; a
+confirmed unplugged/off cohort may qualify retained current exactly as before.
+The normal evening plan is then recalculated inside its original window, not
+forced to start immediately. Invalid or unavailable EV SoC withholds export
+only while the opt-in is enabled. No new stored schema, controller or timer.
 
 Direct Tessie control also treats the configured connected-EV baseline
 as site policy: an otherwise unauthorised plug-in auto-start cannot retain a

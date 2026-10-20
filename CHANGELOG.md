@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.12.51 — EV charging before evening export
+
+- Extend the existing opt-in EV-before-export policy: when the car is home,
+  connected and below its target on the direct Tessie path, offer Sellable energy
+  through the normal outside-window EV controls. No solar or scheduled start
+  is required; normal inverter-percentage, service, connector and SoC limits
+  remain binding. An already-active daily-ready session retains ownership.
+- Recheck the actual house/reserve/EV budget and fresh physical evidence each
+  tick and before positive writes. Lost authority returns to baseline/stop;
+  reaching the target hands back to existing policies and normal export timing.
+- Require fresh physical EV baseline/off feedback before automatic export
+  starts, including restart and delayed-command handoffs. Retained unplugged
+  current cannot falsely block a positively confirmed disconnected/off car.
+- Reuse existing switches, targets, writers and saved ownership; no helper,
+  timer, journal migration or live-dashboard replacement. The paid-export
+  daily-cap accounting change remains a to-do and is not included.
+
 ## 0.12.50 — Correct multi-inverter Solis readings
 
 - Keep the explicitly selected inverter's complete native published frame
