@@ -31,6 +31,7 @@ class FoxessExportPolicyBaseContext:
     price_export_enabled: bool = False
     price_interval_start: datetime | None = None
     price_interval_end: datetime | None = None
+    before_export_recovery_target_percent: float | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -77,6 +78,7 @@ class FoxessExportPolicyContext:
     price_export_enabled: bool = False
     price_interval_start: datetime | None = None
     price_interval_end: datetime | None = None
+    before_export_recovery_target_percent: float | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -134,6 +136,7 @@ def evaluate_foxess_export_policy_base(
         enabled=context.before_export_enabled,
         ev_soc_percent=context.ev_soc_percent,
         target_soc_percent=context.before_export_target_percent,
+        recovery_target_soc_percent=context.before_export_recovery_target_percent,
     )
     effective_enabled = context.requested_enabled and decision.export_allowed
     within_session_window = context.start_at <= context.now < context.finish_at
@@ -203,6 +206,7 @@ def evaluate_foxess_export_policy(
             before_export_enabled=context.before_export_enabled,
             ev_soc_percent=context.ev_soc_percent,
             before_export_target_percent=context.before_export_target_percent,
+            before_export_recovery_target_percent=context.before_export_recovery_target_percent,
             now=context.now,
             start_at=context.start_at,
             finish_at=context.finish_at,

@@ -11,6 +11,7 @@ from .ev import (
     DirectEvseReconciliationState,
     SmartSocketRecoveryState,
 )
+from .ev_before_export import EvBeforeExportRecovery
 from .ev_learning import DrivingSnapshotState
 from .ev_outside_window import MeasuredSolarAdjustmentState, PreFreeSessionState
 from .learning import DemandHistory
@@ -54,6 +55,7 @@ class EvPersistenceState:
     )
     charge_to_full_started_at: datetime | None = None
     outside_control_active: bool = False
+    before_export_recovery: EvBeforeExportRecovery = field(default_factory=EvBeforeExportRecovery)
     smart_recovery: SmartSocketRecoveryState = field(
         default_factory=SmartSocketRecoveryState
     )
@@ -142,6 +144,10 @@ class EvPersistenceState:
             daily_backfill=daily_backfill,
             charge_to_full_started_at=charge_to_full_started_at,
             outside_control_active=outside_control_active,
+            before_export_recovery=(
+                _before_export_recovery(mapping['before_export_recovery'])
+                if 'before_export_recovery' in mapping else EvBeforeExportRecovery()
+            ),
             smart_recovery=smart_recovery,
         )
 
@@ -231,6 +237,11 @@ class EvPersistenceState:
                 else None
             ),
             "outside_control_active": self.outside_control_active,
+            **({"before_export_recovery": {
+                "pending": self.before_export_recovery.pending,
+                "binding": list(self.before_export_recovery.binding),
+                "valid": self.before_export_recovery.valid,
+            }} if self.before_export_recovery != EvBeforeExportRecovery() else {}),
             "smart_recovery": {
                 "attempted": recovery.attempted,
                 "phase": recovery.phase,
@@ -246,6 +257,21 @@ class EvPersistenceState:
     def validated_for_storage(self) -> EvPersistenceState:
         """Apply the established grouped fallbacks before writing a snapshot."""
         return type(self).from_payload(self.to_payload(), self.restored_at)
+
+
+def _before_export_recovery(payload: object) -> EvBeforeExportRecovery:
+    if (
+        not isinstance(payload, dict) or type(payload.get('pending')) is not bool
+        or type(payload.get('valid', True)) is not bool
+        or not isinstance(payload.get('binding'), list)
+        or len(payload['binding']) > 32
+        or any(not isinstance(v, str) or len(v) > 256 for v in payload['binding'])
+        or payload['pending'] and not payload['binding']
+    ):
+        return EvBeforeExportRecovery(valid=False)
+    return EvBeforeExportRecovery(
+        payload['pending'], tuple(payload['binding']), payload.get('valid', True),
+    )
 
 
 def _reconciliation(payload: object, now: datetime) -> DirectEvseReconciliationState:

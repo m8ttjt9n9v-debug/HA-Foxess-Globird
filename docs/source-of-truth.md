@@ -210,6 +210,21 @@ layers around the proven algorithm, not replacement algorithms.
 
 ## Current software truth
 
+### v0.12.58 EV-before-export hysteresis correction
+
+The configurable EV top-up buffer defaults to one percentage point; zero
+retains the former single-threshold behavior. A bound recovery begun below the
+saved export minimum retains that minimum but continues to the buffered target
+before handing back to export. Once complete, a reading at the minimum does not
+re-arm it. The existing EV journal checkpoints the small recovery record before
+positive intent, retains it across restart/disconnect and rolls back failed
+transitions. Corruption cannot release export in the uncertain recovery band.
+The EV and export policies share this read-only recovery target; their existing
+writers, ownership, normal SoC/current/energy limits and physical handoff remain.
+The wizard and native buffer number share one configuration-entry value. No
+deployed dashboard is automatically rewritten. This correction does not add
+simultaneous EV/export or imply live rollout. See [the buffer record](ev-before-export-buffer.md).
+
 ### EV discretionary-energy evidence during awaited checkpoints
 
 A genuinely confirmed zero-baseline stop ends its obsolete positive retry

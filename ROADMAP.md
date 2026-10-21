@@ -61,6 +61,22 @@ retains the final decision. It does not authorise monitoring jobs or deployments
 - [ ] Complete final release gates and approved live acceptance. Concurrent
   EV/export remains design-only.
 
+## EV-before-export threshold buffer — v0.12.58
+
+- [x] Keep the minimum unchanged; persist a bound recovery begun below it until
+  the configurable buffered boundary, sharing intent with the export gate.
+- [x] Expose one setting in EV Charging policies and a native dashboard number;
+  keep zero-buffer characterization and all existing physical/energy limits.
+- [x] Characterise restart, disconnect, settings edits, checkpoint failure,
+  malformed evidence, normal SoC caps, explicit overrides and current caps.
+- [x] Complete 4,110 frozen tests, Ruff/contracts and v57/v26 upgrade/rollback
+  rehearsals, including pending-buffer compatibility and cancelled checkpoints.
+- [x] Obtain separate publication and named-site rollout approval.
+- [ ] Complete release gates and controlled pilot/remote acceptance. Repository
+  validation does not change a live dashboard, setting or control.
+
+See [EV-before-export buffer](docs/ev-before-export-buffer.md).
+
 ## Concurrent evening EV charging and export — design only
 
 - [x] Document a dozen late-arrival, funding, power, cap and lifecycle scenarios

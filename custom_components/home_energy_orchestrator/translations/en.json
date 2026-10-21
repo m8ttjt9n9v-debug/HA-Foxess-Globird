@@ -147,6 +147,7 @@
           "automatic_export_enabled": "Enable automatic ZEROHERO export (Local Modbus owner only)",
           "ev_before_export_enabled": "Prioritise EV before automatic export",
           "ev_before_export_soc_target_percent": "Withhold export while EV SoC is below (%)",
+          "ev_before_export_soc_buffer_percent": "EV top-up buffer (percentage points)",
           "ev_automatic_control_enabled": "Request automatic EV control (independent of FoxESS ownership)",
           "rehearsal_mode": "Safety Lock (ON = no hardware writes)",
           "aemo_monitor_enabled": "AEMO price monitoring",
@@ -321,6 +322,7 @@
           "automatic_export_enabled": "Enable automatic ZEROHERO export (Local Modbus owner only)",
           "ev_before_export_enabled": "Prioritise EV before automatic export",
           "ev_before_export_soc_target_percent": "Withhold export while EV SoC is below (%)",
+          "ev_before_export_soc_buffer_percent": "EV top-up buffer (percentage points)",
           "ev_automatic_control_enabled": "Request automatic EV control (independent of FoxESS ownership)",
           "rehearsal_mode": "Safety Lock (ON = no hardware writes)",
           "aemo_monitor_enabled": "AEMO price monitoring",
@@ -548,7 +550,8 @@
             "ev_protected_baseline_a": "EV keep-alive current outside free window (A; 0 disables keep-alive)",
             "ev_outside_battery_reserve_percent": "Home battery minimum for EV charging outside free window (%)",
             "ev_before_export_enabled": "Prioritise EV before automatic export",
-            "ev_before_export_soc_target_percent": "Withhold export while EV SoC is below (%)"
+            "ev_before_export_soc_target_percent": "Withhold export while EV SoC is below (%)",
+            "ev_before_export_soc_buffer_percent": "EV top-up buffer (percentage points)"
           },
           "data_description": {
             "ev_location_mode": "Auto uses the car's location; Home or Away is a manual override.",
@@ -582,7 +585,8 @@
             "ev_telemetry_max_age_seconds": "Reject outside-window power readings older than this when setting EV current.",
             "ev_telemetry_max_skew_seconds": "Reject power readings whose timestamps differ by more than this.",
             "ev_before_export_enabled": "Before selling, use spare battery energy to charge a home, plugged-in car towards the target below. Normal outside-window limits and house reserves still apply.",
-            "ev_before_export_soc_target_percent": "EV top-up target before selling. Export stays on hold below this level; charging stops at the normal EV limit if it is lower."
+            "ev_before_export_soc_target_percent": "Minimum EV charge before selling. A top-up begun below this level continues to the minimum plus the buffer before export resumes. Normal EV limits still win.",
+            "ev_before_export_soc_buffer_percent": "Extra percentage points after a below-minimum top-up: minimum 40% plus buffer 1 means charge to 41%, then allow export until below 40%. Set 0 for the former single threshold."
           },
           "sections": {
             "solar_soak": {
@@ -850,7 +854,8 @@
             "ev_protected_baseline_a": "EV keep-alive current outside free window (A; 0 disables keep-alive)",
             "ev_outside_battery_reserve_percent": "Home battery minimum for EV charging outside free window (%)",
             "ev_before_export_enabled": "Prioritise EV before automatic export",
-            "ev_before_export_soc_target_percent": "Withhold export while EV SoC is below (%)"
+            "ev_before_export_soc_target_percent": "Withhold export while EV SoC is below (%)",
+            "ev_before_export_soc_buffer_percent": "EV top-up buffer (percentage points)"
           },
           "data_description": {
             "ev_location_mode": "Auto uses the car's location; Home or Away is a manual override.",
@@ -884,7 +889,8 @@
             "ev_telemetry_max_age_seconds": "Reject outside-window power readings older than this when setting EV current.",
             "ev_telemetry_max_skew_seconds": "Reject power readings whose timestamps differ by more than this.",
             "ev_before_export_enabled": "Before selling, use spare battery energy to charge a home, plugged-in car towards the target below. Normal outside-window limits and house reserves still apply.",
-            "ev_before_export_soc_target_percent": "EV top-up target before selling. Export stays on hold below this level; charging stops at the normal EV limit if it is lower."
+            "ev_before_export_soc_target_percent": "Minimum EV charge before selling. A top-up begun below this level continues to the minimum plus the buffer before export resumes. Normal EV limits still win.",
+            "ev_before_export_soc_buffer_percent": "Extra percentage points after a below-minimum top-up: minimum 40% plus buffer 1 means charge to 41%, then allow export until below 40%. Set 0 for the former single threshold."
           },
           "sections": {
             "solar_soak": {

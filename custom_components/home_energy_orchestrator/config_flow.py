@@ -56,6 +56,7 @@ from .const import (
     CONF_EV_AUTOMATIC_CONTROL_ENABLED,
     CONF_EV_BACKFILL_BUFFER_MINUTES,
     CONF_EV_BEFORE_EXPORT_ENABLED,
+    CONF_EV_BEFORE_EXPORT_SOC_BUFFER,
     CONF_EV_BEFORE_EXPORT_SOC_TARGET,
     CONF_EV_CABLE_CONNECTED,
     CONF_EV_CAPACITY_ENTITY,
@@ -192,6 +193,7 @@ from .const import (
     DEFAULT_EV_AUTOMATIC_CONTROL_ENABLED,
     DEFAULT_EV_BACKFILL_BUFFER_MINUTES,
     DEFAULT_EV_BEFORE_EXPORT_ENABLED,
+    DEFAULT_EV_BEFORE_EXPORT_SOC_BUFFER,
     DEFAULT_EV_BEFORE_EXPORT_SOC_TARGET,
     DEFAULT_EV_CAPACITY_FALLBACK_KWH,
     DEFAULT_EV_CAPACITY_SOURCE,
@@ -785,6 +787,10 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         0 <= number(CONF_EV_ARRIVAL_RESERVE_SOC) <= 100,
                     CONF_EV_BEFORE_EXPORT_SOC_TARGET:
                         0 <= number(CONF_EV_BEFORE_EXPORT_SOC_TARGET) <= 100,
+                    CONF_EV_BEFORE_EXPORT_SOC_BUFFER:
+                        0 <= number(CONF_EV_BEFORE_EXPORT_SOC_BUFFER) <= 100
+                        and number(CONF_EV_BEFORE_EXPORT_SOC_BUFFER).is_integer()
+                        and not isinstance(data[CONF_EV_BEFORE_EXPORT_SOC_BUFFER], bool),
                     CONF_EV_DAILY_BACKFILL_ENERGY:
                         number(CONF_EV_DAILY_BACKFILL_ENERGY) >= 0,
                     CONF_EV_OUTSIDE_INVERTER_PERCENT:
@@ -2307,6 +2313,9 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 CONF_EV_BEFORE_EXPORT_SOC_TARGET,
                 DEFAULT_EV_BEFORE_EXPORT_SOC_TARGET,
             ),
+            CONF_EV_BEFORE_EXPORT_SOC_BUFFER: data.get(
+                CONF_EV_BEFORE_EXPORT_SOC_BUFFER, DEFAULT_EV_BEFORE_EXPORT_SOC_BUFFER,
+            ),
             CONF_EV_AUTOMATIC_CONTROL_ENABLED: data.get(
                 CONF_EV_AUTOMATIC_CONTROL_ENABLED,
                 DEFAULT_EV_AUTOMATIC_CONTROL_ENABLED,
@@ -2357,6 +2366,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     def _validate_input(self, data: dict[str, object]) -> dict[str, str]:
         """Reject malformed IDs and unsafe physical limits before saving them."""
         for key, minimum, maximum in (
+            (CONF_EV_BEFORE_EXPORT_SOC_BUFFER, 0.0, 100.0),
             (CONF_EV_SOLAR_SOAK_BATTERY_SOC, 0.0, 100.0),
             (CONF_EV_SOLAR_SOAK_AVERAGE_MINUTES, 1.0, 30.0),
             (CONF_EV_SOLAR_SOAK_ADJUSTMENT_MINUTES, 1.0, 30.0),

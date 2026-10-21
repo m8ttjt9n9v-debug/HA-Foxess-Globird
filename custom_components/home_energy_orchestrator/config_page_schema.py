@@ -12,6 +12,7 @@ from homeassistant.data_entry_flow import section
 from homeassistant.helpers import selector
 
 from .const import (
+    CONF_EV_BEFORE_EXPORT_SOC_BUFFER,
     CONF_EV_CAPACITY_FALLBACK_KWH,
     CONF_EV_SOLAR_SOAK_ADJUSTMENT_MINUTES,
     CONF_EV_SOLAR_SOAK_AVERAGE_MINUTES,
@@ -84,7 +85,8 @@ def _validator(spec: FieldSpec) -> Any:
         else json.loads(spec.selector_config_json)
     )
     if spec.selector_kind == "number":
-        if spec.key in SOLAR_SOAK_SECTION["solar_soak"]:
+        if (spec.key in SOLAR_SOAK_SECTION["solar_soak"]
+                or spec.key == CONF_EV_BEFORE_EXPORT_SOC_BUFFER):
             return selector.NumberSelector(selector.NumberSelectorConfig(**config))
         if spec.key == CONF_EV_CAPACITY_FALLBACK_KWH:
             return CapacityCoerce()

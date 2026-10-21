@@ -14,6 +14,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from . import EnergyConfigEntry
 from .aemo_monitor_controls import AemoThresholdNumber
 from .const import (
+    CONF_EV_BEFORE_EXPORT_SOC_BUFFER,
     CONF_EV_BEFORE_EXPORT_SOC_TARGET,
     CONF_EV_MORNING_SOLAR_RESERVE_SOC,
     CONF_EV_SOLAR_SOAK_ADJUSTMENT_MINUTES,
@@ -26,6 +27,7 @@ from .const import (
 from .coordinator import EnergyCoordinator
 from .entity_catalogue import (
     AEMO_THRESHOLD_DESCRIPTIONS,
+    EV_BEFORE_EXPORT_BUFFER_DESCRIPTION,
     EV_BEFORE_EXPORT_TARGET_DESCRIPTION,
     EV_MORNING_SOLAR_RESERVE_DESCRIPTION,
     EV_SOLAR_SOAK_DESCRIPTIONS,
@@ -52,6 +54,9 @@ async def async_setup_entry(
                 entry.runtime_data,
                 entry,
                 EV_BEFORE_EXPORT_TARGET_DESCRIPTION,
+            ),
+            EvBeforeExportBufferNumber(
+                entry.runtime_data, entry, EV_BEFORE_EXPORT_BUFFER_DESCRIPTION,
             ),
             EvMorningSolarReserveNumber(
                 entry.runtime_data,
@@ -167,6 +172,43 @@ class EvBeforeExportTargetNumber(CoordinatorEntity[EnergyCoordinator], NumberEnt
         controller = self.coordinator.active_controller
         if controller is not None:
             await controller.async_reconcile()
+        self.coordinator.async_update_listeners()
+
+
+class EvBeforeExportBufferNumber(EvBeforeExportTargetNumber):
+    """Dashboard and wizard edit one persisted percentage-point buffer."""
+
+    def __init__(self, coordinator, entry, description):
+        super().__init__(coordinator, entry, description)
+        self.entity_id = 'number.home_energy_ev_before_export_soc_buffer'
+
+    @property
+    def available(self):
+        return True
+
+    @property
+    def native_value(self):
+        return self.coordinator.runtime_config.ev_preferences.before_export_soc_buffer
+
+    async def async_set_native_value(self, value):
+        try:
+            numeric = float(value)
+        except (TypeError, ValueError, OverflowError) as error:
+            raise HomeAssistantError('Use a whole-number buffer from 0 to 100') from error
+        if (isinstance(value, bool) or not isfinite(numeric) or not numeric.is_integer()
+                or not 0 <= numeric <= 100):
+            raise HomeAssistantError('Use a whole-number buffer from 0 to 100')
+        self.hass.config_entries.async_update_entry(
+            self._entry, data={**self._entry.data, CONF_EV_BEFORE_EXPORT_SOC_BUFFER: numeric},
+            options={k:v for k,v in self._entry.options.items()
+                     if k != CONF_EV_BEFORE_EXPORT_SOC_BUFFER},
+        )
+        self.coordinator.update_config_value(CONF_EV_BEFORE_EXPORT_SOC_BUFFER, numeric)
+        self.async_write_ha_state()
+        if self.coordinator.ev_controller is not None:
+            await self.coordinator.ev_controller.async_reconcile()
+        if self.coordinator.active_controller is not None:
+            await self.coordinator.active_controller.async_reconcile()
         self.coordinator.async_update_listeners()
 
 

@@ -37,10 +37,12 @@ def _running(hass, freezer):
 
 
 @pytest.mark.parametrize("publication", ["native_clock", "native_value", "electrical"])
+@pytest.mark.parametrize('buffer_setting', [0, 1])
 async def test_healthy_publication_during_checkpoint_does_not_create_stop_duty(
-    hass, freezer, monkeypatch, publication,
+    hass, freezer, monkeypatch, publication, buffer_setting,
 ):
     rig = _running(hass, freezer)
+    rig.coordinator.update_config_value('ev_before_export_soc_buffer_percent', buffer_setting)
     calls = _services(hass)
     original_save = rig.controller._async_save
     published = False
@@ -88,10 +90,12 @@ async def test_healthy_publication_during_checkpoint_does_not_create_stop_duty(
     "future_native", "future_electrical", "native_mismatch", "expired_native",
     "failed_native", "optimistic_native",
 ])
+@pytest.mark.parametrize('buffer_setting', [0, 1])
 async def test_post_checkpoint_current_evidence_still_rejects_real_faults(
-    hass, freezer, monkeypatch, fault,
+    hass, freezer, monkeypatch, fault, buffer_setting,
 ):
     rig = _running(hass, freezer)
+    rig.coordinator.update_config_value('ev_before_export_soc_buffer_percent', buffer_setting)
     calls = _services(hass)
     original_save = rig.controller._async_save
     published = False

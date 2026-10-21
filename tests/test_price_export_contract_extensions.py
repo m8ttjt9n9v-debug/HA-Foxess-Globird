@@ -12,6 +12,7 @@ from scripts.config_contract import (
     AEMO_CONFIG_KEYS,
     AMBER_CONFIG_KEYS,
     EV_CAPACITY_CONFIG_KEYS,
+    EV_EXPORT_BUFFER_CONFIG_KEYS,
     LOAD_CONFIG_KEYS,
     PRICE_EXPORT_CONFIG_KEYS,
     SOLAR_SOAK_CONFIG_KEYS,
@@ -46,13 +47,21 @@ def test_price_export_adds_only_five_reviewed_configuration_keys() -> None:
     )
     assert current["config_entry_version"] == historical["config_entry_version"] == 6
     assert (
-        set(current["declared_config_keys"]) - set(historical["declared_config_keys"])
-    ) - EV_CAPACITY_CONFIG_KEYS - AMBER_CONFIG_KEYS - LOAD_CONFIG_KEYS - SOLAR_SOAK_CONFIG_KEYS == (
-        price_keys
+        (set(current["declared_config_keys"]) - set(historical["declared_config_keys"]))
+        - EV_CAPACITY_CONFIG_KEYS
+        - AMBER_CONFIG_KEYS
+        - LOAD_CONFIG_KEYS
+        - SOLAR_SOAK_CONFIG_KEYS
+        - EV_EXPORT_BUFFER_CONFIG_KEYS
+        == (price_keys)
     )
     assert (
-        current["page_field_count"] - len(EV_CAPACITY_CONFIG_KEYS)
-        - len(AMBER_CONFIG_KEYS) - len(LOAD_CONFIG_KEYS) - len(SOLAR_SOAK_CONFIG_KEYS)
+        current["page_field_count"]
+        - len(EV_CAPACITY_CONFIG_KEYS)
+        - len(AMBER_CONFIG_KEYS)
+        - len(LOAD_CONFIG_KEYS)
+        - len(SOLAR_SOAK_CONFIG_KEYS)
+        - len(EV_EXPORT_BUFFER_CONFIG_KEYS)
         == historical["page_field_count"] + 5
     )
 
@@ -75,15 +84,19 @@ def test_capacity_configuration_is_a_separate_three_key_addition() -> None:
     price_keys = AEMO_CONFIG_KEYS | PRICE_EXPORT_CONFIG_KEYS
     assert not (EV_CAPACITY_CONFIG_KEYS & price_keys)
     assert ADDITIVE_CONFIG_KEYS == (
-        price_keys | EV_CAPACITY_CONFIG_KEYS | AMBER_CONFIG_KEYS | LOAD_CONFIG_KEYS
+        price_keys
+        | EV_CAPACITY_CONFIG_KEYS
+        | AMBER_CONFIG_KEYS
+        | LOAD_CONFIG_KEYS
         | SOLAR_SOAK_CONFIG_KEYS
+        | EV_EXPORT_BUFFER_CONFIG_KEYS
     )
     assert (
         set(current["declared_config_keys"]) - set(historical["declared_config_keys"])
         == ADDITIVE_CONFIG_KEYS
     )
     assert historical["page_field_count"] == 135
-    assert current["page_field_count"] == 135 + 5 + 3 + 2 + 1 + 3
+    assert current["page_field_count"] == 135 + 5 + 3 + 2 + 1 + 3 + 1
 
 
 def test_price_export_admits_only_monitor_and_one_automatic_request() -> None:
@@ -110,22 +123,31 @@ def test_price_export_admits_only_monitor_and_one_automatic_request() -> None:
         ("number", "ev_solar_soak_average_minutes"),
         ("number", "ev_solar_soak_adjustment_minutes"),
     }
-    assert new - trip_ids - load_ids - solar_soak_ids == {
-        ("sensor", "aemo_market_status"), ("sensor", "aemo_spot_price"),
-        ("switch", "aemo_monitor"), ("select", "aemo_region"),
-        ("number", "aemo_export_threshold"), ("number", "aemo_import_threshold"),
-        ("button", "aemo_clear_import_threshold"), ("switch", "critical_event_sell"),
+    assert new - trip_ids - load_ids - solar_soak_ids - {
+        ("number", "ev_before_export_soc_buffer")
+    } == {
+        ("sensor", "aemo_market_status"),
+        ("sensor", "aemo_spot_price"),
+        ("switch", "aemo_monitor"),
+        ("select", "aemo_region"),
+        ("number", "aemo_export_threshold"),
+        ("number", "aemo_import_threshold"),
+        ("button", "aemo_clear_import_threshold"),
+        ("switch", "critical_event_sell"),
     }
 
 
 def test_legacy_export_journal_keeps_exact_four_field_payload() -> None:
     record = json.loads(
-        (ROOT / "docs/maintainability/export-session-payload-additions-price-export-v1.json")
-        .read_text()
+        (
+            ROOT / "docs/maintainability/export-session-payload-additions-price-export-v1.json"
+        ).read_text()
     )
     payload = {
-        "phase": "active", "requested_power_kw": 4.0,
-        "attempts": 1, "last_command_at": "2026-01-01T01:00:00+00:00",
+        "phase": "active",
+        "requested_power_kw": 4.0,
+        "attempts": 1,
+        "last_command_at": "2026-01-01T01:00:00+00:00",
     }
     restored = ExportSessionState.from_payload(payload)
     assert set(payload) == set(record["retained_fields"])
@@ -137,15 +159,21 @@ def test_legacy_export_journal_keeps_exact_four_field_payload() -> None:
 def test_price_export_uses_existing_journal_with_three_explicit_fields() -> None:
     deadline = datetime(2026, 1, 1, 1, 5, tzinfo=UTC)
     state = ExportSessionState(
-        phase="active", requested_power_kw=4.0, attempts=1,
-        authority_source="price", price_deadline=deadline,
+        phase="active",
+        requested_power_kw=4.0,
+        attempts=1,
+        authority_source="price",
+        price_deadline=deadline,
         price_actuator_entities=(
-            "select.battery_work_mode", "number.force_charge", "number.force_discharge",
+            "select.battery_work_mode",
+            "number.force_charge",
+            "number.force_discharge",
         ),
     )
     record = json.loads(
-        (ROOT / "docs/maintainability/export-session-payload-additions-price-export-v1.json")
-        .read_text()
+        (
+            ROOT / "docs/maintainability/export-session-payload-additions-price-export-v1.json"
+        ).read_text()
     )
     payload = state.to_payload()
     assert set(payload) == set(record["retained_fields"] + record["additional_fields"])
@@ -156,15 +184,19 @@ def test_price_export_uses_existing_journal_with_three_explicit_fields() -> None
 
 def test_grace_adds_only_optional_price_permission_boundary() -> None:
     record = json.loads(
-        (ROOT / "docs/maintainability/export-session-payload-additions-price-grace-v1.json")
-        .read_text()
+        (
+            ROOT / "docs/maintainability/export-session-payload-additions-price-grace-v1.json"
+        ).read_text()
     )
     assert record["additional_optional_fields"] == ["price_permission_end"]
     assert record["ordinary_zerohero_payload_unchanged"]
     assert record["new_store_required"] is False
     end = datetime(2026, 1, 1, 1, 7, 30, tzinfo=UTC)
     state = ExportSessionState(
-        phase="active", requested_power_kw=4, authority_source="price", price_deadline=end,
+        phase="active",
+        requested_power_kw=4,
+        authority_source="price",
+        price_deadline=end,
         price_actuator_entities=("select.mode", "number.charge", "number.discharge"),
         price_permission_end=end,
     )

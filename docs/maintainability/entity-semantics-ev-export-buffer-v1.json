@@ -1,0 +1,17 @@
+{
+  "schema_version": 1, "extension": "ev_export_buffer_v1", "entity_count": 1,
+  "attribute_profiles": {},
+  "entities": [{
+    "key": "ev_before_export_soc_buffer",
+    "definition": "Additional vehicle percentage points after an EV-before-export top-up starts below the saved minimum. Export remains held until minimum plus buffer, bounded by normal EV limits. Completion permits export at the original minimum without immediately re-arming in the band. Zero preserves the former single threshold.",
+    "producer": "EvBeforeExportBufferNumber.native_value projects RuntimeConfiguration.ev_preferences.before_export_soc_buffer; the number and EV Charging policies edit the same persisted configuration entry.",
+    "role": "configuration",
+    "unit_and_sign": "Whole percentage points, 0 through 100 inclusive, default 1. This is an additive SoC buffer, not a power percentage or a higher permanent export minimum.",
+    "time_basis": "Current saved setting. Pending top-up intent survives restart in the existing EV journal, bound to the minimum and commissioned vehicle/mappings. Settings changes use current limits; a changed minimum or binding starts a fresh decision.",
+    "availability": "Editable while HEO is loaded even if telemetry is unavailable. No setting edit substitutes for fresh control evidence.",
+    "state_vocabulary": "Finite whole-number percentage points. Invalid edits are rejected; corrupt runtime settings or recovery state cannot authorise charging or release export.",
+    "audience": "primary", "equivalents": {"foxess": null, "globird": null, "tessie": null},
+    "consumers": ["EV Charging policies", "EV/export dashboard controls", "Existing EV and export arbitration"],
+    "decision": "retain", "review_status": "engineering_draft"
+  }]
+}

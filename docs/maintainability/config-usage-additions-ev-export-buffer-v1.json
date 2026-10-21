@@ -1,0 +1,9 @@
+{
+  "schema_version": 1, "extension": "ev_export_buffer_v1", "access_count": 4,
+  "accesses": [
+    {"constant":"CONF_EV_BEFORE_EXPORT_SOC_BUFFER","key":"ev_before_export_soc_buffer_percent","source":"custom_components/home_energy_orchestrator/config_flow.py","scope":"ConfigFlow._apply_defaults","receiver":"data","access":"get","kind":"raw_mapping","layer":"boundary"},
+    {"constant":"CONF_EV_BEFORE_EXPORT_SOC_BUFFER","key":"ev_before_export_soc_buffer_percent","source":"custom_components/home_energy_orchestrator/config_flow.py","scope":"ConfigFlow._page_limit_error","receiver":"data","access":"subscript_load","kind":"raw_mapping","layer":"boundary"},
+    {"constant":"CONF_EV_BEFORE_EXPORT_SOC_BUFFER","key":"ev_before_export_soc_buffer_percent","source":"custom_components/home_energy_orchestrator/configuration.py","scope":"_before_export_buffer","receiver":"data","access":"get","kind":"raw_mapping","layer":"boundary"},
+    {"constant":"CONF_EV_BEFORE_EXPORT_SOC_BUFFER","key":"ev_before_export_soc_buffer_percent","source":"custom_components/home_energy_orchestrator/number.py","scope":"EvBeforeExportBufferNumber.async_set_native_value","receiver":"self.coordinator","access":"update_config_value","kind":"managed_mutation","layer":"runtime"}
+  ]
+}

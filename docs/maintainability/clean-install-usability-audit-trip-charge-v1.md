@@ -8,8 +8,8 @@ remain separate.
 
 | Measure | Result |
 |---|---:|
-| Catalogue entities | 129 |
-| Portable dashboard references | 123 |
+| Catalogue entities | 130 |
+| Portable dashboard references | 124 |
 | Entity translation keys | 0 |
 | Proposed relabels awaiting owner review | 0 |
 | Owner-approved relabels | 10 |
@@ -18,7 +18,7 @@ remain separate.
 
 | Audience | Total | Referenced | Not referenced |
 |---|---:|---:|---:|
-| primary | 58 | 58 | 0 |
+| primary | 59 | 59 | 0 |
 | advanced | 42 | 37 | 5 |
 | diagnostic | 29 | 28 | 1 |
 
@@ -33,7 +33,7 @@ Any primary omissions require a presentation decision before change.
 
 ## Category evidence
 
-Current categories: `{'none': 106, 'diagnostic': 3, 'config': 20}`.
+Current categories: `{'none': 106, 'diagnostic': 3, 'config': 21}`.
 
 The semantic review marks the following entities as diagnostic audience,
 but Home Assistant does not currently classify them as Diagnostic. This is

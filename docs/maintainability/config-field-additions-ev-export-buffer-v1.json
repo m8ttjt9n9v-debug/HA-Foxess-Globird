@@ -1,0 +1,10 @@
+{
+  "schema_version": 1, "extension": "ev_export_buffer_v1", "field_count": 1,
+  "fields": [{
+    "key": "ev_before_export_soc_buffer_percent", "page": "ev_policies", "order": 33,
+    "required": true, "has_default": true, "default": 1.0,
+    "input_kind": "number", "input_config": {"min": 0.0, "max": 100.0, "step": 1.0, "mode": "box", "unit_of_measurement": "%"},
+    "setup_label": "EV top-up buffer (percentage points)",
+    "reconfigure_label": "EV top-up buffer (percentage points)"
+  }]
+}

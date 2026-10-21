@@ -474,6 +474,12 @@ Existing actual-measurement and fast local-input age bounds remain unchanged.
 
 ## Site commissioning values
 
+EV-before-export hysteresis uses a configurable whole-percentage-point buffer,
+default 1, beside the unchanged minimum. Zero preserves single-threshold
+behavior. A recovery begun below the minimum must survive restart and remain
+shared by both existing controllers until its normal-limit-bounded release
+target. Persistence/source failure cannot invent completion or new power.
+
 Every installation must supply its own values. Never copy a reference site's
 service rating or a target site's multi-phase rating as a default control fact.
 Configure phase count, per-phase or aggregate limits as the model requires,

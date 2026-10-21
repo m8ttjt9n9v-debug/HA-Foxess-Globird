@@ -20,6 +20,8 @@ from homeassistant.util import dt as dt_util
 
 from .aemo_monitor import PRICE_PUBLICATION_GRACE
 from .const import (
+    CONF_EV_TELEMETRY_MAX_AGE_SECONDS,
+    DEFAULT_EV_TELEMETRY_MAX_AGE_SECONDS,
     FOXESS_CONTROL_OWNER_CLOUD,
     FOXESS_CONTROL_OWNER_MODBUS,
 )
@@ -29,6 +31,7 @@ from .ev_observation_adapter import (
     capture_ev_feedback,
     ev_observation_entity_map,
 )
+from .ev_source_feedback import before_export_vehicle_feedback_valid
 from .foxess_adapter import FoxessEntityMap, FoxessServiceAdapter, FoxessWriteBlocked
 from .foxess_observation_adapter import (
     FoxessFeedbackSnapshot,
@@ -49,6 +52,7 @@ from .planner.ev_before_export import (
     EvBeforeExportDecision,
     calculate_protected_keepalive_energy_kwh,
     compose_protected_ev_energy_kwh,
+    decide_ev_before_export,
     protected_keepalive_requires_evidence,
 )
 from .planner.ev_outside_window import protected_baseline_current_a
@@ -500,6 +504,10 @@ class ActiveFoxessController:
             before_export_enabled=runtime.ev_preferences.before_export_enabled,
             ev_soc_percent=getattr(self.coordinator.snapshot, "ev_soc", None),
             before_export_target_percent=runtime.ev_preferences.before_export_soc_target,
+            before_export_recovery_target_percent=(
+                ev.before_export_release_target()
+                if callable(getattr(ev, 'before_export_release_target', None)) else None
+            ),
             now=now,
             start_at=start_at,
             finish_at=finish_at,
@@ -542,6 +550,21 @@ class ActiveFoxessController:
             return True
         feedback = capture_ev_feedback(self.hass, ev_observation_entity_map(runtime))
         maximum_age = runtime.telemetry.max_age_seconds
+        if runtime.ev_preferences.before_export_soc_buffer != 0:
+            ev = getattr(self.coordinator, 'ev_controller', None)
+            release = (ev.before_export_release_target()
+                       if callable(getattr(ev, 'before_export_release_target', None)) else None)
+            if not before_export_vehicle_feedback_valid(
+                self.hass, feedback, now=now,
+                max_age_seconds=runtime.ev_numbers.value(
+                    CONF_EV_TELEMETRY_MAX_AGE_SECONDS, DEFAULT_EV_TELEMETRY_MAX_AGE_SECONDS,
+                ),
+            ) or not decide_ev_before_export(
+                enabled=True, ev_soc_percent=feedback.soc.number,
+                target_soc_percent=runtime.ev_preferences.before_export_soc_target,
+                recovery_target_soc_percent=release,
+            ).export_allowed:
+                return False
         physical = feedback.physical_observation(now=now, max_age_seconds=maximum_age)
         if not physical.available:
             return False

@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.12.58 — Buffered EV-before-export handoff
+
+- Add a configurable top-up buffer, default one percentage point. Keep the
+  original export minimum, but finish a top-up begun below it at minimum plus
+  buffer before releasing export. Zero retains the former single threshold.
+- Share bound, restart-safe recovery intent between the existing EV and export
+  policies. Preserve source, reserve, current, normal SoC and physical handoff
+  checks; free/Full priority remains independent. No concurrent export is added.
+- Expose the same saved buffer in EV Charging policies and a native dashboard
+  number. Preserve all existing entity IDs and deployed dashboards.
+
 ## 0.12.57 — Coherent EV-before-export feedback
 
 - Prevent a real Tessie or electrical update during an awaited checkpoint from

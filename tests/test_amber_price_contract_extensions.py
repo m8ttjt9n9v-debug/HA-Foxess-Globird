@@ -18,6 +18,7 @@ from scripts.config_contract import (
     AMBER_ADDITIONS_PATH,
     AMBER_CONFIG_KEYS,
     EV_CAPACITY_CONFIG_KEYS,
+    EV_EXPORT_BUFFER_CONFIG_KEYS,
     LOAD_CONFIG_KEYS,
     PRICE_EXPORT_CONFIG_KEYS,
     SOLAR_SOAK_CONFIG_KEYS,
@@ -51,18 +52,28 @@ PAYLOAD_PATH = ROOT / "docs/maintainability/aemo-monitor-payload-additions-amber
 
 def test_amber_price_configuration_is_only_its_separate_two_key_extension():
     reviewed = json.loads(AMBER_ADDITIONS_PATH.read_text())
-    assert set(reviewed["additional_config_keys"]) == AMBER_CONFIG_KEYS == {
-        "amber_price_entity", "amber_price_region",
-    }
+    assert (
+        set(reviewed["additional_config_keys"])
+        == AMBER_CONFIG_KEYS
+        == {
+            "amber_price_entity",
+            "amber_price_region",
+        }
+    )
     assert ADDITIVE_CONFIG_KEYS == (
-        AEMO_CONFIG_KEYS | PRICE_EXPORT_CONFIG_KEYS | EV_CAPACITY_CONFIG_KEYS
-        | AMBER_CONFIG_KEYS | LOAD_CONFIG_KEYS | SOLAR_SOAK_CONFIG_KEYS
+        AEMO_CONFIG_KEYS
+        | PRICE_EXPORT_CONFIG_KEYS
+        | EV_CAPACITY_CONFIG_KEYS
+        | AMBER_CONFIG_KEYS
+        | LOAD_CONFIG_KEYS
+        | SOLAR_SOAK_CONFIG_KEYS
+        | EV_EXPORT_BUFFER_CONFIG_KEYS
     )
     retained = build_config_contract()
     current = build_config_contract(include_extensions=True)
     assert retained["config_entry_version"] == current["config_entry_version"] == 6
     assert retained["page_field_count"] == 135
-    assert current["page_field_count"] == 149
+    assert current["page_field_count"] == 150
     assert set(current["declared_config_keys"]) - set(retained["declared_config_keys"]) == (
         ADDITIVE_CONFIG_KEYS
     )
@@ -78,8 +89,9 @@ def test_only_two_explicit_optional_fields_follow_the_retained_price_page():
     assert reviewed["field_count"] == 2
     assert amber_fields == reviewed["fields"]
     assert [field["order"] for field in amber_fields] == [6, 7]
-    assert all(field["required"] is False and field["has_default"] is False
-               for field in amber_fields)
+    assert all(
+        field["required"] is False and field["has_default"] is False for field in amber_fields
+    )
 
 
 def test_amber_configuration_reads_are_exactly_reviewed_boundary_reads():
@@ -108,8 +120,13 @@ def test_provider_attributes_extend_existing_entities_without_new_identity():
         added = additions[old["entity_key"]]
         assert added["default_entity_id"] == old["default_entity_id"]
         assert set(added["custom_attributes"]) == {
-            "source_entity", "source_updated_at", "source_confirmed", "amber_price_entity",
-            "amber_price_region", "amber_source_status", "aemo_fallback_status",
+            "source_entity",
+            "source_updated_at",
+            "source_confirmed",
+            "amber_price_entity",
+            "amber_price_region",
+            "amber_source_status",
+            "aemo_fallback_status",
         }
         assert not set(added["custom_attributes"]) & set(old["custom_attributes"])
         assert actual[old["entity_key"]]["custom_attributes"] == sorted(
@@ -140,11 +157,21 @@ def test_amber_semantics_only_append_descriptions_to_the_retained_market_profile
 async def test_amber_journal_provenance_uses_existing_store_and_no_new_root_authority(hass):
     reviewed = json.loads(PAYLOAD_PATH.read_text())
     result = AemoMonitorResult(
-        "possible_export_event", "NSW1", 3.0, None,
-        price_per_kwh=4, price_per_mwh=4000, interval_start=NOW,
-        interval_end=NOW + timedelta(minutes=5), first_seen_at=NOW, successful_fetch_at=NOW,
-        source_kind="amber", source_url="homeassistant://sensor.selected_price",
-        source_entity="sensor.selected_price", source_updated_at=NOW, source_confirmed=True,
+        "possible_export_event",
+        "NSW1",
+        3.0,
+        None,
+        price_per_kwh=4,
+        price_per_mwh=4000,
+        interval_start=NOW,
+        interval_end=NOW + timedelta(minutes=5),
+        first_seen_at=NOW,
+        successful_fetch_at=NOW,
+        source_kind="amber",
+        source_url="homeassistant://sensor.selected_price",
+        source_entity="sensor.selected_price",
+        source_updated_at=NOW,
+        source_confirmed=True,
     )
     payload = _MonitorState(observations=[result], active_candidate=result).payload()
     assert reviewed["storage_version"] == 1
@@ -157,9 +184,18 @@ async def test_amber_journal_provenance_uses_existing_store_and_no_new_root_auth
     assert set(payload["observations"][0]) == observation_fields | set(
         reviewed["additional_observation_fields"]
     )
-    monitor = AemoMarketMonitor(hass, "amber-contract", AemoMonitorConfiguration(
-        True, "NSW1", 3.0, None, "sensor.selected_price", "NSW1",
-    ))
+    monitor = AemoMarketMonitor(
+        hass,
+        "amber-contract",
+        AemoMonitorConfiguration(
+            True,
+            "NSW1",
+            3.0,
+            None,
+            "sensor.selected_price",
+            "NSW1",
+        ),
+    )
     restored = monitor._decode_state(payload)
     assert restored.observations[0].source_kind == "amber"
     assert restored.observations[0].source_confirmed is True
@@ -171,8 +207,12 @@ async def test_amber_journal_provenance_uses_existing_store_and_no_new_root_auth
     stores = build_persistence_contract()["stores"]
     # The separate paid-cap extension adds one counter, not Amber authority.
     assert len(stores) == 18
-    assert [record for record in stores if record["source"].endswith("aemo_monitor.py")] == [{
-        "attribute": "self._store", "private": True,
-        "source": "custom_components/home_energy_orchestrator/aemo_monitor.py",
-        "storage_key_expression": reviewed["storage_key_expression"], "version": 1,
-    }]
+    assert [record for record in stores if record["source"].endswith("aemo_monitor.py")] == [
+        {
+            "attribute": "self._store",
+            "private": True,
+            "source": "custom_components/home_energy_orchestrator/aemo_monitor.py",
+            "storage_key_expression": reviewed["storage_key_expression"],
+            "version": 1,
+        }
+    ]

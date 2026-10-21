@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from contextvars import ContextVar
-from dataclasses import replace
+from dataclasses import astuple, replace
 from datetime import UTC, datetime, timedelta
 from math import ceil, floor, isfinite
 
@@ -191,6 +191,9 @@ from .planner.ev import (
     reset_smart_state_for_path,
 )
 from .planner.ev_before_export import (
+    EvBeforeExportRecovery,
+    advance_before_export_recovery,
+    before_export_recovery_target,
     calculate_protected_keepalive_energy_kwh,
     compose_protected_ev_energy_kwh,
     decide_ev_before_export,
@@ -321,6 +324,10 @@ class ActiveEvController:
             CONF_EV_SOLAR_SOAK_AVERAGE_MINUTES, DEFAULT_EV_SOLAR_SOAK_AVERAGE_MINUTES,
         )))
         self._solar_soak_active = False
+        self.before_export_recovery = EvBeforeExportRecovery()
+        self._before_export_state_loaded = False
+        self._before_export_storage_error = False
+        self._before_export_checkpoint_in_progress = False
         self._solar_soak_ceiling_a = 0.0
         self.reconciliation = DirectEvseReconciliationState()
         self.smart_recovery = SmartSocketRecoveryState()
@@ -558,6 +565,7 @@ class ActiveEvController:
             )
             _CYCLE_FEEDBACK.set(feedback)
             self.capacity_evidence(now)
+            await self._async_update_before_export_recovery(now)
             trip = getattr(self.coordinator, "trip_charge", None)
             if trip is not None and not await trip.async_reconcile_before_ev_locked(now):
                 self.last_reason = "trip_journal_unavailable"
@@ -605,7 +613,9 @@ class ActiveEvController:
                 now,
                 ev_current if ev_valid else None,
             )
-            if self.last_saved_at is None or now - self.last_saved_at >= timedelta(minutes=1):
+            if not self._before_export_storage_error and (
+                self.last_saved_at is None or now - self.last_saved_at >= timedelta(minutes=1)
+            ):
                 await self._async_save(now)
 
             gate = self.gate_status
@@ -2703,6 +2713,97 @@ class ActiveEvController:
         self.allowance_phase = "outside_free_window"
         return True
 
+    def _before_export_recovery_binding(self):
+        runtime = self.coordinator.runtime_config
+        return (
+            str(runtime.ev_preferences.before_export_soc_target),
+            runtime.ev_policy.charge_path,
+            *(str(value or '') for value in astuple(ev_observation_entity_map(runtime))),
+        )
+
+    def before_export_release_target(self) -> float | None:
+        """Read-only gate shared by EV selection and the existing export writer."""
+        runtime = self.coordinator.runtime_config
+        preference = runtime.ev_preferences
+        if (not preference.before_export_enabled or preference.before_export_soc_buffer == 0
+                or runtime.ev_policy.charge_path == EV_CHARGE_PATH_SMART_SOCKET):
+            return None
+        release = before_export_recovery_target(
+            preference.before_export_soc_target, preference.before_export_soc_buffer,
+            min(self._float(CONF_EV_FREE_WINDOW_CHARGE_LIMIT, DEFAULT_EV_FREE_WINDOW_CHARGE_LIMIT),
+                NON_OVERRIDE_CHARGE_LIMIT_MAX_PERCENT),
+        )
+        if (not isfinite(release) or self._before_export_storage_error
+                or self._before_export_checkpoint_in_progress
+                or not self._before_export_state_loaded or not self.before_export_recovery.valid):
+            return float('nan')
+        if (self.before_export_recovery.pending
+                and self.before_export_recovery.binding == self._before_export_recovery_binding()):
+            return release
+        return None
+
+    async def _async_update_before_export_recovery(self, now):
+        """Checkpoint the hysteresis transition before any positive EV command."""
+        preference = self.coordinator.runtime_config.ev_preferences
+        smart_path = (
+            self.coordinator.runtime_config.ev_policy.charge_path == EV_CHARGE_PATH_SMART_SOCKET
+        )
+        if (not preference.before_export_enabled or preference.before_export_soc_buffer == 0
+                or smart_path):
+            candidate = EvBeforeExportRecovery()
+        else:
+            if not self._before_export_state_loaded:
+                await self._async_restore()
+            runtime = self.coordinator.runtime_config
+            now = dt_util.now().astimezone(now.tzinfo)
+            feedback = capture_ev_feedback(self.hass, ev_observation_entity_map(runtime))
+            maximum_age = self._float(
+                CONF_EV_TELEMETRY_MAX_AGE_SECONDS, DEFAULT_EV_TELEMETRY_MAX_AGE_SECONDS,
+            )
+            if not before_export_vehicle_feedback_valid(
+                self.hass, feedback, now=now, max_age_seconds=maximum_age,
+            ):
+                return
+            token = _CYCLE_FEEDBACK.set(feedback)
+            try:
+                soc = feedback.soc.number
+                if soc is None:
+                    return
+                release = before_export_recovery_target(
+                    preference.before_export_soc_target, preference.before_export_soc_buffer,
+                    min(self._float(
+                        CONF_EV_FREE_WINDOW_CHARGE_LIMIT, DEFAULT_EV_FREE_WINDOW_CHARGE_LIMIT,
+                    ),
+                        NON_OVERRIDE_CHARGE_LIMIT_MAX_PERCENT),
+                )
+                candidate = advance_before_export_recovery(
+                    self.before_export_recovery, binding=self._before_export_recovery_binding(),
+                    soc=soc, minimum=preference.before_export_soc_target, release=release,
+                    connected=self._connected_at_home()[0],
+                )
+            finally:
+                _CYCLE_FEEDBACK.reset(token)
+        if candidate == self.before_export_recovery and not self._before_export_storage_error:
+            return
+        prior = self.before_export_recovery
+        self._before_export_checkpoint_in_progress = True
+        self.before_export_recovery = candidate
+        try:
+            await self._async_save(now)
+        except (Exception, asyncio.CancelledError) as error:
+            self.before_export_recovery = prior
+            self._before_export_storage_error = True
+            if isinstance(error, asyncio.CancelledError):
+                raise
+            # Do not let this extra checkpoint prevent an existing zero-
+            # baseline stop. The invalid release target blocks increases;
+            # reducing reconciliation retains its normal stop journal.
+            _LOGGER.warning("EV-before-export recovery checkpoint failed", exc_info=True)
+            return
+        finally:
+            self._before_export_checkpoint_in_progress = False
+        self._before_export_storage_error = False
+
     def _calculate_before_export_target(
         self, now, observation, *, vehicle_soc, soft_limit, baseline, ceiling, minimum, step,
     ) -> bool | None:
@@ -2720,6 +2821,7 @@ class ActiveEvController:
             enabled=preference.before_export_enabled,
             ev_soc_percent=vehicle_soc,
             target_soc_percent=preference.before_export_soc_target,
+            recovery_target_soc_percent=self.before_export_release_target(),
         )
         if decision.export_allowed:
             return None
@@ -2727,12 +2829,13 @@ class ActiveEvController:
         valid_target = isfinite(preference.before_export_soc_target) and (
             0 <= preference.before_export_soc_target <= 100
         )
-        target = (
-            min(preference.before_export_soc_target, soft_limit) if valid_target else soft_limit
-        )
+        release = self.before_export_release_target()
+        target = min(
+            preference.before_export_soc_target if release is None else release, soft_limit,
+        ) if valid_target else soft_limit
         budget = self._before_export_energy_budget(now)
         result = EvCurrentDecision(baseline, "ev_before_export_energy_unavailable")
-        if not valid_soc or not valid_target:
+        if not valid_soc or not valid_target or not isfinite(target):
             result = EvCurrentDecision(baseline, "ev_before_export_soc_unavailable")
         elif vehicle_soc >= target:
             result = EvCurrentDecision(baseline, "ev_before_export_normal_soc_limit")
@@ -3895,9 +3998,12 @@ class ActiveEvController:
         ))
         try:
             soc = self._mapped_number(runtime.ev_telemetry.soc_entity)
+            release = self.before_export_release_target()
+            target = preference.before_export_soc_target if release is None else release
             if (
                 not preference.before_export_enabled or soc is None
-                or soc >= min(preference.before_export_soc_target, self._float(
+                or not isfinite(target)
+                or soc >= min(target, self._float(
                     CONF_EV_FREE_WINDOW_CHARGE_LIMIT, DEFAULT_EV_FREE_WINDOW_CHARGE_LIMIT,
                 ), NON_OVERRIDE_CHARGE_LIMIT_MAX_PERCENT)
                 or self._free_window(now)[0] or self._charge_to_full_requested()
@@ -3948,6 +4054,7 @@ class ActiveEvController:
             if not decide_ev_before_export(
                 enabled=preference.before_export_enabled, ev_soc_percent=soc,
                 target_soc_percent=preference.before_export_soc_target,
+                recovery_target_soc_percent=self.before_export_release_target(),
             ).export_allowed:
                 return False
             ceiling = min(
@@ -4089,6 +4196,12 @@ class ActiveEvController:
 
     async def _async_restore(self) -> None:
         persisted = await self._repository.async_load()
+        self._before_export_state_loaded = True
+        self.before_export_recovery = (
+            EvBeforeExportRecovery(valid=False)
+            if self._repository.last_restore_status == 'invalid'
+            else persisted.before_export_recovery
+        )
         if self._repository.last_restore_status != "restored":
             return
         now = persisted.restored_at
@@ -4159,6 +4272,7 @@ class ActiveEvController:
             charge_to_full_started_at=self.charge_to_full_started_at,
             outside_control_active=self.outside_control_active,
             smart_recovery=self.smart_recovery,
+            before_export_recovery=self.before_export_recovery,
         )
         await self._repository.async_save(persisted.validated_for_storage())
         self.last_saved_at = saved_at

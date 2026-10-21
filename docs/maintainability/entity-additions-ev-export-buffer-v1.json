@@ -1,0 +1,10 @@
+{
+  "schema_version": 1, "entity_count": 1,
+  "entities": [{
+    "default_entity_id": "number.home_energy_ev_before_export_soc_buffer",
+    "device_class": null, "enabled_by_default": true, "entity_category": "config",
+    "key": "ev_before_export_soc_buffer", "name": "EV Before Export SoC Buffer",
+    "platform": "number", "state_class": null, "translation_key": null,
+    "unique_id_template": "{config_entry_id}_ev_before_export_soc_buffer", "unit": "%"
+  }]
+}

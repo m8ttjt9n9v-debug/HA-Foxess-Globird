@@ -14,6 +14,7 @@ from scripts.config_contract import (
     ADDITIVE_CONFIG_KEYS,
     AMBER_CONFIG_KEYS,
     EV_CAPACITY_CONFIG_KEYS,
+    EV_EXPORT_BUFFER_CONFIG_KEYS,
     LOAD_CONFIG_KEYS,
     SOLAR_SOAK_CONFIG_KEYS,
 )
@@ -43,6 +44,9 @@ LOAD_ADDITIONS_PATH = (
 )
 SOLAR_SOAK_ADDITIONS_PATH = (
     REPOSITORY_ROOT / "docs" / "maintainability" / "config-usage-additions-solar-soak-v1.json"
+)
+EV_EXPORT_BUFFER_ADDITIONS_PATH = (
+    REPOSITORY_ROOT / "docs/maintainability/config-usage-additions-ev-export-buffer-v1.json"
 )
 RECONFIGURE_TRANSITION_PATH = (
     REPOSITORY_ROOT / "docs" / "maintainability" / "config-usage-transition-reconfigure-v1.json"
@@ -208,6 +212,14 @@ def build_config_usage_contract(*, include_extensions: bool = False) -> dict[str
         visitor.visit(tree)
         records.extend(visitor.records)
     if not include_extensions:
+        buffer = json.loads(EV_EXPORT_BUFFER_ADDITIONS_PATH.read_text(encoding="utf-8"))
+        accesses = [item for item in records if item['key'] in EV_EXPORT_BUFFER_CONFIG_KEYS]
+        if buffer.get('access_count') != len(buffer['accesses']) or sorted(
+            json.dumps(item, sort_keys=True) for item in accesses
+        ) != sorted(json.dumps(item, sort_keys=True) for item in buffer['accesses']):
+            raise ValueError('reviewed EV export buffer configuration usage changed')
+        for reviewed in buffer['accesses']:
+            records.remove(reviewed)
         solar_soak = json.loads(SOLAR_SOAK_ADDITIONS_PATH.read_text(encoding="utf-8"))
         soak_accesses = [item for item in records if item["key"] in SOLAR_SOAK_CONFIG_KEYS]
         if solar_soak.get("access_count") != len(solar_soak["accesses"]) or sorted(

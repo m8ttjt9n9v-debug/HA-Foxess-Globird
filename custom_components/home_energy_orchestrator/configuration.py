@@ -49,6 +49,7 @@ from .const import (
     CONF_EV_AT_HOME,
     CONF_EV_AUTOMATIC_CONTROL_ENABLED,
     CONF_EV_BEFORE_EXPORT_ENABLED,
+    CONF_EV_BEFORE_EXPORT_SOC_BUFFER,
     CONF_EV_BEFORE_EXPORT_SOC_TARGET,
     CONF_EV_CABLE_CONNECTED,
     CONF_EV_CAPACITY_ENTITY,
@@ -150,6 +151,7 @@ from .const import (
     DEFAULT_EV_ALLOWANCE_GUARD_ENABLED,
     DEFAULT_EV_AUTOMATIC_CONTROL_ENABLED,
     DEFAULT_EV_BEFORE_EXPORT_ENABLED,
+    DEFAULT_EV_BEFORE_EXPORT_SOC_BUFFER,
     DEFAULT_EV_BEFORE_EXPORT_SOC_TARGET,
     DEFAULT_EV_CAPACITY_SOURCE,
     DEFAULT_EV_CHARGE_PATH,
@@ -224,6 +226,18 @@ def _optional_number(
         return float(data.get(key, default))
     except (TypeError, ValueError):
         return None
+
+
+def _before_export_buffer(data: Mapping[str, object]) -> float:
+    raw = data.get(CONF_EV_BEFORE_EXPORT_SOC_BUFFER, DEFAULT_EV_BEFORE_EXPORT_SOC_BUFFER)
+    try:
+        value = float(raw)
+    except (TypeError, ValueError, OverflowError):
+        return float('nan')
+    if (isinstance(raw, bool) or not isfinite(value) or not value.is_integer()
+            or not 0 <= value <= 100):
+        return float('nan')
+    return value
 
 
 def _required_number(data: Mapping[str, object], key: str) -> float | None:
@@ -371,6 +385,7 @@ class EvPreferenceSettings:
 
     before_export_enabled: bool
     before_export_soc_target: float
+    before_export_soc_buffer: float
     charge_to_full_configured: bool
     charge_to_full_enabled: bool
     legacy_charge_to_full_entity: str | None
@@ -1060,6 +1075,7 @@ class RuntimeConfiguration:
                     CONF_EV_BEFORE_EXPORT_SOC_TARGET,
                     DEFAULT_EV_BEFORE_EXPORT_SOC_TARGET,
                 ),
+                before_export_soc_buffer=_before_export_buffer(data),
                 charge_to_full_configured=(
                     CONF_EV_CHARGE_TO_FULL_ENABLED in data
                 ),

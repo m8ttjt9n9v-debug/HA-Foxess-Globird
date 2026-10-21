@@ -13,6 +13,38 @@ from .ev import EvCurrentDecision
 from .ev_outside_window import PreFreeCurrentInputs, plan_pre_free_current
 
 
+@dataclass(frozen=True, slots=True)
+class EvBeforeExportRecovery:
+    """A bound top-up obligation, not new energy or device authority."""
+
+    pending: bool = False
+    binding: tuple[str, ...] = ()
+    valid: bool = True
+
+
+def before_export_recovery_target(minimum: float, buffer: float, soft_limit: float) -> float:
+    """Normal SoC limits cap buffering, without lowering the export minimum."""
+    if not all(math.isfinite(v) and 0 <= v <= 100 for v in (minimum, buffer, soft_limit)):
+        return math.nan
+    return min(minimum + buffer, 100, max(minimum, soft_limit))
+
+
+def advance_before_export_recovery(
+    state: EvBeforeExportRecovery, *, binding: tuple[str, ...], soc: float,
+    minimum: float, release: float, connected: bool,
+) -> EvBeforeExportRecovery:
+    """Arm below minimum; release at the buffered boundary, retaining outages."""
+    if not math.isfinite(soc) or not 0 <= soc <= 100 or not math.isfinite(release):
+        return state
+    if soc >= release:
+        return EvBeforeExportRecovery(binding=binding)
+    if soc < minimum and connected:
+        return EvBeforeExportRecovery(True, binding)
+    if not state.valid:
+        return state  # Corruption is not proof of completion within the band.
+    return state if state.binding == binding else EvBeforeExportRecovery(binding=binding)
+
+
 def plan_ev_before_export_current(
     *, sellable_kwh: float, vehicle_room_kwh: float, baseline_a: float,
     current_ceiling_a: float, charger_minimum_a: float, voltage_v: float,
@@ -105,6 +137,7 @@ def decide_ev_before_export(
     enabled: bool,
     ev_soc_percent: float | None,
     target_soc_percent: float,
+    recovery_target_soc_percent: float | None = None,
 ) -> EvBeforeExportDecision:
     """Withhold export below the configured EV target when explicitly enabled."""
     if not enabled:
@@ -115,6 +148,13 @@ def decide_ev_before_export(
         return EvBeforeExportDecision(False, "ev_soc_unavailable")
     if not 0 <= ev_soc_percent <= 100:
         return EvBeforeExportDecision(False, "ev_soc_invalid")
+    if recovery_target_soc_percent is not None and (
+        not math.isfinite(recovery_target_soc_percent)
+        or not target_soc_percent <= recovery_target_soc_percent <= 100
+    ):
+        return EvBeforeExportDecision(False, "target_invalid")
     if ev_soc_percent < target_soc_percent:
         return EvBeforeExportDecision(False, "ev_below_target")
+    if recovery_target_soc_percent is not None and ev_soc_percent < recovery_target_soc_percent:
+        return EvBeforeExportDecision(False, "ev_buffer_topup")
     return EvBeforeExportDecision(True, "target_met")

@@ -47,6 +47,7 @@ def _case(hass, now, **changes):
     config = dict(
         ev_before_export_enabled=True,
         ev_before_export_soc_target_percent=30,
+        ev_before_export_soc_buffer_percent=0,  # Characterise the pre-buffer policy.
         ev_pre_free_backfill_enabled=False,
         ev_pre_free_backfill_timing="conservative",
         ev_morning_solar_enabled=False,
