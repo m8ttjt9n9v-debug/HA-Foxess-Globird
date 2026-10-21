@@ -382,13 +382,28 @@ opposite flow, or two nonzero magnitudes cannot use this timing fallback.
 Ready by, pre-free backfill and measured-solar stages use this same boundary;
 none gets a separate relaxed freshness rule.
 
-Standalone measured-solar EV current changes are held until the candidate
+Enabled post-free direct-EVSE spill additionally requires qualified positive
+canonical solar and current protected Sellable, Local Modbus/master authority,
+idle battery sessions and Self Use. It buffers a five-minute reconstructed mean
+only while BOTH qualified current and snapshot house SoC exceed90% and any
+higher outside reserve. Round up once, then clip down within all existing
+limits, including the total outside-inverter percentage. A tiny energy budget
+also bounds the next30s interval. The regular full-battery threshold remains
+relevant to legacy/pre-free and smart-socket spill, not this afternoon buffer.
+No setting is silently edited. Source-bound mean/cadence history is optional in
+the existing store; invalid, expired or rebound history is discarded. Startup
+partial history is not presented as five full minutes. Ordinary updates use a
+five-minute cadence; authority loss or reduced safe ceilings curtail on the
+existing30s check, and positive services independently recheck live authority.
+
+Legacy/morning measured-solar EV current changes are held until the candidate
 remains stable for 10 minutes. This rate limit persists across restart and
 prevents ordinary cloud-edge variation from producing repeated adjacent-current
 Tessie writes. Combined pre-free instead adopts its latest safe target on a
 ten-minute adjustment cadence: its moving battery-energy/time contribution
 must not continually reset an unchanged-candidate timer and strand energy.
-The standalone stable-target hysteresis remains unchanged.
+Their stable-target hysteresis remains unchanged; buffered afternoon direct
+capture does not require an unchanged amp candidate.
 Verified grid import and any failed eligibility evidence curtail immediately.
 Combined pre-free also curtails immediately for a reduced protected battery
 component/budget or service headroom, rather than hiding lost authority behind

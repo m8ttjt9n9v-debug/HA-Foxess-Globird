@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from math import floor, isfinite
+from math import ceil, floor, isfinite
 
 from .ev import (
     NON_OVERRIDE_CHARGE_LIMIT_MAX_PERCENT,
@@ -119,8 +119,9 @@ def rate_limit_measured_solar_current(
     current_step_a: float,
     immediate_curtailment: bool,
     require_stable_target: bool = True,
+    adjustment_interval: timedelta = MEASURED_SOLAR_ADJUSTMENT_INTERVAL,
 ) -> MeasuredSolarAdjustment:
-    """Accept stable solar targets no more frequently than every 10 minutes.
+    """Accept stable solar targets on the caller's bounded adjustment cadence.
 
     A target must remain unchanged for the interval before an ordinary change is
     accepted.  That pending interval is the whole-amp hysteresis: a cloud edge
@@ -130,7 +131,8 @@ def rate_limit_measured_solar_current(
     return to the protected baseline. Combined pre-free pacing instead takes
     the latest target each interval: the moving energy/deadline must not
     restart the pending clock indefinitely. Independent solar keeps its
-    original unchanged-target hysteresis by default.
+    original ten-minute unchanged-target hysteresis by default. The afternoon
+    buffered extension supplies five minutes and no stable-candidate wait.
     """
     values = (requested_current_a, charger_minimum_a, current_step_a)
     if (
@@ -138,6 +140,7 @@ def rate_limit_measured_solar_current(
         or now.tzinfo is None
         or not all(isfinite(value) and value >= 0 for value in values)
         or current_step_a <= 0
+        or adjustment_interval <= timedelta(0)
     ):
         raise ValueError("measured solar adjustment inputs are invalid")
     if requested_current_a < charger_minimum_a:
@@ -175,11 +178,11 @@ def rate_limit_measured_solar_current(
     )
     if (
         now.astimezone(UTC) - state.changed_at.astimezone(UTC)
-        >= MEASURED_SOLAR_ADJUSTMENT_INTERVAL
+        >= adjustment_interval
         and (
             not require_stable_target
             or now.astimezone(UTC) - pending_since.astimezone(UTC)
-            >= MEASURED_SOLAR_ADJUSTMENT_INTERVAL
+            >= adjustment_interval
         )
     ):
         accepted = MeasuredSolarAdjustmentState(
@@ -510,14 +513,56 @@ def evaluate_solar_spill_telemetry(
     )
 
 
-def plan_solar_spill_current(inputs: SolarSpillInputs) -> SolarSpillDecision:
-    """Reconstruct spill and floor it to a whole supported current step.
+def plan_solar_spill_current(
+    inputs: SolarSpillInputs, *, buffered: bool = False,
+    mean_surplus_kw: float | None = None, sellable_energy_kwh: float | None = None,
+    solar_generation_kw: float | None = None,
+) -> SolarSpillDecision:
+    """Retain source arithmetic; separately qualify buffered afternoon capture.
 
     The source equation is EV power + signed grid flow (export positive,
     import negative) + signed battery charge. It removes battery discharge,
     import and adds energy still being absorbed by a full battery, preventing
-    the target from collapsing when EV charging begins.
+    the target from collapsing when EV charging begins. Legacy callers floor
+    that instantaneous value. Buffered callers supply a qualified five-minute
+    mean, current Sellable and gross solar, round upward once, then down-bound
+    by the supported physical/service/inverter and live-energy ceilings.
     """
+    if buffered:
+        from .ev_solar_soak import SOLAR_SOAK_FLOOR_PERCENT
+
+        _validate_solar_spill(inputs)
+        if not inputs.telemetry_valid:
+            return SolarSpillDecision(0, 0, "telemetry_unavailable")
+        if inputs.battery_soc_percent <= SOLAR_SOAK_FLOOR_PERCENT:
+            return SolarSpillDecision(0, 0, "battery_buffer_floor")
+        for value, reason in (
+            (sellable_energy_kwh, "sellable_energy_unavailable"),
+            (solar_generation_kw, "solar_generation_unavailable"),
+            (mean_surplus_kw, "solar_mean_unavailable"),
+        ):
+            if (isinstance(value, bool) or not isinstance(value, (float, int))
+                    or not isfinite(value) or value <= 0):
+                return SolarSpillDecision(0, 0, reason)
+        if not inputs.connected or inputs.vehicle_soc_percent >= inputs.vehicle_soft_limit_percent:
+            return SolarSpillDecision(0, mean_surplus_kw, "vehicle_not_eligible")
+        if inputs.in_boosted_export_window:
+            return SolarSpillDecision(0, mean_surplus_kw, "boosted_export_window")
+        raw = mean_surplus_kw * 1000 / (inputs.voltage_v * inputs.phase_count)
+        stepped = ceil(round(raw / inputs.current_step_a, 9)) * inputs.current_step_a
+        # The live budget must afford even a full-battery-funded control tick.
+        budget_ceiling = sellable_energy_kwh * 1000 / (
+            inputs.voltage_v * inputs.phase_count * EV_CONTROL_INTERVAL.total_seconds() / 3600
+        )
+        ceiling = floor(round(
+            min(inputs.current_ceiling_a, budget_ceiling) / inputs.current_step_a, 9,
+        )) * inputs.current_step_a
+        target = min(stepped, ceiling)
+        return SolarSpillDecision(
+            round(target, 3) if target >= inputs.charger_minimum_a else 0,
+            mean_surplus_kw,
+            "solar_spill" if target >= inputs.charger_minimum_a else "below_charger_minimum",
+        )
     return _plan_measured_solar_current(
         inputs,
         threshold_phase="battery_not_full",

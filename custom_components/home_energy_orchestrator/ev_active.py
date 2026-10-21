@@ -271,6 +271,7 @@ from .planner.ev_persistence import (
     EvPersistenceState,
 )
 from .planner.ev_power_constraints import inverter_backed_current_ceiling
+from .planner.ev_solar_soak import SOLAR_SOAK_INTERVAL, SolarSoakAverage
 from .planner.learning import DemandHistory
 from .planner.ledger import calculate_ledger
 from .planner.timed_average import TimedAverageWindow
@@ -310,6 +311,9 @@ class ActiveEvController:
         )
         self.grid_average = TimedAverageWindow(timedelta(minutes=3))
         self.ev_average = TimedAverageWindow(timedelta(minutes=3))
+        self.solar_soak_average = SolarSoakAverage()
+        self._solar_soak_active = False
+        self._solar_soak_ceiling_a = 0.0
         self.reconciliation = DirectEvseReconciliationState()
         self.smart_recovery = SmartSocketRecoveryState()
         self.smart_stage_target_a: float | None = None
@@ -598,6 +602,7 @@ class ActiveEvController:
 
             gate = self.gate_status
             if gate not in {"ready", "safety_locked"}:
+                self._reset_solar_soak()
                 self.last_reason = gate
                 return
             policy = self.coordinator.runtime_config.ev_policy
@@ -618,6 +623,7 @@ class ActiveEvController:
                 # Preserve the pilot reset even when telemetry is unavailable.
                 await self._async_save(now)
             if self.multiphase_feedback_unavailable:
+                self._reset_solar_soak()
                 await self._async_reconcile_missing_multiphase_current(
                     now, observation, gate=gate, smart_path=smart_path
                 )
@@ -646,6 +652,7 @@ class ActiveEvController:
                 )
                 return
             if not connected:
+                self._reset_solar_soak()
                 if (self.daily_backfill_stop_pending or self.outside_stop_requested) and not (
                     feedback.physical_observation(
                         now=now, max_age_seconds=self._float(
@@ -697,6 +704,7 @@ class ActiveEvController:
                 self.last_reason = self.eligibility_route.reason
                 return
             if observation is None:
+                self._reset_solar_soak()
                 if self._ready_by_backfill_selected() and self.daily_backfill_active:
                     self._apply_daily_backfill_cycle_state(
                         end_daily_backfill_session(self._daily_backfill_cycle_state())
@@ -911,7 +919,17 @@ class ActiveEvController:
                     or self.decision_phase.startswith("ev_before_export_")
                 )
             )
-            if not startup_telemetry_hold and (cadence.should_decide or before_export_recheck):
+            solar_recheck = self._solar_soak_active or bool(
+                not smart_path and not in_window and not charge_to_full_requested
+                and not self.daily_backfill_active and not self.pre_free_session.active
+                and policy.solar_spill_enabled and not self._pre_free_window(now)[1]
+            )
+            if in_window or charge_to_full_requested or smart_path:
+                self._reset_solar_soak()
+                solar_recheck = False
+            if not startup_telemetry_hold and (
+                cadence.should_decide or before_export_recheck or solar_recheck
+            ):
                 try:
                     calculated = (
                         self._calculate_target(
@@ -2052,6 +2070,7 @@ class ActiveEvController:
     def _calculate_outside_target(self, now: datetime, observation: DirectEvseObservation) -> bool:
         """Port solar spill and latest-start backfill without touching FoxESS."""
         self.outside_stop_requested = False
+        self._solar_soak_active = False
         snapshot = self.coordinator.snapshot
         current_minimum = self._physical_charging_minimum_a(observation)
         current_step = observation.current_step_a
@@ -2128,6 +2147,7 @@ class ActiveEvController:
             self.outside_control_active = abort.outside_control_active
             self.outside_stage_candidates = abort.candidates
             self.measured_solar_adjustment = MeasuredSolarAdjustmentState()
+            self._reset_solar_soak()
             if abort.last_reason is not None:
                 self.last_reason = abort.last_reason
             return abort.continue_reconciliation
@@ -2138,6 +2158,7 @@ class ActiveEvController:
             step=current_step,
         ) if not charge_to_full and not self.daily_backfill_active else None
         if before_export is not None:
+            self._reset_solar_soak()
             return before_export
         if vehicle_soc is None:
             return self._reject_outside_candidate("ev_soc_unavailable")
@@ -2196,9 +2217,13 @@ class ActiveEvController:
                     snapshot.battery_soc,
                     vehicle_soc,
                     soft_limit,
-                    ceiling,
+                    (min(pre_free_ceiling, observation.current_maximum_a or 0)
+                     if not in_pre_free
+                     and self.coordinator.runtime_config.ev_policy.charge_path == "direct_evse"
+                     else ceiling),
                     current_minimum,
                     current_step,
+                    buffered_soak=not in_pre_free,
                 )
         if (
             solar_configured
@@ -2493,6 +2518,8 @@ class ActiveEvController:
             "morning_solar",
         }:
             self.measured_solar_adjustment = MeasuredSolarAdjustmentState()
+        if self.outside_stage_selection.stage != "solar_spill":
+            self._reset_solar_soak()
         ownership = reconcile_outside_ownership(
             self._daily_backfill_cycle_state(),
             charge_to_full=charge_to_full,
@@ -2894,6 +2921,13 @@ class ActiveEvController:
                 snapshot is not None
                 and snapshot.grid_power_kw is not None
                 and snapshot.grid_power_kw > 0
+            ) or bool(
+                self._solar_soak_active and self.measured_solar_adjustment.target_current_a
+                and self._solar_soak_ceiling_a < self.measured_solar_adjustment.target_current_a
+            ),
+            require_stable_target=not self._solar_soak_active,
+            adjustment_interval=(
+                SOLAR_SOAK_INTERVAL if self._solar_soak_active else timedelta(minutes=10)
             ),
         )
         self.measured_solar_adjustment = adjustment.state
@@ -2912,6 +2946,7 @@ class ActiveEvController:
     def _reject_outside_candidate(self, reason: str) -> bool:
         """Record an outside-window input rejection without changing control."""
         self.last_reason = reason
+        self._reset_solar_soak()
         self.measured_solar_adjustment = MeasuredSolarAdjustmentState()
         if self._ready_by_backfill_selected():
             self.daily_backfill_hold_reason = reason
@@ -3418,6 +3453,7 @@ class ActiveEvController:
         *,
         battery_threshold_percent: float | None = None,
         morning: bool = False,
+        buffered_soak: bool = False,
     ) -> SolarSpillDecision:
         evaluation = self._measured_ev_telemetry(now)
         voltage = self._float(CONF_EV_VOLTAGE, DEFAULT_EV_VOLTAGE)
@@ -3447,11 +3483,88 @@ class ActiveEvController:
             charger_minimum_a=current_minimum,
             current_ceiling_a=ceiling,
         )
+        if (buffered_soak and not morning
+                and self.coordinator.runtime_config.ev_policy.charge_path == "direct_evse"):
+            authority = self._solar_soak_authority(now)
+            if authority is None or not evaluation.telemetry_valid:
+                self._reset_solar_soak()
+                return SolarSpillDecision(0, 0, "solar_soak_unavailable")
+            binding = self._solar_soak_binding()
+            gap = self.coordinator.runtime_config.telemetry.max_age_seconds
+            if self.solar_soak_average.needs_reset(now, binding=binding, max_gap_seconds=gap):
+                if self.measured_solar_adjustment.phase == "solar_spill":
+                    self.measured_solar_adjustment = MeasuredSolarAdjustmentState()
+            average = self.solar_soak_average.observe(
+                now, max(evaluation.ev_power_kw + evaluation.net_grid_export_kw
+                         + evaluation.battery_charge_kw, 0),
+                binding=binding, max_gap_seconds=gap,
+            )
+            self._solar_soak_ceiling_a = floor(round(min(
+                ceiling, authority[0] * 1000 / (voltage * phases / 120),
+            ) / current_step, 9)) * current_step
+            decision = plan_solar_spill_current(
+                inputs, buffered=True, mean_surplus_kw=average,
+                sellable_energy_kwh=authority[0], solar_generation_kw=authority[1],
+            )
+            self._solar_soak_active = decision.phase == "solar_spill"
+            if not self._solar_soak_active:
+                self._reset_solar_soak()
+            return decision
+        if not morning and self.solar_soak_average.window.samples:
+            # Legacy/pre-free/smart spill must not inherit a buffered mean's
+            # accepted current merely because both use the same stage name.
+            self._reset_solar_soak()
         return (
             plan_morning_solar_current(inputs)
             if morning
             else plan_solar_spill_current(inputs)
         )
+
+    def _reset_solar_soak(self):
+        self.solar_soak_average.clear()
+        self._solar_soak_active = False
+        if self.measured_solar_adjustment.phase == "solar_spill":
+            self.measured_solar_adjustment = MeasuredSolarAdjustmentState()
+
+    def _solar_soak_binding(self):
+        runtime = self.coordinator.runtime_config
+        return [
+            runtime.power_sources.grid_entity, runtime.electrical.effective_grid_power_direction,
+            runtime.power_sources.battery_entity, runtime.battery.charge_power_entity,
+            runtime.battery.discharge_power_entity,
+            runtime.electrical.battery_power_positive_direction,
+            runtime.power_sources.solar_entity,
+            runtime.electrical.effective_solar_generation_direction,
+            runtime.ev_telemetry.actual_current_entity, runtime.ev_connection.voltage_v,
+            runtime.ev_connection.phase_count, runtime.ev_telemetry.soc_entity,
+        ]
+
+    def _solar_soak_authority(self, now):
+        runtime = self.coordinator.runtime_config
+        snapshot, telemetry = self.coordinator.snapshot, self.coordinator.telemetry
+        solar = None if telemetry is None else telemetry.solar_power
+        feedback = _CYCLE_FEEDBACK.get()
+        live_soc = None if feedback is None else feedback.battery_soc.number
+        floor_percent = max(90, self._float(
+            CONF_EV_OUTSIDE_BATTERY_RESERVE_PERCENT, DEFAULT_EV_OUTSIDE_BATTERY_RESERVE_PERCENT,
+        ))
+        if (
+            runtime.ev_policy.charge_path != "direct_evse"
+            or not runtime.ev_policy.solar_spill_enabled
+            or not runtime.site.solar_configured or self._free_window(now)[0]
+            or self._pre_free_window(now)[1] or self._boosted_window_active(now)
+            or self._charge_to_full_requested() or snapshot is None
+            or snapshot.battery_soc is None or not isfinite(snapshot.battery_soc)
+            or not floor_percent < snapshot.battery_soc <= 100
+            or live_soc is None or not floor_percent < live_soc <= 100
+            or solar is None or not solar.valid or not solar.fresh or solar.value is None
+            or not isfinite(solar.value) or solar.value <= 0 or solar.updated_at is None
+            or not 0 <= (now - solar.updated_at).total_seconds()
+            <= runtime.telemetry.max_age_seconds
+        ):
+            return None
+        budget = self._before_export_energy_budget(now)
+        return (budget, solar.value) if budget is not None and budget > 0 else None
 
     def _pre_free_window(self, now: datetime) -> tuple[datetime, bool, float]:
         free_time = self.coordinator._configured_time(  # noqa: SLF001
@@ -3610,6 +3723,8 @@ class ActiveEvController:
         """Keep reducing reconciliation open; recheck a positive top-up live."""
         if self.gate_status != "ready":
             return False
+        if self._solar_soak_active:
+            return self._solar_soak_write_authorized()
         if self.decision_phase != "ev_before_export_charging":
             return True
         now = dt_util.now()
@@ -3648,6 +3763,47 @@ class ActiveEvController:
             return self.target_current_a is not None and self.target_current_a <= ceiling and (
                 budget >= required
             )
+        finally:
+            _CYCLE_FEEDBACK.reset(token)
+
+    def _solar_soak_write_authorized(self):
+        now = dt_util.now()
+        runtime = self.coordinator.runtime_config
+        token = _CYCLE_FEEDBACK.set(capture_ev_feedback(
+            self.hass, ev_observation_entity_map(runtime),
+        ))
+        try:
+            authority = self._solar_soak_authority(now)
+            soc = self._mapped_number(runtime.ev_telemetry.soc_entity)
+            observation = self._observation()
+            if (authority is None or observation is None
+                    or observation.current_step_a is None or soc is None
+                    or not self._connected_at_home()[0]):
+                return False
+            if soc >= min(self._float(
+                CONF_EV_FREE_WINDOW_CHARGE_LIMIT, DEFAULT_EV_FREE_WINDOW_CHARGE_LIMIT,
+            ), NON_OVERRIDE_CHARGE_LIMIT_MAX_PERCENT):
+                return False
+            preference = runtime.ev_preferences
+            if not decide_ev_before_export(
+                enabled=preference.before_export_enabled, ev_soc_percent=soc,
+                target_soc_percent=preference.before_export_soc_target,
+            ).export_allowed:
+                return False
+            ceiling = min(
+                self._path_ceiling_a(), observation.current_maximum_a or 0,
+                self._outside_service_ceiling_a(
+                    self._path_ceiling_a(), current_step=observation.current_step_a,
+                ),
+                self._outside_inverter_ceiling_a(
+                    self._path_ceiling_a(), current_step=observation.current_step_a,
+                ),
+            )
+            target = self.target_current_a
+            required = (target or 0) * self._float(CONF_EV_VOLTAGE, DEFAULT_EV_VOLTAGE) * (
+                self._float(CONF_EV_PHASE_COUNT, DEFAULT_EV_PHASE_COUNT)
+            ) / 1000 / 120
+            return target is not None and 0 < target <= ceiling and authority[0] >= required
         finally:
             _CYCLE_FEEDBACK.reset(token)
 
@@ -3778,6 +3934,10 @@ class ActiveEvController:
         now = persisted.restored_at
         self.grid_average.restore(persisted.grid_average_payload, now)
         self.ev_average.restore(persisted.ev_average_payload, now)
+        restored_soak = self.solar_soak_average.restore(
+            persisted.solar_soak_average_payload, now, binding=self._solar_soak_binding(),
+            max_gap_seconds=self.coordinator.runtime_config.telemetry.max_age_seconds,
+        )
         self.driving_history = persisted.driving_history
         self.driving_snapshot = persisted.driving_snapshot
         self.daily_driving_energy_kwh = persisted.daily_driving_energy_kwh
@@ -3786,6 +3946,11 @@ class ActiveEvController:
         self.target_limit_percent = persisted.reconciliation.target_limit_percent
         self.pre_free_session = persisted.pre_free_session
         self.measured_solar_adjustment = persisted.measured_solar_adjustment
+        if self.measured_solar_adjustment.phase == "solar_spill":
+            if restored_soak:
+                self._solar_soak_active = True
+            else:
+                self.measured_solar_adjustment = MeasuredSolarAdjustmentState()
         daily = persisted.daily_backfill
         self.daily_backfill_cycle_ready_at = daily.cycle_ready_at
         self.daily_backfill_delivered_kwh = daily.delivered_kwh
@@ -3808,6 +3973,7 @@ class ActiveEvController:
             restored_at=saved_at,
             grid_average_payload=self.grid_average.to_payload(),
             ev_average_payload=self.ev_average.to_payload(),
+            solar_soak_average_payload=self.solar_soak_average.to_payload(),
             driving_history=self.driving_history,
             driving_snapshot=self.driving_snapshot,
             daily_driving_energy_kwh=self.daily_driving_energy_kwh,

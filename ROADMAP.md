@@ -519,6 +519,19 @@ request charging.
   suite must no longer be presented as sufficient evidence for lifecycle
   safety.
 
+## Buffered afternoon solar capture
+
+- [x] v0.12.55: extend post-free direct solar spill with a time-weighted
+  five-minute mean, upward supported-amp rounding and down-stepped physical/
+  service/outside-inverter limits. Use the existing Sellable pool to buffer
+  clouds above90% and any higher outside reserve, with qualified positive
+  gross solar and no higher owner. Preserve immediate safety reductions,
+  normal EV limits and cleanup; reuse the30s loop and shared writer. Optional
+  source-bound history/cadence survives only recent qualified restart. This
+  explicit afternoon extension does not replace golden pilot arithmetic or
+  morning/combined/pre-free, smart-socket, Full/Trip/free policy. Automated
+  scenario proof is separate from controlled pilot/live acceptance.
+
 ## High-priority feature — measured morning solar EV capture
 
 - [x] Add a distinct, default-off Morning Solar EV Charging dashboard switch

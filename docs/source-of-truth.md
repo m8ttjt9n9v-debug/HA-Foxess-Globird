@@ -513,6 +513,30 @@ layers around the proven algorithm, not replacement algorithms.
   solar. Pre-free battery backfill consumes no more than the local protected
   export plan and the vehicle's wall-energy room. Its no-solar path retains
   the latest-start calculation and persisted active phase/frozen start.
+- From v0.12.55, enabled **post-free direct-EVSE** solar spill uses a
+  time-weighted five-minute mean of that same reconstruction, rounded UP once
+  to a supported current step and then capped DOWN by physical, service and
+  the saved outside-window inverter percentage. Qualified positive gross solar
+  and current protected Sellable are mandatory. Both live and snapshot house
+  SoC must be strictly above90% (or a higher outside reserve); the battery may
+  buffer clouds/rounding instead of remaining at the old full-battery threshold.
+  No solar/Sellable, observed90%, invalid evidence, normal EV limit or a higher
+  owner withdraws extra soak through existing baseline/stop. A tiny budget also
+  bounds current to energy affordable through the next30s control check,
+  conservatively treating it as entirely battery-funded. Ordinary changes adopt
+  the latest mean every five minutes, without a stable-amp-candidate wait.
+  Safety reductions remain immediate. Each positive service rechecks authority.
+  Optional source-bound averaging history survives only a recent qualified
+  restart; invalid, gapped or rebound history is discarded. First entry uses
+  observed partial history, never an invented five-minute past. No new poller,
+  writer, setting, entity or storage version. Morning, combined/pre-free,
+  smart-socket, Full/Trip, free-window and before-export ownership are unchanged.
+
+  | Proven source / authority | Retained behavior | Explicit extension |
+  | --- | --- | --- |
+  | Pilot v1.4.24 spill reconstruction | EV + export + signed battery; no EV double count | Five-minute time weighting and upward current step |
+  | Protected Sellable ledger / outside envelope | House/reserve/EV protection and all caps | Existing spare energy may buffer afternoon soak above90% |
+  | Measured-solar journal / shared EV writer | Persistent cadence, cleanup and priority | Five-minute cadence and optional bounded source history |
 - Morning measured-solar EV capture is a separate default-off policy before
   the free-power window. It uses the same coherent measured-surplus equation
   but an independently configured house-battery reserve, rather than the
@@ -532,7 +556,7 @@ layers around the proven algorithm, not replacement algorithms.
   Caps, vehicle room and protection can leave energy unused; reaching an exact
   house-battery reserve by free start is not guaranteed. See
   [combined pre-free charging](ev-combined-pre-free.md).
-- Normal measured-solar EV-current changes are restart-safe and require a
+- Legacy/morning measured-solar EV-current changes are restart-safe and require a
   stable 10-minute target before Tessie is asked to change. Verified grid
   import may curtail immediately. The configured measured-solar SoC threshold
   is a hard cutoff: below it, the held spill target is discarded immediately
@@ -543,8 +567,9 @@ layers around the proven algorithm, not replacement algorithms.
   optional accepted battery-current context, but adopts the latest safe target
   on a ten-minute adjustment cadence rather than requiring an unchanged
   candidate for ten minutes. Otherwise a moving energy/time deadline can reset
-  the timer indefinitely and strand energy. Standalone measured-solar hysteresis
-  remains unchanged; a reduced protected battery component/budget still
+  the timer indefinitely and strand energy. Buffered afternoon direct capture
+  follows the five-minute rule above; other measured-solar hysteresis remains
+  unchanged. A reduced protected battery component/budget still
   curtails immediately. No new store version or writer is added. Uncombined
   pre-free, free-window, daily-backfill and charge-to-full stages discard the
   solar hold.

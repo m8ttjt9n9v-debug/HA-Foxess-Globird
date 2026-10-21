@@ -38,6 +38,7 @@ class EvPersistenceState:
     restored_at: datetime
     grid_average_payload: object = None
     ev_average_payload: object = None
+    solar_soak_average_payload: object = None
     driving_history: DemandHistory = field(default_factory=lambda: DemandHistory([]))
     driving_snapshot: DrivingSnapshotState = field(default_factory=DrivingSnapshotState)
     daily_driving_energy_kwh: float | None = None
@@ -131,6 +132,7 @@ class EvPersistenceState:
             restored_at=now,
             grid_average_payload=mapping.get("grid_average"),
             ev_average_payload=mapping.get("ev_average"),
+            solar_soak_average_payload=mapping.get("solar_soak_average"),
             driving_history=driving_history,
             driving_snapshot=driving_snapshot,
             daily_driving_energy_kwh=daily_driving,
@@ -144,13 +146,15 @@ class EvPersistenceState:
         )
 
     def to_payload(self) -> dict[str, object]:
-        """Return the unchanged composite Store payload."""
+        """Retain the composite Store with optional bounded solar history."""
         reconciliation = self.reconciliation
         daily = self.daily_backfill
         recovery = self.smart_recovery
         return {
             "grid_average": self.grid_average_payload,
             "ev_average": self.ev_average_payload,
+            **({"solar_soak_average": self.solar_soak_average_payload}
+               if self.solar_soak_average_payload is not None else {}),
             "driving_history": self.driving_history.to_payload(),
             "driving_snapshot": {
                 "snapshot_date": (

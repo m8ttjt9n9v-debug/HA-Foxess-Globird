@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.12.55 — Smooth buffered afternoon solar charging
+
+- Use a time-weighted five-minute reconstructed-surplus mean for enabled
+  post-free direct EV solar capture; round up once to a supported amp step,
+  then retain all physical, service and outside-inverter percentage caps.
+- Let current protected Sellable buffer clouds/rounding while solar generates
+  and house SoC exceeds90% (or a higher saved outside reserve). Recheck every30s
+  and before positive services; lost/invalid authority, reserve or normal EV
+  limits curtail through existing baseline/stop. Tiny budgets additionally
+  bound the next control interval.
+- Adopt ordinary targets every five minutes without the stable-candidate wait.
+  Keep bounded source-matched history across recent restart; discard stale,
+  interrupted or rebound history. Morning, combined/pre-free, Full/Trip, free,
+  before-export and smart-socket policies are unchanged. No new poller, writer,
+  setting, entity or storage version.
+
 ## 0.12.54 — Correct unchanged EV-before-export feedback
 
 - Qualify the explicitly mapped native Tessie vehicle against its already

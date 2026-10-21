@@ -1044,16 +1044,14 @@ async def test_solar_spill_runtime_ports_measured_surplus_to_tessie(
 
 
 @pytest.mark.freeze_time("2026-09-07 15:00:00+00:00")
-async def test_solar_spill_replaces_a_high_previous_current_with_live_surplus(
+async def test_buffered_solar_without_protected_budget_cannot_keep_high_current(
     hass: HomeAssistant,
 ) -> None:
-    """A solar-stage entry calculates fresh surplus instead of inheriting 15 A.
+    """A legacy fixture lacks Sellable authority and cannot borrow the buffer.
 
-    This is the battery-buffer case: actual EV power is 3.45 kW (15 A), no
-    grid energy is flowing, and the battery supplies 2.27 kW while cloud cover
-    leaves only 1.18 kW of solar after house demand.  The immediate solar-spill
-    target is therefore 5 A.  The measured-solar cadence applies only to later
-    ordinary changes; it cannot preserve a previous high setting at entry.
+    Golden legacy arithmetic still covers the original 1.18 kW / floor-to-5 A
+    port. Qualified five-minute/ceil runtime cases use a complete live ledger
+    in test_ev_solar_soak; missing authority must not retain this prior15 A.
     """
     _set_ev_states(hass)
     hass.states.async_set("sensor.car_charging", "charging")
@@ -1103,10 +1101,9 @@ async def test_solar_spill_replaces_a_high_previous_current_with_live_surplus(
     await controller.async_reconcile(soc_state.last_updated)
     await hass.async_block_till_done()
 
-    assert controller.solar_spill.reconstructed_surplus_kw == 1.18
-    assert controller.solar_spill.phase == "solar_spill"
-    assert controller.target_current_a == 5
-    assert commands == [5]
+    assert controller.solar_spill.phase == "solar_soak_unavailable"
+    assert controller.target_current_a == 1
+    assert commands == [1]
 
 
 async def test_measured_solar_runtime_holds_normal_changes_but_curtails_grid_import(
