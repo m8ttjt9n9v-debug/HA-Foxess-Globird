@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "entity_count": 0,
+  "entities": [],
+  "attribute_addition_count": 1,
+  "attribute_additions": [{
+    "entity_key": "status",
+    "default_entity_id": "sensor.home_energy_status",
+    "custom_attributes": ["ev_export_handoff_observed_at", "ev_export_handoff_reason", "ev_export_handoff_source"]
+  }]
+}

@@ -59,6 +59,7 @@
           "foxess_force_discharge_power_entity": "FoxESS force-discharge power number (required for ZEROHERO export or diagnostics)",
           "ev_at_home_entity": "EV at-home evidence entity (required when mandatory EV baseline is non-zero)",
           "ev_cable_connected_entity": "EV cable-connected entity (required when mandatory EV baseline is non-zero)",
+          "ev_local_connection_entity": "Local charger vehicle-connected sensor (optional export handover proof)",
           "ev_charging_state_entity": "Tessie charging-state sensor",
           "ev_actual_current_entity": "Tessie actual charging-current sensor",
           "ev_stored_energy_entity": "Tessie stored-energy sensor",
@@ -234,6 +235,7 @@
           "foxess_force_discharge_power_entity": "FoxESS force-discharge power number (required for ZEROHERO export or diagnostics)",
           "ev_at_home_entity": "EV at-home evidence entity (required when mandatory EV baseline is non-zero)",
           "ev_cable_connected_entity": "EV cable-connected entity (required when mandatory EV baseline is non-zero)",
+          "ev_local_connection_entity": "Local charger vehicle-connected sensor (optional export handover proof)",
           "ev_charging_state_entity": "Tessie charging-state sensor",
           "ev_actual_current_entity": "Tessie actual charging-current sensor",
           "ev_stored_energy_entity": "Tessie stored-energy sensor",
@@ -481,6 +483,7 @@
             "ev_soc_entity": "EV state of charge sensor (optional)",
             "ev_at_home_entity": "EV at-home evidence entity (required when mandatory EV baseline is non-zero)",
             "ev_cable_connected_entity": "EV cable-connected entity (required when mandatory EV baseline is non-zero)",
+          "ev_local_connection_entity": "Local charger vehicle-connected sensor (optional export handover proof)",
             "ev_charging_state_entity": "Tessie charging-state sensor",
             "ev_actual_current_entity": "Tessie actual charging-current sensor",
             "ev_stored_energy_entity": "Tessie stored-energy sensor",
@@ -499,6 +502,7 @@
           "title": "EV charger",
           "description": "Map writable charger controls and commissioned electrical limits.",
           "data": {
+            "ev_local_connection_entity": "Local charger vehicle-connected sensor (optional export handover proof)",
             "ev_current_limit_entity": "Tessie writable charging-current number",
             "ev_charge_limit_entity": "Tessie writable charge-limit number",
             "ev_charge_switch_entity": "Tessie charge switch",
@@ -513,6 +517,9 @@
             "ev_min_current": "Commissioned EV minimum current (A)",
             "ev_max_current": "Commissioned EV maximum current (A)",
             "ev_control_commissioned": "EV mappings and electrical limits commissioned"
+          },
+          "data_description": {
+            "ev_local_connection_entity": "Optional independent local binary sensor for this direct charger: on means connected. Qualified unplugged evidence can release export handover while the vehicle sleeps; it never completes an EV recovery or permits charging. Native Tesla Wall Connector uses its own live local publication. Unknown or expired evidence falls back to the existing vehicle checks. Leave blank for another charging path or charger."
           }
         },
       "ev_policies": {
@@ -785,6 +792,7 @@
             "ev_soc_entity": "EV state of charge sensor (optional)",
             "ev_at_home_entity": "EV at-home evidence entity (required when mandatory EV baseline is non-zero)",
             "ev_cable_connected_entity": "EV cable-connected entity (required when mandatory EV baseline is non-zero)",
+          "ev_local_connection_entity": "Local charger vehicle-connected sensor (optional export handover proof)",
             "ev_charging_state_entity": "Tessie charging-state sensor",
             "ev_actual_current_entity": "Tessie actual charging-current sensor",
             "ev_stored_energy_entity": "Tessie stored-energy sensor",
@@ -817,6 +825,9 @@
             "ev_min_current": "Commissioned EV minimum current (A)",
             "ev_max_current": "Commissioned EV maximum current (A)",
             "ev_control_commissioned": "EV mappings and electrical limits commissioned"
+          },
+          "data_description": {
+            "ev_local_connection_entity": "Optional independent local binary sensor for this direct charger: on means connected. Qualified unplugged evidence can release export handover while the vehicle sleeps; it never completes an EV recovery or permits charging. Native Tesla Wall Connector uses its own live local publication. Unknown or expired evidence falls back to the existing vehicle checks. Leave blank for another charging path or charger."
           }
         },
       "reconfigure_ev_policies": {

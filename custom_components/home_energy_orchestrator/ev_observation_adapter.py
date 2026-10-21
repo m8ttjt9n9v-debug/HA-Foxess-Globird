@@ -93,23 +93,26 @@ class EvFeedbackSnapshot:
     battery_soc: EvEntityFeedback
 
     def physical_observation(
-        self, *, now: datetime, max_age_seconds: float,
+        self, *, now: datetime, max_age_seconds: float, measured_cohort_valid: bool = False,
     ) -> EvPhysicalObservation:
         """Use one fresh cohort and the pilot's stopped-current qualification.
 
         Tessie may retain positive raw current while explicitly disconnected.
         This never excuses missing/invalid current, a live charge switch,
         charging feedback, or uncertain connection/state observations.
+        Only a caller that has independently validated the exact native
+        measurement cohort may supply measured_cohort_valid; entity/cache
+        timestamps are never rewritten or renewed by this projection.
         """
         cable = self.cable_connected.available_state
         charging = self.charging_state.available_state
         switch = self.charge_switch.available_state
         current = self.actual_current.current_a
         available = (
-            all(item.fresh(now, max_age_seconds) for item in (
+            (measured_cohort_valid or all(item.fresh(now, max_age_seconds) for item in (
                 self.cable_connected, self.charging_state,
                 self.actual_current, self.charge_switch,
-            ))
+            )))
             and cable in {"on", "off", "connected", "disconnected"}
             and charging in {"charging", "stopped", "complete", "disconnected",
                              "nopower", "no_power"}

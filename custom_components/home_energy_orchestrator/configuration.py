@@ -66,6 +66,7 @@ from .const import (
     CONF_EV_DAILY_READY_TIME,
     CONF_EV_FREE_WINDOW_PRIORITY,
     CONF_EV_LIFETIME_ENERGY,
+    CONF_EV_LOCAL_CONNECTION,
     CONF_EV_LOCATION_MODE,
     CONF_EV_MAX_CURRENT,
     CONF_EV_MIN_CURRENT,
@@ -401,6 +402,7 @@ class EvConnectionSettings:
     location_mode: str
     at_home_entity: str | None
     cable_connected_entity: str | None
+    local_connection_entity: str | None
     protected_baseline_a: float
     voltage_v: float
     configured_voltage_v: float | None
@@ -1105,6 +1107,10 @@ class RuntimeConfiguration:
                     str(ev_cable_connected_entity)
                     if ev_cable_connected_entity
                     else None
+                ),
+                local_connection_entity=(
+                    str(data[CONF_EV_LOCAL_CONNECTION])
+                    if data.get(CONF_EV_LOCAL_CONNECTION) else None
                 ),
                 protected_baseline_a=max(
                     _number(

@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "field_count": 1,
+  "fields": [{
+    "key": "ev_local_connection_entity",
+    "page": "charger",
+    "order": 15,
+    "required": false,
+    "has_default": false,
+    "default": null,
+    "input_kind": "entity",
+    "input_config": {"domain": ["binary_sensor"], "multiple": false, "reorder": false},
+    "setup_label": "Local charger vehicle-connected sensor (optional export handover proof)",
+    "reconfigure_label": "Local charger vehicle-connected sensor (optional export handover proof)"
+  }]
+}

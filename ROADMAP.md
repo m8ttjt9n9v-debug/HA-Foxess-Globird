@@ -10,6 +10,19 @@ features, remind the owner of that preference and suggest deferral unless a
 change is critical or makes a major difference. This is advisory: the owner
 retains the final decision. It does not authorise monitoring jobs or deployments.
 
+## Local charger export-handover correction — v0.12.59
+
+- [x] Separate fresh independently mapped local unplug evidence from stale
+  sleeping-vehicle telemetry; preserve the EV minimum, pending buffered recovery
+  and stop duties, existing writers and per-command protection.
+- [x] Qualify exact native local publications without a new poller, old-cache
+  seeding or borrowing another sensor's clock; discard proof across restart.
+- [x] Add full joint-controller charge/stop/depart/sleep/export/reconnect and
+  restart regressions, including source conflicts and authority withdrawal.
+- [ ] Complete frozen suite, compatibility rehearsals, review and release gates,
+  then separately approved pilot-first installation. Do not infer physical
+  spike delivery or modify a live dashboard from startup checks.
+
 ## Paid-export daily cap correction — v0.12.52
 
 - [x] Keep total physical export and the separate tariff bonus allowance intact;

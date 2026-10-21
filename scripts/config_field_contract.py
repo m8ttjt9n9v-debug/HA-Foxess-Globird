@@ -48,6 +48,9 @@ SOLAR_SOAK_ADDITIONS_PATH = (
 EV_EXPORT_BUFFER_ADDITIONS_PATH = (
     REPOSITORY_ROOT / "docs/maintainability/config-field-additions-ev-export-buffer-v1.json"
 )
+EV_LOCAL_CONNECTION_ADDITIONS_PATH = (
+    REPOSITORY_ROOT / "docs/maintainability/config-field-additions-ev-local-connection-v1.json"
+)
 
 
 def _json_value(value: Any) -> Any:
@@ -145,6 +148,7 @@ def validate_against_release_baseline() -> None:
             ADDITIONS_PATH, CAPACITY_ADDITIONS_PATH, AMBER_ADDITIONS_PATH, LOAD_ADDITIONS_PATH,
             SOLAR_SOAK_ADDITIONS_PATH,
             EV_EXPORT_BUFFER_ADDITIONS_PATH,
+            EV_LOCAL_CONNECTION_ADDITIONS_PATH,
         )
     ]
     extension = {"schema_version": baseline["schema_version"], "fields": []}

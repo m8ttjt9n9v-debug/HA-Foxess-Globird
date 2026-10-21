@@ -82,6 +82,7 @@ from .const import (
     CONF_EV_HOUSE_BATTERY_TAPER_SOC,
     CONF_EV_LEARNING_MINIMUM_SAMPLES,
     CONF_EV_LIFETIME_ENERGY,
+    CONF_EV_LOCAL_CONNECTION,
     CONF_EV_LOCATION_MODE,
     CONF_EV_MAX_CURRENT,
     CONF_EV_MIN_CURRENT,
@@ -887,14 +888,14 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return {**current, **changes}, set(changes)
 
     def _commit_reconfigure(self, pending: dict[str, object], changed_keys: set[str]):
-        """Commit atomically, removing only overrides of explicitly edited keys."""
+        """Commit only explicit edits, not defaults used to validate the draft."""
         entry = self._get_reconfigure_entry()
         data = dict(pending)
         title = str(data.pop(CONF_NAME))
         return self.async_update_reload_and_abort(
             entry,
             title=title,
-            data_updates=data,
+            data_updates={key: value for key, value in data.items() if key in changed_keys},
             options={key: value for key, value in entry.options.items() if key not in changed_keys},
             reason="reconfigure_successful",
         )
@@ -1499,6 +1500,9 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 ): vol.Coerce(float),
                 optional_entity(CONF_EV_AT_HOME): selector.EntitySelector(),
                 optional_entity(CONF_EV_CABLE_CONNECTED): selector.EntitySelector(),
+                optional_entity(CONF_EV_LOCAL_CONNECTION): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain="binary_sensor"),
+                ),
                 optional_entity(CONF_EV_CHARGING_STATE): ENTITY,
                 optional_entity(CONF_EV_ACTUAL_CURRENT): ENTITY,
                 optional_entity(CONF_EV_STORED_ENERGY): ENTITY,
@@ -2419,6 +2423,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             CONF_EV_SOC,
             CONF_EV_AT_HOME,
             CONF_EV_CABLE_CONNECTED,
+            CONF_EV_LOCAL_CONNECTION,
             CONF_EV_CHARGING_STATE,
             CONF_EV_ACTUAL_CURRENT,
             CONF_EV_STORED_ENERGY,
@@ -2438,6 +2443,9 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             if entity_id is not None and not valid_entity_id(str(entity_id)):
                 return {key: "invalid_entity"}
         current_entity = data.get(CONF_SITE_GRID_CURRENT)
+        local_connection = data.get(CONF_EV_LOCAL_CONNECTION)
+        if local_connection and not str(local_connection).startswith("binary_sensor."):
+            return {CONF_EV_LOCAL_CONNECTION: "invalid_entity"}
         current_state = self.hass.states.get(str(current_entity)) if current_entity else None
         if current_state is not None:
             try:

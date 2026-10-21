@@ -195,6 +195,8 @@ def advance_export_session(
         return _start(state, observation, now, requested, discharge_power_max_kw, tolerance_kw)
 
     if state.phase == "starting":
+        if not window_active or finish_requested:
+            return _stop(state, observation, now, tolerance_kw)
         decision = ControlDecision(
             "force_discharge", state.requested_power_kw, "export_window_ready"
         )
@@ -204,8 +206,6 @@ def advance_export_session(
                 FoxessCommandPlan((), "feedback_matches_plan"),
                 "active",
             )
-        if not window_active or finish_requested:
-            return _stop(state, observation, now, tolerance_kw)
         if _within_retry(state, now, acceptance_timeout):
             return ExportSessionTransition(
                 state, FoxessCommandPlan((), "awaiting_feedback"), "awaiting_feedback"

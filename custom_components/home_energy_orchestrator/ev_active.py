@@ -134,6 +134,7 @@ from .ev_observation_adapter import (
 )
 from .ev_source_feedback import (
     before_export_inverter_feedback_valid,
+    before_export_physical_feedback_valid,
     before_export_vehicle_feedback_valid,
 )
 from .foxess_adapter import FoxessEntityMap
@@ -672,11 +673,7 @@ class ActiveEvController:
             if not connected:
                 self._reset_solar_soak()
                 if (self.daily_backfill_stop_pending or self.outside_stop_requested) and not (
-                    feedback.physical_observation(
-                        now=now, max_age_seconds=self._float(
-                            CONF_EV_TELEMETRY_MAX_AGE_SECONDS, DEFAULT_EV_TELEMETRY_MAX_AGE_SECONDS,
-                        ),
-                    ).disconnected_idle
+                    self._zero_stop_feedback_confirmed(now, disconnected=True)
                 ):
                     # Losing eligibility is not acknowledgement of a stop.
                     self.last_reason = "daily_backfill_stop_feedback_unavailable"
@@ -1207,11 +1204,7 @@ class ActiveEvController:
             ) for value in (self.target_current_a, self.target_limit_percent,
                             self.reconciliation.target_current_a,
                             self.reconciliation.target_limit_percent))
-            or not feedback.physical_observation(
-                now=now, max_age_seconds=self._float(
-                    CONF_EV_TELEMETRY_MAX_AGE_SECONDS, DEFAULT_EV_TELEMETRY_MAX_AGE_SECONDS,
-                ),
-            ).disconnected_idle
+            or not self._zero_stop_feedback_confirmed(now, disconnected=True)
         ):
             return
         prior = (self.reconciliation, self.target_current_a, self.target_limit_percent,
@@ -1403,7 +1396,10 @@ class ActiveEvController:
             retry_interval=DAILY_BACKFILL_STOP_RETRY_INTERVAL,
         )
         retire_episode = stop.save_required and self._zero_stop_ends_positive_episode()
-        if retire_episode and not self._zero_stop_feedback_confirmed(now):
+        # A stop acknowledgement needs measured feedback independently of
+        # whether startup/Trip readiness permits retiring the old positive
+        # episode. Optimistic switch-off must not clear durable duty on reload.
+        if stop.save_required and not self._zero_stop_feedback_confirmed(now):
             self.last_reason = "daily_backfill_stop_feedback_unavailable"
             return
         self._apply_daily_backfill_stop_state(stop.state)
@@ -1466,31 +1462,33 @@ class ActiveEvController:
             ))
         )
 
-    def _zero_stop_feedback_confirmed(self, now: datetime) -> bool:
-        """Reuse the native measurement contract, never optimistic switch data."""
+    def _zero_stop_feedback_confirmed(self, now: datetime, *, disconnected: bool = False) -> bool:
+        """Acknowledge measured physical stop, not unrelated policy readiness."""
         now = dt_util.now().astimezone(now.tzinfo)
         runtime = self.coordinator.runtime_config
         feedback = capture_ev_feedback(self.hass, ev_observation_entity_map(runtime))
         maximum_age = self._float(
             CONF_EV_TELEMETRY_MAX_AGE_SECONDS, DEFAULT_EV_TELEMETRY_MAX_AGE_SECONDS,
         )
-        token = _CYCLE_FEEDBACK.set(feedback)
-        try:
-            return (
-                before_export_vehicle_feedback_valid(
-                    self.hass, feedback, now=now, max_age_seconds=maximum_age,
-                )
-                and self._connected_at_home()[0]
-                and (runtime.ev_connection.location_mode != "auto"
-                     or feedback.at_home.fresh(now, maximum_age))
-                and feedback.charge_switch.available_state == "off"
-                and feedback.charging_state.available_state in {
-                    "stopped", "complete", "disconnected", "nopower", "no_power",
-                }
-                and feedback.actual_current_result == (0.0, True)
-            )
-        finally:
-            _CYCLE_FEEDBACK.reset(token)
+        if not before_export_physical_feedback_valid(
+            self.hass, feedback, now=now, max_age_seconds=maximum_age,
+        ):
+            return False
+        physical = feedback.physical_observation(
+            now=now, max_age_seconds=maximum_age, measured_cohort_valid=True,
+        )
+        # SoC, requested amps, charge limit, GPS and Trip startup cannot prove
+        # or disprove a measured stop. Preserve the established state-qualified
+        # stopped-current rule: a stopped native frame may retain old raw amps.
+        # Physical absence/export permission remains a separate, stricter gate.
+        return (
+            physical.available and not physical.charge_switch_on
+            and feedback.charging_state.available_state in {
+                "stopped", "complete", "disconnected", "nopower", "no_power",
+            }
+            and feedback.actual_current_result == (0.0, True)
+            and (not disconnected or physical.disconnected_idle)
+        )
 
     async def _async_reconcile_general_limit_only(
         self,

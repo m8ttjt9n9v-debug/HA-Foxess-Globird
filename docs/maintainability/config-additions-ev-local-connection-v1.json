@@ -1,0 +1,6 @@
+{
+  "schema_version": 1,
+  "config_entry_version": 6,
+  "additional_config_keys": ["ev_local_connection_entity"],
+  "basis": "Optional explicitly commissioned local charger disconnection evidence; no discovery, activation or stored-state migration."
+}

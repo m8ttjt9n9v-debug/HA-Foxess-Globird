@@ -229,8 +229,12 @@ async def test_effective_options_are_shown_and_only_edited_override_is_removed(h
         for key, value in latest_options.items()
         if key != "aemo_import_threshold_per_kwh"
     }
-    assert entry.data["ev_charge_to_full_enabled"] is True
-    assert entry.data["house_learning_fallback_kwh"] == 21.0
+    # Unedited overrides remain effective without being duplicated into data.
+    assert entry.data["ev_charge_to_full_enabled"] is ENTRY_DATA["ev_charge_to_full_enabled"]
+    assert entry.data["house_learning_fallback_kwh"] == ENTRY_DATA["house_learning_fallback_kwh"]
+    effective = {**entry.data, **entry.options}
+    assert effective["ev_charge_to_full_enabled"] is True
+    assert effective["house_learning_fallback_kwh"] == 21.0
 
 
 @pytest.mark.parametrize("same_value", [False, True])

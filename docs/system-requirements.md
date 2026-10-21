@@ -213,6 +213,17 @@ break the connection.
 
 ## Required for Tessie EV automation
 
+For export handover while the vehicle sleeps, an optional **Local charger
+vehicle-connected sensor** can be explicitly mapped in EV charger setup. It
+must describe the commissioned direct charger, not a vehicle parked elsewhere,
+with `on` connected and `off` unplugged. Native Tesla Wall Connector support
+observes its existing healthy local coordinator; initial startup waits for a
+new local publication. No charger is selected automatically. Other mappings
+must publish within the existing telemetry age limit. Missing or expired local
+proof does not become zero consumption; existing vehicle evidence is still
+required. The input never clears a pending stop or buffered top-up, changes an
+EV minimum, or authorises EV charging. No deployed dashboard is rewritten.
+
 The optional direct-Tessie EV-before-export top-up reuses its existing switch
 and SoC target. Smart-socket top-up remains unsupported; its older independent
 policies are unchanged.

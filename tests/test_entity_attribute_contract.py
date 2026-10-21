@@ -74,9 +74,13 @@ def test_entity_attribute_contract_matches_reviewed_release_baseline() -> None:
             baseline["entities"] + monitor["entities"] + trip["entities"] + capacity["entities"]
         )
     }
-    from scripts.entity_attribute_contract import LOAD_ADDITIONS_PATH
+    from scripts.entity_attribute_contract import (
+        EV_LOCAL_CONNECTION_ADDITIONS_PATH,
+        LOAD_ADDITIONS_PATH,
+    )
     load = json.loads(LOAD_ADDITIONS_PATH.read_text(encoding="utf-8"))
-    for extension in (manual, price, impact, resume, startup, feedback, amber, load):
+    local = json.loads(EV_LOCAL_CONNECTION_ADDITIONS_PATH.read_text(encoding="utf-8"))
+    for extension in (manual, price, impact, resume, startup, feedback, amber, load, local):
         for record in extension["attribute_additions"]:
             retained = expected[record["entity_key"]]
             retained["custom_attributes"] = sorted(

@@ -2570,6 +2570,13 @@ async def test_multiphase_current_loss_stops_external_zero_baseline_charge_and_p
 
     hass.states.async_set("switch.car_charge", "off")
     await restored.async_reconcile(at + timedelta(seconds=62))
+    # Switch acknowledgement alone contradicts the still-charging 16 A
+    # measurement. Retain the persisted stop until actual feedback agrees.
+    assert restored.daily_backfill_stop_pending is True
+    assert restored.last_reason == "daily_backfill_stop_feedback_unavailable"
+    hass.states.async_set("sensor.car_charging", "stopped")
+    hass.states.async_set("sensor.car_actual_current", "0", {"unit_of_measurement": "A"})
+    await restored.async_reconcile(at + timedelta(seconds=63))
     assert restored.daily_backfill_stop_pending is False
     assert restored.last_reason == "daily_backfill_stopped"
 

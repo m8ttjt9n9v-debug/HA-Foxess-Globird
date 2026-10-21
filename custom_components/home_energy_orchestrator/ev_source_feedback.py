@@ -122,6 +122,146 @@ def before_export_vehicle_feedback_valid(hass, feedback, *, now, max_age_seconds
     )
 
 
+def before_export_item_measured_fresh(hass, item, *, now, max_age_seconds, cohort_valid):
+    """A cached Tessie entity report cannot invent a new affirmative measurement.
+
+    Qualify only this field of the exact native frame: an unrelated optimistic
+    current/limit command-cache mutation cannot hide real charging evidence.
+    Full-cohort permission remains a separate positive-authority contract; its
+    mixed-source HA-clock fallback cannot prove a native measurement timestamp.
+    Generic explicitly mapped publishers retain their own report-clock contract.
+    """
+    row = er.async_get(hass).async_get(item.entity_id) if item.entity_id else None
+    if row is None or row.platform != "tessie":
+        return _retained_valid(item, now) and item.fresh(now, max_age_seconds)
+    if not _retained_valid(item, now) or row.disabled_by is not None:
+        return False
+    entry = hass.config_entries.async_get_entry(row.config_entry_id)
+    device = dr.async_get(hass).async_get(row.device_id) if row.device_id else None
+    if (
+        entry is None or entry.domain != "tessie" or entry.state != ConfigEntryState.LOADED
+        or device is None or entry.entry_id not in device.config_entries
+    ):
+        return False
+    vins = {value for domain, value in device.identifiers if domain == "tessie"}
+    if len(vins) != 1:
+        return False
+    vin = next(iter(vins))
+    field = next((field for field in (
+        "charge_state_charger_actual_current", "charge_state_conn_charge_cable",
+        "charge_state_charging_state", "charge_state_charge_enable_request",
+    ) if row.unique_id == f"{vin}-{field}"), None)
+    if field is None:
+        return False
+    vehicles = getattr(getattr(entry, "runtime_data", None), "vehicles", None)
+    if isinstance(vehicles, Mapping):
+        vehicles = vehicles.values()
+    elif not isinstance(vehicles, (list, tuple)):
+        return False
+    matches = [vehicle for vehicle in vehicles if getattr(vehicle, "vin", None) == vin]
+    if len(matches) != 1:
+        return False
+    provider = getattr(matches[0], "data_coordinator", None)
+    if (
+        provider is None or getattr(provider, "last_update_success", False) is not True
+        or getattr(provider, "config_entry", None) is not entry
+    ):
+        return False
+    data = getattr(provider, "data", None)
+    if not isinstance(data, Mapping) or data.get("state") != "online":
+        return False
+    stamp = data.get("charge_state_timestamp")
+    if (
+        type(stamp) not in (int, float) or not isfinite(stamp)
+        or type(max_age_seconds) not in (int, float) or not isfinite(max_age_seconds)
+    ):
+        return False
+    try:
+        measured_at = datetime.fromtimestamp(stamp / 1000, UTC)
+        if not 0 <= (now - measured_at).total_seconds() <= max_age_seconds:
+            return False
+    except (OverflowError, OSError, TypeError, ValueError):
+        return False
+    if field == "charge_state_charger_actual_current":
+        value = data.get(field)
+        return (
+            type(value) in (int, float) and isfinite(value) and value >= 0
+            and item.unit == "A" and item.current_a == value
+        )
+    if field == "charge_state_conn_charge_cable":
+        value = data.get(field)
+        return isinstance(value, str) and item.available_state == (
+            "off" if value == "<invalid>" else "on"
+        )
+    value = data.get("charge_state_charging_state")
+    state = {"Charging": "charging", "Stopped": "stopped", "Complete": "complete",
+             "Disconnected": "disconnected", "NoPower": "no_power"}.get(value) if (
+        isinstance(value, str)
+    ) else None
+    if state is None:
+        return False  # A command acknowledgement bool is not a measurement.
+    return item.available_state == (
+        ("on" if state == "charging" else "off")
+        if field == "charge_state_charge_enable_request" else state
+    )
+
+
+def before_export_physical_feedback_valid(hass, feedback, *, now, max_age_seconds):
+    """Qualify physical clocks and one native vehicle without policy values.
+
+    Native physical fields must belong to the same commissioned vehicle as
+    each other and any native SoC/current/charge-limit mapping. Their registry
+    identities remain available while those unrelated policy values load or
+    are unavailable. Explicit generic publishers keep their own clock contract.
+    This validates evidence only; the physical projection still decides stop.
+    """
+    physical = (
+        (feedback.cable_connected, "charge_state_conn_charge_cable"),
+        (feedback.charging_state, "charge_state_charging_state"),
+        (feedback.actual_current, "charge_state_charger_actual_current"),
+        (feedback.charge_switch, "charge_state_charge_enable_request"),
+    )
+    if not all(before_export_item_measured_fresh(
+        hass, item, now=now, max_age_seconds=max_age_seconds, cohort_valid=False,
+    ) for item, _field in physical):
+        return False
+    registry = er.async_get(hass)
+    native_physical = [
+        (item, field) for item, field in physical
+        if item.entity_id and (row := registry.async_get(item.entity_id)) is not None
+        and row.platform == "tessie"
+    ]
+    if not native_physical:
+        return True
+    anchors = (
+        (feedback.soc, "charge_state_usable_battery_level"),
+        (feedback.current_limit, "charge_state_charge_current_request"),
+        (feedback.charge_limit, "charge_state_charge_limit_soc"),
+    )
+    identity = None
+    for item, field in (*native_physical, *anchors):
+        row = registry.async_get(item.entity_id) if item.entity_id else None
+        if row is None or row.platform != "tessie":
+            continue  # An explicit generic publisher has no native vehicle identity.
+        entry = hass.config_entries.async_get_entry(row.config_entry_id)
+        device = dr.async_get(hass).async_get(row.device_id) if row.device_id else None
+        if (
+            row.disabled_by is not None or entry is None or entry.domain != "tessie"
+            or entry.state != ConfigEntryState.LOADED or device is None
+            or entry.entry_id not in device.config_entries
+        ):
+            return False
+        vins = {value for domain, value in device.identifiers if domain == "tessie"}
+        if len(vins) != 1:
+            return False
+        vin = next(iter(vins))
+        current = (entry.entry_id, device.id, vin)
+        if row.unique_id != f"{vin}-{field}" or identity is not None and current != identity:
+            return False
+        identity = current
+    return True
+
+
 def before_export_inverter_feedback_valid(hass, mode, battery_soc, grid, *, now, max_age_seconds):
     """Retain stable mode/SoC only with the mapped inverter's live local grid.
 

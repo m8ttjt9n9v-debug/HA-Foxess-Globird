@@ -73,6 +73,9 @@ _TELEMETRY_KEYS = (
 LOAD_ADDITIONS_PATH = (
     REPOSITORY_ROOT / "docs" / "maintainability" / "entity-attribute-additions-load-power-v1.json"
 )
+EV_LOCAL_CONNECTION_ADDITIONS_PATH = (
+    REPOSITORY_ROOT / "docs/maintainability/entity-attribute-additions-ev-local-connection-v1.json"
+)
 _SCORECARD_KEYS = (
     "forecast_error_yesterday",
     "forecast_scorecard_status",
@@ -256,6 +259,7 @@ def validate_against_release_baseline() -> None:
             EV_STARTUP_ADDITIONS_PATH,
             EV_FEEDBACK_ADDITIONS_PATH,
             LOAD_ADDITIONS_PATH,
+            EV_LOCAL_CONNECTION_ADDITIONS_PATH,
         )
     ]
     for extension in additions:

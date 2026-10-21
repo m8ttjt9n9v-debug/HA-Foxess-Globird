@@ -723,6 +723,9 @@ class ControlReadModel:
     ev_before_export_enabled: bool
     ev_before_export_soc_target_percent: float
     ev_before_export_status: str
+    ev_export_handoff_source: str
+    ev_export_handoff_reason: str
+    ev_export_handoff_observed_at: datetime | None
     ev_automatic_control_enabled: bool
     ev_gate: str
     export_session_phase: str
@@ -922,6 +925,9 @@ class SiteReadModel:
             "export_authority_source": self.export_authority_source,
             "export_price_deadline": self.export_price_deadline,
             "ev_before_export_status": control.ev_before_export_status,
+            "ev_export_handoff_source": control.ev_export_handoff_source,
+            "ev_export_handoff_reason": control.ev_export_handoff_reason,
+            "ev_export_handoff_observed_at": control.ev_export_handoff_observed_at,
             "ev_automatic_control_enabled": control.ev_automatic_control_enabled,
             "ev_control_gate": control.ev_gate,
             "ev_writes_enabled": control.ev_gate == "ready",
@@ -993,6 +999,9 @@ class SiteReadModel:
                 control.ev_before_export_soc_target_percent
             ),
             "ev_before_export_status": control.ev_before_export_status,
+            "ev_export_handoff_source": control.ev_export_handoff_source,
+            "ev_export_handoff_reason": control.ev_export_handoff_reason,
+            "ev_export_handoff_observed_at": control.ev_export_handoff_observed_at,
             "ev_automatic_control_enabled": control.ev_automatic_control_enabled,
             **self.ev.actuator_diagnostics(control.ev_gate),
             "export_session_phase": control.export_session_phase,
@@ -1388,6 +1397,9 @@ def build_site_read_model(
         ev_before_export_status=(
             "unavailable" if controller is None else controller.ev_before_export_decision.reason
         ),
+        ev_export_handoff_source=getattr(controller, "ev_export_handoff_source", "unavailable"),
+        ev_export_handoff_reason=getattr(controller, "ev_export_handoff_reason", "unavailable"),
+        ev_export_handoff_observed_at=getattr(controller, "ev_export_handoff_observed_at", None),
         ev_automatic_control_enabled=automation.ev_control_enabled,
         ev_gate=ev_gate,
         export_session_phase=(

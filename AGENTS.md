@@ -16,6 +16,26 @@ or incident evidence into this public repository.
 
 These instructions are mandatory for AI-assisted work in this repository.
 
+## Threshold stability and hysteresis
+
+Always review control thresholds and policy handoffs for flapping. Consider
+sensor rounding/noise, delayed updates, standby consumption and repeated
+crossings: reaching a threshold once does not guarantee it will stay reached.
+
+- Explicitly decide whether separate start/stop or recovery/release thresholds
+  are needed; document why a single threshold is appropriate when retaining it.
+- Reuse existing controller state and journals for hysteresis. Pending intent
+  must survive restart/reconnect where required; do not add a competing writer
+  or arbitrary delay as a substitute for a clear state transition.
+- Policy buffers must be configurable through setup and native dashboard
+  controls, not site-specific literals. Respect existing SoC, energy, reserve,
+  inverter and current limits; a buffer grants no additional power authority.
+- Never use hysteresis to delay an emergency stop, disabled control, expired
+  authority or rejection of invalid/stale safety evidence.
+- Test below, at and above both boundaries, repeated/jittering readings, slow
+  drift, restart/reconnect, setting changes and handoff to other policies.
+  Verify both stable operation and immediate withdrawal of unsafe authority.
+
 ## Live-site boundary
 
 A designated pilot HACS site is controlled staging and acceptance

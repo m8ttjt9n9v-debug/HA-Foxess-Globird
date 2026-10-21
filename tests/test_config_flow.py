@@ -1547,7 +1547,7 @@ async def test_user_flow_rejects_negative_learning_fallback(hass):
 
 
 async def test_reconfigure_updates_and_reloads_an_entry(hass):
-    entry = MockConfigEntry(domain=DOMAIN, title="Original Site", data=ENTRY_DATA)
+    entry = MockConfigEntry(domain=DOMAIN, title="Original Site", data=ENTRY_DATA, version=6)
     entry.add_to_hass(hass)
 
     updated_data = {**ENTRY_DATA, "battery_capacity_kwh": 25.0}
@@ -1561,25 +1561,16 @@ async def test_reconfigure_updates_and_reloads_an_entry(hass):
     assert result["reason"] == "reconfigure_successful"
     await hass.async_block_till_done()
     assert entry.title == "Updated Site"
-    assert entry.data == {
-        **updated_data,
-        "ev_capacity_source": "legacy_ratio",
-        "ev_capacity_fallback_kwh": 0.0,
-        "ev_morning_solar_enabled": False,
-        "ev_solar_soak_battery_soc_percent": 90.0,
-        "ev_before_export_soc_buffer_percent": 1.0,
+    # An unrelated edit preserves the raw entry; absent defaults still apply
+    # through the loaded runtime/native controls without becoming saved edits.
+    assert entry.data == updated_data
+    for key, expected in {
+        "ev_before_export_soc_buffer": 1.0,
+        "ev_solar_soak_battery_soc": 90.0,
         "ev_solar_soak_average_minutes": 5.0,
         "ev_solar_soak_adjustment_minutes": 5.0,
-        "ev_morning_solar_reserve_soc_percent": 20.0,
-        "ev_outside_battery_reserve_percent": 20.0,
-        CONF_EV_HOUSE_BATTERY_TAPER_SOC: DEFAULT_EV_HOUSE_BATTERY_TAPER_SOC,
-        CONF_EV_PRE_FREE_BACKFILL_TIMING: DEFAULT_EV_PRE_FREE_BACKFILL_TIMING,
-        "offpeak_export_rate_per_kwh": 0.0,
-        "force_discharge_offset_minutes": 1.0,
-        "aemo_monitor_enabled": False,
-        "aemo_export_threshold_per_kwh": 3.0,
-        "critical_event_sell_enabled": False,
-    }
+    }.items():
+        assert float(hass.states.get("number.home_energy_" + key).state) == expected
     assert await hass.config_entries.async_unload(entry.entry_id)
 
 

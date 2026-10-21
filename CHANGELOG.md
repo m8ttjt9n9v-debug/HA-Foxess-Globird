@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.12.59 — Local charger proof for export handover
+
+- Add an optional, explicitly selected local charger connection sensor. Fresh
+  unplugged proof can release an otherwise completed EV/export handover while
+  vehicle telemetry sleeps; the existing EV minimum and buffered recovery,
+  pending stops, ownership, energy, current and price protections remain.
+- Observe the native Tesla Wall Connector's own local publications without a
+  new poller or API client. Reject failed, expired, conflicting or rebound
+  evidence; after restart wait for a new publication. Unconfigured sites retain
+  the existing vehicle-feedback path, now consistently using qualified native
+  measurement clocks rather than unchanged entity-report clocks.
+- Withdraw a starting export before accepting matching feedback if its
+  authority has already ended. Add full charge/depart/sleep/reconnect/restart
+  lifecycle regressions for ordinary and price-triggered export.
+- Keep unconfirmed stop duties across startup even when Trip/retry retirement
+  is not yet ready; an optimistic switch acknowledgement is not measured stop
+  completion.
+- Preserve existing settings, entity identities, persistent intent and deployed
+  dashboards. The new mapping must be commissioned deliberately; installation
+  never selects a charger or activates a policy.
+
 ## 0.12.58 — Buffered EV-before-export handoff
 
 - Add a configurable top-up buffer, default one percentage point. Keep the

@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "extension": "ev_local_connection_v1",
+  "entity_count": 0,
+  "entities": [],
+  "attribute_profiles": {},
+  "attribute_profile_additions": {
+    "orchestrator_status_v1": {
+      "ev_export_handoff_source": "Read-only provenance of the latest EV-to-export handover check: vehicle_feedback for the existing vehicle path, entity_report for an explicitly mapped local binary sensor, tesla_wall_connector for its qualified native local publication, or unavailable before the controller supplies a result. It does not identify a device or grant charging/export permission.",
+      "ev_export_handoff_reason": "Diagnostic reason from the latest EV-to-export handover evaluation. It distinguishes qualified local disconnection, normal vehicle baseline/off/disconnected evidence, pending recovery/stop duties, conflicting observations and unavailable or expired evidence. This is not a new session phase, ownership latch, command acknowledgement or proof of delivered export.",
+      "ev_export_handoff_observed_at": "Timezone-aware reception timestamp of the accepted local connection observation, or null when no local observation is accepted or the existing vehicle-feedback path is used. A native Wall Connector timestamp comes only from a new successful local payload publication; initial cache contents, repeated callbacks and unrelated entity updates cannot renew it. The timestamp is diagnostic, not a retained permission lease or a vehicle measurement timestamp."
+    }
+  }
+}

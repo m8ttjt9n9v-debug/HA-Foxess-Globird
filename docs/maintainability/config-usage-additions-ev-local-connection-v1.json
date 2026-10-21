@@ -1,0 +1,35 @@
+{
+  "access_count": 3,
+  "accesses": [
+    {
+      "constant": "CONF_EV_LOCAL_CONNECTION",
+      "key": "ev_local_connection_entity",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py",
+      "scope": "ConfigFlow._validate_input",
+      "receiver": "data",
+      "access": "get",
+      "kind": "raw_mapping",
+      "layer": "boundary"
+    },
+    {
+      "constant": "CONF_EV_LOCAL_CONNECTION",
+      "key": "ev_local_connection_entity",
+      "source": "custom_components/home_energy_orchestrator/configuration.py",
+      "scope": "RuntimeConfiguration.from_mapping",
+      "receiver": "data",
+      "access": "get",
+      "kind": "raw_mapping",
+      "layer": "boundary"
+    },
+    {
+      "constant": "CONF_EV_LOCAL_CONNECTION",
+      "key": "ev_local_connection_entity",
+      "source": "custom_components/home_energy_orchestrator/configuration.py",
+      "scope": "RuntimeConfiguration.from_mapping",
+      "receiver": "data",
+      "access": "subscript_load",
+      "kind": "raw_mapping",
+      "layer": "boundary"
+    }
+  ]
+}

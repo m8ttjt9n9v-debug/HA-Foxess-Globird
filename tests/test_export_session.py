@@ -55,6 +55,19 @@ def test_starting_waits_then_accepts_feedback() -> None:
     assert active.plan.commands == ()
 
 
+@pytest.mark.parametrize("withdrawal", [{"window_active": False}, {"finish_requested": True}])
+def test_start_feedback_cannot_override_withdrawn_authority(withdrawal) -> None:
+    started = _advance(ExportSessionState())
+    result = _advance(
+        started.state, FoxessObservation("Force Discharge", 0, 8),
+        now=NOW + timedelta(seconds=1), **withdrawal,
+    )
+    assert result.state.phase == "stopping"
+    assert [command.action for command in result.plan.commands] == [
+        "select_mode", "set_discharge_power",
+    ]
+
+
 def test_active_session_remains_latched_when_telemetry_is_eligible() -> None:
     state = ExportSessionState("active", 8, 0)
     result = _advance(state, FoxessObservation("Force Discharge", 0, 8))

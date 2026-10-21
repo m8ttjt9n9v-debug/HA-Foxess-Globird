@@ -22,16 +22,21 @@ from .aemo_monitor import PRICE_PUBLICATION_GRACE
 from .const import (
     CONF_EV_TELEMETRY_MAX_AGE_SECONDS,
     DEFAULT_EV_TELEMETRY_MAX_AGE_SECONDS,
+    EV_CHARGE_PATH_DIRECT,
     FOXESS_CONTROL_OWNER_CLOUD,
     FOXESS_CONTROL_OWNER_MODBUS,
 )
 from .coordinator import EnergyCoordinator
+from .ev_local_connection import LocalEvConnectionObserver
 from .ev_observation_adapter import (
     capture_ev_entity_feedback,
     capture_ev_feedback,
     ev_observation_entity_map,
 )
-from .ev_source_feedback import before_export_vehicle_feedback_valid
+from .ev_source_feedback import (
+    before_export_item_measured_fresh,
+    before_export_vehicle_feedback_valid,
+)
 from .foxess_adapter import FoxessEntityMap, FoxessServiceAdapter, FoxessWriteBlocked
 from .foxess_observation_adapter import (
     FoxessFeedbackSnapshot,
@@ -97,6 +102,10 @@ class ActiveFoxessController:
         self._adapter: FoxessServiceAdapter | None = None
         self._reconcile_lock = asyncio.Lock()
         self._reconcile_stopped = False
+        self._local_ev_connection = LocalEvConnectionObserver(hass)
+        self.ev_export_handoff_source = "vehicle_feedback"
+        self.ev_export_handoff_reason = "not_evaluated"
+        self.ev_export_handoff_observed_at = None
         self._price_unsub = None
         self._price_task = None
         self._price_reconcile_requested = False
@@ -269,6 +278,7 @@ class ActiveFoxessController:
     async def async_stop(self) -> None:
         """Stop the timer without changing inverter state."""
         self._reconcile_stopped = True
+        self._local_ev_connection.close()
         if self._price_unsub is not None:
             self._price_unsub()
             self._price_unsub = None
@@ -550,25 +560,103 @@ class ActiveFoxessController:
             return True
         feedback = capture_ev_feedback(self.hass, ev_observation_entity_map(runtime))
         maximum_age = runtime.telemetry.max_age_seconds
+        ev = getattr(self.coordinator, 'ev_controller', None)
+        release = (ev.before_export_release_target()
+                   if callable(getattr(ev, 'before_export_release_target', None)) else None)
+        vehicle_cohort_valid = before_export_vehicle_feedback_valid(
+            self.hass, feedback, now=now,
+            max_age_seconds=min(maximum_age, runtime.ev_numbers.value(
+                CONF_EV_TELEMETRY_MAX_AGE_SECONDS, DEFAULT_EV_TELEMETRY_MAX_AGE_SECONDS,
+            )),
+        )
+
+        def measured_fresh(item):
+            return before_export_item_measured_fresh(
+                self.hass, item, now=now, max_age_seconds=maximum_age,
+                cohort_valid=vehicle_cohort_valid,
+            )
+
+        local = self._local_ev_connection.capture(
+            connection.local_connection_entity, now=now, max_age_seconds=maximum_age,
+        )
+        self.ev_export_handoff_source = local.source
+        self.ev_export_handoff_reason = local.reason
+        self.ev_export_handoff_observed_at = local.observed_at
+        if local.reason in {"native_mismatch", "native_contactor_closed"}:
+            return False  # Affirmative conflicting local evidence is not an outage fallback.
+        if local.available and runtime.ev_policy.charge_path == EV_CHARGE_PATH_DIRECT:
+            # Explicit independent local proof is not cached vehicle presence.
+            # It grants no EV command, completes no recovery/stop, and cannot
+            # bypass the existing minimum or a pending buffered recovery.
+            fresh_cable = measured_fresh(feedback.cable_connected)
+            cable = feedback.cable_connected.available_state
+            if local.status == "connected" and fresh_cable and cable in {"off", "disconnected"}:
+                self.ev_export_handoff_reason = "connection_conflict"
+                return False
+            if local.disconnected:
+                if (
+                    release is not None
+                    or runtime.ev_preferences.before_export_soc_buffer != 0 and ev is None
+                    or feedback.soc.restored
+                    or feedback.soc.available_state is None
+                    or feedback.soc.last_reported is None
+                    or feedback.soc.last_reported > now
+                    or not decide_ev_before_export(
+                        enabled=True, ev_soc_percent=feedback.soc.number,
+                        target_soc_percent=runtime.ev_preferences.before_export_soc_target,
+                    ).export_allowed
+                ):
+                    self.ev_export_handoff_reason = "ev_recovery_or_soc_unconfirmed"
+                    return False
+                if ev is not None and (
+                    getattr(ev, 'daily_backfill_stop_pending', False)
+                    or getattr(ev, 'outside_stop_requested', False)
+                ):
+                    self.ev_export_handoff_reason = "ev_stop_pending"
+                    return False
+                physical = feedback.physical_observation(
+                    now=now, max_age_seconds=maximum_age,
+                    measured_cohort_valid=vehicle_cohort_valid,
+                )
+                if (
+                    measured_fresh(feedback.charging_state)
+                    and feedback.charging_state.available_state == "charging"
+                    or measured_fresh(feedback.charge_switch)
+                    and feedback.charge_switch.available_state == "on"
+                    or measured_fresh(feedback.actual_current)
+                    and feedback.actual_current.current_a is not None
+                    and feedback.actual_current.current_a > 0
+                    and not physical.disconnected_idle
+                ):
+                    self.ev_export_handoff_reason = "connection_conflict"
+                    return False
+                if (
+                    feedback.at_home.fresh(now, maximum_age)
+                    and feedback.at_home.available_state in {"home", "on"}
+                    and fresh_cable and cable in {"on", "connected"}
+                ):
+                    self.ev_export_handoff_reason = "connection_conflict"
+                    return False
+                self.ev_export_handoff_reason = "local_disconnected"
+                return True
+        self.ev_export_handoff_source = "vehicle_feedback"
+        self.ev_export_handoff_observed_at = None
         if runtime.ev_preferences.before_export_soc_buffer != 0:
-            ev = getattr(self.coordinator, 'ev_controller', None)
-            release = (ev.before_export_release_target()
-                       if callable(getattr(ev, 'before_export_release_target', None)) else None)
-            if not before_export_vehicle_feedback_valid(
-                self.hass, feedback, now=now,
-                max_age_seconds=runtime.ev_numbers.value(
-                    CONF_EV_TELEMETRY_MAX_AGE_SECONDS, DEFAULT_EV_TELEMETRY_MAX_AGE_SECONDS,
-                ),
-            ) or not decide_ev_before_export(
+            if not vehicle_cohort_valid or not decide_ev_before_export(
                 enabled=True, ev_soc_percent=feedback.soc.number,
                 target_soc_percent=runtime.ev_preferences.before_export_soc_target,
                 recovery_target_soc_percent=release,
             ).export_allowed:
+                self.ev_export_handoff_reason = "vehicle_feedback_unconfirmed"
                 return False
-        physical = feedback.physical_observation(now=now, max_age_seconds=maximum_age)
+        physical = feedback.physical_observation(
+            now=now, max_age_seconds=maximum_age, measured_cohort_valid=vehicle_cohort_valid,
+        )
         if not physical.available:
+            self.ev_export_handoff_reason = "vehicle_feedback_not_fresh"
             return False
         if physical.disconnected_idle:
+            self.ev_export_handoff_reason = "vehicle_disconnected"
             return True
         if feedback.cable_connected.available_state not in {"on", "connected"}:
             return False
@@ -576,6 +664,7 @@ class ActiveFoxessController:
         # Positive connected raw current remains contradictory, not stopped
         # proof merely because the state-qualified projection reports zero.
         if not physical.charge_switch_on and not physical.charging_activity:
+            self.ev_export_handoff_reason = "vehicle_stopped"
             return True
         current = feedback.current_limit
         values = (
@@ -587,7 +676,7 @@ class ActiveFoxessController:
             connection.protected_baseline_a,
             feedback.actual_current.current_a,
         )
-        if not current.fresh(now, maximum_age) or any(
+        if not (vehicle_cohort_valid or current.fresh(now, maximum_age)) or any(
             value is None or not isfinite(value) for value in values
         ):
             return False

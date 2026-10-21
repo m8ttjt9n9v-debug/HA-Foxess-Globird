@@ -210,6 +210,33 @@ layers around the proven algorithm, not replacement algorithms.
 
 ## Current software truth
 
+### v0.12.59 independent local EV/export handover proof
+
+An optional explicitly commissioned `ev_local_connection_entity` can prove the
+selected direct charger is physically unplugged while vehicle telemetry sleeps.
+It is not a second EV connection mapping for charging: it grants no EV command,
+completes no pending recovery or stop, and never bypasses the saved EV minimum.
+Native Tesla Wall Connector proof uses exact entry/device/field binding and a
+new successful local provider publication, not an unchanged HA entity clock.
+It adds no HTTP reader or poller. Evidence is volatile and is discarded on
+expiry, failure, unload, rebinding or restart; generic mapped binary sensors
+retain their own report-clock contract. Positive conflicting evidence vetoes
+the shortcut. Existing qualified vehicle checks remain the fallback when local
+proof is unavailable. Every positive export command rechecks the same boundary.
+
+Fresh native vehicle measurement cohorts now also qualify physical handover
+consistently with top-up selection; an HA cache publication cannot renew an old
+vehicle measurement or turn retained raw current into a fresh contradiction.
+Starting export withdraws before feedback acceptance when authority ends.
+Stop completion independently requires measured vehicle feedback, even when
+startup ordering prevents retirement of the earlier positive retry episode;
+optimistic switch acknowledgement cannot clear that durable obligation.
+The minimum, persistent recovery buffer, normal windows, paid cap, house/EV
+energy protection, exclusive writers and reducing cleanup remain unchanged.
+There is no new policy threshold or hysteresis lease. See
+[local connection handover](ev-export-local-connection.md). Release validation
+and named-site installation remain distinct from physical spike/payment proof.
+
 ### v0.12.58 EV-before-export hysteresis correction
 
 The configurable EV top-up buffer defaults to one percentage point; zero
