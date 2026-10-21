@@ -37,6 +37,15 @@ retains the final decision. It does not authorise monitoring jobs or deployments
 - [ ] Publish a separately approved release and complete its controlled pilot
   installation. The existing immutable release does not contain this repair.
 
+## EV-before-export native source-clock correction — v0.12.54
+
+- [x] Reproduce unchanged HA values falsely blocking a current native vehicle
+  frame. Qualify exact entry/device/field/value binding and vehicle measurement
+  age, not fetch time; preserve generic freshness and all electrical protections.
+- [x] Characterise source expiry, offline/unload, mismatches, restored inputs,
+  wrong inverter/vehicle, unchanged battery/mode and per-command source loss.
+- [ ] Complete release gates and separately approved pilot/remote acceptance.
+
 ## EV-before-export protected charging — v0.12.51
 
 - [x] Extend the existing opt-in and target through the current EV outside

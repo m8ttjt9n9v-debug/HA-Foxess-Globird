@@ -126,6 +126,10 @@ from .ev_observation_adapter import (
     capture_ev_feedback,
     ev_observation_entity_map,
 )
+from .ev_source_feedback import (
+    before_export_inverter_feedback_valid,
+    before_export_vehicle_feedback_valid,
+)
 from .foxess_adapter import FoxessEntityMap
 from .foxess_observation_adapter import capture_foxess_feedback
 from .maintenance_barrier import maintenance_writes_blocked
@@ -2683,16 +2687,13 @@ class ActiveEvController:
         max_age = self._float(
             CONF_EV_TELEMETRY_MAX_AGE_SECONDS, DEFAULT_EV_TELEMETRY_MAX_AGE_SECONDS,
         )
-        if not feedback.physical_observation(now=now, max_age_seconds=max_age).available:
+        if not before_export_vehicle_feedback_valid(
+            self.hass, feedback, now=now, max_age_seconds=max_age,
+        ):
             return None
-        required = [
-            feedback.soc, feedback.current_limit, feedback.charge_limit, feedback.battery_soc,
-            feedback.cable_connected, feedback.charging_state,
-            feedback.actual_current, feedback.charge_switch,
-        ]
-        if runtime.ev_connection.location_mode == "auto":
-            required.append(feedback.at_home)
-        if any(not v.fresh(now, max_age) for v in required):
+        if runtime.ev_connection.location_mode == "auto" and not feedback.at_home.fresh(
+            now, max_age,
+        ):
             return None
         if feedback.current_limit.unit != "A" or feedback.current_limit.current_a is None:
             return None
@@ -2700,7 +2701,10 @@ class ActiveEvController:
         if not mapping.actuator_mapping_complete:
             return None
         mode = self._entity_feedback(mapping.work_mode_entity)
-        if not mode.fresh(now, runtime.telemetry.max_age_seconds):
+        if not before_export_inverter_feedback_valid(
+            self.hass, mode, feedback.battery_soc, telemetry.grid_power,
+            now=now, max_age_seconds=runtime.telemetry.max_age_seconds,
+        ):
             return None
         for entity in (mapping.force_charge_power_entity, mapping.force_discharge_power_entity):
             source = self._entity_feedback(entity)

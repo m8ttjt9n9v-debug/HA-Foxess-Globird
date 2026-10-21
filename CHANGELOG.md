@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.12.54 — Correct unchanged EV-before-export feedback
+
+- Qualify the explicitly mapped native Tessie vehicle against its already
+  fetched charge-state measurement timestamp and matching input values. Healthy
+  unchanged SoC, cable, current and switch states no longer block the top-up
+  solely because their individual Home Assistant report clocks are old.
+- Keep the existing age limit, reject failed/offline/unloaded, mismatched,
+  restored or contradictory sources, and recheck between positive commands.
+  An HTTP cache fetch or command acknowledgement is not a new measurement.
+- Treat unchanged FoxESS mode/house-battery SoC as retained values only when
+  the same loaded inverter has fresh local electrical evidence. Generic mapped
+  publishers retain the prior strict report-clock checks. Reserve, Sellable,
+  outside-current limits, ownership, cleanup and export handoff are unchanged;
+  no new polling, helper, setting, controller or persistent schema.
+
 ## 0.12.53 — Complete verified EV keepalive handoffs
 
 - Complete an ended backfill session's pending stop obligation when fresh

@@ -782,6 +782,19 @@ The normal evening plan is then recalculated inside its original window, not
 forced to start immediately. Invalid or unavailable EV SoC withholds export
 only while the opt-in is enabled. No new stored schema, controller or timer.
 
+From v0.12.54, the top-up distinguishes native publisher measurement clocks
+from unchanged HA entity clocks. All mapped native Tessie charge inputs must
+belong to the same loaded entry/vehicle, match one existing charge-state frame,
+and pass the unchanged EV age limit using `charge_state_timestamp`. Failed,
+offline, restored, mismatched and optimistic command-only data cannot grant
+authority. Location still needs its own fresh report. A recent HTTP cache fetch
+cannot renew an old vehicle measurement. Native FoxESS retained mode and
+battery SoC require available non-restored values and the same loaded inverter's
+fresh local grid evidence, in addition to all existing fast electrical/house
+checks. Generic publishers retain strict report-clock checks for mode/EV data.
+This correction is confined to the top-up's budget guard; maintenance admission,
+export physical handoff, ordinary solar and other policy freshness are unchanged.
+
 Direct Tessie control also treats the configured connected-EV baseline
 as site policy: an otherwise unauthorised plug-in auto-start cannot retain a
 vehicle's previous charging current. A zero baseline creates a bounded stop

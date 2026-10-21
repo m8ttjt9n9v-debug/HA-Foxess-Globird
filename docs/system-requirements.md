@@ -223,6 +223,14 @@ All ordinary EV gates, outside-window caps, battery reserves and the normal SoC
 ceiling apply. Target crossing hands current back to baseline/off before
 automatic export can begin. There is no new helper, API key or schedule.
 
+For native Tessie top-up feedback, the existing charge-state frame must be
+recent and agree with every mapped charge input for the same vehicle/entry.
+Individual unchanged HA values need not republish within that interval; neither
+HTTP fetch time nor a command acknowledgement substitutes for vehicle time.
+Native FoxESS retained mode/SoC must share the loaded inverter with fresh local
+grid evidence. Missing/stale electrical data, unavailable/restored inputs and
+unrecognised native mappings remain blocking. There is no additional API poll.
+
 Restored active Full/Trip intent waits for completed Home Assistant startup
 and its initial vehicle/actuator feedback before becoming ready. The original
 timeout still counts; missing startup data is not a new permission to charge.
