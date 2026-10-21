@@ -811,6 +811,7 @@
           "title": "Reconfigure: EV charger",
           "description": "Map writable charger controls and commissioned electrical limits.",
           "data": {
+            "ev_local_connection_entity": "Local charger vehicle-connected sensor (optional export handover proof)",
             "ev_current_limit_entity": "Tessie writable charging-current number",
             "ev_charge_limit_entity": "Tessie writable charge-limit number",
             "ev_charge_switch_entity": "Tessie charge switch",
