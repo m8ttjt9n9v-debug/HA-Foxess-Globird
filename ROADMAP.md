@@ -521,6 +521,12 @@ request charging.
 
 ## Buffered afternoon solar capture
 
+- [x] v0.12.56: expose the buffer floor, averaging window and ordinary update
+  interval in EV Charging policies and as persistent dashboard number controls,
+  default90%/5min/5min. Both surfaces edit the same values. Reset old bound
+  history/cadence on policy edits; preserve immediate safety cuts and every
+  existing house, energy and current limit. No hard-coded site policy values.
+
 - [x] v0.12.55: extend post-free direct solar spill with a time-weighted
   five-minute mean, upward supported-amp rounding and down-stepped physical/
   service/outside-inverter limits. Use the existing Sellable pool to buffer

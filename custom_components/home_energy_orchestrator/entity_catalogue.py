@@ -36,6 +36,7 @@ AvailabilityRule = Literal[
     "monitor_status",
     "current_market_price",
     "market_configuration",
+    "configuration",
     "trip_state",
 ]
 
@@ -707,6 +708,39 @@ EV_MORNING_SOLAR_RESERVE_DESCRIPTION = NumberEntityDescription(
     entity_category=EntityCategory.CONFIG,
 )
 
+EV_SOLAR_SOAK_DESCRIPTIONS = (
+    NumberEntityDescription(
+        key="ev_solar_soak_battery_soc",
+        name="Solar Soak Battery Floor",
+        icon="mdi:battery-sun",
+        native_unit_of_measurement=PERCENTAGE,
+        native_min_value=0.0,
+        native_max_value=100.0,
+        native_step=1.0,
+        entity_category=EntityCategory.CONFIG,
+    ),
+    NumberEntityDescription(
+        key="ev_solar_soak_average_minutes",
+        name="Solar Soak Averaging Period",
+        icon="mdi:chart-bell-curve-cumulative",
+        native_unit_of_measurement="min",
+        native_min_value=1.0,
+        native_max_value=30.0,
+        native_step=1.0,
+        entity_category=EntityCategory.CONFIG,
+    ),
+    NumberEntityDescription(
+        key="ev_solar_soak_adjustment_minutes",
+        name="Solar Soak Adjustment Period",
+        icon="mdi:timer-sync-outline",
+        native_unit_of_measurement="min",
+        native_min_value=1.0,
+        native_max_value=30.0,
+        native_step=1.0,
+        entity_category=EntityCategory.CONFIG,
+    ),
+)
+
 HOUSE_OCCUPANCY_DESCRIPTION = SelectEntityDescription(
     key="house_occupancy_mode",
     name="House Energy Occupancy Mode",
@@ -879,6 +913,9 @@ _NON_SENSOR_PROJECTIONS = {
     "test_duration": "TestNumber.native_value",
     "ev_before_export_soc_target": "EvBeforeExportTargetNumber.native_value",
     "ev_morning_solar_reserve_soc": "EvMorningSolarReserveNumber.native_value",
+    "ev_solar_soak_battery_soc": "EvSolarSoakNumber.native_value",
+    "ev_solar_soak_average_minutes": "EvSolarSoakNumber.native_value",
+    "ev_solar_soak_adjustment_minutes": "EvSolarSoakNumber.native_value",
     "house_occupancy_mode": "HouseOccupancyModeSelect.current_option",
     "safety_lock": "SafetyLockSwitch.is_on",
     "automatic_charge": "AutomaticChargeSwitch.is_on",
@@ -913,7 +950,9 @@ def _entity_spec(platform: EntityPlatform, description: EntityDescription) -> En
     else:
         projection = _NON_SENSOR_PROJECTIONS[description.key]
         availability = (
-            "market_configuration" if description.key in _AEMO_CONFIGURATION_KEYS else "coordinator"
+            "market_configuration" if description.key in _AEMO_CONFIGURATION_KEYS
+            else "configuration" if description in EV_SOLAR_SOAK_DESCRIPTIONS
+            else "coordinator"
         )
     return EntitySpec(platform, description, projection, availability)
 
@@ -930,6 +969,7 @@ ENTITY_SPECS = (
     *(_entity_spec("number", description) for description in NUMBER_DESCRIPTIONS),
     _entity_spec("number", EV_BEFORE_EXPORT_TARGET_DESCRIPTION),
     _entity_spec("number", EV_MORNING_SOLAR_RESERVE_DESCRIPTION),
+    *(_entity_spec("number", description) for description in EV_SOLAR_SOAK_DESCRIPTIONS),
     _entity_spec("select", HOUSE_OCCUPANCY_DESCRIPTION),
     _entity_spec("switch", SAFETY_DESCRIPTION),
     _entity_spec("switch", CHARGE_DESCRIPTION),

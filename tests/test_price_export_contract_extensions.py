@@ -14,6 +14,7 @@ from scripts.config_contract import (
     EV_CAPACITY_CONFIG_KEYS,
     LOAD_CONFIG_KEYS,
     PRICE_EXPORT_CONFIG_KEYS,
+    SOLAR_SOAK_CONFIG_KEYS,
     build_config_contract,
 )
 from scripts.entity_contract import (
@@ -46,10 +47,12 @@ def test_price_export_adds_only_five_reviewed_configuration_keys() -> None:
     assert current["config_entry_version"] == historical["config_entry_version"] == 6
     assert (
         set(current["declared_config_keys"]) - set(historical["declared_config_keys"])
-    ) - EV_CAPACITY_CONFIG_KEYS - AMBER_CONFIG_KEYS - LOAD_CONFIG_KEYS == price_keys
+    ) - EV_CAPACITY_CONFIG_KEYS - AMBER_CONFIG_KEYS - LOAD_CONFIG_KEYS - SOLAR_SOAK_CONFIG_KEYS == (
+        price_keys
+    )
     assert (
         current["page_field_count"] - len(EV_CAPACITY_CONFIG_KEYS)
-        - len(AMBER_CONFIG_KEYS) - len(LOAD_CONFIG_KEYS)
+        - len(AMBER_CONFIG_KEYS) - len(LOAD_CONFIG_KEYS) - len(SOLAR_SOAK_CONFIG_KEYS)
         == historical["page_field_count"] + 5
     )
 
@@ -73,13 +76,14 @@ def test_capacity_configuration_is_a_separate_three_key_addition() -> None:
     assert not (EV_CAPACITY_CONFIG_KEYS & price_keys)
     assert ADDITIVE_CONFIG_KEYS == (
         price_keys | EV_CAPACITY_CONFIG_KEYS | AMBER_CONFIG_KEYS | LOAD_CONFIG_KEYS
+        | SOLAR_SOAK_CONFIG_KEYS
     )
     assert (
         set(current["declared_config_keys"]) - set(historical["declared_config_keys"])
         == ADDITIVE_CONFIG_KEYS
     )
     assert historical["page_field_count"] == 135
-    assert current["page_field_count"] == 135 + 5 + 3 + 2 + 1
+    assert current["page_field_count"] == 135 + 5 + 3 + 2 + 1 + 3
 
 
 def test_price_export_admits_only_monitor_and_one_automatic_request() -> None:
@@ -101,7 +105,12 @@ def test_price_export_admits_only_monitor_and_one_automatic_request() -> None:
         (record["platform"], record["key"]) for record in build_entity_contract()["entities"]
     } - old
     load_ids = {("sensor", "ev_charging_power"), ("sensor", "house_load_excluding_ev")}
-    assert new - trip_ids - load_ids == {
+    solar_soak_ids = {
+        ("number", "ev_solar_soak_battery_soc"),
+        ("number", "ev_solar_soak_average_minutes"),
+        ("number", "ev_solar_soak_adjustment_minutes"),
+    }
+    assert new - trip_ids - load_ids - solar_soak_ids == {
         ("sensor", "aemo_market_status"), ("sensor", "aemo_spot_price"),
         ("switch", "aemo_monitor"), ("select", "aemo_region"),
         ("number", "aemo_export_threshold"), ("number", "aemo_import_threshold"),

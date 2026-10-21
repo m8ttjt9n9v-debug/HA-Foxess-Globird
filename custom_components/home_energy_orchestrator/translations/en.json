@@ -111,6 +111,9 @@
           "ev_allowance_safety_margin_kwh": "Free-energy allowance safety margin (kWh)",
           "ev_solar_spill_enabled": "Use surplus solar for EV when home battery is full enough",
           "ev_solar_spill_battery_soc_percent": "Home battery SoC to start regular solar EV charging (%)",
+          "ev_solar_soak_battery_soc_percent": "Home battery buffer floor (%)",
+          "ev_solar_soak_average_minutes": "Solar averaging period (minutes)",
+          "ev_solar_soak_adjustment_minutes": "Normal current adjustment period (minutes)",
           "ev_morning_solar_enabled": "Use morning solar for EV before free power",
           "ev_morning_solar_reserve_soc_percent": "Home battery minimum for morning solar EV charging (%)",
           "ev_pre_free_backfill_enabled": "Use spare home-battery energy for EV before free power",
@@ -282,6 +285,9 @@
           "ev_allowance_safety_margin_kwh": "Free-energy allowance safety margin (kWh)",
           "ev_solar_spill_enabled": "Use surplus solar for EV when home battery is full enough",
           "ev_solar_spill_battery_soc_percent": "Home battery SoC to start regular solar EV charging (%)",
+          "ev_solar_soak_battery_soc_percent": "Home battery buffer floor (%)",
+          "ev_solar_soak_average_minutes": "Solar averaging period (minutes)",
+          "ev_solar_soak_adjustment_minutes": "Normal current adjustment period (minutes)",
           "ev_morning_solar_enabled": "Use morning solar for EV before free power",
           "ev_morning_solar_reserve_soc_percent": "Home battery minimum for morning solar EV charging (%)",
           "ev_pre_free_backfill_enabled": "Use spare home-battery energy for EV before free power",
@@ -526,6 +532,9 @@
             "ev_allowance_safety_margin_kwh": "Free-energy allowance safety margin (kWh)",
             "ev_solar_spill_enabled": "Use surplus solar for EV when home battery is full enough",
             "ev_solar_spill_battery_soc_percent": "Home battery SoC to start regular solar EV charging (%)",
+            "ev_solar_soak_battery_soc_percent": "Home battery buffer floor (%)",
+            "ev_solar_soak_average_minutes": "Solar averaging period (minutes)",
+            "ev_solar_soak_adjustment_minutes": "Normal current adjustment period (minutes)",
             "ev_morning_solar_enabled": "Use morning solar for EV before free power",
             "ev_morning_solar_reserve_soc_percent": "Home battery minimum for morning solar EV charging (%)",
             "ev_pre_free_backfill_enabled": "Use spare home-battery energy for EV before free power",
@@ -556,7 +565,10 @@
             "ev_allowance_guard_enabled": "Limit free-window EV grid import to the remaining free-energy allowance. Solar can still supply the EV.",
             "ev_allowance_safety_margin_kwh": "Leave this much of the free grid-import allowance unused when planning EV charging.",
             "ev_solar_spill_enabled": "Use measured solar surplus when the home battery reaches the threshold below; this also works before free power if morning solar is off.",
-            "ev_solar_spill_battery_soc_percent": "Legacy/pre-free and smart-socket solar threshold. Post-free direct EV solar-soak instead buffers above 90% while qualified solar and Sellable remain, respecting any higher outside reserve.",
+            "ev_solar_spill_battery_soc_percent": "Legacy/pre-free and smart-socket solar threshold. Post-free direct EV charging instead uses the adjustable Solar soak controls below.",
+            "ev_solar_soak_battery_soc_percent": "After free power, allow solar-soak battery buffering above this home-battery SoC while solar is generating and protected Sellable remains. A higher outside-window reserve still wins; this cannot override house protection or power limits.",
+            "ev_solar_soak_average_minutes": "Average the reconstructed solar opportunity over this many minutes, then round up to the next supported car amp within existing limits. Changing this period starts fresh averaging history.",
+            "ev_solar_soak_adjustment_minutes": "Adopt normal current changes this often to avoid chasing clouds. Import, lost energy permission and safety reductions act immediately; they do not wait for this timer.",
             "ev_morning_solar_enabled": "Before free power, send measured solar surplus to the EV. Charging from spare home-battery energy takes over if it starts.",
             "ev_morning_solar_reserve_soc_percent": "Morning solar EV charging requires at least this home-battery SoC; separate from the regular solar threshold.",
             "ev_pre_free_backfill_enabled": "Use available home-battery surplus after protecting house needs, with the timing selected below.",
@@ -571,6 +583,22 @@
             "ev_telemetry_max_skew_seconds": "Reject power readings whose timestamps differ by more than this.",
             "ev_before_export_enabled": "Before selling, use spare battery energy to charge a home, plugged-in car towards the target below. Normal outside-window limits and house reserves still apply.",
             "ev_before_export_soc_target_percent": "EV top-up target before selling. Export stays on hold below this level; charging stops at the normal EV limit if it is lower."
+          },
+          "sections": {
+            "solar_soak": {
+              "name": "Afternoon solar soak",
+              "description": "For direct EV charging after free power. These are also editable from the dashboard.",
+              "data": {
+                "ev_solar_soak_battery_soc_percent": "Home battery buffer floor (%)",
+                "ev_solar_soak_average_minutes": "Solar averaging period (minutes)",
+                "ev_solar_soak_adjustment_minutes": "Normal current adjustment period (minutes)"
+              },
+              "data_description": {
+                "ev_solar_soak_battery_soc_percent": "Buffer only above this home-battery SoC while solar and protected Sellable remain. A higher outside-window reserve still wins.",
+                "ev_solar_soak_average_minutes": "Average measured opportunity over this period before rounding up to a supported amp within all limits.",
+                "ev_solar_soak_adjustment_minutes": "Normal changes use this cadence. Safety reductions and permission loss act immediately."
+              }
+            }
           }
         },
       "recovery": {
@@ -806,6 +834,9 @@
             "ev_allowance_safety_margin_kwh": "Free-energy allowance safety margin (kWh)",
             "ev_solar_spill_enabled": "Use surplus solar for EV when home battery is full enough",
             "ev_solar_spill_battery_soc_percent": "Home battery SoC to start regular solar EV charging (%)",
+            "ev_solar_soak_battery_soc_percent": "Home battery buffer floor (%)",
+            "ev_solar_soak_average_minutes": "Solar averaging period (minutes)",
+            "ev_solar_soak_adjustment_minutes": "Normal current adjustment period (minutes)",
             "ev_morning_solar_enabled": "Use morning solar for EV before free power",
             "ev_morning_solar_reserve_soc_percent": "Home battery minimum for morning solar EV charging (%)",
             "ev_pre_free_backfill_enabled": "Use spare home-battery energy for EV before free power",
@@ -836,7 +867,10 @@
             "ev_allowance_guard_enabled": "Limit free-window EV grid import to the remaining free-energy allowance. Solar can still supply the EV.",
             "ev_allowance_safety_margin_kwh": "Leave this much of the free grid-import allowance unused when planning EV charging.",
             "ev_solar_spill_enabled": "Use measured solar surplus when the home battery reaches the threshold below; this also works before free power if morning solar is off.",
-            "ev_solar_spill_battery_soc_percent": "Legacy/pre-free and smart-socket solar threshold. Post-free direct EV solar-soak instead buffers above 90% while qualified solar and Sellable remain, respecting any higher outside reserve.",
+            "ev_solar_spill_battery_soc_percent": "Legacy/pre-free and smart-socket solar threshold. Post-free direct EV charging instead uses the adjustable Solar soak controls below.",
+            "ev_solar_soak_battery_soc_percent": "After free power, allow solar-soak battery buffering above this home-battery SoC while solar is generating and protected Sellable remains. A higher outside-window reserve still wins; this cannot override house protection or power limits.",
+            "ev_solar_soak_average_minutes": "Average the reconstructed solar opportunity over this many minutes, then round up to the next supported car amp within existing limits. Changing this period starts fresh averaging history.",
+            "ev_solar_soak_adjustment_minutes": "Adopt normal current changes this often to avoid chasing clouds. Import, lost energy permission and safety reductions act immediately; they do not wait for this timer.",
             "ev_morning_solar_enabled": "Before free power, send measured solar surplus to the EV. Charging from spare home-battery energy takes over if it starts.",
             "ev_morning_solar_reserve_soc_percent": "Morning solar EV charging requires at least this home-battery SoC; separate from the regular solar threshold.",
             "ev_pre_free_backfill_enabled": "Use available home-battery surplus after protecting house needs, with the timing selected below.",
@@ -851,6 +885,22 @@
             "ev_telemetry_max_skew_seconds": "Reject power readings whose timestamps differ by more than this.",
             "ev_before_export_enabled": "Before selling, use spare battery energy to charge a home, plugged-in car towards the target below. Normal outside-window limits and house reserves still apply.",
             "ev_before_export_soc_target_percent": "EV top-up target before selling. Export stays on hold below this level; charging stops at the normal EV limit if it is lower."
+          },
+          "sections": {
+            "solar_soak": {
+              "name": "Afternoon solar soak",
+              "description": "For direct EV charging after free power. These are also editable from the dashboard.",
+              "data": {
+                "ev_solar_soak_battery_soc_percent": "Home battery buffer floor (%)",
+                "ev_solar_soak_average_minutes": "Solar averaging period (minutes)",
+                "ev_solar_soak_adjustment_minutes": "Normal current adjustment period (minutes)"
+              },
+              "data_description": {
+                "ev_solar_soak_battery_soc_percent": "Buffer only above this home-battery SoC while solar and protected Sellable remain. A higher outside-window reserve still wins.",
+                "ev_solar_soak_average_minutes": "Average measured opportunity over this period before rounding up to a supported amp within all limits.",
+                "ev_solar_soak_adjustment_minutes": "Normal changes use this cadence. Safety reductions and permission loss act immediately."
+              }
+            }
           }
         },
       "reconfigure_recovery": {
@@ -1089,6 +1139,9 @@
       }
     },
     "number": {
+      "ev_solar_soak_battery_soc": {"name": "Solar Soak Battery Floor"},
+      "ev_solar_soak_average_minutes": {"name": "Solar Soak Averaging Period"},
+      "ev_solar_soak_adjustment_minutes": {"name": "Solar Soak Adjustment Period"},
       "aemo_export_threshold": {
         "name": "AEMO Export Price Threshold"
       },

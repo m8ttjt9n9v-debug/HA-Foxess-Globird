@@ -66,6 +66,9 @@ _REQUIRED_FIELDS = {
 LOAD_EXTENSIONS_PATH = (
     REPOSITORY_ROOT / "docs" / "maintainability" / "entity-semantics-load-power-v1.json"
 )
+SOLAR_SOAK_EXTENSIONS_PATH = (
+    REPOSITORY_ROOT / "docs" / "maintainability" / "entity-semantics-solar-soak-v1.json"
+)
 _ROLES = {
     "accumulator",
     "actuator_setting",
@@ -100,6 +103,7 @@ def load_semantic_contract() -> dict[str, Any]:
         EV_FEEDBACK_EXTENSIONS_PATH,
         AMBER_EXTENSIONS_PATH,
         LOAD_EXTENSIONS_PATH,
+        SOLAR_SOAK_EXTENSIONS_PATH,
     ):
         extension = json.loads(path.read_text(encoding="utf-8"))
         if extension.get("schema_version") != baseline.get("schema_version"):

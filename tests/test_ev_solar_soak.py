@@ -120,7 +120,8 @@ def test_mean_is_rounded_up_once_then_clipped_to_supported_cap(phases, step, mea
         SOLAR, voltage_v=230, phase_count=phases, current_step_a=step, current_ceiling_a=cap
     )
     decision = plan_solar_spill_current(
-        row, buffered=True, mean_surplus_kw=mean, sellable_energy_kwh=10, solar_generation_kw=4
+        row, buffered=True, mean_surplus_kw=mean, sellable_energy_kwh=10, solar_generation_kw=4,
+        buffer_floor_percent=90,
     )
     assert decision.current_a == expected
     assert decision.current_a <= cap
@@ -135,19 +136,20 @@ def test_buffer_boundary_and_budget_are_not_replaced_by_full_battery(soc, budget
         mean_surplus_kw=3.43,
         sellable_energy_kwh=budget,
         solar_generation_kw=4,
+        buffer_floor_percent=90,
     )
     assert (decision.current_a > 0) == (soc > 90 and budget == 1)
 
 
 def test_average_is_time_weighted_not_sample_weighted_and_restores_without_tail():
-    average = SolarSoakAverage()
+    average = SolarSoakAverage(timedelta(minutes=5))
     now = _now()
     for seconds, value in [(0, 1), (60, 5), (120, 5), (180, 5), (240, 5), (300, 9)]:
         result = average.observe(
             now + timedelta(seconds=seconds), value, binding=["same"], max_gap_seconds=90
         )
     assert result == pytest.approx(4.2)
-    restored = SolarSoakAverage()
+    restored = SolarSoakAverage(timedelta(minutes=5))
     assert restored.restore(
         average.to_payload(), now + timedelta(seconds=320), binding=["same"], max_gap_seconds=90
     )
@@ -164,7 +166,7 @@ def test_average_is_time_weighted_not_sample_weighted_and_restores_without_tail(
 
 @pytest.mark.parametrize("fault", ["binding", "future", "invalid", "order", "gap", "nan"])
 def test_corrupt_history_cannot_survive_restore(fault):
-    a = SolarSoakAverage()
+    a = SolarSoakAverage(timedelta(minutes=5))
     now = _now()
     a.observe(now, 5, binding=["same"], max_gap_seconds=90)
     payload = a.to_payload()

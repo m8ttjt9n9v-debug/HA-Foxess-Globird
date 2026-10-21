@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.12.56 — Configurable afternoon solar charging
+
+- Expose the afternoon solar-soak battery floor, averaging period and ordinary
+  current-adjustment interval in EV Charging policies and as dashboard-editable
+  number entities. Defaults are 90%, 5 minutes and 5 minutes, not fixed policy.
+- Configuration and dashboard edits share the same persistent settings; changes
+  immediately re-evaluate the existing EV controller. Higher house reserves and
+  all current/energy limits still win, and safety reductions do not wait.
+- Discard old averaging/cadence evidence when these settings change. Retain the
+  existing writer and journal; add no polling, automatic activation or new store
+  version. Include the three controls in the portable dashboard example.
+
 ## 0.12.55 — Smooth buffered afternoon solar charging
 
 - Use a time-weighted five-minute reconstructed-surplus mean for enabled

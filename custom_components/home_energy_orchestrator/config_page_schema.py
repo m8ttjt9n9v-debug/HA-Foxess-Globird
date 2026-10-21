@@ -11,7 +11,12 @@ import voluptuous as vol
 from homeassistant.data_entry_flow import section
 from homeassistant.helpers import selector
 
-from .const import CONF_EV_CAPACITY_FALLBACK_KWH
+from .const import (
+    CONF_EV_CAPACITY_FALLBACK_KWH,
+    CONF_EV_SOLAR_SOAK_ADJUSTMENT_MINUTES,
+    CONF_EV_SOLAR_SOAK_AVERAGE_MINUTES,
+    CONF_EV_SOLAR_SOAK_BATTERY_SOC,
+)
 from .field_catalogue import FIELD_KEYS_BY_PAGE, FIELD_SPECS_BY_KEY, FieldSpec
 
 
@@ -43,6 +48,13 @@ _GRID_SECTION_BY_POWER = {
     keys[0]: name for name, keys in GRID_PHASE_SECTIONS.items()
 }
 _GRID_SECTION_KEYS = {key for keys in GRID_PHASE_SECTIONS.values() for key in keys}
+SOLAR_SOAK_SECTION = {
+    "solar_soak": (
+        CONF_EV_SOLAR_SOAK_BATTERY_SOC,
+        CONF_EV_SOLAR_SOAK_AVERAGE_MINUTES,
+        CONF_EV_SOLAR_SOAK_ADJUSTMENT_MINUTES,
+    )
+}
 
 
 def _marker(spec: FieldSpec, defaults: Mapping[str, object]) -> vol.Marker:
@@ -72,6 +84,8 @@ def _validator(spec: FieldSpec) -> Any:
         else json.loads(spec.selector_config_json)
     )
     if spec.selector_kind == "number":
+        if spec.key in SOLAR_SOAK_SECTION["solar_soak"]:
+            return selector.NumberSelector(selector.NumberSelectorConfig(**config))
         if spec.key == CONF_EV_CAPACITY_FALLBACK_KWH:
             return CapacityCoerce()
         coerced_type = {"float": float, "int": int}[config["coerce"]]
@@ -99,6 +113,18 @@ def build_page_schema(page: str, defaults: Mapping[str, object]) -> vol.Schema:
     """Return one ordered page, grouping matched grid phases for operators."""
     fields: dict[vol.Marker, Any] = {}
     for key in FIELD_KEYS_BY_PAGE[page]:
+        if page == "ev_policies" and key in SOLAR_SOAK_SECTION["solar_soak"]:
+            if key == CONF_EV_SOLAR_SOAK_BATTERY_SOC:
+                fields[vol.Required("solar_soak")] = section(
+                    vol.Schema({
+                        _marker(FIELD_SPECS_BY_KEY[item], defaults): _validator(
+                            FIELD_SPECS_BY_KEY[item]
+                        )
+                        for item in SOLAR_SOAK_SECTION["solar_soak"]
+                    }),
+                    {"collapsed": False},
+                )
+            continue
         if page == "grid" and key in _GRID_SECTION_KEYS:
             phase = _GRID_SECTION_BY_POWER.get(key)
             if phase is not None:

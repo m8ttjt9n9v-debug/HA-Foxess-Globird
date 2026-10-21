@@ -15,6 +15,7 @@ from scripts.config_contract import (
     AMBER_CONFIG_KEYS,
     EV_CAPACITY_CONFIG_KEYS,
     LOAD_CONFIG_KEYS,
+    SOLAR_SOAK_CONFIG_KEYS,
 )
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
@@ -39,6 +40,9 @@ AMBER_ADDITIONS_PATH = (
 )
 LOAD_ADDITIONS_PATH = (
     REPOSITORY_ROOT / "docs" / "maintainability" / "config-usage-additions-load-power-v1.json"
+)
+SOLAR_SOAK_ADDITIONS_PATH = (
+    REPOSITORY_ROOT / "docs" / "maintainability" / "config-usage-additions-solar-soak-v1.json"
 )
 RECONFIGURE_TRANSITION_PATH = (
     REPOSITORY_ROOT / "docs" / "maintainability" / "config-usage-transition-reconfigure-v1.json"
@@ -204,6 +208,14 @@ def build_config_usage_contract(*, include_extensions: bool = False) -> dict[str
         visitor.visit(tree)
         records.extend(visitor.records)
     if not include_extensions:
+        solar_soak = json.loads(SOLAR_SOAK_ADDITIONS_PATH.read_text(encoding="utf-8"))
+        soak_accesses = [item for item in records if item["key"] in SOLAR_SOAK_CONFIG_KEYS]
+        if solar_soak.get("access_count") != len(solar_soak["accesses"]) or sorted(
+            json.dumps(item, sort_keys=True) for item in soak_accesses
+        ) != sorted(json.dumps(item, sort_keys=True) for item in solar_soak["accesses"]):
+            raise ValueError("reviewed solar-soak configuration usage changed")
+        for reviewed in solar_soak["accesses"]:
+            records.remove(reviewed)
         load = json.loads(LOAD_ADDITIONS_PATH.read_text(encoding="utf-8"))
         load_accesses = [item for item in records if item["key"] in LOAD_CONFIG_KEYS]
         if load.get("access_count") != len(load["accesses"]) or sorted(

@@ -5,7 +5,7 @@ to the reviewed semantic worksheet. It records the current names, including
 the retained naming approvals and versioned revisions. Edit the catalogue or semantic
 worksheet, then regenerate this file; do not edit rows by hand.
 
-Total entities: **126**.
+Total entities: **129**.
 
 ## Binary Sensor
 
@@ -36,6 +36,9 @@ Total entities: **126**.
 | `number.home_energy_aemo_import_threshold` | AEMO Consumption Observation Threshold | configuration | advanced | AUD/kWh | `AemoThresholdNumber.native_value` | market_configuration | retain | Optional persistent wholesale-price threshold below which a validated current interval may be labelled a possible consumption opportunity; an absent threshold disables this inference and does not imply a free-power window or reward. |
 | `number.home_energy_ev_before_export_soc_target` | EV Before Export SoC Target | configuration | primary | % | `EvBeforeExportTargetNumber.native_value` | coordinator | retain | Operator-adjustable EV SoC threshold below which the enabled EV-before-export preference withholds discretionary export. |
 | `number.home_energy_ev_morning_solar_reserve_soc` | Morning Solar EV Reserve SoC | configuration | primary | % | `EvMorningSolarReserveNumber.native_value` | coordinator | retain | Operator-adjustable minimum house-battery state of charge required before morning measured solar surplus may be allocated to the EV. |
+| `number.home_energy_ev_solar_soak_adjustment_minutes` | Solar Soak Adjustment Period | configuration | advanced | min | `EvSolarSoakNumber.native_value` | configuration | retain | Saved cadence for ordinary afternoon solar-soak current changes using the latest qualified mean. Safety cuts, verified import, lower safe ceilings and permission loss do not wait for this interval. |
+| `number.home_energy_ev_solar_soak_average_minutes` | Solar Soak Averaging Period | configuration | advanced | min | `EvSolarSoakNumber.native_value` | configuration | retain | Saved time-weighted averaging window for reconstructed afternoon solar opportunity before upward supported-amp rounding and existing limits. Not a second measurement source, poller or EV writer. |
+| `number.home_energy_ev_solar_soak_battery_soc` | Solar Soak Battery Floor | configuration | primary | % | `EvSolarSoakNumber.native_value` | configuration | retain | Saved minimum house-battery SoC for additional afternoon direct-EVSE solar buffering while qualified solar and protected Sellable remain. A higher outside-window reserve still wins; 100% disables this extra buffer, not a separately configured keepalive. |
 | `number.home_energy_test_charge_power` | Test Charge Power | configuration | diagnostic | kW | `TestNumber.native_value` | coordinator | retain | Operator-selected power for the next manual house-battery Force Charge diagnostic. |
 | `number.home_energy_test_discharge_power` | Test Discharge Power | configuration | diagnostic | kW | `TestNumber.native_value` | coordinator | retain | Operator-selected power for the next manual house-battery Force Discharge diagnostic. |
 | `number.home_energy_test_duration` | Test Duration | configuration | diagnostic | min | `TestNumber.native_value` | coordinator | retain | Operator-selected duration for the next manual charge or discharge diagnostic. |

@@ -517,6 +517,7 @@ def plan_solar_spill_current(
     inputs: SolarSpillInputs, *, buffered: bool = False,
     mean_surplus_kw: float | None = None, sellable_energy_kwh: float | None = None,
     solar_generation_kw: float | None = None,
+    buffer_floor_percent: float | None = None,
 ) -> SolarSpillDecision:
     """Retain source arithmetic; separately qualify buffered afternoon capture.
 
@@ -524,17 +525,19 @@ def plan_solar_spill_current(
     import negative) + signed battery charge. It removes battery discharge,
     import and adds energy still being absorbed by a full battery, preventing
     the target from collapsing when EV charging begins. Legacy callers floor
-    that instantaneous value. Buffered callers supply a qualified five-minute
+    that instantaneous value. Buffered callers supply a qualified configured
     mean, current Sellable and gross solar, round upward once, then down-bound
     by the supported physical/service/inverter and live-energy ceilings.
     """
     if buffered:
-        from .ev_solar_soak import SOLAR_SOAK_FLOOR_PERCENT
-
         _validate_solar_spill(inputs)
         if not inputs.telemetry_valid:
             return SolarSpillDecision(0, 0, "telemetry_unavailable")
-        if inputs.battery_soc_percent <= SOLAR_SOAK_FLOOR_PERCENT:
+        if (isinstance(buffer_floor_percent, bool)
+                or not isinstance(buffer_floor_percent, (float, int))
+                or not isfinite(buffer_floor_percent) or not 0 <= buffer_floor_percent <= 100):
+            return SolarSpillDecision(0, 0, "battery_buffer_floor_unavailable")
+        if inputs.battery_soc_percent <= buffer_floor_percent:
             return SolarSpillDecision(0, 0, "battery_buffer_floor")
         for value, reason in (
             (sellable_energy_kwh, "sellable_energy_unavailable"),

@@ -20,6 +20,7 @@ from scripts.config_contract import (
     EV_CAPACITY_CONFIG_KEYS,
     LOAD_CONFIG_KEYS,
     PRICE_EXPORT_CONFIG_KEYS,
+    SOLAR_SOAK_CONFIG_KEYS,
     build_config_contract,
 )
 from scripts.config_field_contract import (
@@ -55,13 +56,13 @@ def test_amber_price_configuration_is_only_its_separate_two_key_extension():
     }
     assert ADDITIVE_CONFIG_KEYS == (
         AEMO_CONFIG_KEYS | PRICE_EXPORT_CONFIG_KEYS | EV_CAPACITY_CONFIG_KEYS
-        | AMBER_CONFIG_KEYS | LOAD_CONFIG_KEYS
+        | AMBER_CONFIG_KEYS | LOAD_CONFIG_KEYS | SOLAR_SOAK_CONFIG_KEYS
     )
     retained = build_config_contract()
     current = build_config_contract(include_extensions=True)
     assert retained["config_entry_version"] == current["config_entry_version"] == 6
     assert retained["page_field_count"] == 135
-    assert current["page_field_count"] == 146
+    assert current["page_field_count"] == 149
     assert set(current["declared_config_keys"]) - set(retained["declared_config_keys"]) == (
         ADDITIVE_CONFIG_KEYS
     )

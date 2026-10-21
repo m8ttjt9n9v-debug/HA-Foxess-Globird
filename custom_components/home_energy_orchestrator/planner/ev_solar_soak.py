@@ -1,20 +1,23 @@
 """Bounded history for the optional afternoon solar-spill policy extension."""
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from math import isfinite
 
 from .timed_average import TimedAverageWindow
-
-SOLAR_SOAK_INTERVAL = timedelta(minutes=5)
-SOLAR_SOAK_FLOOR_PERCENT = 90.0
 
 
 class SolarSoakAverage:
     """Average only contiguous qualified observations, never a stale tail."""
 
-    def __init__(self):
-        self.window = TimedAverageWindow(SOLAR_SOAK_INTERVAL)
+    def __init__(self, duration):
+        self.window = TimedAverageWindow(duration)
         self.binding = None
+
+    def configure(self, duration):
+        """A changed averaging window starts new evidence, not a stretched tail."""
+        if duration != self.window.duration:
+            self.window = TimedAverageWindow(duration)
+            self.binding = None
 
     def clear(self):
         self.window.samples.clear()
@@ -29,7 +32,7 @@ class SolarSoakAverage:
         self.window.observe(now, value, source_valid=True)
         self.window.samples = self.window.samples[-512:]
         result = self.window.result(now)
-        # Start with the first observed value, not invented five-minute history.
+        # Start with the first observed value, not invented historical coverage.
         return value if result.value is None else result.value
 
     def needs_reset(self, now, *, binding, max_gap_seconds):

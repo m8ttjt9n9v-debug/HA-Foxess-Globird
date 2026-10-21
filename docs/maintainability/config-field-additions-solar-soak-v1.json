@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "extension": "solar_soak_v1",
+  "field_count": 3,
+  "fields": [
+    {
+      "key": "ev_solar_soak_battery_soc_percent", "page": "ev_policies", "order": 30,
+      "required": true, "has_default": true, "default": 90.0,
+      "input_kind": "number", "input_config": {"min": 0.0, "max": 100.0, "step": 1.0, "mode": "box", "unit_of_measurement": "%"},
+      "setup_label": "Home battery buffer floor (%)", "reconfigure_label": "Home battery buffer floor (%)"
+    },
+    {
+      "key": "ev_solar_soak_average_minutes", "page": "ev_policies", "order": 31,
+      "required": true, "has_default": true, "default": 5.0,
+      "input_kind": "number", "input_config": {"min": 1.0, "max": 30.0, "step": 1.0, "mode": "box", "unit_of_measurement": "min"},
+      "setup_label": "Solar averaging period (minutes)", "reconfigure_label": "Solar averaging period (minutes)"
+    },
+    {
+      "key": "ev_solar_soak_adjustment_minutes", "page": "ev_policies", "order": 32,
+      "required": true, "has_default": true, "default": 5.0,
+      "input_kind": "number", "input_config": {"min": 1.0, "max": 30.0, "step": 1.0, "mode": "box", "unit_of_measurement": "min"},
+      "setup_label": "Normal current adjustment period (minutes)", "reconfigure_label": "Normal current adjustment period (minutes)"
+    }
+  ]
+}

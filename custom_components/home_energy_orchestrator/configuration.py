@@ -531,6 +531,9 @@ _EV_NUMERIC_FIELD_NAMES = (
     "EV_SMART_SOCKET_RETRY_SECONDS",
     "EV_SMART_SOCKET_SETTLE_SECONDS",
     "EV_SOLAR_SPILL_BATTERY_SOC",
+    "EV_SOLAR_SOAK_BATTERY_SOC",
+    "EV_SOLAR_SOAK_AVERAGE_MINUTES",
+    "EV_SOLAR_SOAK_ADJUSTMENT_MINUTES",
     "EV_TELEMETRY_MAX_AGE_SECONDS",
     "EV_TELEMETRY_MAX_SKEW_SECONDS",
     "EV_VOLTAGE",
@@ -561,9 +564,33 @@ class EvNumericSettings:
         for key, default in _EV_NUMERIC_DEFAULTS.items():
             try:
                 value = float(data.get(key, default))
-            except (TypeError, ValueError):
+            except (TypeError, ValueError, OverflowError):
                 value = default
             values[key] = value if isfinite(value) else default
+        # Missing controls adopt reviewed defaults. Corrupt saved floors must
+        # not grant buffering; invalid durations never become zero/negative.
+        for name, maximum in (
+            ("EV_SOLAR_SOAK_BATTERY_SOC", 100.0),
+            ("EV_SOLAR_SOAK_AVERAGE_MINUTES", 30.0),
+            ("EV_SOLAR_SOAK_ADJUSTMENT_MINUTES", 30.0),
+        ):
+            key = getattr(config_const, f"CONF_{name}")
+            default = _EV_NUMERIC_DEFAULTS[key]
+            try:
+                raw = data.get(key, default)
+                candidate = float(raw)
+                minimum = 0.0 if name == "EV_SOLAR_SOAK_BATTERY_SOC" else 1.0
+                valid = (
+                    not isinstance(raw, bool)
+                    and isfinite(candidate)
+                    and minimum <= candidate <= maximum
+                    and candidate.is_integer()
+                )
+            except (TypeError, ValueError, OverflowError):
+                valid = False
+            values[key] = candidate if valid else (
+                100.0 if name == "EV_SOLAR_SOAK_BATTERY_SOC" else default
+            )
         # An existing entry has a reviewed outside-window reserve but no
         # separate morning-solar value.  Use that reserve until the optional
         # dashboard/configuration control is explicitly saved.

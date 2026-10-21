@@ -384,16 +384,21 @@ none gets a separate relaxed freshness rule.
 
 Enabled post-free direct-EVSE spill additionally requires qualified positive
 canonical solar and current protected Sellable, Local Modbus/master authority,
-idle battery sessions and Self Use. It buffers a five-minute reconstructed mean
-only while BOTH qualified current and snapshot house SoC exceed90% and any
+idle battery sessions and Self Use. It buffers a configured reconstructed mean
+only while BOTH qualified current and snapshot house SoC exceed the buffer floor and any
 higher outside reserve. Round up once, then clip down within all existing
 limits, including the total outside-inverter percentage. A tiny energy budget
 also bounds the next30s interval. The regular full-battery threshold remains
 relevant to legacy/pre-free and smart-socket spill, not this afternoon buffer.
 No setting is silently edited. Source-bound mean/cadence history is optional in
 the existing store; invalid, expired or rebound history is discarded. Startup
-partial history is not presented as five full minutes. Ordinary updates use a
-five-minute cadence; authority loss or reduced safe ceilings curtail on the
+partial history is not presented as full-window coverage. From v0.12.56, EV
+Charging policies and native dashboard number entities share the buffer-floor
+setting (0–100%, default90%), average window (1–30min, default5) and normal
+adjustment interval (1–30min, default5). A higher outside reserve always wins;
+100% disables extra buffered soak. Changing these values resets the old bound
+history/cadence and immediately re-evaluates; settings survive restart and
+reconfiguration. Ordinary updates use the saved cadence; authority loss or reduced safe ceilings curtail on the
 existing30s check, and positive services independently recheck live authority.
 
 Legacy/morning measured-solar EV current changes are held until the candidate

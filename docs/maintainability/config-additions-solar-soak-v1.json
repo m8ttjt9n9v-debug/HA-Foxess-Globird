@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "extension": "solar_soak_v1",
+  "config_entry_version": 6,
+  "additional_config_keys": [
+    "ev_solar_soak_battery_soc_percent",
+    "ev_solar_soak_average_minutes",
+    "ev_solar_soak_adjustment_minutes"
+  ],
+  "automatic_control_defaults_changed": false
+}

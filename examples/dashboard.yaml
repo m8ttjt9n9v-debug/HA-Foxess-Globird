@@ -262,6 +262,21 @@ views:
           - type: tile
             entity: number.home_energy_ev_morning_solar_reserve_soc
             name: Morning house-battery reserve
+          - type: entities
+            title: Afternoon solar soak
+            show_header_toggle: false
+            entities:
+              - entity: number.home_energy_ev_solar_soak_battery_soc
+                name: Minimum house-battery SoC
+              - entity: number.home_energy_ev_solar_soak_average_minutes
+                name: Surplus averaging period
+              - entity: number.home_energy_ev_solar_soak_adjustment_minutes
+                name: Normal current update interval
+          - type: markdown
+            content: >-
+              These values also appear in EV Charging policies. Extra afternoon
+              soak needs solar and Sellable energy; a higher outside reserve
+              and all current limits still apply. Safety reductions are immediate.
           - type: tile
             entity: sensor.home_energy_ev_solar_spill_status
             name: Solar-spill decision

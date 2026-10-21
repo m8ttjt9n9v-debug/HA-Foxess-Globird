@@ -514,29 +514,36 @@ layers around the proven algorithm, not replacement algorithms.
   export plan and the vehicle's wall-energy room. Its no-solar path retains
   the latest-start calculation and persisted active phase/frozen start.
 - From v0.12.55, enabled **post-free direct-EVSE** solar spill uses a
-  time-weighted five-minute mean of that same reconstruction, rounded UP once
+  time-weighted mean of that same reconstruction, rounded UP once
   to a supported current step and then capped DOWN by physical, service and
   the saved outside-window inverter percentage. Qualified positive gross solar
   and current protected Sellable are mandatory. Both live and snapshot house
-  SoC must be strictly above90% (or a higher outside reserve); the battery may
+  SoC must be strictly above the configured buffer floor (or a higher outside
+  reserve); the battery may
   buffer clouds/rounding instead of remaining at the old full-battery threshold.
-  No solar/Sellable, observed90%, invalid evidence, normal EV limit or a higher
+  No solar/Sellable, reaching that floor, invalid evidence, normal EV limit or a higher
   owner withdraws extra soak through existing baseline/stop. A tiny budget also
   bounds current to energy affordable through the next30s control check,
   conservatively treating it as entirely battery-funded. Ordinary changes adopt
-  the latest mean every five minutes, without a stable-amp-candidate wait.
+  the latest mean at the configured interval, without a stable-amp-candidate wait.
   Safety reductions remain immediate. Each positive service rechecks authority.
   Optional source-bound averaging history survives only a recent qualified
   restart; invalid, gapped or rebound history is discarded. First entry uses
-  observed partial history, never an invented five-minute past. No new poller,
-  writer, setting, entity or storage version. Morning, combined/pre-free,
+  observed partial history, never an invented past. From v0.12.56, the buffer
+  floor, averaging period and normal adjustment interval are independently
+  configurable in EV Charging policies and through native dashboard number
+  entities; defaults are90%,5min,5min. Both surfaces persist the same config
+  entry values. Edits re-evaluate immediately and invalidate old mean/cadence
+  bindings; safety reductions never wait for the adjustment interval. A100%
+  floor disables this additional buffer, not the protected baseline. No new
+  poller, writer or storage version. Morning, combined/pre-free,
   smart-socket, Full/Trip, free-window and before-export ownership are unchanged.
 
   | Proven source / authority | Retained behavior | Explicit extension |
   | --- | --- | --- |
-  | Pilot v1.4.24 spill reconstruction | EV + export + signed battery; no EV double count | Five-minute time weighting and upward current step |
-  | Protected Sellable ledger / outside envelope | House/reserve/EV protection and all caps | Existing spare energy may buffer afternoon soak above90% |
-  | Measured-solar journal / shared EV writer | Persistent cadence, cleanup and priority | Five-minute cadence and optional bounded source history |
+  | Pilot v1.4.24 spill reconstruction | EV + export + signed battery; no EV double count | Configured time weighting and upward current step |
+  | Protected Sellable ledger / outside envelope | House/reserve/EV protection and all caps | Existing spare energy may buffer above the configured floor |
+  | Measured-solar journal / shared EV writer | Persistent cadence, cleanup and priority | Configured cadence and bounded, policy-bound source history |
 - Morning measured-solar EV capture is a separate default-off policy before
   the free-power window. It uses the same coherent measured-surplus equation
   but an independently configured house-battery reserve, rather than the
@@ -568,7 +575,7 @@ layers around the proven algorithm, not replacement algorithms.
   on a ten-minute adjustment cadence rather than requiring an unchanged
   candidate for ten minutes. Otherwise a moving energy/time deadline can reset
   the timer indefinitely and strand energy. Buffered afternoon direct capture
-  follows the five-minute rule above; other measured-solar hysteresis remains
+  follows the configured rule above; other measured-solar hysteresis remains
   unchanged. A reduced protected battery component/budget still
   curtails immediately. No new store version or writer is added. Uncombined
   pre-free, free-window, daily-backfill and charge-to-full stages discard the

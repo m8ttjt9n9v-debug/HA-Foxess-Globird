@@ -40,6 +40,33 @@ supplies the value's clock. The grid and accepted battery clocks must still
 pass the same age and skew limits for morning solar, Ready by and pre-free
 backfill. No arbitrary old zero is treated as current evidence.
 
+## Configurable afternoon buffer
+
+From v0.12.56, post-free direct-EVSE solar spill separately uses the same
+reconstructed opportunity with a time-weighted mean, rounding up once to the
+actuator step and then down within all existing limits. Qualified positive
+solar and protected Sellable are required. Both live and snapshot house SoC
+must be strictly above the configured buffer floor or higher outside reserve.
+Only this additional soak stops at that floor; the configured protected
+baseline retains its existing behavior.
+
+In **Reconfigure → EV Charging policies → Afternoon solar soak**, set:
+
+| Setting | Default | Dashboard entity |
+| --- | --- | --- |
+| Minimum house-battery SoC | 90% | `number.home_energy_ev_solar_soak_battery_soc` |
+| Surplus averaging period | 5 min | `number.home_energy_ev_solar_soak_average_minutes` |
+| Normal current-adjustment interval | 5 min | `number.home_energy_ev_solar_soak_adjustment_minutes` |
+
+The floor accepts0–100%; time controls accept whole minutes1–30. Both screens
+edit the same persisted configuration, not independent helpers. Normal changes
+use the latest mean at the saved adjustment interval. Safety/authority loss,
+verified import and reduced safe ceilings curtail immediately on the existing
+control check. Changing any of these settings re-evaluates immediately and
+discards old bound history/cadence; a recent restart with unchanged settings
+can retain qualified evidence. No polling or additional device writer is added.
+Morning/pre-free/smart-socket policies retain their original math and timing.
+
 ## Morning measured-solar extension
 
 Morning solar capture is a separately identified, default-off extension.  It

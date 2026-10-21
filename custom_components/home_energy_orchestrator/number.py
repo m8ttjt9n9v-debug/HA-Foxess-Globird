@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+from math import isfinite
+
 from homeassistant.components.number import NumberEntity, NumberEntityDescription
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
@@ -13,12 +16,19 @@ from .aemo_monitor_controls import AemoThresholdNumber
 from .const import (
     CONF_EV_BEFORE_EXPORT_SOC_TARGET,
     CONF_EV_MORNING_SOLAR_RESERVE_SOC,
+    CONF_EV_SOLAR_SOAK_ADJUSTMENT_MINUTES,
+    CONF_EV_SOLAR_SOAK_AVERAGE_MINUTES,
+    CONF_EV_SOLAR_SOAK_BATTERY_SOC,
+    DEFAULT_EV_SOLAR_SOAK_ADJUSTMENT_MINUTES,
+    DEFAULT_EV_SOLAR_SOAK_AVERAGE_MINUTES,
+    DEFAULT_EV_SOLAR_SOAK_BATTERY_SOC,
 )
 from .coordinator import EnergyCoordinator
 from .entity_catalogue import (
     AEMO_THRESHOLD_DESCRIPTIONS,
     EV_BEFORE_EXPORT_TARGET_DESCRIPTION,
     EV_MORNING_SOLAR_RESERVE_DESCRIPTION,
+    EV_SOLAR_SOAK_DESCRIPTIONS,
 )
 from .entity_catalogue import (
     NUMBER_DESCRIPTIONS as DESCRIPTIONS,
@@ -48,8 +58,82 @@ async def async_setup_entry(
                 entry,
                 EV_MORNING_SOLAR_RESERVE_DESCRIPTION,
             ),
+            *(
+                EvSolarSoakNumber(entry.runtime_data, entry, description)
+                for description in EV_SOLAR_SOAK_DESCRIPTIONS
+            ),
         )
     )
+
+
+class EvSolarSoakNumber(CoordinatorEntity[EnergyCoordinator], NumberEntity):
+    """Edit the same solar-soak setting used by the configuration wizard."""
+
+    _SETTINGS = {
+        "ev_solar_soak_battery_soc": (
+            CONF_EV_SOLAR_SOAK_BATTERY_SOC, DEFAULT_EV_SOLAR_SOAK_BATTERY_SOC
+        ),
+        "ev_solar_soak_average_minutes": (
+            CONF_EV_SOLAR_SOAK_AVERAGE_MINUTES, DEFAULT_EV_SOLAR_SOAK_AVERAGE_MINUTES
+        ),
+        "ev_solar_soak_adjustment_minutes": (
+            CONF_EV_SOLAR_SOAK_ADJUSTMENT_MINUTES, DEFAULT_EV_SOLAR_SOAK_ADJUSTMENT_MINUTES
+        ),
+    }
+
+    def __init__(self, coordinator, entry, description) -> None:
+        super().__init__(coordinator)
+        self.entity_description = description
+        self._entry = entry
+        self._attr_unique_id = f"{entry.entry_id}_{description.key}"
+        self.entity_id = f"number.home_energy_{description.key}"
+        self._attr_has_entity_name = True
+
+    @property
+    def available(self) -> bool:
+        # Operator configuration remains editable during a telemetry outage;
+        # reconciliation still enforces the normal evidence and write gates.
+        return True
+
+    @property
+    def native_value(self) -> float:
+        key, default = self._SETTINGS[self.entity_description.key]
+        return self.coordinator.runtime_config.ev_numbers.value(key, default)
+
+    async def async_set_native_value(self, value: float) -> None:
+        description = self.entity_description
+        try:
+            numeric = float(value)
+        except (TypeError, ValueError, OverflowError) as error:
+            raise HomeAssistantError("Use a finite whole-number solar-soak setting") from error
+        if (
+            isinstance(value, bool)
+            or not isfinite(numeric)
+            or not numeric.is_integer()
+            or not description.native_min_value <= numeric <= description.native_max_value
+        ):
+            raise HomeAssistantError(
+                "Use a finite whole-number solar-soak setting within its limits"
+            )
+        key, _default = self._SETTINGS[description.key]
+        self.hass.config_entries.async_update_entry(
+            self._entry,
+            data={**self._entry.data, key: numeric},
+            options={name: item for name, item in self._entry.options.items() if name != key},
+        )
+        # Constant-key writes are deliberately explicit so the persisted-key
+        # usage audit can account for each managed configuration boundary.
+        if key == CONF_EV_SOLAR_SOAK_BATTERY_SOC:
+            self.coordinator.update_config_value(CONF_EV_SOLAR_SOAK_BATTERY_SOC, numeric)
+        elif key == CONF_EV_SOLAR_SOAK_AVERAGE_MINUTES:
+            self.coordinator.update_config_value(CONF_EV_SOLAR_SOAK_AVERAGE_MINUTES, numeric)
+        else:
+            self.coordinator.update_config_value(CONF_EV_SOLAR_SOAK_ADJUSTMENT_MINUTES, numeric)
+        self.async_write_ha_state()
+        controller = self.coordinator.ev_controller
+        if controller is not None:
+            await controller.async_reconcile()
+        self.coordinator.async_update_listeners()
 
 
 class EvBeforeExportTargetNumber(CoordinatorEntity[EnergyCoordinator], NumberEntity):

@@ -13,6 +13,7 @@ from scripts.entity_semantics import (
     EV_FEEDBACK_EXTENSIONS_PATH,
     MANUAL_EXTENSIONS_PATH,
     SEMANTICS_PATH,
+    SOLAR_SOAK_EXTENSIONS_PATH,
     entities_awaiting_review,
     load_semantic_contract,
     validate_semantic_contract,
@@ -23,10 +24,28 @@ def test_reviewed_entity_semantics_are_complete_and_current() -> None:
     contract = load_semantic_contract()
     validate_semantic_contract(contract)
     expected_count = build_entity_contract()["entity_count"]
-    assert expected_count == 126
+    assert expected_count == 129
     assert contract["reviewed_entity_count"] == expected_count
     assert contract["total_entity_count"] == expected_count
     assert entities_awaiting_review(contract) == []
+
+
+def test_solar_soak_semantics_add_only_three_shared_configuration_controls():
+    addition = json.loads(SOLAR_SOAK_EXTENSIONS_PATH.read_text(encoding="utf-8"))
+    assert addition["entity_count"] == 3
+    assert addition["attribute_profiles"] == {}
+    records = {item["key"]: item for item in addition["entities"]}
+    assert set(records) == {
+        "ev_solar_soak_battery_soc",
+        "ev_solar_soak_average_minutes",
+        "ev_solar_soak_adjustment_minutes",
+    }
+    assert all(item["role"] == "configuration" for item in records.values())
+    assert all("EvSolarSoakNumber.native_value" in item["producer"] for item in records.values())
+    assert all("telemetry is unavailable" in item["availability"] for item in records.values())
+    assert "100% disables this extra buffer" in records["ev_solar_soak_battery_soc"]["definition"]
+    assert "1 through 30" in records["ev_solar_soak_average_minutes"]["unit_and_sign"]
+    assert "do not wait" in records["ev_solar_soak_adjustment_minutes"]["definition"]
 
 
 def test_ev_feedback_semantics_are_additive_and_identify_the_same_capture() -> None:

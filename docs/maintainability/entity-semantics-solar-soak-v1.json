@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "extension": "solar_soak_v1",
+  "entity_count": 3,
+  "attribute_profiles": {},
+  "entities": [
+    {
+      "key": "ev_solar_soak_battery_soc",
+      "definition": "Saved minimum house-battery SoC for additional afternoon direct-EVSE solar buffering while qualified solar and protected Sellable remain. A higher outside-window reserve still wins; 100% disables this extra buffer, not a separately configured keepalive.",
+      "producer": "EvSolarSoakNumber.native_value projects RuntimeConfiguration.ev_numbers; its setter and EV Charging policies persist the same ev_solar_soak_battery_soc_percent configuration-entry value. ActiveEvController remains the sole EV device writer.",
+      "role": "configuration",
+      "unit_and_sign": "Whole percent, 0 through 100 inclusive; default 90%. This is the house battery, not the vehicle target.",
+      "time_basis": "Current persisted operator setting; survives reload and restart. Edits immediately reconcile existing policy and invalidate old bound mean/cadence evidence.",
+      "availability": "Editable while HEO is loaded even if telemetry is unavailable; missing telemetry cannot grant a positive EV command.",
+      "state_vocabulary": "Finite whole-number percentage; invalid dashboard edits are rejected, and a corrupt saved floor yields 100% conservatively.",
+      "audience": "primary",
+      "equivalents": {"foxess": null, "globird": null, "tessie": null},
+      "consumers": ["EV Charging policies", "Solar-soak dashboard controls", "Existing ActiveEvController buffered solar-spill planner and per-command authority checks"],
+      "decision": "retain",
+      "review_status": "engineering_draft"
+    },
+    {
+      "key": "ev_solar_soak_average_minutes",
+      "definition": "Saved time-weighted averaging window for reconstructed afternoon solar opportunity before upward supported-amp rounding and existing limits. Not a second measurement source, poller or EV writer.",
+      "producer": "EvSolarSoakNumber.native_value projects RuntimeConfiguration.ev_numbers; its setter and EV Charging policies persist the same ev_solar_soak_average_minutes configuration-entry value. ActiveEvController owns SolarSoakAverage.",
+      "role": "configuration",
+      "unit_and_sign": "Whole positive minutes, 1 through 30 inclusive; default 5 minutes.",
+      "time_basis": "Current persisted operator setting; survives reload and restart. A changed period starts fresh qualified evidence rather than stretching old history.",
+      "availability": "Editable while HEO is loaded even if telemetry is unavailable; unavailable evidence still blocks new positive charging commands.",
+      "state_vocabulary": "Finite whole-number minutes. Invalid dashboard edits are rejected; corrupt saved periods fall back to the reviewed bounded default.",
+      "audience": "advanced",
+      "equivalents": {"foxess": null, "globird": null, "tessie": null},
+      "consumers": ["EV Charging policies", "Solar-soak dashboard controls", "Existing ActiveEvController SolarSoakAverage and source/policy-bound history"],
+      "decision": "retain",
+      "review_status": "engineering_draft"
+    },
+    {
+      "key": "ev_solar_soak_adjustment_minutes",
+      "definition": "Saved cadence for ordinary afternoon solar-soak current changes using the latest qualified mean. Safety cuts, verified import, lower safe ceilings and permission loss do not wait for this interval.",
+      "producer": "EvSolarSoakNumber.native_value projects RuntimeConfiguration.ev_numbers; its setter and EV Charging policies persist the same ev_solar_soak_adjustment_minutes configuration-entry value. Existing measured-solar reconciliation and ActiveEvController remain authoritative.",
+      "role": "configuration",
+      "unit_and_sign": "Whole positive minutes, 1 through 30 inclusive; default 5 minutes.",
+      "time_basis": "Current persisted operator setting; survives reload and restart. Editing it immediately re-evaluates and invalidates the old bound normal-adjustment cadence.",
+      "availability": "Editable while HEO is loaded even if telemetry is unavailable; editing a setting never substitutes for control eligibility.",
+      "state_vocabulary": "Finite whole-number minutes. Invalid dashboard edits are rejected; corrupt saved periods fall back to the reviewed bounded default.",
+      "audience": "advanced",
+      "equivalents": {"foxess": null, "globird": null, "tessie": null},
+      "consumers": ["EV Charging policies", "Solar-soak dashboard controls", "Existing measured-solar adjustment planner through ActiveEvController"],
+      "decision": "retain",
+      "review_status": "engineering_draft"
+    }
+  ]
+}

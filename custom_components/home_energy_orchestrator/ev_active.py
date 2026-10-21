@@ -55,6 +55,9 @@ from .const import (
     CONF_EV_SMART_SOCKET_CURRENT_LIMIT,
     CONF_EV_SMART_SOCKET_RETRY_SECONDS,
     CONF_EV_SMART_SOCKET_SETTLE_SECONDS,
+    CONF_EV_SOLAR_SOAK_ADJUSTMENT_MINUTES,
+    CONF_EV_SOLAR_SOAK_AVERAGE_MINUTES,
+    CONF_EV_SOLAR_SOAK_BATTERY_SOC,
     CONF_EV_SOLAR_SPILL_BATTERY_SOC,
     CONF_EV_TELEMETRY_MAX_AGE_SECONDS,
     CONF_EV_TELEMETRY_MAX_SKEW_SECONDS,
@@ -101,6 +104,9 @@ from .const import (
     DEFAULT_EV_SMART_SOCKET_CURRENT_LIMIT,
     DEFAULT_EV_SMART_SOCKET_RETRY_SECONDS,
     DEFAULT_EV_SMART_SOCKET_SETTLE_SECONDS,
+    DEFAULT_EV_SOLAR_SOAK_ADJUSTMENT_MINUTES,
+    DEFAULT_EV_SOLAR_SOAK_AVERAGE_MINUTES,
+    DEFAULT_EV_SOLAR_SOAK_BATTERY_SOC,
     DEFAULT_EV_SOLAR_SPILL_BATTERY_SOC,
     DEFAULT_EV_TELEMETRY_MAX_AGE_SECONDS,
     DEFAULT_EV_TELEMETRY_MAX_SKEW_SECONDS,
@@ -271,7 +277,7 @@ from .planner.ev_persistence import (
     EvPersistenceState,
 )
 from .planner.ev_power_constraints import inverter_backed_current_ceiling
-from .planner.ev_solar_soak import SOLAR_SOAK_INTERVAL, SolarSoakAverage
+from .planner.ev_solar_soak import SolarSoakAverage
 from .planner.learning import DemandHistory
 from .planner.ledger import calculate_ledger
 from .planner.timed_average import TimedAverageWindow
@@ -311,7 +317,9 @@ class ActiveEvController:
         )
         self.grid_average = TimedAverageWindow(timedelta(minutes=3))
         self.ev_average = TimedAverageWindow(timedelta(minutes=3))
-        self.solar_soak_average = SolarSoakAverage()
+        self.solar_soak_average = SolarSoakAverage(timedelta(minutes=self._float(
+            CONF_EV_SOLAR_SOAK_AVERAGE_MINUTES, DEFAULT_EV_SOLAR_SOAK_AVERAGE_MINUTES,
+        )))
         self._solar_soak_active = False
         self._solar_soak_ceiling_a = 0.0
         self.reconciliation = DirectEvseReconciliationState()
@@ -2927,7 +2935,10 @@ class ActiveEvController:
             ),
             require_stable_target=not self._solar_soak_active,
             adjustment_interval=(
-                SOLAR_SOAK_INTERVAL if self._solar_soak_active else timedelta(minutes=10)
+                timedelta(minutes=self._float(
+                    CONF_EV_SOLAR_SOAK_ADJUSTMENT_MINUTES,
+                    DEFAULT_EV_SOLAR_SOAK_ADJUSTMENT_MINUTES,
+                )) if self._solar_soak_active else timedelta(minutes=10)
             ),
         )
         self.measured_solar_adjustment = adjustment.state
@@ -3491,6 +3502,9 @@ class ActiveEvController:
                 return SolarSpillDecision(0, 0, "solar_soak_unavailable")
             binding = self._solar_soak_binding()
             gap = self.coordinator.runtime_config.telemetry.max_age_seconds
+            self.solar_soak_average.configure(timedelta(minutes=self._float(
+                CONF_EV_SOLAR_SOAK_AVERAGE_MINUTES, DEFAULT_EV_SOLAR_SOAK_AVERAGE_MINUTES,
+            )))
             if self.solar_soak_average.needs_reset(now, binding=binding, max_gap_seconds=gap):
                 if self.measured_solar_adjustment.phase == "solar_spill":
                     self.measured_solar_adjustment = MeasuredSolarAdjustmentState()
@@ -3505,6 +3519,9 @@ class ActiveEvController:
             decision = plan_solar_spill_current(
                 inputs, buffered=True, mean_surplus_kw=average,
                 sellable_energy_kwh=authority[0], solar_generation_kw=authority[1],
+                buffer_floor_percent=self._float(
+                    CONF_EV_SOLAR_SOAK_BATTERY_SOC, DEFAULT_EV_SOLAR_SOAK_BATTERY_SOC,
+                ),
             )
             self._solar_soak_active = decision.phase == "solar_spill"
             if not self._solar_soak_active:
@@ -3537,6 +3554,11 @@ class ActiveEvController:
             runtime.electrical.effective_solar_generation_direction,
             runtime.ev_telemetry.actual_current_entity, runtime.ev_connection.voltage_v,
             runtime.ev_connection.phase_count, runtime.ev_telemetry.soc_entity,
+            self._float(CONF_EV_SOLAR_SOAK_BATTERY_SOC, DEFAULT_EV_SOLAR_SOAK_BATTERY_SOC),
+            self._float(CONF_EV_SOLAR_SOAK_AVERAGE_MINUTES, DEFAULT_EV_SOLAR_SOAK_AVERAGE_MINUTES),
+            self._float(
+                CONF_EV_SOLAR_SOAK_ADJUSTMENT_MINUTES, DEFAULT_EV_SOLAR_SOAK_ADJUSTMENT_MINUTES,
+            ),
         ]
 
     def _solar_soak_authority(self, now):
@@ -3545,7 +3567,9 @@ class ActiveEvController:
         solar = None if telemetry is None else telemetry.solar_power
         feedback = _CYCLE_FEEDBACK.get()
         live_soc = None if feedback is None else feedback.battery_soc.number
-        floor_percent = max(90, self._float(
+        floor_percent = max(self._float(
+            CONF_EV_SOLAR_SOAK_BATTERY_SOC, DEFAULT_EV_SOLAR_SOAK_BATTERY_SOC,
+        ), self._float(
             CONF_EV_OUTSIDE_BATTERY_RESERVE_PERCENT, DEFAULT_EV_OUTSIDE_BATTERY_RESERVE_PERCENT,
         ))
         if (
@@ -3934,6 +3958,9 @@ class ActiveEvController:
         now = persisted.restored_at
         self.grid_average.restore(persisted.grid_average_payload, now)
         self.ev_average.restore(persisted.ev_average_payload, now)
+        self.solar_soak_average.configure(timedelta(minutes=self._float(
+            CONF_EV_SOLAR_SOAK_AVERAGE_MINUTES, DEFAULT_EV_SOLAR_SOAK_AVERAGE_MINUTES,
+        )))
         restored_soak = self.solar_soak_average.restore(
             persisted.solar_soak_average_payload, now, binding=self._solar_soak_binding(),
             max_gap_seconds=self.coordinator.runtime_config.telemetry.max_age_seconds,

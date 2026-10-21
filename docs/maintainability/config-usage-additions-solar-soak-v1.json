@@ -1,0 +1,97 @@
+{
+  "access_count": 9,
+  "accesses": [
+    {
+      "access": "get",
+      "constant": "CONF_EV_SOLAR_SOAK_ADJUSTMENT_MINUTES",
+      "key": "ev_solar_soak_adjustment_minutes",
+      "kind": "raw_mapping",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._apply_defaults",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_SOLAR_SOAK_AVERAGE_MINUTES",
+      "key": "ev_solar_soak_average_minutes",
+      "kind": "raw_mapping",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._apply_defaults",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "get",
+      "constant": "CONF_EV_SOLAR_SOAK_BATTERY_SOC",
+      "key": "ev_solar_soak_battery_soc_percent",
+      "kind": "raw_mapping",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._apply_defaults",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "subscript_load",
+      "constant": "CONF_EV_SOLAR_SOAK_ADJUSTMENT_MINUTES",
+      "key": "ev_solar_soak_adjustment_minutes",
+      "kind": "raw_mapping",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._page_limit_error",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "subscript_load",
+      "constant": "CONF_EV_SOLAR_SOAK_AVERAGE_MINUTES",
+      "key": "ev_solar_soak_average_minutes",
+      "kind": "raw_mapping",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._page_limit_error",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "subscript_load",
+      "constant": "CONF_EV_SOLAR_SOAK_BATTERY_SOC",
+      "key": "ev_solar_soak_battery_soc_percent",
+      "kind": "raw_mapping",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._page_limit_error",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "update_config_value",
+      "constant": "CONF_EV_SOLAR_SOAK_ADJUSTMENT_MINUTES",
+      "key": "ev_solar_soak_adjustment_minutes",
+      "kind": "managed_mutation",
+      "layer": "runtime",
+      "receiver": "self.coordinator",
+      "scope": "EvSolarSoakNumber.async_set_native_value",
+      "source": "custom_components/home_energy_orchestrator/number.py"
+    },
+    {
+      "access": "update_config_value",
+      "constant": "CONF_EV_SOLAR_SOAK_AVERAGE_MINUTES",
+      "key": "ev_solar_soak_average_minutes",
+      "kind": "managed_mutation",
+      "layer": "runtime",
+      "receiver": "self.coordinator",
+      "scope": "EvSolarSoakNumber.async_set_native_value",
+      "source": "custom_components/home_energy_orchestrator/number.py"
+    },
+    {
+      "access": "update_config_value",
+      "constant": "CONF_EV_SOLAR_SOAK_BATTERY_SOC",
+      "key": "ev_solar_soak_battery_soc_percent",
+      "kind": "managed_mutation",
+      "layer": "runtime",
+      "receiver": "self.coordinator",
+      "scope": "EvSolarSoakNumber.async_set_native_value",
+      "source": "custom_components/home_energy_orchestrator/number.py"
+    }
+  ],
+  "extension": "solar_soak_v1",
+  "schema_version": 1
+}

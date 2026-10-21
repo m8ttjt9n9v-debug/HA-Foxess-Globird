@@ -1,0 +1,45 @@
+{
+  "entities": [
+    {
+      "default_entity_id": "number.home_energy_ev_solar_soak_adjustment_minutes",
+      "device_class": null,
+      "enabled_by_default": true,
+      "entity_category": "config",
+      "key": "ev_solar_soak_adjustment_minutes",
+      "name": "Solar Soak Adjustment Period",
+      "platform": "number",
+      "state_class": null,
+      "translation_key": null,
+      "unique_id_template": "{config_entry_id}_ev_solar_soak_adjustment_minutes",
+      "unit": "min"
+    },
+    {
+      "default_entity_id": "number.home_energy_ev_solar_soak_average_minutes",
+      "device_class": null,
+      "enabled_by_default": true,
+      "entity_category": "config",
+      "key": "ev_solar_soak_average_minutes",
+      "name": "Solar Soak Averaging Period",
+      "platform": "number",
+      "state_class": null,
+      "translation_key": null,
+      "unique_id_template": "{config_entry_id}_ev_solar_soak_average_minutes",
+      "unit": "min"
+    },
+    {
+      "default_entity_id": "number.home_energy_ev_solar_soak_battery_soc",
+      "device_class": null,
+      "enabled_by_default": true,
+      "entity_category": "config",
+      "key": "ev_solar_soak_battery_soc",
+      "name": "Solar Soak Battery Floor",
+      "platform": "number",
+      "state_class": null,
+      "translation_key": null,
+      "unique_id_template": "{config_entry_id}_ev_solar_soak_battery_soc",
+      "unit": "%"
+    }
+  ],
+  "entity_count": 3,
+  "schema_version": 1
+}

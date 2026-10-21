@@ -12,7 +12,12 @@ from homeassistant.core import callback, valid_entity_id
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import selector
 
-from .config_page_schema import GRID_PHASE_SECTIONS, CapacityCoerce, build_page_schema
+from .config_page_schema import (
+    GRID_PHASE_SECTIONS,
+    SOLAR_SOAK_SECTION,
+    CapacityCoerce,
+    build_page_schema,
+)
 from .configuration import AemoMonitorConfiguration, EvCapacitySettings
 from .const import (
     BATTERY_POSITIVE_DISCHARGE,
@@ -101,6 +106,9 @@ from .const import (
     CONF_EV_SMART_SOCKET_RETRY_SECONDS,
     CONF_EV_SMART_SOCKET_SETTLE_SECONDS,
     CONF_EV_SOC,
+    CONF_EV_SOLAR_SOAK_ADJUSTMENT_MINUTES,
+    CONF_EV_SOLAR_SOAK_AVERAGE_MINUTES,
+    CONF_EV_SOLAR_SOAK_BATTERY_SOC,
     CONF_EV_SOLAR_SPILL_BATTERY_SOC,
     CONF_EV_SOLAR_SPILL_ENABLED,
     CONF_EV_STORED_ENERGY,
@@ -224,6 +232,9 @@ from .const import (
     DEFAULT_EV_SMART_SOCKET_POWER_SWITCHING,
     DEFAULT_EV_SMART_SOCKET_RETRY_SECONDS,
     DEFAULT_EV_SMART_SOCKET_SETTLE_SECONDS,
+    DEFAULT_EV_SOLAR_SOAK_ADJUSTMENT_MINUTES,
+    DEFAULT_EV_SOLAR_SOAK_AVERAGE_MINUTES,
+    DEFAULT_EV_SOLAR_SOAK_BATTERY_SOC,
     DEFAULT_EV_SOLAR_SPILL_BATTERY_SOC,
     DEFAULT_EV_SOLAR_SPILL_ENABLED,
     DEFAULT_EV_TELEMETRY_MAX_AGE_SECONDS,
@@ -514,8 +525,9 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         displayed = self._draft_input
         if user_input is not None:
             submitted = dict(user_input)
-            if page == "grid":
-                for section_name in GRID_PHASE_SECTIONS:
+            if page in ("grid", "ev_policies"):
+                sections = GRID_PHASE_SECTIONS if page == "grid" else SOLAR_SOAK_SECTION
+                for section_name in sections:
                     section_values = submitted.pop(section_name, None)
                     if isinstance(section_values, dict):
                         submitted.update(section_values)
@@ -564,9 +576,10 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     @staticmethod
     def _page_display_errors(page: str, errors: dict[str, str]) -> dict[str, str]:
         """Attach nested grid-field failures to their visible phase section."""
-        if page != "grid":
+        if page not in ("grid", "ev_policies"):
             return errors
-        for section_name, keys in GRID_PHASE_SECTIONS.items():
+        sections = GRID_PHASE_SECTIONS if page == "grid" else SOLAR_SOAK_SECTION
+        for section_name, keys in sections.items():
             for key in keys:
                 if key in errors:
                     return {section_name: errors[key]}
@@ -741,6 +754,18 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 }
             elif page == "ev_policies":
                 checks = {
+                    CONF_EV_SOLAR_SOAK_BATTERY_SOC:
+                        0 <= number(CONF_EV_SOLAR_SOAK_BATTERY_SOC) <= 100
+                        and number(CONF_EV_SOLAR_SOAK_BATTERY_SOC).is_integer()
+                        and not isinstance(data[CONF_EV_SOLAR_SOAK_BATTERY_SOC], bool),
+                    CONF_EV_SOLAR_SOAK_AVERAGE_MINUTES:
+                        1 <= number(CONF_EV_SOLAR_SOAK_AVERAGE_MINUTES) <= 30
+                        and number(CONF_EV_SOLAR_SOAK_AVERAGE_MINUTES).is_integer()
+                        and not isinstance(data[CONF_EV_SOLAR_SOAK_AVERAGE_MINUTES], bool),
+                    CONF_EV_SOLAR_SOAK_ADJUSTMENT_MINUTES:
+                        1 <= number(CONF_EV_SOLAR_SOAK_ADJUSTMENT_MINUTES) <= 30
+                        and number(CONF_EV_SOLAR_SOAK_ADJUSTMENT_MINUTES).is_integer()
+                        and not isinstance(data[CONF_EV_SOLAR_SOAK_ADJUSTMENT_MINUTES], bool),
                     CONF_EV_FREE_WINDOW_CHARGE_LIMIT:
                         0 <= number(CONF_EV_FREE_WINDOW_CHARGE_LIMIT) <= 100,
                     CONF_EV_FREE_WINDOW_MINIMUM_CURRENT:
@@ -2168,6 +2193,15 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 CONF_EV_SOLAR_SPILL_BATTERY_SOC,
                 DEFAULT_EV_SOLAR_SPILL_BATTERY_SOC,
             ),
+            CONF_EV_SOLAR_SOAK_BATTERY_SOC: data.get(
+                CONF_EV_SOLAR_SOAK_BATTERY_SOC, DEFAULT_EV_SOLAR_SOAK_BATTERY_SOC,
+            ),
+            CONF_EV_SOLAR_SOAK_AVERAGE_MINUTES: data.get(
+                CONF_EV_SOLAR_SOAK_AVERAGE_MINUTES, DEFAULT_EV_SOLAR_SOAK_AVERAGE_MINUTES,
+            ),
+            CONF_EV_SOLAR_SOAK_ADJUSTMENT_MINUTES: data.get(
+                CONF_EV_SOLAR_SOAK_ADJUSTMENT_MINUTES, DEFAULT_EV_SOLAR_SOAK_ADJUSTMENT_MINUTES,
+            ),
             CONF_EV_MORNING_SOLAR_ENABLED: data.get(
                 CONF_EV_MORNING_SOLAR_ENABLED, DEFAULT_EV_MORNING_SOLAR_ENABLED
             ),
@@ -2322,6 +2356,21 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     def _validate_input(self, data: dict[str, object]) -> dict[str, str]:
         """Reject malformed IDs and unsafe physical limits before saving them."""
+        for key, minimum, maximum in (
+            (CONF_EV_SOLAR_SOAK_BATTERY_SOC, 0.0, 100.0),
+            (CONF_EV_SOLAR_SOAK_AVERAGE_MINUTES, 1.0, 30.0),
+            (CONF_EV_SOLAR_SOAK_ADJUSTMENT_MINUTES, 1.0, 30.0),
+        ):
+            raw = data.get(key)
+            try:
+                number = float(raw)
+            except (TypeError, ValueError, OverflowError):
+                return {key: "invalid_site_limits"}
+            if (
+                isinstance(raw, bool) or not math.isfinite(number)
+                or not minimum <= number <= maximum or not number.is_integer()
+            ):
+                return {key: "invalid_site_limits"}
         if data.get(CONF_HOUSE_LOAD_SOURCE, "sensor") not in {
             "sensor", "power_balance", "power_balance_cloud_solar",
         }:

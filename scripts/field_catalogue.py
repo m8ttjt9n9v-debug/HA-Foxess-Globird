@@ -32,6 +32,9 @@ AMBER_ADDITIONS_PATH = (
 LOAD_ADDITIONS_PATH = (
     REPOSITORY_ROOT / "docs" / "maintainability" / "config-field-additions-load-power-v1.json"
 )
+SOLAR_SOAK_ADDITIONS_PATH = (
+    REPOSITORY_ROOT / "docs" / "maintainability" / "config-field-additions-solar-soak-v1.json"
+)
 
 _EV_PAGES = {"car", "charger", "ev_policies", "recovery"}
 
@@ -95,6 +98,7 @@ def rendered_catalogue() -> str:
     known = {field["key"] for field in fields}
     for path in (
         ADDITIONS_PATH, CAPACITY_ADDITIONS_PATH, AMBER_ADDITIONS_PATH, LOAD_ADDITIONS_PATH,
+        SOLAR_SOAK_ADDITIONS_PATH,
     ):
         additions = json.loads(path.read_text(encoding="utf-8"))
         if additions["field_count"] != len(additions["fields"]):
