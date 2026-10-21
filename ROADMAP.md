@@ -46,6 +46,30 @@ retains the final decision. It does not authorise monitoring jobs or deployments
   wrong inverter/vehicle, unchanged battery/mode and per-command source loss.
 - [ ] Complete release gates and separately approved pilot/remote acceptance.
 
+## EV-before-export awaited-publication coherence correction
+
+- [x] Reproduce a healthy native-frame/current/electrical publication during an
+  awaited checkpoint falsely invalidating the earlier cycle's energy evidence.
+- [x] Recheck one complete synchronous live cohort at the actual budget-check
+  time, restoring enclosing feedback and preserving each positive-command gate.
+- [x] Retain real future/stale/mismatched/failed native evidence rejection and
+  characterize native command-cache mutations without treating them as readings.
+- [x] Retire obsolete positive retries only on a qualified zero-baseline stop,
+  checkpointing both handoffs atomically with rollback on save failure.
+- [x] Complete focused validation and independent review, including native
+  publication races, active-owner preservation and stop/restart regressions.
+- [ ] Complete final release gates and approved live acceptance. Concurrent
+  EV/export remains design-only.
+
+## Concurrent evening EV charging and export — design only
+
+- [x] Document a dozen late-arrival, funding, power, cap and lifecycle scenarios
+  in [the overlap design](docs/ev-export-overlap-design.md), including full EV
+  shortfall protection and gross-versus-net power conservation.
+- [ ] Review a separately opted-in shared allocation using the existing writers
+  and journals. Do not enable overlap or weaken existing exclusive gates as part
+  of the awaited-publication bug fix.
+
 ## EV-before-export protected charging — v0.12.51
 
 - [x] Extend the existing opt-in and target through the current EV outside

@@ -232,6 +232,18 @@ Native FoxESS retained mode/SoC must share the loaded inverter with fresh local
 grid evidence. Missing/stale electrical data, unavailable/restored inputs and
 unrecognised native mappings remain blocking. There is no additional API poll.
 
+Awaited checkpoints may let a genuine provider/electrical publication advance.
+After a qualified zero-baseline stop, obsolete positive retries must retire
+with the stop checkpoint so an identical later target starts a fresh episode.
+Unconfirmed stops and active owners retain their duties; persistence failure
+restores both transitions rather than manufacturing an acknowledgement.
+Budget-backed selection and reconciliation must recapture coherent current
+evidence at the time of evaluation, rather than compare a new frame with the
+cycle's older captured values or clock. Reaching a target/reserve or changing
+an actuator request/maximum during that wait still requires the normal
+curtailment, even when the older feedback already matched. Optimistic native
+command-cache mutations cannot substitute for measured vehicle feedback.
+
 Restored active Full/Trip intent waits for completed Home Assistant startup
 and its initial vehicle/actuator feedback before becoming ready. The original
 timeout still counts; missing startup data is not a new permission to charge.

@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.12.57 — Coherent EV-before-export feedback
+
+- Prevent a real Tessie or electrical update during an awaited checkpoint from
+  being compared with the cycle's older readings/time, incorrectly stopping
+  protected EV charging as though energy evidence had disappeared.
+- Re-evaluate target/reserve crossings and reconcile current requests/native
+  maxima from current feedback, including when older actuators already matched.
+- End an obsolete positive retry episode when a genuine zero-baseline stop is
+  confirmed. Persist stop completion and retry retirement together, restoring
+  both on save failure; preserve active owners and unconfirmed stop duties.
+- Preserve genuine source expiry/future/mismatch rejection, command-acknowledgement
+  limits, electrical/energy caps and existing exclusive charging/export policy.
+- Add permanent real-controller publication-race and native command-cache
+  regressions. Concurrent EV/export is documented as a separate design only.
+
 ## 0.12.56 — Configurable afternoon solar charging
 
 - Expose the afternoon solar-soak battery floor, averaging period and ordinary

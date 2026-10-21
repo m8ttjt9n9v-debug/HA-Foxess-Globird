@@ -979,6 +979,23 @@ class ActiveEvController:
                 self.target_limit_percent,
                 charge_to_full=charge_to_full_requested,
             )
+            if not in_window and self._outside_uses_current_budget(now):
+                # Selection used a post-checkpoint cohort. Reconcile against
+                # that same current actuator state, including an already
+                # matching old request which changed during the checkpoint.
+                feedback = capture_ev_feedback(
+                    self.hass, ev_observation_entity_map(self.coordinator.runtime_config),
+                )
+                _CYCLE_FEEDBACK.set(feedback)
+                observation = feedback.direct_observation
+                if observation is None:
+                    self.last_reason = "ev_actuator_metadata_unavailable"
+                    return
+                self.requested_current_a = observation.requested_current_a
+                self.applied_limit_percent = observation.charge_limit_percent
+                self.charge_switch_on = observation.charge_switch_on
+                current, valid = feedback.actual_current_result
+                self.actual_current_a = current if valid else None
             if self.outside_stop_requested:
                 await self._async_reconcile_outside_stop(now, observation, gate=gate)
                 return
@@ -1363,22 +1380,42 @@ class ActiveEvController:
             charge_switch_on = charge_state == "on"
         else:
             charge_switch_on = observation.charge_switch_on
+        prior_stop = DailyBackfillStopState(
+            pending=self.daily_backfill_stop_pending,
+            attempts=self.daily_backfill_stop_attempts,
+            last_attempt_at=self.daily_backfill_last_stop_at,
+            outside_control_active=self.outside_control_active,
+        )
         stop = reconcile_daily_backfill_stop(
-            DailyBackfillStopState(
-                pending=self.daily_backfill_stop_pending,
-                attempts=self.daily_backfill_stop_attempts,
-                last_attempt_at=self.daily_backfill_last_stop_at,
-                outside_control_active=self.outside_control_active,
-            ),
+            prior_stop,
             charge_switch_on=charge_switch_on,
             now=now,
             retry_interval=DAILY_BACKFILL_STOP_RETRY_INTERVAL,
         )
+        retire_episode = stop.save_required and self._zero_stop_ends_positive_episode()
+        if retire_episode and not self._zero_stop_feedback_confirmed(now):
+            self.last_reason = "daily_backfill_stop_feedback_unavailable"
+            return
         self._apply_daily_backfill_stop_state(stop.state)
         if stop.save_required:
+            prior = (
+                self.reconciliation, self.last_decision_at, self._decision_fingerprint,
+                self.outside_stop_requested, self.last_reason,
+            )
+            if retire_episode:
+                # The old positive request was deliberately stopped. Reusing
+                # its amps later is a new episode, not another failed retry.
+                self.reconciliation = DirectEvseReconciliationState()
+                self.last_decision_at = self._decision_fingerprint = None
             self.outside_stop_requested = False
             self.last_reason = stop.plan.reason
-            await self._async_save(now)
+            try:
+                await self._async_save(now)
+            except Exception:
+                self._apply_daily_backfill_stop_state(prior_stop)
+                (self.reconciliation, self.last_decision_at, self._decision_fingerprint,
+                 self.outside_stop_requested, self.last_reason) = prior
+                raise
             return
         if not stop.plan.commands:
             self.last_reason = stop.plan.reason
@@ -1395,6 +1432,55 @@ class ActiveEvController:
                 record_daily_backfill_stop_attempt(stop.state, now)
             )
             await self._async_save(now)
+
+    def _zero_stop_ends_positive_episode(self) -> bool:
+        """Only an unowned zero-baseline stop can retire a positive episode."""
+        trip = getattr(self.coordinator, "trip_charge", None)
+        baseline = self._float(CONF_EV_PROTECTED_BASELINE_A, DEFAULT_EV_PROTECTED_BASELINE_A)
+        old_target = self.reconciliation.target_current_a
+        return (
+            isfinite(baseline) and baseline == 0
+            and self.target_current_a == 0 and not isinstance(self.target_current_a, bool)
+            and type(old_target) in (int, float) and isfinite(old_target) and old_target > 0
+            and self.reconciliation.phase in DIRECT_EVSE_RECONCILIATION_PHASES
+            and (self.daily_backfill_stop_pending or self.outside_stop_requested)
+            and self.coordinator.runtime_config.ev_policy.charge_path != EV_CHARGE_PATH_SMART_SOCKET
+            and not self.pre_free_session.active and not self.daily_backfill_active
+            and not self.outside_target_active and not self._charge_to_full_requested()
+            and self.charge_to_full_started_at is None
+            and self.smart_recovery.phase == "idle"
+            and self.smart_stage_started_at is None and self.smart_stage_target_a is None
+            and not (trip is not None and (
+                trip.owns_full or trip._state.cleanup_pending
+                or not trip._loaded or trip._invalid_storage or trip._storage_error or trip._dirty
+            ))
+        )
+
+    def _zero_stop_feedback_confirmed(self, now: datetime) -> bool:
+        """Reuse the native measurement contract, never optimistic switch data."""
+        now = dt_util.now().astimezone(now.tzinfo)
+        runtime = self.coordinator.runtime_config
+        feedback = capture_ev_feedback(self.hass, ev_observation_entity_map(runtime))
+        maximum_age = self._float(
+            CONF_EV_TELEMETRY_MAX_AGE_SECONDS, DEFAULT_EV_TELEMETRY_MAX_AGE_SECONDS,
+        )
+        token = _CYCLE_FEEDBACK.set(feedback)
+        try:
+            return (
+                before_export_vehicle_feedback_valid(
+                    self.hass, feedback, now=now, max_age_seconds=maximum_age,
+                )
+                and self._connected_at_home()[0]
+                and (runtime.ev_connection.location_mode != "auto"
+                     or feedback.at_home.fresh(now, maximum_age))
+                and feedback.charge_switch.available_state == "off"
+                and feedback.charging_state.available_state in {
+                    "stopped", "complete", "disconnected", "nopower", "no_power",
+                }
+                and feedback.actual_current_result == (0.0, True)
+            )
+        finally:
+            _CYCLE_FEEDBACK.reset(token)
 
     async def _async_reconcile_general_limit_only(
         self,
@@ -2075,7 +2161,38 @@ class ActiveEvController:
         self.allowance_ev_power_kw = result.ev_power_kw
         return result.decision
 
+    def _outside_uses_current_budget(self, now: datetime) -> bool:
+        """Identify the direct policies that read the live protected budget."""
+        runtime = self.coordinator.runtime_config
+        return runtime.ev_policy.charge_path != EV_CHARGE_PATH_SMART_SOCKET and (
+            runtime.ev_preferences.before_export_enabled
+            or self._solar_soak_active
+            or runtime.site.solar_configured and runtime.ev_policy.solar_spill_enabled
+            and not self._pre_free_window(now)[1]
+        )
+
     def _calculate_outside_target(self, now: datetime, observation: DirectEvseObservation) -> bool:
+        """Keep budget-backed selection on the same current feedback boundary."""
+        if not self._outside_uses_current_budget(now):
+            return self._observed_outside_target(now, observation)
+        runtime = self.coordinator.runtime_config
+        now = dt_util.now().astimezone(now.tzinfo)
+        token = _CYCLE_FEEDBACK.set(capture_ev_feedback(
+            self.hass, ev_observation_entity_map(runtime),
+        ))
+        try:
+            if self._free_window(now)[0]:
+                # The next ordinary cycle owns the free-window handoff. A
+                # checkpoint crossing its boundary cannot add outside power.
+                return self._reject_outside_candidate("free_window_transition")
+            current = self._observation()
+            if current is None:
+                return self._reject_outside_candidate("ev_actuator_metadata_unavailable")
+            return self._observed_outside_target(now, current)
+        finally:
+            _CYCLE_FEEDBACK.reset(token)
+
+    def _observed_outside_target(self, now: datetime, observation: DirectEvseObservation) -> bool:
         """Port solar spill and latest-start backfill without touching FoxESS."""
         self.outside_stop_requested = False
         self._solar_soak_active = False
@@ -2685,7 +2802,26 @@ class ActiveEvController:
         return True
 
     def _before_export_energy_budget(self, now: datetime) -> float | None:
-        """Recheck the same reserve/house/EV ledger against current evidence."""
+        """Read a current budget cohort after any awaited lifecycle checkpoint.
+
+        The outer cycle retains its original EV feedback and scheduling time.
+        Native vehicle and electrical publications may advance while that
+        cycle awaits storage. This synchronous check captures EV feedback and
+        reads the native frame/electrical evidence against its own current
+        clock, without mixing them with the earlier cycle's observation.
+        Every positive-command recheck enters this same fresh boundary.
+        """
+        now = dt_util.now().astimezone(now.tzinfo)
+        token = _CYCLE_FEEDBACK.set(capture_ev_feedback(
+            self.hass, ev_observation_entity_map(self.coordinator.runtime_config),
+        ))
+        try:
+            return self._observed_before_export_energy_budget(now)
+        finally:
+            _CYCLE_FEEDBACK.reset(token)
+
+    def _observed_before_export_energy_budget(self, now: datetime) -> float | None:
+        """Recheck the same reserve/house/EV ledger against one current cohort."""
         runtime = self.coordinator.runtime_config
         active = getattr(self.coordinator, "active_controller", None)
         snapshot, data = self.coordinator.snapshot, self.coordinator.data

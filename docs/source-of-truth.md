@@ -210,6 +210,37 @@ layers around the proven algorithm, not replacement algorithms.
 
 ## Current software truth
 
+### EV discretionary-energy evidence during awaited checkpoints
+
+A genuinely confirmed zero-baseline stop ends its obsolete positive retry
+episode. Otherwise a later legitimate request for the same amps/limit can
+inherit an old failed-start backoff. Retirement requires a pending stop, fresh
+native-qualified stopped/off evidence and no active Full/Trip, daily/pre-free,
+surplus or recovery owner. Stop completion and retry/cadence retirement share
+one checkpoint; save failure restores both. Positive keepalive and unconfirmed
+stop obligations are unchanged. This is not a migration that clears arbitrary
+old episodes or treats optimistic switch updates as physical acknowledgement.
+
+Before-export and buffered-soak selection, fallback and energy rechecks sample
+complete live feedback synchronously at their actual check time. Earlier captured
+feedback and scheduling time must not be combined with a later Tessie frame or
+later electrical publication after an awaited checkpoint. That combination can
+incorrectly mark an ordinary new reading as future or contradictory and create
+a false stop obligation. The local recheck restores the enclosing cycle's
+feedback afterward; actuator reconciliation also refreshes its observation so
+an already-matching older request cannot hide a new higher current or a lower
+actuator maximum. Target/reserve crossings still curtail an existing charge,
+even when no new positive service would otherwise be necessary. Every positive
+command still makes a new protected check.
+
+This is a coherence correction, not a new charging policy. Native vehicle
+identity, measurement age, provider health and value agreement remain required.
+Optimistic command acknowledgements are not measurements; actual future/stale
+or mismatched evidence remains blocked. The existing instantaneous grid-import
+guard, energy reserve, EV targets, electrical caps and exclusive EV/export
+ownership are unchanged. Concurrent EV charging and forced export is not enabled
+by this correction. Repository regressions do not establish live acceptance.
+
 - Optional dedicated EV planning capacity replaces the instantaneous
   remaining-energy/SoC inference only when explicitly selected. One read-only
   resolver supplies the learned limit/free-window gain, both Trip schedulers,
