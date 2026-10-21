@@ -31,13 +31,14 @@ def before_export_vehicle_feedback_valid(hass, feedback, *, now, max_age_seconds
     )
     if any(not _retained_valid(item, now) for item in items):
         return False
+    strict_fresh = all(item.fresh(now, max_age_seconds) for item in items) and (
+        feedback.physical_observation(now=now, max_age_seconds=max_age_seconds).available
+    )
     registry = er.async_get(hass)
     soc = registry.async_get(feedback.soc.entity_id) if feedback.soc.entity_id else None
     if soc is None or soc.platform != "tessie":
         # An arbitrary mapped publisher has no established native-frame contract.
-        return all(item.fresh(now, max_age_seconds) for item in items) and (
-            feedback.physical_observation(now=now, max_age_seconds=max_age_seconds).available
-        )
+        return strict_fresh
     entry = hass.config_entries.async_get_entry(soc.config_entry_id)
     device = dr.async_get(hass).async_get(soc.device_id) if soc.device_id else None
     if (
@@ -60,8 +61,10 @@ def before_export_vehicle_feedback_valid(hass, feedback, *, now, max_age_seconds
     )
     for item, field in fields:
         row = registry.async_get(item.entity_id) if item.entity_id else None
+        if row is None or row.platform != "tessie":
+            return strict_fresh  # Preserve fresh explicit mixed-source mappings.
         if (
-            row is None or row.platform != "tessie" or row.disabled_by is not None
+            row.disabled_by is not None
             or row.config_entry_id != entry.entry_id or row.device_id != device.id
             or row.unique_id != f"{vin}-{field}"
         ):
@@ -129,10 +132,12 @@ def before_export_inverter_feedback_valid(hass, mode, battery_soc, grid, *, now,
     """
     if not _retained_valid(mode, now) or not _retained_valid(battery_soc, now):
         return False
+    if mode.fresh(now, max_age_seconds):
+        return True  # Existing fresh mode does not need a native alternative.
     registry = er.async_get(hass)
     mode_row = registry.async_get(mode.entity_id) if mode.entity_id else None
     if mode_row is None or mode_row.platform != "foxess_modbus":
-        return mode.fresh(now, max_age_seconds)
+        return False
     entry = hass.config_entries.async_get_entry(mode_row.config_entry_id)
     if (
         entry is None or entry.domain != "foxess_modbus" or entry.state != ConfigEntryState.LOADED

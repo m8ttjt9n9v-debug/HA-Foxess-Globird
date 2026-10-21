@@ -223,7 +223,8 @@ All ordinary EV gates, outside-window caps, battery reserves and the normal SoC
 ceiling apply. Target crossing hands current back to baseline/off before
 automatic export can begin. There is no new helper, API key or schedule.
 
-For native Tessie top-up feedback, the existing charge-state frame must be
+Existing freshly reporting mappings keep their original feedback contract.
+For unchanged native Tessie top-up feedback, the existing charge-state frame must be
 recent and agree with every mapped charge input for the same vehicle/entry.
 Individual unchanged HA values need not republish within that interval; neither
 HTTP fetch time nor a command acknowledgement substitutes for vehicle time.

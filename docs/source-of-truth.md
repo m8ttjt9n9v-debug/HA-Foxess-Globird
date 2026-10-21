@@ -783,7 +783,8 @@ forced to start immediately. Invalid or unavailable EV SoC withholds export
 only while the opt-in is enabled. No new stored schema, controller or timer.
 
 From v0.12.54, the top-up distinguishes native publisher measurement clocks
-from unchanged HA entity clocks. All mapped native Tessie charge inputs must
+from unchanged HA entity clocks. Existing fresh mapped feedback retains its
+original contract. For the unchanged-value alternative, native charge inputs must
 belong to the same loaded entry/vehicle, match one existing charge-state frame,
 and pass the unchanged EV age limit using `charge_state_timestamp`. Failed,
 offline, restored, mismatched and optimistic command-only data cannot grant

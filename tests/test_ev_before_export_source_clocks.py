@@ -259,3 +259,40 @@ async def test_healthy_frame_expires_without_rewriting_entity_clocks(hass, freez
     await rig.controller.async_reconcile(now)
     assert rig.controller.decision_phase == "ev_before_export_energy_unavailable"
     assert not _above_baseline(calls)
+
+
+async def test_existing_fresh_mixed_mapping_needs_no_native_cache_fallback(hass, freezer):
+    rig = _native(hass, freezer, old_seconds=0)
+    # Explicit template/device mappings keep their own strict clock contract;
+    # they cannot borrow a native car's clock when any input expires.
+    er.async_get(hass).async_remove("sensor.car_actual_current")
+    hass.states.async_set("sensor.car_actual_current", "0", {"unit_of_measurement": "A"},
+                          force_update=True)
+    rig.entry.runtime_data = None
+    calls = _services(hass)
+    await rig.controller.async_reconcile(rig.now)
+    assert _above_baseline(calls)
+
+
+@pytest.mark.parametrize("fault", ["old_measurement", "failed_provider"])
+async def test_fresh_native_entity_reports_cannot_renew_old_or_failed_vehicle_data(
+    hass, freezer, fault,
+):
+    rig = _native(hass, freezer, old_seconds=0)
+    if fault == "old_measurement":
+        rig.provider.data["charge_state_timestamp"] -= 91_000
+    else:
+        rig.provider.last_update_success = False
+    calls = _services(hass)
+    await rig.controller.async_reconcile(rig.now)
+    assert not _above_baseline(calls)
+
+
+async def test_fresh_mode_does_not_require_native_grid_or_battery_mapping(hass, freezer):
+    rig = _native(hass, freezer)
+    state = hass.states.get("select.foxess_mode")
+    hass.states.async_set(state.entity_id, state.state, dict(state.attributes), force_update=True)
+    er.async_get(hass).async_update_entity("sensor.site_grid", device_id=None)
+    calls = _services(hass)
+    await rig.controller.async_reconcile(rig.now)
+    assert _above_baseline(calls)
