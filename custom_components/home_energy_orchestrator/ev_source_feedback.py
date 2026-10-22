@@ -22,8 +22,16 @@ def _retained_valid(item, now):
     )
 
 
-def before_export_vehicle_feedback_valid(hass, feedback, *, now, max_age_seconds):
-    """Qualify one vehicle cohort without changing ordinary/maintenance rules."""
+def before_export_vehicle_feedback_valid(
+    hass, feedback, *, now, max_age_seconds, local_connected_idle=False, measured_since=None,
+):
+    """Qualify one vehicle cohort without changing ordinary/maintenance rules.
+
+    Only the export handover caller, after independent fresh native open-
+    contactor proof, may request retained stopped-frame validation. That is
+    retained SoC/stop evidence, NOT fresh vehicle current or charging authority.
+    Generic/mixed mappings have no such native frame contract.
+    """
     items = (
         feedback.soc, feedback.current_limit, feedback.charge_limit,
         feedback.cable_connected, feedback.charging_state,
@@ -38,7 +46,7 @@ def before_export_vehicle_feedback_valid(hass, feedback, *, now, max_age_seconds
     soc = registry.async_get(feedback.soc.entity_id) if feedback.soc.entity_id else None
     if soc is None or soc.platform != "tessie":
         # An arbitrary mapped publisher has no established native-frame contract.
-        return strict_fresh
+        return strict_fresh and not local_connected_idle
     entry = hass.config_entries.async_get_entry(soc.config_entry_id)
     device = dr.async_get(hass).async_get(soc.device_id) if soc.device_id else None
     if (
@@ -62,7 +70,7 @@ def before_export_vehicle_feedback_valid(hass, feedback, *, now, max_age_seconds
     for item, field in fields:
         row = registry.async_get(item.entity_id) if item.entity_id else None
         if row is None or row.platform != "tessie":
-            return strict_fresh  # Preserve fresh explicit mixed-source mappings.
+            return strict_fresh and not local_connected_idle
         if (
             row.disabled_by is not None
             or row.config_entry_id != entry.entry_id or row.device_id != device.id
@@ -84,7 +92,9 @@ def before_export_vehicle_feedback_valid(hass, feedback, *, now, max_age_seconds
     ):
         return False
     data = getattr(provider, "data", None)
-    if not isinstance(data, Mapping) or data.get("state") != "online":
+    if not isinstance(data, Mapping) or data.get("state") not in (
+        {"online", "asleep"} if local_connected_idle else {"online"}
+    ):
         return False
     stamp = data.get("charge_state_timestamp")
     if type(stamp) not in (int, float) or not isfinite(stamp):
@@ -93,9 +103,10 @@ def before_export_vehicle_feedback_valid(hass, feedback, *, now, max_age_seconds
         observed_at = datetime.fromtimestamp(stamp / 1000, UTC)
     except (OverflowError, OSError, ValueError):
         return False
-    if not isfinite(max_age_seconds) or not (
-        0 <= (now - observed_at).total_seconds() <= max_age_seconds
-    ):
+    age = (now - observed_at).total_seconds()
+    if not isfinite(max_age_seconds) or age < 0 or (
+        not local_connected_idle and age > max_age_seconds
+    ) or (measured_since is not None and observed_at < measured_since):
         return False
     for item, field in (
         (feedback.soc, "charge_state_usable_battery_level"),
@@ -114,6 +125,10 @@ def before_export_vehicle_feedback_valid(hass, feedback, *, now, max_age_seconds
              "Disconnected": "disconnected", "NoPower": "no_power"}.get(charging)
     return (
         state is not None and feedback.charging_state.available_state == state
+        and (not local_connected_idle or (
+            state in {"stopped", "complete", "no_power"}
+            and cable != "<invalid>" and feedback.actual_current.current_a == 0
+        ))
         and feedback.cable_connected.available_state == ("off" if cable == "<invalid>" else "on")
         and feedback.charge_switch.available_state == ("on" if state == "charging" else "off")
         and feedback.actual_current.current_a is not None and feedback.actual_current.current_a >= 0

@@ -63,6 +63,15 @@ def test_01260_describes_strict_command_and_transient_continuation_boundaries() 
     assert not Version("0.12.60").is_prerelease
 
 
+def test_01261_distinguishes_retained_stop_from_fresh_vehicle_authority() -> None:
+    title, notes = release_text("v0.12.61", CHANGELOG_PATH.read_text(encoding="utf-8"))
+    assert title == "v0.12.61 — Keep completed EV handover through vehicle sleep"
+    assert "open-contactor" in notes and "not\n  fresh vehicle telemetry" in notes
+    assert "Reconnection requires" in notes and "pending buffered recovery/stop" in notes
+    assert "v0.12.60" in notes and "deployed dashboards" in notes
+    assert not Version("0.12.61").is_prerelease
+
+
 def test_01240_has_stable_guarded_maintenance_and_separate_activation_notes() -> None:
     title, notes = release_text("v0.12.40", CHANGELOG_PATH.read_text(encoding="utf-8"))
     assert title == "v0.12.40 — Safe per-site Fleet updates and restarts"

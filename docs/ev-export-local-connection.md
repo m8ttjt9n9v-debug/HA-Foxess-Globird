@@ -66,3 +66,36 @@ saved policy or charger mapping is changed automatically by HACS installation.
 Rollback ignores the optional mapping and restores the previous strict handover;
 retain a deployment backup. Repository and startup checks are not physical
 critical-event export or retailer-payment proof.
+
+## Connected stopped-car correction — v0.12.61
+
+The disconnected-only fallback did not cover a car that remains plugged in and
+sleeps after its measured stop. The native observer now independently qualifies
+**connected and contactor open** from the same newly published vitals frame.
+This uses the existing telemetry age bound, not a new delay or grace period.
+Raw off-state charger current is not a reliable substitute for contactor state.
+Generic binary sensors cannot supply this stronger proof.
+
+The handover also requires the exact mapped vehicle's loaded native publisher
+and a valid, coherent retained charge-state frame: connected, stopped/complete/
+no-power, charge switch off, actual current zero, matching SoC/current/limit
+fields, valid units and a non-future measurement timestamp. Online or asleep is
+allowed only for this retained stopped-frame check. It is explicitly NOT a fresh
+vehicle cohort and is never used by EV command or stop-acknowledgement checks.
+An observed disconnect/reconnect requires a vehicle frame from the new connection;
+the old stopped frame cannot follow a car through a trip. Restart/rebinding
+discards all local proof and awaits a genuine new local publication; restored
+vehicle placeholders still cannot qualify. No persistent schema is added.
+
+The existing minimum remains value-based. Pending buffered recovery, unconfirmed
+stop and corrupt recovery remain blocking; this independent physical proof cannot
+complete them. Source failure, expiry, affirmative charging/closed-contactor
+evidence or changed authority immediately withdraws the shortcut, including
+between staged export commands. Existing qualified live vehicle feedback remains
+the fallback. No SoC hysteresis boundary or top-up policy changes here.
+
+Joint lifecycle regressions cover both controller orders and one/three phases,
+top-up through the buffer, measured stop, continued connection/sleep, repeated
+publications/export, real unload/setup, reconnect and command-boundary authority
+loss. The preceding disconnected/away, stop-duty and price-expiry suites remain.
+No site settings, dashboard layout, charger mapping or minimum changes are implied.

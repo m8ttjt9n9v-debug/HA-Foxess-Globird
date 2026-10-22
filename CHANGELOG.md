@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.12.61 — Keep completed EV handover through vehicle sleep
+
+- Keep a completed EV/export handover valid when the stopped car stays plugged
+  in and sleeps. Require a fresh, bound native local open-contactor publication
+  and a coherent same-vehicle stopped/zero-current frame; retained SoC is not
+  fresh vehicle telemetry and grants no EV charging authority.
+- Keep the saved minimum, pending buffered recovery/stop duties, current and
+  energy limits, ownership, prices and reducing cleanup. Reconnection requires
+  a new vehicle measurement; stale/conflicting local proof never extends export.
+- Add joint charge/stop/sleep/export/reload/reconnect and command-race regression
+  tests. Include v0.12.60's configurable transient-import correction unchanged.
+  No settings, charger mappings or deployed dashboards are changed by installation.
+
 ## 0.12.60 — Stable EV top-ups through transient import
 
 - Prevent a brief grid-import spike from cancelling and immediately restarting

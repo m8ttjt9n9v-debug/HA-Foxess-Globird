@@ -27,6 +27,13 @@ class LocalEvConnectionObservation:
     source: str
     observed_at: datetime | None = None
     reason: str = ""
+    contactor_open: bool = False
+    connected_since: datetime | None = None
+
+    @property
+    def connected_idle(self) -> bool:
+        """Only a qualified native publication can prove a connected open contactor."""
+        return self.status == "connected" and self.contactor_open
 
     @property
     def disconnected(self) -> bool:
@@ -106,6 +113,8 @@ class LocalEvConnectionObserver:
         self._published_data: object | None = None
         self._entity_id: str | None = None
         self._native_source = False
+        self._connection_state: bool | None = None
+        self._connected_since: datetime | None = None
 
     def close(self):
         """Discard all evidence and remove only our native subscription."""
@@ -113,6 +122,8 @@ class LocalEvConnectionObserver:
         self._binding = None
         self._frame = None
         self._published_data = None
+        self._connection_state = None
+        self._connected_since = None
         if remove is not None:
             try:
                 remove()
@@ -169,7 +180,13 @@ class LocalEvConnectionObserver:
             self._frame = None
             values = _vitals(provider)
             if values is not None:
-                self._frame = (*values, dt_util.utcnow())
+                at = dt_util.utcnow()
+                if self._connection_state is False and values[0]:
+                    self._connected_since = at
+                elif not values[0]:
+                    self._connected_since = None
+                self._connection_state = values[0]
+                self._frame = (*values, at)
 
         try:
             self._remove_listener = binding.provider.async_add_listener(published)
@@ -213,22 +230,34 @@ class LocalEvConnectionObserver:
             if current is None or (state.state == "on") != current[0]:
                 self._frame = None
                 return unknown("native_mismatch")
-            if current[0]:
-                self._frame = None
-                return LocalEvConnectionObservation("connected", source, reason="native_connected")
             if current[1]:
                 self._frame = None
+                if current[0]:
+                    return LocalEvConnectionObservation(
+                        "connected", source, reason="native_connected"
+                    )
                 return unknown("native_contactor_closed")
             if getattr(binding.provider, "data", None) is not self._published_data:
                 self._frame = None
+                if current[0]:
+                    return LocalEvConnectionObservation(
+                        "connected", source, reason="native_connected"
+                    )
                 return unknown("awaiting_native_publication")
             if frame is None or current != frame[:2]:
+                if current[0]:
+                    return LocalEvConnectionObservation(
+                        "connected", source, reason="native_connected"
+                    )
                 return unknown("awaiting_native_publication")
             stamp = frame[2]
             if not _fresh(stamp, now, max_age_seconds):
                 return unknown("native_publication_expired")
             return LocalEvConnectionObservation(
-                "disconnected", source, stamp, "native_disconnected"
+                "connected" if current[0] else "disconnected", source, stamp,
+                "native_connected_stopped" if current[0] else "native_disconnected",
+                contactor_open=True,
+                connected_since=self._connected_since,
             )
         if row is not None and row.config_entry_id:
             entry = self.hass.config_entries.async_get_entry(row.config_entry_id)

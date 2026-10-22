@@ -546,9 +546,9 @@ class ActiveFoxessController:
         """Confirm the EV is no longer spending surplus before export takes it.
 
         This uses physical feedback, not the EV controller's callback order or
-        remembered target. A positively disconnected car may retain requested
-        and raw current; only the shared complete disconnected-idle proof
-        permits disregarding those values.
+        remembered target. Local unplug proof may disregard retained raw
+        current. A connected open-contactor proof instead requires a coherent
+        same-vehicle stopped/zero-current frame; it does not freshen that frame.
         """
         runtime = self.coordinator.runtime_config
         connection = runtime.ev_connection
@@ -593,7 +593,7 @@ class ActiveFoxessController:
             if local.status == "connected" and fresh_cable and cable in {"off", "disconnected"}:
                 self.ev_export_handoff_reason = "connection_conflict"
                 return False
-            if local.disconnected:
+            if local.disconnected or local.connected_idle:
                 if (
                     release is not None
                     or runtime.ev_preferences.before_export_soc_buffer != 0 and ev is None
@@ -614,6 +614,12 @@ class ActiveFoxessController:
                 ):
                     self.ev_export_handoff_reason = "ev_stop_pending"
                     return False
+                if local.connected_idle and not before_export_vehicle_feedback_valid(
+                    self.hass, feedback, now=now, max_age_seconds=maximum_age,
+                    local_connected_idle=True, measured_since=local.connected_since,
+                ):
+                    self.ev_export_handoff_reason = "retained_stopped_frame_unconfirmed"
+                    return False
                 physical = feedback.physical_observation(
                     now=now, max_age_seconds=maximum_age,
                     measured_cohort_valid=vehicle_cohort_valid,
@@ -631,13 +637,15 @@ class ActiveFoxessController:
                     self.ev_export_handoff_reason = "connection_conflict"
                     return False
                 if (
-                    feedback.at_home.fresh(now, maximum_age)
+                    local.disconnected and feedback.at_home.fresh(now, maximum_age)
                     and feedback.at_home.available_state in {"home", "on"}
                     and fresh_cable and cable in {"on", "connected"}
                 ):
                     self.ev_export_handoff_reason = "connection_conflict"
                     return False
-                self.ev_export_handoff_reason = "local_disconnected"
+                self.ev_export_handoff_reason = (
+                    "local_connected_stopped" if local.connected_idle else "local_disconnected"
+                )
                 return True
         self.ev_export_handoff_source = "vehicle_feedback"
         self.ev_export_handoff_observed_at = None

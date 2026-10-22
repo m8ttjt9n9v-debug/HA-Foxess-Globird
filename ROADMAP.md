@@ -1,5 +1,17 @@
 # Project roadmap
 
+## Connected stopped-car export handover — v0.12.61
+
+- [x] Characterize the full top-up → measured stop → connected sleep → export
+  lifecycle that the disconnected-only local handover did not cover.
+- [x] Require independent fresh native open-contactor proof plus bound retained
+  stopped/zero-current vehicle evidence; preserve minimum, pending duties,
+  source clocks, writers and every positive-command check.
+- [x] Add source-boundary, restart/reconnect, callback-order, immediate invalidation
+  and staged-command-loss regressions. Retain the v0.12.60 import correction.
+- [ ] Complete frozen checks, compatibility rehearsal, publication and separately
+  approved pilot-first acceptance. No live activation follows from code tests.
+
 ## EV-before-export transient-import stability — v0.12.60
 
 - [x] Reproduce stop/start chatter from an instantaneous economic import veto;

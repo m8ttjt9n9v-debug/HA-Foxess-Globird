@@ -1,5 +1,18 @@
 # Project source of truth
 
+## v0.12.61 connected, stopped vehicle export handover
+
+The explicitly selected native local charger can also prove its contactor is
+open while the vehicle stays connected and sleeps after a measured stop. This
+requires its own new, bounded publisher frame, plus a coherent retained native
+same-vehicle stopped/zero-current/connected frame. It never treats that older
+vehicle measurement as fresh, completes a pending stop/recovery or grants EV
+commands. An observed reconnect requires a later vehicle measurement. All
+minimum, energy, ownership, pricing and per-command export protections remain.
+Generic connection sensors alone cannot prove connected-idle. No store schema,
+new timer, policy number, writer or poller is added. The v0.12.60 import correction
+is retained unchanged. See [local handover provenance](ev-export-local-connection.md).
+
 ## v0.12.60 EV top-up transient-import correction
 
 An already-owned EV-before-export top-up can retain, never increase, its current

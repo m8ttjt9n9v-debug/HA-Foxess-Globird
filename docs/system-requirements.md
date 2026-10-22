@@ -226,6 +226,15 @@ break the connection.
 
 ## Required for Tessie EV automation
 
+For export handover with a connected sleeping car, the optional native local
+charger mapping must independently publish a valid connected/open-contactor
+frame within the existing telemetry age bound. A generic connection sensor is
+not proof of an open contactor. Retained vehicle evidence must be an exact bound
+native stopped/zero-current/connected frame with valid non-restored SoC at the
+saved minimum and no pending recovery/stop. This does not qualify old vehicle
+data for charging. Observed reconnect requires a newer vehicle measurement.
+No local proof is seeded from cache after startup or source rebinding.
+
 For export handover while the vehicle sleeps, an optional **Local charger
 vehicle-connected sensor** can be explicitly mapped in EV charger setup. It
 must describe the commissioned direct charger, not a vehicle parked elsewhere,
