@@ -1,5 +1,18 @@
 # System requirements and integration map
 
+## EV top-up import confirmation
+
+EV-before-export continuation uses an adjustable 0–300-second confirmation
+period (default 60) for continuous economic import. It may retain only an
+already-issued matching top-up current. New starts, increases and retries still
+require strict non-import evidence at each command boundary. All existing source,
+electrical, reserve and ownership gates remain immediate. Zero selects the
+previous immediate-import mode; corrupt settings/state grant no retention.
+The original deadline survives in the existing EV journal and cannot be renewed
+by repeat observations, restart or setting/source rebinding. Cold restart uses
+strict starting evidence. The native configuration number is dashboard-ready;
+installing the release does not overwrite a deployed dashboard.
+
 ## Optional Fleet maintenance
 
 Fleet maintenance requires HACS update support for the verified HEO repository,

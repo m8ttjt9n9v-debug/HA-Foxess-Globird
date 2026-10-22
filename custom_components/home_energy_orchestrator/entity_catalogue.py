@@ -697,6 +697,13 @@ EV_BEFORE_EXPORT_TARGET_DESCRIPTION = NumberEntityDescription(
     entity_category=EntityCategory.CONFIG,
 )
 
+EV_BEFORE_EXPORT_IMPORT_DESCRIPTION = NumberEntityDescription(
+    key="ev_before_export_import_confirm_seconds", name="EV Top-up Import Confirmation",
+    icon="mdi:timer-outline", native_unit_of_measurement="s",
+    native_min_value=0.0, native_max_value=300.0, native_step=1.0,
+    entity_category=EntityCategory.CONFIG,
+)
+
 EV_BEFORE_EXPORT_BUFFER_DESCRIPTION = NumberEntityDescription(
     key="ev_before_export_soc_buffer", name="EV Before Export SoC Buffer",
     icon="mdi:battery-charging-40", native_unit_of_measurement=PERCENTAGE,
@@ -920,6 +927,7 @@ _NON_SENSOR_PROJECTIONS = {
     "test_duration": "TestNumber.native_value",
     "ev_before_export_soc_target": "EvBeforeExportTargetNumber.native_value",
     "ev_before_export_soc_buffer": "EvBeforeExportBufferNumber.native_value",
+    "ev_before_export_import_confirm_seconds": "EvBeforeExportImportNumber.native_value",
     "ev_morning_solar_reserve_soc": "EvMorningSolarReserveNumber.native_value",
     "ev_solar_soak_battery_soc": "EvSolarSoakNumber.native_value",
     "ev_solar_soak_average_minutes": "EvSolarSoakNumber.native_value",
@@ -960,7 +968,8 @@ def _entity_spec(platform: EntityPlatform, description: EntityDescription) -> En
         availability = (
             "market_configuration" if description.key in _AEMO_CONFIGURATION_KEYS
             else "configuration" if (description in EV_SOLAR_SOAK_DESCRIPTIONS
-                                      or description == EV_BEFORE_EXPORT_BUFFER_DESCRIPTION)
+                                      or description in (EV_BEFORE_EXPORT_BUFFER_DESCRIPTION,
+                                                         EV_BEFORE_EXPORT_IMPORT_DESCRIPTION))
             else "coordinator"
         )
     return EntitySpec(platform, description, projection, availability)
@@ -978,6 +987,7 @@ ENTITY_SPECS = (
     *(_entity_spec("number", description) for description in NUMBER_DESCRIPTIONS),
     _entity_spec("number", EV_BEFORE_EXPORT_TARGET_DESCRIPTION),
     _entity_spec("number", EV_BEFORE_EXPORT_BUFFER_DESCRIPTION),
+    _entity_spec("number", EV_BEFORE_EXPORT_IMPORT_DESCRIPTION),
     _entity_spec("number", EV_MORNING_SOLAR_RESERVE_DESCRIPTION),
     *(_entity_spec("number", description) for description in EV_SOLAR_SOAK_DESCRIPTIONS),
     _entity_spec("select", HOUSE_OCCUPANCY_DESCRIPTION),

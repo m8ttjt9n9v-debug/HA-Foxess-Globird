@@ -1,5 +1,16 @@
 # Project source of truth
 
+## v0.12.60 EV top-up transient-import correction
+
+An already-owned EV-before-export top-up can retain, never increase, its current
+through brief valid grid-import disturbances. The configurable confirmation
+period defaults to 60 seconds; setup and its native dashboard number share one
+setting. Persistent import withdraws at the original deadline; all electrical,
+freshness, reserve, energy, ownership and normal current limits remain immediate.
+Positive-command checks remain strict, including retries and start-up races.
+No other EV policy, export handover, paid accounting or deployed dashboard is
+changed. See [the provenance and lifecycle record](ev-before-export-import-stability.md).
+
 The public product name is **FoxESS GloBird Tesla Energy Orchestrator**. The
 existing `home_energy_orchestrator` integration domain, entity IDs, and `HEO`
 short form remain stable for upgrade compatibility.

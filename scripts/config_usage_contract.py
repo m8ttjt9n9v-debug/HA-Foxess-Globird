@@ -15,6 +15,7 @@ from scripts.config_contract import (
     AMBER_CONFIG_KEYS,
     EV_CAPACITY_CONFIG_KEYS,
     EV_EXPORT_BUFFER_CONFIG_KEYS,
+    EV_IMPORT_CONFIG_KEYS,
     EV_LOCAL_CONNECTION_CONFIG_KEYS,
     LOAD_CONFIG_KEYS,
     SOLAR_SOAK_CONFIG_KEYS,
@@ -51,6 +52,9 @@ EV_EXPORT_BUFFER_ADDITIONS_PATH = (
 )
 EV_LOCAL_CONNECTION_ADDITIONS_PATH = (
     REPOSITORY_ROOT / "docs/maintainability/config-usage-additions-ev-local-connection-v1.json"
+)
+EV_IMPORT_ADDITIONS_PATH = (
+    REPOSITORY_ROOT / "docs/maintainability/config-usage-additions-ev-import-v1.json"
 )
 RECONFIGURE_TRANSITION_PATH = (
     REPOSITORY_ROOT / "docs" / "maintainability" / "config-usage-transition-reconfigure-v1.json"
@@ -216,6 +220,14 @@ def build_config_usage_contract(*, include_extensions: bool = False) -> dict[str
         visitor.visit(tree)
         records.extend(visitor.records)
     if not include_extensions:
+        imported = json.loads(EV_IMPORT_ADDITIONS_PATH.read_text(encoding="utf-8"))
+        accesses = [item for item in records if item["key"] in EV_IMPORT_CONFIG_KEYS]
+        if imported["access_count"] != len(imported["accesses"]) or sorted(
+            json.dumps(item, sort_keys=True) for item in accesses
+        ) != sorted(json.dumps(item, sort_keys=True) for item in imported["accesses"]):
+            raise ValueError("reviewed EV import configuration usage changed")
+        for reviewed in imported["accesses"]:
+            records.remove(reviewed)
         local = json.loads(EV_LOCAL_CONNECTION_ADDITIONS_PATH.read_text(encoding="utf-8"))
         accesses = [item for item in records if item['key'] in EV_LOCAL_CONNECTION_CONFIG_KEYS]
         if local.get("access_count") != len(local["accesses"]) or sorted(

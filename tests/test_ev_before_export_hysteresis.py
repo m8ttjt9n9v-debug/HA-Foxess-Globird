@@ -262,6 +262,9 @@ async def test_buffer_does_not_bypass_existing_energy_or_ownership_limits(hass, 
     _charging(hass, 8)
     hass.states.async_set("sensor.car_soc", "40", {"unit_of_measurement": "%"})
     if fault == "grid_import":
+        # Characterise the former immediate mode; transient retention and
+        # sustained-import withdrawal have their own lifecycle regressions.
+        coordinator.update_config_value("ev_before_export_import_confirm_seconds", 0)
         _fresh(coordinator, now, grid_kw=0.3)
     elif fault == "reserve":
         hass.states.async_set("sensor.site_battery_soc", "20", {"unit_of_measurement": "%"})

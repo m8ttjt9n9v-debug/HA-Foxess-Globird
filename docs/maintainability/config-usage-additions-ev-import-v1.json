@@ -1,0 +1,8 @@
+{
+  "schema_version": 1, "extension": "ev_import_v1", "access_count": 3,
+  "accesses": [
+    {"constant":"CONF_EV_BEFORE_EXPORT_IMPORT_CONFIRM_SECONDS","key":"ev_before_export_import_confirm_seconds","source":"custom_components/home_energy_orchestrator/config_flow.py","scope":"ConfigFlow._apply_defaults","receiver":"data","access":"get","kind":"raw_mapping","layer":"boundary"},
+    {"constant":"CONF_EV_BEFORE_EXPORT_IMPORT_CONFIRM_SECONDS","key":"ev_before_export_import_confirm_seconds","source":"custom_components/home_energy_orchestrator/config_flow.py","scope":"ConfigFlow._page_limit_error","receiver":"data","access":"subscript_load","kind":"raw_mapping","layer":"boundary"},
+    {"constant":"CONF_EV_BEFORE_EXPORT_IMPORT_CONFIRM_SECONDS","key":"ev_before_export_import_confirm_seconds","source":"custom_components/home_energy_orchestrator/number.py","scope":"EvBeforeExportImportNumber.async_set_native_value","receiver":"self.coordinator","access":"update_config_value","kind":"managed_mutation","layer":"runtime"}
+  ]
+}

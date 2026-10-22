@@ -1,0 +1,12 @@
+{
+  "schema_version": 1, "extension": "ev_import_v1", "field_count": 1,
+  "fields": [{
+    "key": "ev_before_export_import_confirm_seconds",
+    "page": "ev_policies", "order": 34, "required": true,
+    "has_default": true, "default": 60.0, "input_kind": "number",
+    "input_config": {"min": 0.0, "max": 300.0, "step": 1.0,
+                     "mode": "box", "unit_of_measurement": "s"},
+    "setup_label": "EV top-up import confirmation (seconds)",
+    "reconfigure_label": "EV top-up import confirmation (seconds)"
+  }]
+}

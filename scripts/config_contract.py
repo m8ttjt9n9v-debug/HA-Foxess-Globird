@@ -35,11 +35,12 @@ SOLAR_SOAK_CONFIG_KEYS = frozenset({
     const.CONF_EV_SOLAR_SOAK_ADJUSTMENT_MINUTES,
 })
 EV_EXPORT_BUFFER_CONFIG_KEYS = frozenset({const.CONF_EV_BEFORE_EXPORT_SOC_BUFFER})
+EV_IMPORT_CONFIG_KEYS = frozenset({const.CONF_EV_BEFORE_EXPORT_IMPORT_CONFIRM_SECONDS})
 EV_LOCAL_CONNECTION_CONFIG_KEYS = frozenset({const.CONF_EV_LOCAL_CONNECTION})
 ADDITIVE_CONFIG_KEYS = (
     AEMO_CONFIG_KEYS | PRICE_EXPORT_CONFIG_KEYS | EV_CAPACITY_CONFIG_KEYS | AMBER_CONFIG_KEYS
     | LOAD_CONFIG_KEYS | SOLAR_SOAK_CONFIG_KEYS | EV_EXPORT_BUFFER_CONFIG_KEYS
-    | EV_LOCAL_CONNECTION_CONFIG_KEYS
+    | EV_LOCAL_CONNECTION_CONFIG_KEYS | EV_IMPORT_CONFIG_KEYS
 )
 CAPACITY_ADDITIONS_PATH = (
     REPOSITORY_ROOT / "docs" / "maintainability" / "config-additions-ev-capacity-v1.json"
@@ -59,6 +60,9 @@ EV_EXPORT_BUFFER_ADDITIONS_PATH = (
 EV_LOCAL_CONNECTION_ADDITIONS_PATH = (
     REPOSITORY_ROOT / "docs/maintainability/config-additions-ev-local-connection-v1.json"
 )
+EV_IMPORT_ADDITIONS_PATH = (
+    REPOSITORY_ROOT / "docs/maintainability/config-additions-ev-import-v1.json"
+)
 
 
 def build_config_contract(*, include_extensions: bool = False) -> dict[str, object]:
@@ -70,6 +74,7 @@ def build_config_contract(*, include_extensions: bool = False) -> dict[str, obje
         (SOLAR_SOAK_ADDITIONS_PATH, SOLAR_SOAK_CONFIG_KEYS),
         (EV_EXPORT_BUFFER_ADDITIONS_PATH, EV_EXPORT_BUFFER_CONFIG_KEYS),
         (EV_LOCAL_CONNECTION_ADDITIONS_PATH, EV_LOCAL_CONNECTION_CONFIG_KEYS),
+        (EV_IMPORT_ADDITIONS_PATH, EV_IMPORT_CONFIG_KEYS),
     ):
         addition = json.loads(path.read_text(encoding="utf-8"))
         if (

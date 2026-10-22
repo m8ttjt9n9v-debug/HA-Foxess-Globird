@@ -522,6 +522,7 @@ _EV_NUMERIC_FIELD_NAMES = (
     "EV_ALLOWANCE_SAFETY_MARGIN",
     "EV_ARRIVAL_RESERVE_SOC",
     "EV_BACKFILL_BUFFER_MINUTES",
+    "EV_BEFORE_EXPORT_IMPORT_CONFIRM_SECONDS",
     "EV_CHARGE_EFFICIENCY",
     "EV_CHARGE_TO_FULL_MAX_HOURS",
     "EV_DAILY_BACKFILL_ENERGY",
@@ -580,9 +581,16 @@ class EvNumericSettings:
         values: dict[str, float] = {}
         for key, default in _EV_NUMERIC_DEFAULTS.items():
             try:
-                value = float(data.get(key, default))
+                raw = data.get(key, default)
+                value = float(raw)
+                if key == config_const.CONF_EV_BEFORE_EXPORT_IMPORT_CONFIRM_SECONDS and (
+                    isinstance(raw, bool) or not isfinite(value)
+                    or not value.is_integer() or not 0 <= value <= 300
+                ):
+                    raise ValueError
             except (TypeError, ValueError, OverflowError):
-                value = default
+                value = (0.0 if key == config_const.CONF_EV_BEFORE_EXPORT_IMPORT_CONFIRM_SECONDS
+                         else default)
             values[key] = value if isfinite(value) else default
         # Missing controls adopt reviewed defaults. Corrupt saved floors must
         # not grant buffering; invalid durations never become zero/negative.

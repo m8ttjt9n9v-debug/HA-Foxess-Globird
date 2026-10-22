@@ -1,0 +1,5 @@
+{
+  "schema_version": 1, "extension": "ev_import_v1", "config_entry_version": 6,
+  "additional_config_keys": ["ev_before_export_import_confirm_seconds"],
+  "automatic_control_defaults_changed": false
+}

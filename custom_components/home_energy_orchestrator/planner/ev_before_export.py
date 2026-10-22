@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
+from datetime import datetime
 
 from .ev import EvCurrentDecision
 from .ev_outside_window import PreFreeCurrentInputs, plan_pre_free_current
@@ -20,6 +21,38 @@ class EvBeforeExportRecovery:
     pending: bool = False
     binding: tuple[str, ...] = ()
     valid: bool = True
+
+
+@dataclass(frozen=True, slots=True)
+class EvBeforeExportImport:
+    """Bound economic-import confirmation; never an electrical safety lease."""
+
+    since: datetime | None = None
+    binding: tuple[str, ...] = ()
+    valid: bool = True
+
+
+def confirm_before_export_import(
+    state: EvBeforeExportImport, *, binding: tuple[str, ...], now: datetime,
+    source_at: datetime, importing: bool, retain_existing: bool, seconds: float,
+) -> tuple[EvBeforeExportImport, bool]:
+    """Only retain an existing target until the ORIGINAL import deadline.
+
+    A clear reading rearms. Settings/source rebinding inside an import episode,
+    malformed restored state or an expired deadline cannot renew the interval.
+    The caller separately enforces every fresh electrical/energy/ownership gate.
+    """
+    if not importing:
+        return EvBeforeExportImport(binding=binding), True
+    if (not retain_existing or not state.valid or not math.isfinite(seconds)
+            or not 0 < seconds <= 300 or source_at > now):
+        return state, False
+    if state.since is not None and state.binding != binding:
+        return EvBeforeExportImport(state.since, state.binding, False), False
+    since = state.since or source_at
+    elapsed = (now - since).total_seconds()
+    next_state = EvBeforeExportImport(since, binding)
+    return next_state, 0 <= elapsed < seconds
 
 
 def before_export_recovery_target(minimum: float, buffer: float, soft_limit: float) -> float:

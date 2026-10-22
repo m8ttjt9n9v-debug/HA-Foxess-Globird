@@ -11,7 +11,7 @@ from .ev import (
     DirectEvseReconciliationState,
     SmartSocketRecoveryState,
 )
-from .ev_before_export import EvBeforeExportRecovery
+from .ev_before_export import EvBeforeExportImport, EvBeforeExportRecovery
 from .ev_learning import DrivingSnapshotState
 from .ev_outside_window import MeasuredSolarAdjustmentState, PreFreeSessionState
 from .learning import DemandHistory
@@ -56,6 +56,7 @@ class EvPersistenceState:
     charge_to_full_started_at: datetime | None = None
     outside_control_active: bool = False
     before_export_recovery: EvBeforeExportRecovery = field(default_factory=EvBeforeExportRecovery)
+    before_export_import: EvBeforeExportImport = field(default_factory=EvBeforeExportImport)
     smart_recovery: SmartSocketRecoveryState = field(
         default_factory=SmartSocketRecoveryState
     )
@@ -149,6 +150,7 @@ class EvPersistenceState:
                 if 'before_export_recovery' in mapping else EvBeforeExportRecovery()
             ),
             smart_recovery=smart_recovery,
+            before_export_import=_before_export_import(mapping.get("before_export_import"), now),
         )
 
     def to_payload(self) -> dict[str, object]:
@@ -237,6 +239,12 @@ class EvPersistenceState:
                 else None
             ),
             "outside_control_active": self.outside_control_active,
+            **({"before_export_import": {
+                "since": self.before_export_import.since.isoformat()
+                if self.before_export_import.since else None,
+                "binding": list(self.before_export_import.binding),
+                "valid": self.before_export_import.valid,
+            }} if self.before_export_import != EvBeforeExportImport() else {}),
             **({"before_export_recovery": {
                 "pending": self.before_export_recovery.pending,
                 "binding": list(self.before_export_recovery.binding),
@@ -257,6 +265,27 @@ class EvPersistenceState:
     def validated_for_storage(self) -> EvPersistenceState:
         """Apply the established grouped fallbacks before writing a snapshot."""
         return type(self).from_payload(self.to_payload(), self.restored_at)
+
+
+def _before_export_import(payload: object, now: datetime) -> EvBeforeExportImport:
+    if payload is None:
+        return EvBeforeExportImport()
+    try:
+        if not isinstance(payload, dict) or type(payload.get("valid")) is not bool:
+            raise ValueError
+        binding = payload["binding"]
+        if (not isinstance(binding, list) or len(binding) > 40
+                or any(not isinstance(v, str) or len(v) > 256 for v in binding)):
+            raise ValueError
+        since_raw = payload["since"]
+        if since_raw is not None and not isinstance(since_raw, str):
+            raise ValueError
+        since = datetime.fromisoformat(since_raw) if since_raw is not None else None
+        if since is not None and (since.tzinfo is None or since > now or not binding):
+            raise ValueError
+        return EvBeforeExportImport(since, tuple(binding), payload["valid"])
+    except (KeyError, TypeError, ValueError):
+        return EvBeforeExportImport(valid=False)
 
 
 def _before_export_recovery(payload: object) -> EvBeforeExportRecovery:

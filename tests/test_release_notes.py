@@ -52,6 +52,17 @@ def test_01239_has_stable_recovery_and_readonly_fleet_notes() -> None:
     assert not Version("0.12.39").is_prerelease
 
 
+def test_01260_describes_strict_command_and_transient_continuation_boundaries() -> None:
+    title, notes = release_text("v0.12.60", CHANGELOG_PATH.read_text(encoding="utf-8"))
+    assert title == "v0.12.60 — Stable EV top-ups through transient import"
+    assert "default 60 seconds" in notes
+    assert "continuous import" in notes
+    assert "New starts, increases and retries" in notes
+    assert "strict per-command import gate" in notes
+    assert "without changing deployed dashboards" in notes
+    assert not Version("0.12.60").is_prerelease
+
+
 def test_01240_has_stable_guarded_maintenance_and_separate_activation_notes() -> None:
     title, notes = release_text("v0.12.40", CHANGELOG_PATH.read_text(encoding="utf-8"))
     assert title == "v0.12.40 — Safe per-site Fleet updates and restarts"

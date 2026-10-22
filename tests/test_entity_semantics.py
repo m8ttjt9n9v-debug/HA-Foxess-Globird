@@ -24,7 +24,7 @@ def test_reviewed_entity_semantics_are_complete_and_current() -> None:
     contract = load_semantic_contract()
     validate_semantic_contract(contract)
     expected_count = build_entity_contract()["entity_count"]
-    assert expected_count == 130
+    assert expected_count == 131
     assert contract["reviewed_entity_count"] == expected_count
     assert contract["total_entity_count"] == expected_count
     assert entities_awaiting_review(contract) == []

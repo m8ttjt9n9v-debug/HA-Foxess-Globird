@@ -26,6 +26,7 @@ from .const import (
     CONF_EV_ALLOWANCE_SAFETY_MARGIN,
     CONF_EV_ARRIVAL_RESERVE_SOC,
     CONF_EV_BACKFILL_BUFFER_MINUTES,
+    CONF_EV_BEFORE_EXPORT_IMPORT_CONFIRM_SECONDS,
     CONF_EV_CHARGE_EFFICIENCY,
     CONF_EV_CHARGE_TO_FULL,
     CONF_EV_CHARGE_TO_FULL_ENABLED,
@@ -78,6 +79,7 @@ from .const import (
     DEFAULT_EV_ALLOWANCE_SAFETY_MARGIN,
     DEFAULT_EV_ARRIVAL_RESERVE_SOC,
     DEFAULT_EV_BACKFILL_BUFFER_MINUTES,
+    DEFAULT_EV_BEFORE_EXPORT_IMPORT_CONFIRM_SECONDS,
     DEFAULT_EV_CHARGE_EFFICIENCY,
     DEFAULT_EV_CHARGE_TO_FULL_MAX_HOURS,
     DEFAULT_EV_DAILY_BACKFILL_ENERGY,
@@ -192,11 +194,13 @@ from .planner.ev import (
     reset_smart_state_for_path,
 )
 from .planner.ev_before_export import (
+    EvBeforeExportImport,
     EvBeforeExportRecovery,
     advance_before_export_recovery,
     before_export_recovery_target,
     calculate_protected_keepalive_energy_kwh,
     compose_protected_ev_energy_kwh,
+    confirm_before_export_import,
     decide_ev_before_export,
     plan_ev_before_export_current,
 )
@@ -320,6 +324,7 @@ class ActiveEvController:
             encode=EvPersistenceState.to_payload,
         )
         self.grid_average = TimedAverageWindow(timedelta(minutes=3))
+        self.before_export_import = EvBeforeExportImport()
         self.ev_average = TimedAverageWindow(timedelta(minutes=3))
         self.solar_soak_average = SolarSoakAverage(timedelta(minutes=self._float(
             CONF_EV_SOLAR_SOAK_AVERAGE_MINUTES, DEFAULT_EV_SOLAR_SOAK_AVERAGE_MINUTES,
@@ -2831,7 +2836,7 @@ class ActiveEvController:
         target = min(
             preference.before_export_soc_target if release is None else release, soft_limit,
         ) if valid_target else soft_limit
-        budget = self._before_export_energy_budget(now)
+        budget = self._before_export_energy_budget(now, retain_existing=True)
         result = EvCurrentDecision(baseline, "ev_before_export_energy_unavailable")
         if not valid_soc or not valid_target or not isfinite(target):
             result = EvCurrentDecision(baseline, "ev_before_export_soc_unavailable")
@@ -2860,6 +2865,15 @@ class ActiveEvController:
                     ), phase_count=int(self._float(CONF_EV_PHASE_COUNT, DEFAULT_EV_PHASE_COUNT)),
                     current_step_a=step, vehicle_soc=vehicle_soc, target_soc=target,
                 )
+                if self.before_export_import.since is not None:
+                    # A transient can preserve an already-issued target, never
+                    # ratchet it up. Positive writes still use the strict guard.
+                    retained = self.reconciliation.target_current_a or baseline
+                    result = (
+                        EvCurrentDecision(baseline, "ev_before_export_import_limit_changed")
+                        if result.current_a < retained
+                        else replace(result, current_a=retained)
+                    )
         active = result.phase == "ev_before_export_charging"
         ownership = reconcile_outside_ownership(
             self._daily_backfill_cycle_state(), charge_to_full=False, pre_free_active=False,
@@ -2902,7 +2916,9 @@ class ActiveEvController:
             return False
         return True
 
-    def _before_export_energy_budget(self, now: datetime) -> float | None:
+    def _before_export_energy_budget(
+        self, now: datetime, *, retain_existing: bool = False,
+    ) -> float | None:
         """Read a current budget cohort after any awaited lifecycle checkpoint.
 
         The outer cycle retains its original EV feedback and scheduling time.
@@ -2917,11 +2933,13 @@ class ActiveEvController:
             self.hass, ev_observation_entity_map(self.coordinator.runtime_config),
         ))
         try:
-            return self._observed_before_export_energy_budget(now)
+            return self._observed_before_export_energy_budget(now, retain_existing=retain_existing)
         finally:
             _CYCLE_FEEDBACK.reset(token)
 
-    def _observed_before_export_energy_budget(self, now: datetime) -> float | None:
+    def _observed_before_export_energy_budget(
+        self, now: datetime, *, retain_existing: bool = False,
+    ) -> float | None:
         """Recheck the same reserve/house/EV ledger against one current cohort."""
         runtime = self.coordinator.runtime_config
         active = getattr(self.coordinator, "active_controller", None)
@@ -2951,7 +2969,7 @@ class ActiveEvController:
         if not self._measured_ev_telemetry(now).telemetry_valid:
             return None
         import_threshold = runtime.nonnegative.zero_import_threshold_kw
-        if import_threshold is None or telemetry.grid_power.value > import_threshold:
+        if import_threshold is None:
             return None
         feedback = _CYCLE_FEEDBACK.get()
         if feedback is None:
@@ -3031,7 +3049,37 @@ class ActiveEvController:
         ) / 100
         # Cached Sellable and the fresh ledger are ceilings on the SAME pool,
         # not cumulative deductions. New plug-in keepalive cannot be omitted.
-        return min(sellable, max(ac - house - protected_ev, 0))
+        budget = min(sellable, max(ac - house - protected_ev, 0))
+        importing = telemetry.grid_power.value > import_threshold
+        if not retain_existing:
+            return None if importing else budget
+        observation = feedback.direct_observation
+        previous = self.reconciliation
+        eligible = (
+            self.decision_phase == "ev_before_export_charging"
+            and self.outside_control_active and not self.daily_backfill_stop_pending
+            and previous.target_current_a is not None
+            and previous.target_current_a > runtime.ev_connection.protected_baseline_a
+            and (previous.phase == "confirmed" or (
+                previous.attempts > 0 and previous.last_command_at is not None
+                and previous.last_command_at <= now
+            ))
+            and observation is not None and observation.charge_switch_on
+            and observation.requested_current_a == previous.target_current_a
+        )
+        seconds = self._float(
+            CONF_EV_BEFORE_EXPORT_IMPORT_CONFIRM_SECONDS,
+            DEFAULT_EV_BEFORE_EXPORT_IMPORT_CONFIRM_SECONDS,
+        )
+        binding = (*self._before_export_recovery_binding(),
+                   *(source.entity_id for source in telemetry.grid_power.sources),
+                   str(import_threshold), str(seconds))
+        self.before_export_import, allowed = confirm_before_export_import(
+            self.before_export_import, binding=binding, now=now,
+            source_at=telemetry.grid_power.updated_at, importing=importing,
+            retain_existing=eligible, seconds=seconds,
+        )
+        return budget if allowed else None
 
     def _combined_pre_free_budget(
         self, now: datetime, export_energy_kwh: float | None
@@ -4200,6 +4248,7 @@ class ActiveEvController:
             if self._repository.last_restore_status == 'invalid'
             else persisted.before_export_recovery
         )
+        self.before_export_import = persisted.before_export_import
         if self._repository.last_restore_status != "restored":
             return
         now = persisted.restored_at
@@ -4271,6 +4320,7 @@ class ActiveEvController:
             outside_control_active=self.outside_control_active,
             smart_recovery=self.smart_recovery,
             before_export_recovery=self.before_export_recovery,
+            before_export_import=self.before_export_import,
         )
         await self._repository.async_save(persisted.validated_for_storage())
         self.last_saved_at = saved_at

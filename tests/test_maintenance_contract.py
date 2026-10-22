@@ -62,7 +62,7 @@ def test_existing_canonical_entity_and_attribute_contracts_are_unchanged():
     validate_entities()
     validate_attributes()
     canonical = build_entity_contract()
-    assert canonical["entity_count"] == 130
+    assert canonical["entity_count"] == 131
     assert not any(
         record["key"] == "maintenance" or record["key"].startswith("fleet_")
         for record in canonical["entities"]

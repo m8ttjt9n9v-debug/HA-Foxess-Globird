@@ -1,5 +1,17 @@
 # Project roadmap
 
+## EV-before-export transient-import stability — v0.12.60
+
+- [x] Reproduce stop/start chatter from an instantaneous economic import veto;
+  retain only already-owned matching current through a configurable bounded
+  confirmation, keeping positive writes and all other authority checks strict.
+- [x] Expose setup/native dashboard configuration and preserve the original
+  episode timestamp in the existing EV journal; no new writer or polling job.
+- [x] Add native-current-lag, spike, sustained import, exact boundary, per-command,
+  restart, corruption, edits and immediate authority-withdrawal regressions.
+- [ ] Complete full frozen checks, compatibility rehearsals and release gates;
+  then separately approved pilot-first rollout with fresh preservation checks.
+
 Status here describes behavioral parity, not merely the presence of code.
 
 ## Settling-in period after the paid-cap correction

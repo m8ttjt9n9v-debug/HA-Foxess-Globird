@@ -1,0 +1,17 @@
+{
+  "schema_version": 1, "extension": "ev_import_v1", "entity_count": 1,
+  "attribute_profiles": {},
+  "entities": [{
+    "key": "ev_before_export_import_confirm_seconds",
+    "definition": "Confirmation period for continuous economic grid import during an already authorised EV-before-export top-up. Brief spikes can retain, but never increase or start, its existing current. All electrical, source, reserve and ownership gates remain immediate.",
+    "producer": "EvBeforeExportImportNumber.native_value projects RuntimeConfiguration.ev_numbers; setup and the number edit one persisted setting.",
+    "role": "configuration",
+    "unit_and_sign": "Whole seconds, 0 through 300 inclusive, default 60. Zero restores immediate import withdrawal. This is not the tariff qualification timer.",
+    "time_basis": "Original exceeding measurement timestamp, retained in the EV journal. Repeated samples and restart cannot renew it; a clear reading rearms. Cold restart requires strict start evidence.",
+    "availability": "Editable while HEO is loaded, including during a telemetry outage. Editing never substitutes for fresh evidence.",
+    "state_vocabulary": "Finite whole seconds. Invalid edits are rejected; corrupt saved settings disable retention.",
+    "audience": "advanced", "equivalents": {"foxess": null, "globird": null, "tessie": null},
+    "consumers": ["EV Charging policies", "EV dashboard controls", "EV-before-export import guard"],
+    "decision": "retain", "review_status": "engineering_draft"
+  }]
+}

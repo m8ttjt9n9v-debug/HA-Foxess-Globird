@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.12.60 — Stable EV top-ups through transient import
+
+- Prevent a brief grid-import spike from cancelling and immediately restarting
+  an already-funded EV-before-export top-up. Retain at most its existing current
+  for a configurable confirmation period, default 60 seconds; continuous import
+  still withdraws it. Zero restores the previous immediate-import mode.
+- Keep electrical limits, reserve, protected energy, source freshness, ownership
+  and normal SoC limits immediate. New starts, increases and retries still pass
+  the strict per-command import gate. Other charging policies remain unchanged.
+- Persist the original import deadline without renewal across restart/rebinding;
+  add setup and native dashboard controls without changing deployed dashboards.
+- Add lifecycle regressions for native current lag, isolated/repeated spikes,
+  sustained import, boundaries, command races, settings edits and corrupt state.
+
 ## 0.12.59 — Local charger proof for export handover
 
 - Add an optional, explicitly selected local charger connection sensor. Fresh

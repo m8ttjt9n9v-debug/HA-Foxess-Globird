@@ -41,6 +41,9 @@ SOLAR_SOAK_ADDITIONS_PATH = (
 EV_EXPORT_BUFFER_ADDITIONS_PATH = (
     REPOSITORY_ROOT / "docs/maintainability/entity-additions-ev-export-buffer-v1.json"
 )
+EV_IMPORT_ADDITIONS_PATH = (
+    REPOSITORY_ROOT / "docs/maintainability/entity-additions-ev-import-v1.json"
+)
 
 
 def _json_value(value: Any) -> Any:
@@ -100,6 +103,7 @@ def validate_against_release_baseline() -> None:
             ADDITIONS_PATH, PRICE_ADDITIONS_PATH, TRIP_ADDITIONS_PATH, LOAD_ADDITIONS_PATH,
             SOLAR_SOAK_ADDITIONS_PATH,
             EV_EXPORT_BUFFER_ADDITIONS_PATH,
+            EV_IMPORT_ADDITIONS_PATH,
         )
     ]
     for extension in additions:

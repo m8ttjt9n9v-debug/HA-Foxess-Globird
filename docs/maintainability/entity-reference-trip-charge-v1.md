@@ -5,7 +5,7 @@ to the reviewed semantic worksheet. It records the current names, including
 the retained naming approvals and versioned revisions. Edit the catalogue or semantic
 worksheet, then regenerate this file; do not edit rows by hand.
 
-Total entities: **130**.
+Total entities: **131**.
 
 ## Binary Sensor
 
@@ -34,6 +34,7 @@ Total entities: **130**.
 |---|---|---|---|---|---|---|---|---|
 | `number.home_energy_aemo_export_threshold` | AEMO Export Price Threshold | configuration | advanced | AUD/kWh | `AemoThresholdNumber.native_value` | market_configuration | retain | Persistent wholesale-price threshold at or above which a validated current interval may be labelled a possible supply opportunity; it neither sets an export price nor confirms a payable retailer event. |
 | `number.home_energy_aemo_import_threshold` | AEMO Consumption Observation Threshold | configuration | advanced | AUD/kWh | `AemoThresholdNumber.native_value` | market_configuration | retain | Optional persistent wholesale-price threshold below which a validated current interval may be labelled a possible consumption opportunity; an absent threshold disables this inference and does not imply a free-power window or reward. |
+| `number.home_energy_ev_before_export_import_confirm_seconds` | EV Top-up Import Confirmation | configuration | advanced | s | `EvBeforeExportImportNumber.native_value` | configuration | retain | Confirmation period for continuous economic grid import during an already authorised EV-before-export top-up. Brief spikes can retain, but never increase or start, its existing current. All electrical, source, reserve and ownership gates remain immediate. |
 | `number.home_energy_ev_before_export_soc_buffer` | EV Before Export SoC Buffer | configuration | primary | % | `EvBeforeExportBufferNumber.native_value` | configuration | retain | Additional vehicle percentage points after an EV-before-export top-up starts below the saved minimum. Export remains held until minimum plus buffer, bounded by normal EV limits. Completion permits export at the original minimum without immediately re-arming in the band. Zero preserves the former single threshold. |
 | `number.home_energy_ev_before_export_soc_target` | EV Before Export SoC Target | configuration | primary | % | `EvBeforeExportTargetNumber.native_value` | coordinator | retain | Operator-adjustable EV SoC threshold below which the enabled EV-before-export preference withholds discretionary export. |
 | `number.home_energy_ev_morning_solar_reserve_soc` | Morning Solar EV Reserve SoC | configuration | primary | % | `EvMorningSolarReserveNumber.native_value` | coordinator | retain | Operator-adjustable minimum house-battery state of charge required before morning measured solar surplus may be allocated to the EV. |

@@ -41,6 +41,9 @@ EV_EXPORT_BUFFER_ADDITIONS_PATH = (
 EV_LOCAL_CONNECTION_ADDITIONS_PATH = (
     REPOSITORY_ROOT / "docs/maintainability/config-field-additions-ev-local-connection-v1.json"
 )
+EV_IMPORT_ADDITIONS_PATH = (
+    REPOSITORY_ROOT / "docs/maintainability/config-field-additions-ev-import-v1.json"
+)
 
 _EV_PAGES = {"car", "charger", "ev_policies", "recovery"}
 
@@ -107,6 +110,7 @@ def rendered_catalogue() -> str:
         SOLAR_SOAK_ADDITIONS_PATH,
         EV_EXPORT_BUFFER_ADDITIONS_PATH,
         EV_LOCAL_CONNECTION_ADDITIONS_PATH,
+        EV_IMPORT_ADDITIONS_PATH,
     ):
         additions = json.loads(path.read_text(encoding="utf-8"))
         if additions["field_count"] != len(additions["fields"]):
