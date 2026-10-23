@@ -51,6 +51,13 @@ For a normal change, prove the repository build first, then use the controlled
 deployment sequence in `docs/agent-operating-manual.md`. An unexpected live
 state is evidence to collect and diagnose, not permission to fix forward.
 
+An explicitly authorised, committed and tested local candidate may precede a
+GitHub/HACS release. Record its exact commit, identifiable candidate version
+and file hashes, and follow the same controlled deployment sequence, including
+named-site/restart authority, recoverable backups, preservation and verification.
+The operating manual defines release batching; this route grants no additional
+site, restart or publishing authority. Native Fleet maintenance remains HACS-only.
+
 - The proven Working Single Phase Pilot Site configuration is the algorithmic source. Port existing
   behavior first; do not invent a replacement controller because the target
   site has different electrical limits.

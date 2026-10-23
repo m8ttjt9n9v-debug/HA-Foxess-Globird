@@ -9,8 +9,8 @@ in the documents named by `AGENTS.md`.
 
 The repository is the development environment. A designated pilot Home
 Assistant installation is controlled staging and acceptance infrastructure. It
-is useful for proving a prepared HACS build under real conditions; it is not a
-place to edit settings, switch automation off, or improvise a fix while
+is useful for proving a prepared, reproducible build under real conditions; it
+is not a place to edit settings, switch automation off, or improvise a fix while
 investigating a problem.
 
 New Codex tasks begin with only the prompt and the repository files they read.
@@ -44,8 +44,9 @@ Never use the pilot site as an ad-hoc development box.
 - Do not send FoxESS, EV, smart-socket or Tessie commands as part of diagnosis.
 - Do not restart or reload Home Assistant, HACS, or an integration without the
   specific deployment/recovery authority described above.
-- Do not replace an installed component from an uncommitted tree or make a
-  site-specific patch that is absent from the public, tested package.
+- Do not install from an uncommitted tree or make untracked live patches.
+  An approved local candidate must match its committed, tested source and
+  recorded file hashes.
 - Never describe a site as “fixed” merely because an ad-hoc change temporarily
   stops a symptom.
 
@@ -57,11 +58,16 @@ pilot.
 
 ## Controlled deployment sequence
 
-Use this order when the user has explicitly requested a pilot deployment.
+Use this order when the user has explicitly requested deployment on a named
+site. Prefer the designated pilot where practical; other sites still require
+their own explicit authority.
 
-1. **Prepare the candidate.** Identify the exact commit, version and release
-   asset. Review the diff, run targeted tests and the relevant wider test suite.
-   Confirm no private operational data is in the release.
+1. **Prepare the candidate.** Identify the exact commit, identifiable candidate
+   or release version, and deployable file hashes. Review the diff and validate
+   proportionately: control, safety, persistence and policy-handoff changes
+   require thorough regression, lifecycle and compatibility checks. For an
+   official release, also verify its published asset. Confirm no private
+   operational data is included.
 2. **State the plan.** Record the named target, why it is safe to deploy at
    that time, the preconditions, the backup/rollback method, and the success
    criteria. Device control is out of scope unless separately authorised.
@@ -71,11 +77,13 @@ Use this order when the user has explicitly requested a pilot deployment.
 4. **Make recovery possible.** Create a recoverable backup of the installed
    component/configuration before install. Do not overwrite the only known-good
    copy.
-5. **Install only the released, tested build.** Follow the approved HACS or
-   equivalent deployment path. Restart/reload only if it is an authorised part
-   of the plan.
-6. **Verify safely.** Confirm that Home Assistant and the integration load
-   without errors, the expected version is installed, and control remains
+5. **Install only the authorised, committed and tested build.** Follow the
+   approved HACS or local-candidate deployment path. Restart/reload only if it
+   is an authorised part of the plan.
+6. **Verify safely.** After the authorised restart/reload, confirm that Home
+   Assistant and the integration load without errors and match the recorded
+   build version and file hashes. Distinguish a local candidate from official
+   HACS release metadata. Preserve settings and dashboards; control remains
    inactive or observer-only unless the user has separately authorised
    activation. Do not manufacture an inverter or EV test event.
 7. **Record the result.** Report what was verified, any limitation, and the
@@ -84,6 +92,15 @@ Use this order when the user has explicitly requested a pilot deployment.
 
 Activation is a separate decision from installation. A successfully loaded
 component is not evidence that an automatic controller is safe to enable.
+
+An approved local candidate does not require prior GitHub/HACS publication.
+Batch the full official GitHub/HACS qualification and release after 48 hours
+without candidate-code changes, unless the owner requests an earlier release.
+Publish the exact qualified candidate, without adding untested work. Reuse
+successful check evidence only for the identical unchanged commit where the
+release process permits it. This preference creates no automatic publishing
+job or additional site or restart authority. The native Fleet maintenance
+installer remains HACS-only.
 
 ## Handling incident reports
 
@@ -112,10 +129,11 @@ For a repository-only task, start with a statement like:
 
 For an authorised controlled deployment, add the operational boundary:
 
-> The named pilot site may receive this exact released build only. Before
-> installing, verify the stated safe preconditions and create the specified
-> backup. Do not enable control, alter configuration, or issue FoxESS/EV
-> commands. Stop and report if any precondition fails.
+> The named site may receive only the exact committed, tested candidate or
+> released build identified in the plan. Before installing, verify the stated
+> safe preconditions and create the specified backup. Do not enable control,
+> alter configuration, or issue FoxESS/EV commands. Stop and report if any
+> precondition fails.
 
 This keeps the deployment authority narrow while allowing the task to do useful
 preparation and verification work.
