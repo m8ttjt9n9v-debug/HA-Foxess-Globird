@@ -9,6 +9,10 @@ pre-free opportunity. It works with no fixed daily EV
 allocation. Both timing choices require the pre-free backfill policy to be
 enabled and Local Modbus ownership.
 
+The additional **Use spare energy when plugged in** timing admits that same
+protected charging promptly after export, rather than waiting for a latest
+start. It is opt-in; the existing Ready-by default is unchanged.
+
 The fixed daily ready-by allocation remains a separate operator choice. Its
 existing energy protection, proportional surplus calculation, and FoxCloud
 compatibility are retained when Conservative timing is selected. Ready by is a
@@ -40,6 +44,21 @@ In **EV Charging policies**, select **Backfill timing**:
   latest-start backfill before free power; it is an additional opportunity.
   This is the default for new entries and existing entries without a saved
   timing choice.
+- **Use spare energy when plugged in** starts promptly after the configured
+  effective export finish whenever a home-connected direct-EVSE vehicle has
+  current protected surplus and room to its normal target. It does not wait for
+  a latest start. It reuses this daily session before the canonical ready time
+  and the existing pre-free successor after it. No new deadline, reservation or
+  inverter/EV writer is introduced. Qualified price export may request physical
+  handoff; all existing EV-minimum/reserve and electrical gates still apply.
+  See [prompt timing and lifecycle](ev-post-export-design.md).
+
+Native `select.home_energy_ev_backfill_timing` exposes the same saved choice on
+a dashboard. The new mode's **Spare-energy restart margin** is adjustable in
+setup and `number.home_energy_ev_surplus_rearm_energy` (0–5 kWh, default 0.1).
+It prevents small budget fluctuations from repeatedly restarting the charger;
+active funded charging is not stopped early solely because it is below that
+restart margin. Zero deliberately removes the extra admission band.
 
 Upgrade preserves an explicitly saved Conservative choice. It changes only
 the missing timing selection: neither Automatic EV Control nor the pre-free

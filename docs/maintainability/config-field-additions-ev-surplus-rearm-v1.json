@@ -1,0 +1,12 @@
+{
+  "schema_version": 1, "extension": "ev_surplus_rearm_v1", "field_count": 1,
+  "fields": [{
+    "key": "ev_surplus_rearm_energy_kwh",
+    "page": "ev_policies", "order": 35, "required": true,
+    "has_default": true, "default": 0.1, "input_kind": "number",
+    "input_config": {"min": 0.0, "max": 5.0, "step": 0.01,
+                     "mode": "box", "unit_of_measurement": "kWh"},
+    "setup_label": "Spare-energy restart margin (kWh)",
+    "reconfigure_label": "Spare-energy restart margin (kWh)"
+  }]
+}

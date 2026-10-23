@@ -44,6 +44,9 @@ EV_EXPORT_BUFFER_ADDITIONS_PATH = (
 EV_IMPORT_ADDITIONS_PATH = (
     REPOSITORY_ROOT / "docs/maintainability/entity-additions-ev-import-v1.json"
 )
+EV_BACKFILL_TIMING_ADDITIONS_PATH = (
+    REPOSITORY_ROOT / "docs/maintainability/entity-additions-ev-backfill-timing-v1.json"
+)
 
 
 def _json_value(value: Any) -> Any:
@@ -104,6 +107,7 @@ def validate_against_release_baseline() -> None:
             SOLAR_SOAK_ADDITIONS_PATH,
             EV_EXPORT_BUFFER_ADDITIONS_PATH,
             EV_IMPORT_ADDITIONS_PATH,
+            EV_BACKFILL_TIMING_ADDITIONS_PATH,
         )
     ]
     for extension in additions:

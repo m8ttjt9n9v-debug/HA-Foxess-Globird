@@ -1,0 +1,16 @@
+{
+  "schema_version": 1, "entity_count": 2,
+  "entities": [{
+    "default_entity_id": "select.home_energy_ev_backfill_timing",
+    "device_class": null, "enabled_by_default": true, "entity_category": "config",
+    "key": "ev_backfill_timing", "name": "EV Backfill Timing",
+    "platform": "select", "state_class": null, "translation_key": "ev_backfill_timing",
+    "unique_id_template": "{config_entry_id}_ev_backfill_timing", "unit": null
+  }, {
+    "default_entity_id": "number.home_energy_ev_surplus_rearm_energy",
+    "device_class": null, "enabled_by_default": true, "entity_category": "config",
+    "key": "ev_surplus_rearm_energy", "name": "Spare-energy Restart Margin",
+    "platform": "number", "state_class": null, "translation_key": null,
+    "unique_id_template": "{config_entry_id}_ev_surplus_rearm_energy", "unit": "kWh"
+  }]
+}

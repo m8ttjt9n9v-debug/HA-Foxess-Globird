@@ -1,0 +1,5 @@
+{
+  "schema_version": 1, "extension": "ev_surplus_rearm_v1", "config_entry_version": 6,
+  "additional_config_keys": ["ev_surplus_rearm_energy_kwh"],
+  "automatic_control_defaults_changed": false
+}

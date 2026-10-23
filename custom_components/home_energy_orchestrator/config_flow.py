@@ -18,7 +18,12 @@ from .config_page_schema import (
     CapacityCoerce,
     build_page_schema,
 )
-from .configuration import AemoMonitorConfiguration, EvCapacitySettings
+from .configuration import (
+    AemoMonitorConfiguration,
+    EvCapacitySettings,
+    RuntimeConfiguration,
+    valid_ev_surplus_rearm_energy,
+)
 from .const import (
     BATTERY_POSITIVE_DISCHARGE,
     BATTERY_POWER_DIRECTIONS,
@@ -115,6 +120,7 @@ from .const import (
     CONF_EV_SOLAR_SPILL_BATTERY_SOC,
     CONF_EV_SOLAR_SPILL_ENABLED,
     CONF_EV_STORED_ENERGY,
+    CONF_EV_SURPLUS_REARM_ENERGY,
     CONF_EV_TELEMETRY_MAX_AGE_SECONDS,
     CONF_EV_TELEMETRY_MAX_SKEW_SECONDS,
     CONF_EV_VOLTAGE,
@@ -242,6 +248,7 @@ from .const import (
     DEFAULT_EV_SOLAR_SOAK_BATTERY_SOC,
     DEFAULT_EV_SOLAR_SPILL_BATTERY_SOC,
     DEFAULT_EV_SOLAR_SPILL_ENABLED,
+    DEFAULT_EV_SURPLUS_REARM_ENERGY,
     DEFAULT_EV_TELEMETRY_MAX_AGE_SECONDS,
     DEFAULT_EV_TELEMETRY_MAX_SKEW_SECONDS,
     DEFAULT_EV_VOLTAGE,
@@ -300,6 +307,7 @@ from .const import (
     SOLAR_POWER_DIRECTIONS,
 )
 from .discovery import DiscoveryEntity, discover_entity_defaults
+from .ev_backfill_settings import backfill_timing_error
 from .field_catalogue import FIELD_KEYS_BY_PAGE, FIELD_SPECS_BY_KEY
 from .normalise import current_to_a, energy_to_kwh, power_to_kw
 
@@ -759,6 +767,8 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 }
             elif page == "ev_policies":
                 checks = {
+                    CONF_EV_SURPLUS_REARM_ENERGY:
+                        valid_ev_surplus_rearm_energy(data[CONF_EV_SURPLUS_REARM_ENERGY]),
                     CONF_EV_SOLAR_SOAK_BATTERY_SOC:
                         0 <= number(CONF_EV_SOLAR_SOAK_BATTERY_SOC) <= 100
                         and number(CONF_EV_SOLAR_SOAK_BATTERY_SOC).is_integer()
@@ -2237,6 +2247,9 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 CONF_EV_PRE_FREE_BACKFILL_TIMING,
                 DEFAULT_EV_PRE_FREE_BACKFILL_TIMING,
             ),
+            CONF_EV_SURPLUS_REARM_ENERGY: data.get(
+                CONF_EV_SURPLUS_REARM_ENERGY, DEFAULT_EV_SURPLUS_REARM_ENERGY,
+            ),
             CONF_EV_DAILY_BACKFILL_ENERGY: data.get(
                 CONF_EV_DAILY_BACKFILL_ENERGY,
                 DEFAULT_EV_DAILY_BACKFILL_ENERGY,
@@ -2381,6 +2394,8 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     def _validate_input(self, data: dict[str, object]) -> dict[str, str]:
         """Reject malformed IDs and unsafe physical limits before saving them."""
+        if not valid_ev_surplus_rearm_energy(data.get(CONF_EV_SURPLUS_REARM_ENERGY)):
+            return {CONF_EV_SURPLUS_REARM_ENERGY: "invalid_site_limits"}
         for key, minimum, maximum in (
             (CONF_EV_BEFORE_EXPORT_SOC_BUFFER, 0.0, 100.0),
             (CONF_EV_BEFORE_EXPORT_IMPORT_CONFIRM_SECONDS, 0.0, 300.0),
@@ -2834,6 +2849,8 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             )
         ):
             return {"base": "invalid_ready_by_ev_backfill"}
+        if timing_error := backfill_timing_error(RuntimeConfiguration.from_mapping(data)):
+            return {"base": timing_error}
         if (
             data.get(CONF_EV_CONTROL_COMMISSIONED)
             and site_phase_count > 1

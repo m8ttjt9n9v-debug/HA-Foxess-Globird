@@ -1,5 +1,45 @@
 # Project source of truth
 
+## v0.12.62 optional prompt backfill timing
+
+**Use spare energy when plugged in** is a third opt-in backfill timing choice,
+not a new scheduler or paid override. After the effective configured export
+finish and before the next free window, a home-connected direct-EVSE vehicle
+can use currently discretionary energy promptly, even above its export minimum.
+It requires the existing enabled pre-free policy, Local Modbus commissioning,
+fresh coherent evidence and idle inverter owners. Existing timing choices and
+the Ready-by default are preserved on upgrade.
+
+The existing daily session handles delivery before its one canonical ready
+deadline; the existing pre-free successor handles later energy without crediting
+tomorrow's fixed allocation. Use raw protected Sellable, independently bounded
+by the fresh house/EV/battery ledger, not paid-export-cap/window-clipped Planned
+export. Fund representable current through the existing short-horizon conversion
+within the saved TOTAL inverter percentage, service/connector limits, normal EV
+ceiling and house-battery reserve. No future surplus or second reservation is
+created. Reconnect and restart require current authority, not an old start time.
+
+A configurable restart margin, default 0.1 kWh, separates admission/rearm from
+the funded stop boundary; zero deliberately removes that extra band. Existing
+session state carries continuation through the ready handoff and restart, but
+never retains unsafe power. The existing configurable import confirmation may
+retain only an already-owned matching prompt current; it cannot authorise starts,
+increases or positive retries during import. All hard safety/source/energy gates
+stay immediate, and the original import clock is not renewed by handoff/restart.
+
+Qualified price-export intent has precedence over discretionary prompt charging
+without bypassing EV-minimum/recovery, cap, reserve or event-deadline gates.
+Observe intent before physical handoff to avoid circular waits, then require
+measured EV baseline/stop proof before export writes. An additive owner flag in
+the existing version-one EV journal retains only cleanup provenance after a mode
+edit; it grants no power and clears only on qualified completion. Restoring that
+journal precedes export admission, including with the EV-minimum option off.
+Invalid storage requires physical handoff proof, not guessed completion.
+
+Setup and native dashboard controls share the same timing/restart-margin values.
+Installation does not enable control, select the new mode or replace a deployed
+dashboard. See [the implementation and regression contract](ev-post-export-design.md).
+
 ## v0.12.61 connected, stopped vehicle export handover
 
 The explicitly selected native local charger can also prove its contactor is

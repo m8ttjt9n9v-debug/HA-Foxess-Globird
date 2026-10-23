@@ -33,13 +33,17 @@ async def source_cleanup(hass):
     await hass.async_block_till_done()
 
 
-def _controller(hass, rig, *, mapped=True):
+async def _controller(hass, rig, *, mapped=True):
     rig.coordinator.config.update({
         "ev_local_connection_entity": ENTITY if mapped else None,
         "ev_before_export_soc_target_percent": 20,
     })
     rig.coordinator.runtime_config = RuntimeConfiguration.from_mapping(rig.coordinator.config)
     controller = _loaded_controller(hass, rig.coordinator)
+    assert not rig.controller._before_export_state_loaded
+    assert not controller._ev_before_export_handoff_ready(rig.now)
+    await rig.controller._async_restore()
+    assert rig.controller._before_export_state_loaded
     return controller
 
 
@@ -79,7 +83,7 @@ async def test_old_native_raw_current_republished_alone_does_not_veto_local_unpl
     hass.states.async_set(old.entity_id, "16", dict(old.attributes), force_update=True)
     hass.states.async_set(ENTITY, "off")
     clocks = {entity: hass.states.get(entity).last_reported for entity in FIELDS}
-    controller = _controller(hass, rig)
+    controller = await _controller(hass, rig)
     assert controller._ev_before_export_handoff_ready(rig.now)
     assert controller.ev_export_handoff_reason == "local_disconnected"
     assert clocks == {entity: hass.states.get(entity).last_reported for entity in FIELDS}
@@ -92,7 +96,7 @@ async def test_real_recent_native_charging_vetoes_local_unplug_even_with_old_ha_
     rig = _native(hass, freezer)
     _charge_frame(hass, rig, freezer, charging=True, current=8, connected=True)
     hass.states.async_set(ENTITY, "off")
-    controller = _controller(hass, rig)
+    controller = await _controller(hass, rig)
     assert not controller._ev_before_export_handoff_ready(rig.now)
     assert controller.ev_export_handoff_reason == "connection_conflict"
     controller._local_ev_connection.close()
@@ -100,7 +104,7 @@ async def test_real_recent_native_charging_vetoes_local_unplug_even_with_old_ha_
 
 async def test_future_soc_report_cannot_become_retained_minimum_evidence(hass, freezer):
     rig = _native(hass, freezer)
-    controller = _controller(hass, rig)
+    controller = await _controller(hass, rig)
     hass.states.async_set(ENTITY, "off")
     freezer.move_to(rig.now + timedelta(seconds=1))
     hass.states.async_set("sensor.car_soc", "25", {"unit_of_measurement": "%"}, force_update=True)
@@ -117,7 +121,7 @@ async def test_native_local_contradiction_cannot_fall_back_to_vehicle_disconnect
     rig = _native(hass, freezer, old_seconds=0)
     _charge_frame(hass, rig, freezer, charging=False, current=0, connected=False, entity_age=0)
     local = native(hass)
-    controller = _controller(hass, rig)
+    controller = await _controller(hass, rig)
     controller._ev_before_export_handoff_ready(rig.now)  # Subscribe, do not seed cache.
     local.provider.publish()
     assert controller._ev_before_export_handoff_ready(rig.now)
@@ -133,7 +137,7 @@ async def test_unmapped_zero_buffer_accepts_recent_native_off_with_unchanged_ent
     hass, freezer,
 ):
     rig = _native(hass, freezer)
-    controller = _controller(hass, rig, mapped=False)
+    controller = await _controller(hass, rig, mapped=False)
     assert controller._ev_before_export_handoff_ready(rig.now)
     assert controller.ev_export_handoff_source == "vehicle_feedback"
     controller._local_ev_connection.close()
@@ -145,7 +149,7 @@ async def test_native_charging_contradiction_survives_unrelated_command_cache_mu
     rig = _native(hass, freezer)
     _charge_frame(hass, rig, freezer, charging=True, current=8, connected=True)
     hass.states.async_set(ENTITY, "off")
-    controller = _controller(hass, rig)
+    controller = await _controller(hass, rig)
     # A successful native current command updates the shared cache without
     # advancing the real charge-state timestamp or the actual-current sensor.
     rig.provider.data["charge_state_charge_current_request"] = 12
@@ -238,7 +242,7 @@ async def test_native_physical_handoff_retains_both_existing_age_bounds(
     hass, freezer, general, vehicle,
 ):
     rig = _native(hass, freezer)
-    controller = _controller(hass, rig, mapped=False)
+    controller = await _controller(hass, rig, mapped=False)
     rig.coordinator.config.update({
         "telemetry_max_age_seconds": general, "ev_telemetry_max_age_seconds": vehicle,
     })
@@ -263,7 +267,7 @@ async def test_recent_native_baseline_request_does_not_need_a_value_change(
     rig.provider.data["charge_state_charge_current_request"] = 1
     if mapped:
         hass.states.async_set(ENTITY, "on")
-    controller = _controller(hass, rig, mapped=mapped)
+    controller = await _controller(hass, rig, mapped=mapped)
     rig.coordinator.config["ev_protected_baseline_a"] = 1
     rig.coordinator.runtime_config = RuntimeConfiguration.from_mapping(rig.coordinator.config)
     assert controller._ev_before_export_handoff_ready(rig.now)

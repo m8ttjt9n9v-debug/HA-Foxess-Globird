@@ -1,0 +1,7 @@
+{
+  "schema_version": 1,
+  "key": "ev_pre_free_backfill_timing",
+  "original_options": ["conservative", "ready_by"],
+  "append_options": ["when_connected"],
+  "reason": "Owner-approved additional timing choice; existing identities, order and default remain unchanged."
+}

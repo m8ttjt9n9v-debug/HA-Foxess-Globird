@@ -443,6 +443,11 @@ async def test_export_waits_for_physical_baseline_after_threshold_crossing(
     _fresh(coordinator, now, current_a=1)
     calls.clear()
     await fox.async_reconcile()
+    assert not any(call[2].get("option") == "Force Discharge" for call in calls)
+    # Baseline feedback alone cannot prove absence of a durable cleanup owner
+    # before the replacement process performs its normal journal restoration.
+    await coordinator.ev_controller._async_restore()
+    await fox.async_reconcile()
     assert any(call[2].get("option") == "Force Discharge" for call in calls)
 
 

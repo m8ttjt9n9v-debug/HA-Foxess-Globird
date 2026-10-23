@@ -13,6 +13,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from . import EnergyConfigEntry
 from .aemo_monitor_controls import AemoThresholdNumber
+from .configuration import valid_ev_surplus_rearm_energy
 from .const import (
     CONF_EV_BEFORE_EXPORT_IMPORT_CONFIRM_SECONDS,
     CONF_EV_BEFORE_EXPORT_SOC_BUFFER,
@@ -21,10 +22,12 @@ from .const import (
     CONF_EV_SOLAR_SOAK_ADJUSTMENT_MINUTES,
     CONF_EV_SOLAR_SOAK_AVERAGE_MINUTES,
     CONF_EV_SOLAR_SOAK_BATTERY_SOC,
+    CONF_EV_SURPLUS_REARM_ENERGY,
     DEFAULT_EV_BEFORE_EXPORT_IMPORT_CONFIRM_SECONDS,
     DEFAULT_EV_SOLAR_SOAK_ADJUSTMENT_MINUTES,
     DEFAULT_EV_SOLAR_SOAK_AVERAGE_MINUTES,
     DEFAULT_EV_SOLAR_SOAK_BATTERY_SOC,
+    DEFAULT_EV_SURPLUS_REARM_ENERGY,
 )
 from .coordinator import EnergyCoordinator
 from .entity_catalogue import (
@@ -34,6 +37,7 @@ from .entity_catalogue import (
     EV_BEFORE_EXPORT_TARGET_DESCRIPTION,
     EV_MORNING_SOLAR_RESERVE_DESCRIPTION,
     EV_SOLAR_SOAK_DESCRIPTIONS,
+    EV_SURPLUS_REARM_ENERGY_DESCRIPTION,
 )
 from .entity_catalogue import (
     NUMBER_DESCRIPTIONS as DESCRIPTIONS,
@@ -48,6 +52,9 @@ async def async_setup_entry(
     async_add_entities(
         (
             TripMarginNumber(entry.runtime_data, entry),
+            EvSurplusRearmEnergyNumber(
+                entry.runtime_data, entry, EV_SURPLUS_REARM_ENERGY_DESCRIPTION,
+            ),
             *(TestNumber(entry.runtime_data, entry, description) for description in DESCRIPTIONS),
             *(
                 AemoThresholdNumber(entry.runtime_data, entry, description)
@@ -75,6 +82,44 @@ async def async_setup_entry(
             ),
         )
     )
+
+
+class EvSurplusRearmEnergyNumber(CoordinatorEntity[EnergyCoordinator], NumberEntity):
+    """One configurable start/restart margin, not extra charging authority."""
+
+    def __init__(self, coordinator, entry, description) -> None:
+        super().__init__(coordinator)
+        self.entity_description = description
+        self._entry = entry
+        self._attr_unique_id = f"{entry.entry_id}_{description.key}"
+        self.entity_id = "number.home_energy_ev_surplus_rearm_energy"
+        self._attr_has_entity_name = True
+
+    @property
+    def available(self) -> bool:
+        return True
+
+    @property
+    def native_value(self) -> float:
+        return self.coordinator.runtime_config.ev_numbers.value(
+            CONF_EV_SURPLUS_REARM_ENERGY, DEFAULT_EV_SURPLUS_REARM_ENERGY,
+        )
+
+    async def async_set_native_value(self, value: float) -> None:
+        if not valid_ev_surplus_rearm_energy(value):
+            raise HomeAssistantError("Use a spare-energy restart margin from 0 to 5 kWh, step 0.01")
+        numeric = float(value)
+        self.hass.config_entries.async_update_entry(
+            self._entry,
+            data={**self._entry.data, CONF_EV_SURPLUS_REARM_ENERGY: numeric},
+            options={key: item for key, item in self._entry.options.items()
+                     if key != CONF_EV_SURPLUS_REARM_ENERGY},
+        )
+        self.coordinator.update_config_value(CONF_EV_SURPLUS_REARM_ENERGY, numeric)
+        self.async_write_ha_state()
+        if (controller := self.coordinator.ev_controller) is not None:
+            await controller.async_reconcile()
+        self.coordinator.async_update_listeners()
 
 
 class EvSolarSoakNumber(CoordinatorEntity[EnergyCoordinator], NumberEntity):

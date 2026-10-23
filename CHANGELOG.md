@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.12.62 — Use spare energy when the EV is plugged in
+
+- Add an optional third backfill timing choice, **Use spare energy when plugged
+  in**, in setup and a native dashboard selector. Start protected surplus
+  charging after the configured export finish, without waiting for the morning
+  latest start or requiring the EV to be below its export minimum.
+- Reuse the existing daily/pre-free sessions, energy ledger and Tessie writer.
+  Preserve ready-cycle delivery, reconnect/restart cleanup, normal SoC targets,
+  outside-window inverter percentage, electrical limits and house reserves.
+  Use raw protected Sellable rather than the paid-export-cap-clipped plan.
+- Add a configurable spare-energy restart margin to prevent tiny budgets from
+  repeatedly starting/stopping the charger. Setup and its native dashboard
+  number share one value; existing timing modes and defaults remain unchanged.
+- Reuse bounded sustained-import confirmation only for already-owned prompt
+  charging; new starts/increases remain strict. Eligible price export can request
+  handoff, but must wait for measured baseline/stop proof even with the optional
+  EV-minimum preference off. No simultaneous forced export/EV policy is added.
+- Preserve saved choices and installed dashboards. The reusable dashboard example
+  includes the new controls; importing them or activating the new choice remains
+  explicit. Add native lifecycle, noisy-boundary, persistence and command-race
+  regressions around the reused paths.
+
 ## 0.12.61 — Keep completed EV handover through vehicle sleep
 
 - Keep a completed EV/export handover valid when the stopped car stays plugged

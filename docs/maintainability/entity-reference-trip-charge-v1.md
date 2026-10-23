@@ -5,7 +5,7 @@ to the reviewed semantic worksheet. It records the current names, including
 the retained naming approvals and versioned revisions. Edit the catalogue or semantic
 worksheet, then regenerate this file; do not edit rows by hand.
 
-Total entities: **131**.
+Total entities: **133**.
 
 ## Binary Sensor
 
@@ -41,6 +41,7 @@ Total entities: **131**.
 | `number.home_energy_ev_solar_soak_adjustment_minutes` | Solar Soak Adjustment Period | configuration | advanced | min | `EvSolarSoakNumber.native_value` | configuration | retain | Saved cadence for ordinary afternoon solar-soak current changes using the latest qualified mean. Safety cuts, verified import, lower safe ceilings and permission loss do not wait for this interval. |
 | `number.home_energy_ev_solar_soak_average_minutes` | Solar Soak Averaging Period | configuration | advanced | min | `EvSolarSoakNumber.native_value` | configuration | retain | Saved time-weighted averaging window for reconstructed afternoon solar opportunity before upward supported-amp rounding and existing limits. Not a second measurement source, poller or EV writer. |
 | `number.home_energy_ev_solar_soak_battery_soc` | Solar Soak Battery Floor | configuration | primary | % | `EvSolarSoakNumber.native_value` | configuration | retain | Saved minimum house-battery SoC for additional afternoon direct-EVSE solar buffering while qualified solar and protected Sellable remain. A higher outside-window reserve still wins; 100% disables this extra buffer, not a separately configured keepalive. |
+| `number.home_energy_ev_surplus_rearm_energy` | Spare-energy Restart Margin | configuration | advanced | kWh | `EvSurplusRearmEnergyNumber.native_value` | configuration | retain | Extra discretionary energy required to start or restart Use spare energy when plugged in. An active funded charge may spend through this margin down to its existing minimum funded-current boundary. Prevents energy-threshold chatter without extending power authority or delaying safety withdrawal. |
 | `number.home_energy_test_charge_power` | Test Charge Power | configuration | diagnostic | kW | `TestNumber.native_value` | coordinator | retain | Operator-selected power for the next manual house-battery Force Charge diagnostic. |
 | `number.home_energy_test_discharge_power` | Test Discharge Power | configuration | diagnostic | kW | `TestNumber.native_value` | coordinator | retain | Operator-selected power for the next manual house-battery Force Discharge diagnostic. |
 | `number.home_energy_test_duration` | Test Duration | configuration | diagnostic | min | `TestNumber.native_value` | coordinator | retain | Operator-selected duration for the next manual charge or discharge diagnostic. |
@@ -51,6 +52,7 @@ Total entities: **131**.
 | Entity ID | Current name | Role | Audience | Unit | Projection | Availability | Decision | Definition |
 |---|---|---|---|---|---|---|---|---|
 | `select.home_energy_aemo_region` | AEMO Market Region | configuration | advanced | — | `AemoRegionSelect.current_option` | market_configuration | retain | Explicit NEM region selected for the independent price monitor; clearing the region removes that market mapping and is never replaced by an inferred site location. |
+| `select.home_energy_ev_backfill_timing` | EV Backfill Timing | configuration | primary | — | `EvBackfillTimingSelect.current_option` | configuration | retain | The existing backfill timing setting, editable from setup or this native select. Use spare energy when plugged in offers protected discretionary energy promptly after the normal export finish and before free power, including an already-connected vehicle; selecting a choice enables no policy. |
 | `select.home_energy_house_occupancy_mode` | House Energy Occupancy Mode | configuration | primary | — | `HouseOccupancyModeSelect.current_option` | coordinator | retain | Operator-selected policy choosing automatic person-based occupancy or a forced home/away classification. |
 | `select.home_energy_trip_target_soc` | Trip Charge Target | target | primary | — | `TripTargetSelect.current_option` | trip_state | retain | Selected reported EV SoC at which this trip's owned Full request is withdrawn; not a permanent charge ceiling. |
 

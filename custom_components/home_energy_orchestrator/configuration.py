@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import time
-from math import isfinite
+from math import isclose, isfinite
 from re import fullmatch
 from types import MappingProxyType
 from typing import cast
@@ -552,6 +552,7 @@ _EV_NUMERIC_FIELD_NAMES = (
     "EV_SOLAR_SOAK_BATTERY_SOC",
     "EV_SOLAR_SOAK_AVERAGE_MINUTES",
     "EV_SOLAR_SOAK_ADJUSTMENT_MINUTES",
+    "EV_SURPLUS_REARM_ENERGY",
     "EV_TELEMETRY_MAX_AGE_SECONDS",
     "EV_TELEMETRY_MAX_SKEW_SECONDS",
     "EV_VOLTAGE",
@@ -616,6 +617,13 @@ class EvNumericSettings:
             values[key] = candidate if valid else (
                 100.0 if name == "EV_SOLAR_SOAK_BATTERY_SOC" else default
             )
+        rearm_key = config_const.CONF_EV_SURPLUS_REARM_ENERGY
+        rearm_value = data.get(rearm_key, config_const.DEFAULT_EV_SURPLUS_REARM_ENERGY)
+        # Above the supported range is an explicit fail-closed sentinel, not
+        # a guessed default that could authorise a new surplus episode.
+        values[rearm_key] = (
+            float(rearm_value) if valid_ev_surplus_rearm_energy(rearm_value) else 6.0
+        )
         # An existing entry has a reviewed outside-window reserve but no
         # separate morning-solar value.  Use that reserve until the optional
         # dashboard/configuration control is explicitly saved.
@@ -628,6 +636,18 @@ class EvNumericSettings:
     def value(self, key: str, default: float) -> float:
         """Return one reviewed EV input or the caller's compatibility default."""
         return self.values.get(key, default)
+
+
+def valid_ev_surplus_rearm_energy(value: object) -> bool:
+    """Accept only finite, non-boolean hundredths in the reviewed 0–5 kWh range."""
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError, OverflowError):
+        return False
+    return (
+        not isinstance(value, bool) and isfinite(numeric) and 0 <= numeric <= 5
+        and isclose(numeric * 100, round(numeric * 100), rel_tol=0, abs_tol=1e-7)
+    )
 
 
 @dataclass(frozen=True, slots=True)

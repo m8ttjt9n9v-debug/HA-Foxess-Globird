@@ -1,5 +1,27 @@
 # System requirements and integration map
 
+## Prompt EV backfill timing
+
+The optional **Use spare energy when plugged in** timing requires the enabled
+pre-free policy, commissioned direct-EVSE control and Local Modbus ownership.
+Use a valid export-finish to ready-deadline to free-start chronology; the
+effective finish includes the configured normal-export offset. Smart-socket
+paths are not admitted by this choice. Existing Conservative/Ready-by settings
+and control switches remain unchanged on upgrade.
+
+Native `select.home_energy_ev_backfill_timing` edits the same setup value, and
+`number.home_energy_ev_surplus_rearm_energy` edits the spare-energy restart
+margin (0–5 kWh, default 0.1). These controls need explicit dashboard import;
+their existence does not activate charging. Entry and native validation reject
+unsupported timing/topology, invalid power limits and non-finite margins.
+
+The new mode reuses existing protected energy and daily/pre-free journals,
+bounded current, native source clocks and physical handoff. Raw Sellable may
+remain available after the paid-export cap; the export cap is not an EV energy
+limit. Price export may preempt only with its existing complete authority,
+including the saved EV minimum. Every positive command checks current evidence;
+lost authority curtails immediately. See [prompt backfill](ev-post-export-design.md).
+
 ## EV top-up import confirmation
 
 EV-before-export continuation uses an adjustable 0–300-second confirmation

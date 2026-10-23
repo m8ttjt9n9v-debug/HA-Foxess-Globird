@@ -1,0 +1,27 @@
+{
+  "schema_version": 1, "entity_count": 2, "attribute_profiles": {},
+  "entities": [{
+    "key": "ev_backfill_timing",
+    "definition": "The existing backfill timing setting, editable from setup or this native select. Use spare energy when plugged in offers protected discretionary energy promptly after the normal export finish and before free power, including an already-connected vehicle; selecting a choice enables no policy.",
+    "producer": "EvBackfillTimingSelect.current_option projects RuntimeConfiguration.ev_policy.pre_free_backfill_timing.",
+    "role": "configuration",
+    "unit_and_sign": "Enumerated policy choice, no unit. Missing choices retain Ready by by default; existing explicit choices remain unchanged.",
+    "time_basis": "Current saved configuration, preserved through reload and restart. Each edit requests existing EV reconciliation; no independent schedule or controller is added.",
+    "availability": "Editable while HEO is loaded, including when telemetry is unavailable or automatic control is disabled. All command safety checks remain independent.",
+    "state_vocabulary": "conservative, ready_by, when_connected. Human-facing translated labels do not change the stored enum. Unsupported choices, incompatible charging paths and invalid enabled-policy chronology or power limits are rejected before persistence.",
+    "audience": "primary", "equivalents": {"foxess": null, "globird": null, "tessie": null},
+    "consumers": ["EV Charging policies", "EV dashboard controls", "Existing backfill controller"],
+    "decision": "retain", "review_status": "engineering_draft"
+  }, {
+    "key": "ev_surplus_rearm_energy",
+    "definition": "Extra discretionary energy required to start or restart Use spare energy when plugged in. An active funded charge may spend through this margin down to its existing minimum funded-current boundary. Prevents energy-threshold chatter without extending power authority or delaying safety withdrawal.",
+    "producer": "EvSurplusRearmEnergyNumber.native_value projects the same saved ev_surplus_rearm_energy_kwh value as setup.",
+    "role": "configuration", "unit_and_sign": "Non-negative kWh from 0 through 5, step 0.01, default 0.1. Zero explicitly removes the additional start/restart margin.",
+    "time_basis": "Current saved configuration, immediately re-evaluated and preserved across reload/restart; no additional delay or timer.",
+    "availability": "Editable while HEO is loaded, including when telemetry is unavailable or automatic control is disabled.",
+    "state_vocabulary": "Finite non-boolean hundredths of kWh. Invalid edits are rejected; corrupt saved values cannot grant a new charging episode.",
+    "audience": "advanced", "equivalents": {"foxess": null, "globird": null, "tessie": null},
+    "consumers": ["EV Charging policies", "EV dashboard controls", "Existing backfill controller"],
+    "decision": "retain", "review_status": "engineering_draft"
+  }]
+}

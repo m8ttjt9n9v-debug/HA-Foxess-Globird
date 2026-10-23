@@ -15,6 +15,7 @@ from custom_components.home_energy_orchestrator.config_flow import ConfigFlow
 from custom_components.home_energy_orchestrator.config_page_schema import (
     iter_page_schema_fields,
 )
+from scripts.config_field_amendments import reviewed_field_amendments
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 BASELINE_PATH = (
@@ -53,6 +54,9 @@ EV_LOCAL_CONNECTION_ADDITIONS_PATH = (
 )
 EV_IMPORT_ADDITIONS_PATH = (
     REPOSITORY_ROOT / "docs/maintainability/config-field-additions-ev-import-v1.json"
+)
+EV_SURPLUS_REARM_ADDITIONS_PATH = (
+    REPOSITORY_ROOT / "docs/maintainability/config-field-additions-ev-surplus-rearm-v1.json"
 )
 
 
@@ -153,6 +157,7 @@ def validate_against_release_baseline() -> None:
             EV_EXPORT_BUFFER_ADDITIONS_PATH,
             EV_LOCAL_CONNECTION_ADDITIONS_PATH,
             EV_IMPORT_ADDITIONS_PATH,
+            EV_SURPLUS_REARM_ADDITIONS_PATH,
         )
     ]
     extension = {"schema_version": baseline["schema_version"], "fields": []}
@@ -177,7 +182,10 @@ def validate_against_release_baseline() -> None:
         raise ValueError("configuration entry version changed")
     if current["field_count"] != baseline["field_count"] + len(added):
         raise ValueError("field count differs from baseline plus reviewed additions")
-    expected = retained | added
+    expected = {
+        field["key"]: field
+        for field in reviewed_field_amendments(list((retained | added).values()))
+    }
     if actual.keys() != expected.keys():
         raise ValueError("configuration field identities changed beyond reviewed additions")
     for key, record in expected.items():

@@ -23,6 +23,7 @@ from .const import (
     CONF_EV_TELEMETRY_MAX_AGE_SECONDS,
     DEFAULT_EV_TELEMETRY_MAX_AGE_SECONDS,
     EV_CHARGE_PATH_DIRECT,
+    EV_PRE_FREE_BACKFILL_TIMING_WHEN_CONNECTED,
     FOXESS_CONTROL_OWNER_CLOUD,
     FOXESS_CONTROL_OWNER_MODBUS,
 )
@@ -542,6 +543,69 @@ class ActiveFoxessController:
             price_interval_end=window[1] if window else None,
         )
 
+    def opportunistic_price_export_requested(self, now: datetime) -> bool:
+        """Observe qualified price intent before the EV's physical handoff.
+
+        Published export eligibility includes that handoff and cannot be used
+        by the EV to decide when to yield: each writer would wait for the
+        other. This read-only calculation omits ONLY physical EV handoff; the
+        existing price, cap, minimum, energy, mapping and ownership rules apply.
+        It creates no session, timer, price lease or command authority.
+        """
+        manual_test = getattr(self.coordinator, "manual_test", None)
+        if (
+            self._reconcile_stopped
+            or maintenance_writes_blocked(self.hass)
+            or self.gate_status != "ready"
+            or self.manual.is_active
+            or bool(manual_test is not None and manual_test.is_active)
+            or self.charge_session.phase != "idle"
+            or self.export_session.phase != "idle"
+            or not self._price_mapping_matches()
+            or self._enabled_control_windows_overlap()
+        ):
+            return False
+        inverter = self.coordinator.runtime_config.inverter
+        feedback = capture_foxess_feedback(self.hass, FoxessEntityMap(
+            inverter.work_mode_entity,
+            inverter.force_charge_power_entity,
+            inverter.force_discharge_power_entity,
+        ))
+        if (
+            feedback.observation is None
+            or feedback.mode != "Self Use"
+            or feedback.charge_power_kw != 0
+            or feedback.discharge_power_kw != 0
+        ):
+            return False
+        ownership = evaluate_foxess_ownership(FoxessOwnershipContext(
+            mode=feedback.mode,
+            charge_phase=self.charge_session.phase,
+            export_phase=self.export_session.phase,
+            charge_storage_status=self._charge_storage_status,
+            export_storage_status=self._export_storage_status,
+            manual_present=manual_test is not None,
+            manual_active=False,
+            manual_kind=getattr(manual_test, "active_kind", None),
+            manual_storage_status=getattr(manual_test, "storage_status", "missing"),
+        ))
+        if ownership.hold or ownership.reset_sessions or ownership.checkpoint_manual_idle:
+            return False  # Ordinary inverter reconciliation owns any checkpoint.
+        try:
+            policy = evaluate_foxess_export_policy(self._export_context(feedback, now))
+        except (TypeError, ValueError):
+            return False
+        return (
+            policy.authority_source == "price"
+            and policy.effective_enabled
+            and policy.source_available
+            and policy.eligible
+            and policy.session_window_active
+            and not policy.finish_requested
+            and policy.price_deadline is not None
+            and now < policy.price_deadline
+        )
+
     def _ev_before_export_handoff_ready(self, now: datetime) -> bool:
         """Confirm the EV is no longer spending surplus before export takes it.
 
@@ -552,17 +616,32 @@ class ActiveFoxessController:
         """
         runtime = self.coordinator.runtime_config
         connection = runtime.ev_connection
-        if (
-            not runtime.ev_preferences.before_export_enabled
-            or not connection.configured
-            or not connection.control_commissioned
+        ev = getattr(self.coordinator, "ev_controller", None)
+        minimum_enabled = runtime.ev_preferences.before_export_enabled
+        prompt_handoff = (
+            runtime.ev_policy.pre_free_enabled and (
+                runtime.ev_policy.pre_free_backfill_timing
+                == EV_PRE_FREE_BACKFILL_TIMING_WHEN_CONNECTED
+            )
+            or callable(getattr(ev, "requires_export_handoff", None))
+            and ev.requires_export_handoff()
+        )
+        if not connection.configured or not connection.control_commissioned:
+            return True
+        if runtime.ev_policy.charge_path == EV_CHARGE_PATH_DIRECT and (
+            ev is None or getattr(ev, "_before_export_state_loaded", True) is False
         ):
+            # A mode edit followed by restart cannot hide the optional durable
+            # prompt-cleanup marker before the existing EV journal is restored.
+            # Restoration always runs, including while EV control is disabled.
+            return False
+        if not (minimum_enabled or prompt_handoff):
             return True
         feedback = capture_ev_feedback(self.hass, ev_observation_entity_map(runtime))
         maximum_age = runtime.telemetry.max_age_seconds
-        ev = getattr(self.coordinator, 'ev_controller', None)
         release = (ev.before_export_release_target()
-                   if callable(getattr(ev, 'before_export_release_target', None)) else None)
+                   if minimum_enabled
+                   and callable(getattr(ev, 'before_export_release_target', None)) else None)
         vehicle_cohort_valid = before_export_vehicle_feedback_valid(
             self.hass, feedback, now=now,
             max_age_seconds=min(maximum_age, runtime.ev_numbers.value(
@@ -594,7 +673,7 @@ class ActiveFoxessController:
                 self.ev_export_handoff_reason = "connection_conflict"
                 return False
             if local.disconnected or local.connected_idle:
-                if (
+                if minimum_enabled and (
                     release is not None
                     or runtime.ev_preferences.before_export_soc_buffer != 0 and ev is None
                     or feedback.soc.restored
@@ -649,7 +728,7 @@ class ActiveFoxessController:
                 return True
         self.ev_export_handoff_source = "vehicle_feedback"
         self.ev_export_handoff_observed_at = None
-        if runtime.ev_preferences.before_export_soc_buffer != 0:
+        if minimum_enabled and runtime.ev_preferences.before_export_soc_buffer != 0:
             if not vehicle_cohort_valid or not decide_ev_before_export(
                 enabled=True, ev_soc_percent=feedback.soc.number,
                 target_soc_percent=runtime.ev_preferences.before_export_soc_target,

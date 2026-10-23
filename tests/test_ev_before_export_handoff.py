@@ -21,7 +21,7 @@ def utc_clock(monkeypatch):
     )
 
 
-def _rig(hass, freezer, **changes):
+async def _rig(hass, freezer, **changes):
     now = _now(20, 55)
     freezer.move_to(now)
     coordinator, _ev = _case(hass, now, ev_protected_baseline_a=1, **changes)
@@ -29,8 +29,12 @@ def _rig(hass, freezer, **changes):
     hass.states.async_set("sensor.car_soc", "30", {"unit_of_measurement": "%"})
     controller = _loaded_controller(hass, coordinator)
     coordinator.active_controller = controller
-    # Deliberately no EV runtime: physical source proof must stand on its own.
-    del coordinator.ev_controller
+    # Restore only the existing EV journal. No EV reconciliation or command
+    # selects the outcome; all handoff decisions below still use physical proof.
+    if coordinator.runtime_config.ev_connection.configured:
+        assert not controller._ev_before_export_handoff_ready(now)
+    await _ev._async_restore()
+    assert _ev._before_export_state_loaded
     return now, coordinator, controller
 
 
@@ -60,10 +64,10 @@ def _services(hass, monkeypatch, *, after_discharge=None):
 
 
 @pytest.mark.parametrize("state", ["baseline", "off", "disconnected"])
-async def test_fresh_physical_baseline_or_off_admits_export_without_ev_runtime(
+async def test_fresh_physical_baseline_or_off_admits_export_after_journal_restore(
     hass, freezer, monkeypatch, state
 ):
-    _, _, controller = _rig(hass, freezer)
+    _, _, controller = await _rig(hass, freezer)
     calls = _services(hass, monkeypatch)
     _charging(hass, 1)
     if state == "off":
@@ -109,7 +113,7 @@ async def test_fresh_physical_baseline_or_off_admits_export_without_ev_runtime(
 async def test_missing_stale_or_conflicting_handoff_cannot_start_export(
     hass, freezer, monkeypatch, failure
 ):
-    now, coordinator, controller = _rig(hass, freezer)
+    now, coordinator, controller = await _rig(hass, freezer)
     calls = _services(hass, monkeypatch)
     _charging(hass, 1)
     if failure.startswith("stale_"):
@@ -183,7 +187,7 @@ async def test_missing_stale_or_conflicting_handoff_cannot_start_export(
 async def test_unselected_handoff_does_not_change_existing_export(
     hass, freezer, monkeypatch, changes
 ):
-    _, _, controller = _rig(hass, freezer, **changes)
+    _, _, controller = await _rig(hass, freezer, **changes)
     calls = _services(hass, monkeypatch)
     hass.states.async_remove("sensor.car_actual_current")
     await controller.async_reconcile()
@@ -193,7 +197,7 @@ async def test_unselected_handoff_does_not_change_existing_export(
 async def test_active_export_survives_retained_current_under_proved_disconnection(
     hass, freezer, monkeypatch
 ):
-    _, _, controller = _rig(hass, freezer)
+    _, _, controller = await _rig(hass, freezer)
     calls = _services(hass, monkeypatch)
     _foxess(hass, mode="Force Discharge", discharge=15)
     controller.export_session = ExportSessionState("active", 15, 0)
@@ -215,7 +219,7 @@ async def test_active_export_survives_retained_current_under_proved_disconnectio
 async def test_baseline_handoff_uses_the_representable_physical_current(
     hass, freezer, monkeypatch, step, minimum, configured, physical_baseline
 ):
-    _, coordinator, controller = _rig(hass, freezer)
+    _, coordinator, controller = await _rig(hass, freezer)
     coordinator.config["ev_protected_baseline_a"] = configured
     coordinator.runtime_config = RuntimeConfiguration.from_mapping(coordinator.config)
     calls = _services(hass, monkeypatch)
@@ -231,7 +235,7 @@ async def test_baseline_handoff_uses_the_representable_physical_current(
 
 
 async def test_physical_loss_does_not_block_owned_export_cleanup(hass, freezer, monkeypatch):
-    _, _, controller = _rig(hass, freezer)
+    _, _, controller = await _rig(hass, freezer)
     calls = _services(hass, monkeypatch)
     _foxess(hass, mode="Force Discharge", discharge=15)
     controller.export_session = ExportSessionState("active", 15, 0)
@@ -246,7 +250,7 @@ async def test_physical_loss_does_not_block_owned_export_cleanup(hass, freezer, 
 async def test_mid_staging_ev_change_blocks_mode_then_preserves_reducing_cleanup(
     hass, freezer, monkeypatch
 ):
-    _, _, controller = _rig(hass, freezer)
+    _, _, controller = await _rig(hass, freezer)
     _charging(hass, 1)
     calls = _services(hass, monkeypatch, after_discharge=lambda: _charging(hass, 8))
 

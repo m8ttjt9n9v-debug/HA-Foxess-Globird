@@ -55,6 +55,7 @@ class EvPersistenceState:
     )
     charge_to_full_started_at: datetime | None = None
     outside_control_active: bool = False
+    when_connected_owned: bool = False
     before_export_recovery: EvBeforeExportRecovery = field(default_factory=EvBeforeExportRecovery)
     before_export_import: EvBeforeExportImport = field(default_factory=EvBeforeExportImport)
     smart_recovery: SmartSocketRecoveryState = field(
@@ -145,6 +146,9 @@ class EvPersistenceState:
             daily_backfill=daily_backfill,
             charge_to_full_started_at=charge_to_full_started_at,
             outside_control_active=outside_control_active,
+            # An invalid optional owner must retain cleanup, never prove it
+            # completed. Earlier releases simply ignore this additive field.
+            when_connected_owned=(mapping.get("when_connected_owned", False) is not False),
             before_export_recovery=(
                 _before_export_recovery(mapping['before_export_recovery'])
                 if 'before_export_recovery' in mapping else EvBeforeExportRecovery()
@@ -239,6 +243,7 @@ class EvPersistenceState:
                 else None
             ),
             "outside_control_active": self.outside_control_active,
+            **({"when_connected_owned": True} if self.when_connected_owned else {}),
             **({"before_export_import": {
                 "since": self.before_export_import.since.isoformat()
                 if self.before_export_import.since else None,

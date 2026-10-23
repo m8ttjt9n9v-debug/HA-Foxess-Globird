@@ -1,0 +1,9 @@
+{
+  "schema_version": 1, "access_count": 4,
+  "accesses": [
+    {"constant":"CONF_EV_SURPLUS_REARM_ENERGY","key":"ev_surplus_rearm_energy_kwh","source":"custom_components/home_energy_orchestrator/config_flow.py","scope":"ConfigFlow._apply_defaults","receiver":"data","access":"get","kind":"raw_mapping","layer":"boundary"},
+    {"constant":"CONF_EV_SURPLUS_REARM_ENERGY","key":"ev_surplus_rearm_energy_kwh","source":"custom_components/home_energy_orchestrator/config_flow.py","scope":"ConfigFlow._page_limit_error","receiver":"data","access":"subscript_load","kind":"raw_mapping","layer":"boundary"},
+    {"constant":"CONF_EV_SURPLUS_REARM_ENERGY","key":"ev_surplus_rearm_energy_kwh","source":"custom_components/home_energy_orchestrator/config_flow.py","scope":"ConfigFlow._validate_input","receiver":"data","access":"get","kind":"raw_mapping","layer":"boundary"},
+    {"constant":"CONF_EV_SURPLUS_REARM_ENERGY","key":"ev_surplus_rearm_energy_kwh","source":"custom_components/home_energy_orchestrator/number.py","scope":"EvSurplusRearmEnergyNumber.async_set_native_value","receiver":"self.coordinator","access":"update_config_value","kind":"managed_mutation","layer":"runtime"}
+  ]
+}

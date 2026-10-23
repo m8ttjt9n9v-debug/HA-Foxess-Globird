@@ -39,6 +39,7 @@ class DailyBackfillInputs:
     charger_maximum_a: float
     planning_buffer_minutes: float = 0.0
     use_all_discretionary_energy: bool = False
+    start_immediately: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -69,6 +70,7 @@ class DailyBackfillPlanningEvidence:
     planning_buffer_minutes: float
     use_all_discretionary_energy: bool = False
     planning_capacity_kwh: float | None = None
+    start_immediately: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -198,6 +200,7 @@ def evaluate_daily_backfill_plan(
             charger_maximum_a=evidence.charger_maximum_a,
             planning_buffer_minutes=evidence.planning_buffer_minutes,
             use_all_discretionary_energy=evidence.use_all_discretionary_energy,
+            start_immediately=evidence.start_immediately,
         )
     )
 
@@ -453,6 +456,8 @@ def calculate_daily_backfill_plan(inputs: DailyBackfillInputs) -> DailyBackfillP
     )
     achievable = shortfall <= 0 and (latest is None or latest >= earliest_start)
     planned_start = max(latest, planning_window_start) if latest is not None else None
+    if inputs.start_immediately and planned_start is not None:
+        planned_start = planning_window_start
 
     if now >= ready_at:
         phase = "ready_time_passed"

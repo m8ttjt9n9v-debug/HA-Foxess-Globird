@@ -119,6 +119,7 @@
           "ev_morning_solar_reserve_soc_percent": "Home battery minimum for morning solar EV charging (%)",
           "ev_pre_free_backfill_enabled": "Use spare home-battery energy for EV before free power",
           "ev_pre_free_backfill_timing": "Backfill timing",
+          "ev_surplus_rearm_energy_kwh": "Spare-energy restart margin (kWh)",
           "ev_daily_backfill_energy_kwh": "Reserved EV energy for ready-by (kWh; 0 means none)",
           "ev_daily_ready_time": "Daily EV ready-by time",
           "ev_outside_inverter_percent": "Max EV power outside free window (% of inverter output)",
@@ -296,6 +297,7 @@
           "ev_morning_solar_reserve_soc_percent": "Home battery minimum for morning solar EV charging (%)",
           "ev_pre_free_backfill_enabled": "Use spare home-battery energy for EV before free power",
           "ev_pre_free_backfill_timing": "Backfill timing",
+          "ev_surplus_rearm_energy_kwh": "Spare-energy restart margin (kWh)",
           "ev_daily_backfill_energy_kwh": "Reserved EV energy for ready-by (kWh; 0 means none)",
           "ev_daily_ready_time": "Daily EV ready-by time",
           "ev_outside_inverter_percent": "Max EV power outside free window (% of inverter output)",
@@ -550,6 +552,7 @@
             "ev_morning_solar_reserve_soc_percent": "Home battery minimum for morning solar EV charging (%)",
             "ev_pre_free_backfill_enabled": "Use spare home-battery energy for EV before free power",
             "ev_pre_free_backfill_timing": "Backfill timing",
+            "ev_surplus_rearm_energy_kwh": "Spare-energy restart margin (kWh)",
             "ev_daily_backfill_energy_kwh": "Reserved EV energy for ready-by (kWh; 0 means none)",
             "ev_daily_ready_time": "Daily EV ready-by time",
             "ev_outside_inverter_percent": "Max EV power outside free window (% of inverter output)",
@@ -585,7 +588,8 @@
             "ev_morning_solar_enabled": "Before free power, send measured solar surplus to the EV. Charging from spare home-battery energy takes over if it starts.",
             "ev_morning_solar_reserve_soc_percent": "Morning solar EV charging requires at least this home-battery SoC; separate from the regular solar threshold.",
             "ev_pre_free_backfill_enabled": "Use available home-battery surplus after protecting house needs, with the timing selected below.",
-            "ev_pre_free_backfill_timing": "Ready by is the default: use available battery surplus before the daily ready-by time after protecting the home. No fixed daily kWh allocation is required; charging may start overnight after midnight. After the ready-by time, remaining safe surplus can still backfill before free power. Conservative retains late pre-free backfill. This choice does not enable backfill or automatic EV control.",
+            "ev_pre_free_backfill_timing": "Ready by waits for the calculated start before departure. Use spare energy when plugged in charges promptly after the export window until free power, including an already-connected car. Conservative retains late pre-free backfill. Every choice protects the home and respects outside-free limits; selecting timing does not enable backfill or automatic EV control.",
+            "ev_surplus_rearm_energy_kwh": "Only for Use spare energy when plugged in: wait for this extra Sellable energy before starting or restarting; an active charge can use it. Prevents tiny energy changes repeatedly starting charging. 0 removes the extra margin. Reserves and current limits remain unchanged.",
             "ev_daily_backfill_energy_kwh": "Protect this many wall-side kWh for the EV to receive by the ready-by time. Set 0 to disable the fixed daily allocation; Ready by surplus backfill can still run.",
             "ev_daily_ready_time": "Deadline for the fixed daily allocation and Ready by surplus backfill. Ready by uses the window from midnight to this time, which must be after midnight and before free power starts.",
             "ev_outside_inverter_percent": "Shared upper power limit for EV charging outside free power, before charger and grid safety limits.",
@@ -597,7 +601,7 @@
             "ev_before_export_enabled": "Before selling, use spare battery energy to charge a home, plugged-in car towards the target below. Normal outside-window limits and house reserves still apply.",
             "ev_before_export_soc_target_percent": "Minimum EV charge before selling. A top-up begun below this level continues to the minimum plus the buffer before export resumes. Normal EV limits still win.",
             "ev_before_export_soc_buffer_percent": "Extra percentage points after a below-minimum top-up: minimum 40% plus buffer 1 means charge to 41%, then allow export until below 40%. Set 0 for the former single threshold.",
-            "ev_before_export_import_confirm_seconds": "Brief import may retain an existing funded top-up, never start or increase it. Continuous import stops it after this period. Electrical, reserve and stale-data protection remain immediate. 0 disables the filter."
+            "ev_before_export_import_confirm_seconds": "Brief import may retain an existing funded EV-before-export or plugged-in surplus charge, never start or increase it. Continuous import stops it after this period. Electrical, reserve and stale-data protection remain immediate. 0 disables the filter."
           },
           "sections": {
             "solar_soak": {
@@ -861,6 +865,7 @@
             "ev_morning_solar_reserve_soc_percent": "Home battery minimum for morning solar EV charging (%)",
             "ev_pre_free_backfill_enabled": "Use spare home-battery energy for EV before free power",
             "ev_pre_free_backfill_timing": "Backfill timing",
+            "ev_surplus_rearm_energy_kwh": "Spare-energy restart margin (kWh)",
             "ev_daily_backfill_energy_kwh": "Reserved EV energy for ready-by (kWh; 0 means none)",
             "ev_daily_ready_time": "Daily EV ready-by time",
             "ev_outside_inverter_percent": "Max EV power outside free window (% of inverter output)",
@@ -896,7 +901,8 @@
             "ev_morning_solar_enabled": "Before free power, send measured solar surplus to the EV. Charging from spare home-battery energy takes over if it starts.",
             "ev_morning_solar_reserve_soc_percent": "Morning solar EV charging requires at least this home-battery SoC; separate from the regular solar threshold.",
             "ev_pre_free_backfill_enabled": "Use available home-battery surplus after protecting house needs, with the timing selected below.",
-            "ev_pre_free_backfill_timing": "Ready by is the default: use available battery surplus before the daily ready-by time after protecting the home. No fixed daily kWh allocation is required; charging may start overnight after midnight. After the ready-by time, remaining safe surplus can still backfill before free power. Conservative retains late pre-free backfill. This choice does not enable backfill or automatic EV control.",
+            "ev_pre_free_backfill_timing": "Ready by waits for the calculated start before departure. Use spare energy when plugged in charges promptly after the export window until free power, including an already-connected car. Conservative retains late pre-free backfill. Every choice protects the home and respects outside-free limits; selecting timing does not enable backfill or automatic EV control.",
+            "ev_surplus_rearm_energy_kwh": "Only for Use spare energy when plugged in: wait for this extra Sellable energy before starting or restarting; an active charge can use it. Prevents tiny energy changes repeatedly starting charging. 0 removes the extra margin. Reserves and current limits remain unchanged.",
             "ev_daily_backfill_energy_kwh": "Protect this many wall-side kWh for the EV to receive by the ready-by time. Set 0 to disable the fixed daily allocation; Ready by surplus backfill can still run.",
             "ev_daily_ready_time": "Deadline for the fixed daily allocation and Ready by surplus backfill. Ready by uses the window from midnight to this time, which must be after midnight and before free power starts.",
             "ev_outside_inverter_percent": "Shared upper power limit for EV charging outside free power, before charger and grid safety limits.",
@@ -908,7 +914,7 @@
             "ev_before_export_enabled": "Before selling, use spare battery energy to charge a home, plugged-in car towards the target below. Normal outside-window limits and house reserves still apply.",
             "ev_before_export_soc_target_percent": "Minimum EV charge before selling. A top-up begun below this level continues to the minimum plus the buffer before export resumes. Normal EV limits still win.",
             "ev_before_export_soc_buffer_percent": "Extra percentage points after a below-minimum top-up: minimum 40% plus buffer 1 means charge to 41%, then allow export until below 40%. Set 0 for the former single threshold.",
-            "ev_before_export_import_confirm_seconds": "Brief import may retain an existing funded top-up, never start or increase it. Continuous import stops it after this period. Electrical, reserve and stale-data protection remain immediate. 0 disables the filter."
+            "ev_before_export_import_confirm_seconds": "Brief import may retain an existing funded EV-before-export or plugged-in surplus charge, never start or increase it. Continuous import stops it after this period. Electrical, reserve and stale-data protection remain immediate. 0 disables the filter."
           },
           "sections": {
             "solar_soak": {
@@ -1030,7 +1036,9 @@
       "battery_capacity_required": "Select a live FoxESS battery-capacity sensor, or enter a commissioned fallback capacity.",
       "invalid_daily_ev_backfill": "Daily EV backfill requires a commissioned inverter output/discharge limit, a non-zero outside-window percentage, and a ready time before the free-power window.",
       "invalid_ready_by_ev_backfill": "Ready by surplus backfill requires a commissioned inverter output/discharge limit, a non-zero outside-window percentage, and a ready-by time after midnight and before free power starts.",
-      "invalid_ev_backfill_timing": "Choose Conservative or Ready by for backfill timing.",
+      "invalid_ev_backfill_timing": "Choose Conservative, Ready by, or Use spare energy when plugged in.",
+      "when_connected_requires_direct_evse": "Use spare energy when plugged in requires the commissioned Direct / EVSE charging path.",
+      "invalid_when_connected_ev_backfill": "The effective export finish must be before the next ready-by deadline and free-power start, leaving a non-overlapping charging opportunity.",
       "invalid_ev_capacity_source": "Choose Legacy ratio, Mapped sensor, Tessie provider, or Configured planning capacity.",
       "invalid_ev_capacity_fallback": "Enter a finite number from 0 to 1000 kWh; zero or clearing means unset.",
       "ev_capacity_fallback_required": "Configured planning capacity needs a positive fallback kWh value.",
@@ -1136,7 +1144,8 @@
     "ev_pre_free_backfill_timing": {
       "options": {
         "conservative": "Conservative — finish before free power",
-        "ready_by": "Ready by — use available surplus before departure"
+        "ready_by": "Ready by — use available surplus before departure",
+        "when_connected": "Use spare energy when plugged in"
       }
     }
   },
@@ -1158,6 +1167,14 @@
       }
     },
     "select": {
+      "ev_backfill_timing": {
+        "name": "EV Backfill Timing",
+        "state": {
+          "conservative": "Conservative",
+          "ready_by": "Ready by",
+          "when_connected": "Use spare energy when plugged in"
+        }
+      },
       "aemo_region": {
         "name": "AEMO Market Region"
       }

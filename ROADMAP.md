@@ -1,5 +1,61 @@
 # Project roadmap
 
+## Optional prompt backfill timing — v0.12.62
+
+- [x] [Reuse the existing backfill sessions](docs/ev-post-export-design.md)
+  with one explicit prompt timing choice, not multiple ready deadlines. Keep
+  current defaults/saved choices, and expose the same choice in setup and a
+  native dashboard select. The owner explicitly brought this required feature
+  forward from settling; other deferred features remain deferred.
+- [x] After the configured normal export window closes and before the next
+  free-power window, charge promptly whenever the EV is home, plugged in,
+  below its normal charging ceiling and discretionary Sellable energy remains.
+  Do not wait for the morning Ready-by latest-start time, and do not require
+  the EV to be below its minimum-before-export SoC.
+- [x] Recalculate available energy continuously; stop/curtail at the existing
+  house reserves/floor, outside-window inverter percentage, electrical limits,
+  normal EV ceiling or loss of valid authority. Sellable is a budget, not
+  permission for paid-grid charging or reserve depletion.
+- [x] Retain Ready-by as the deadline backstop. Account for early delivered
+  energy without planning/reserving it twice; reuse the existing EV writer and
+  preserve unplug/reconnect intent and free-window/solar handoffs.
+- [x] Qualified critical-event export can request physical handoff; existing
+  Full/Trip/free ownership and EV-minimum/reserve gates remain. Do not silently
+  introduce simultaneous forced export and surplus EV charging. Extended Away
+  remains a separate unimplemented feature, not automatic household absence.
+- [x] Add a configurable setup/native restart margin after a regression proves
+  tiny-budget chatter with a single funded-current boundary. Reuse existing
+  session and import-confirmation state; all safety reductions remain immediate.
+- [x] Test evening-window close, immediate/repeated plug-in, arrival above the
+  export minimum, exhausted/replenished surplus, load surges, threshold jitter,
+  restart, unavailable data and the next free-window boundary. Preserve existing
+  protections and configurable policy thresholds. Installation does not select
+  this timing, activate control or replace a deployed dashboard. Named-site
+  release acceptance remains a separate controlled step.
+
+## Deferred until after settling — EV shortfall reservation and Extended Away
+
+- [ ] Replace the all-or-nothing EV-minimum export hold with a protected EV
+  energy reservation: account for the predicted arrival-home SoC shortfall to
+  the configured minimum plus recovery margin, including charging losses;
+  export only the non-negative balance of otherwise discretionary energy.
+- [ ] Use actual current SoC plus an estimate of the remaining return journey;
+  do not count already-observed outward-trip consumption twice. Specify a
+  conservative configurable fallback when prediction/evidence is insufficient.
+- [ ] Reconcile with existing house/EV reservations without double-counting.
+  Keep the EV's reserved share available to its existing charging controller,
+  not hidden from it by reducing a shared Sellable input. Adjust the independent
+  EV-minimum export gate consistently; changing a display value alone is not enough.
+- [ ] Add explicit, manually selected **Extended Away** semantics: release the
+  anticipated EV-return reservation and EV-SoC export hold. Never infer this
+  from automatic house occupancy, a normal day trip or vehicle-away detection.
+  Retain house reserves, physical handover, pricing/caps and safety protections.
+- [ ] Specify stable deficit/return/hysteresis transitions and regression cases
+  for missing data, trips, arrival/reconnect, restart, changing estimates/settings
+  and entering/leaving Extended Away. Reuse existing writers; simultaneous EV
+  charging and forced export remains a separate design item. No implementation
+  or rollout during the requested settling period without renewed direction.
+
 ## Connected stopped-car export handover — v0.12.61
 
 - [x] Characterize the full top-up → measured stop → connected sleep → export

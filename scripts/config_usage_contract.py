@@ -17,6 +17,7 @@ from scripts.config_contract import (
     EV_EXPORT_BUFFER_CONFIG_KEYS,
     EV_IMPORT_CONFIG_KEYS,
     EV_LOCAL_CONNECTION_CONFIG_KEYS,
+    EV_SURPLUS_REARM_CONFIG_KEYS,
     LOAD_CONFIG_KEYS,
     SOLAR_SOAK_CONFIG_KEYS,
 )
@@ -55,6 +56,12 @@ EV_LOCAL_CONNECTION_ADDITIONS_PATH = (
 )
 EV_IMPORT_ADDITIONS_PATH = (
     REPOSITORY_ROOT / "docs/maintainability/config-usage-additions-ev-import-v1.json"
+)
+EV_BACKFILL_TIMING_ADDITIONS_PATH = (
+    REPOSITORY_ROOT / "docs/maintainability/config-usage-additions-ev-backfill-timing-v1.json"
+)
+EV_SURPLUS_REARM_ADDITIONS_PATH = (
+    REPOSITORY_ROOT / "docs/maintainability/config-usage-additions-ev-surplus-rearm-v1.json"
 )
 RECONFIGURE_TRANSITION_PATH = (
     REPOSITORY_ROOT / "docs" / "maintainability" / "config-usage-transition-reconfigure-v1.json"
@@ -220,6 +227,21 @@ def build_config_usage_contract(*, include_extensions: bool = False) -> dict[str
         visitor.visit(tree)
         records.extend(visitor.records)
     if not include_extensions:
+        rearm = json.loads(EV_SURPLUS_REARM_ADDITIONS_PATH.read_text(encoding="utf-8"))
+        accesses = [item for item in records if item["key"] in EV_SURPLUS_REARM_CONFIG_KEYS]
+        if rearm["access_count"] != len(rearm["accesses"]) or sorted(
+            json.dumps(item, sort_keys=True) for item in accesses
+        ) != sorted(json.dumps(item, sort_keys=True) for item in rearm["accesses"]):
+            raise ValueError("Reviewed EV surplus rearm configuration usage changed")
+        for reviewed in rearm["accesses"]:
+            records.remove(reviewed)
+        timing = json.loads(EV_BACKFILL_TIMING_ADDITIONS_PATH.read_text(encoding="utf-8"))
+        if timing["schema_version"] != 1 or timing["access_count"] != len(timing["accesses"]):
+            raise ValueError("Invalid backfill timing configuration usage addition")
+        for reviewed in timing["accesses"]:
+            if reviewed not in records:
+                raise ValueError("Reviewed backfill timing configuration usage changed")
+            records.remove(reviewed)
         imported = json.loads(EV_IMPORT_ADDITIONS_PATH.read_text(encoding="utf-8"))
         accesses = [item for item in records if item["key"] in EV_IMPORT_CONFIG_KEYS]
         if imported["access_count"] != len(imported["accesses"]) or sorted(

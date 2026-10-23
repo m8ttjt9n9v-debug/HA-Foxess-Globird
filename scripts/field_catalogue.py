@@ -7,6 +7,8 @@ import json
 from pathlib import Path
 from typing import Any
 
+from scripts.config_field_amendments import reviewed_field_amendments
+
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 CONTRACT_PATH = (
     REPOSITORY_ROOT
@@ -43,6 +45,9 @@ EV_LOCAL_CONNECTION_ADDITIONS_PATH = (
 )
 EV_IMPORT_ADDITIONS_PATH = (
     REPOSITORY_ROOT / "docs/maintainability/config-field-additions-ev-import-v1.json"
+)
+EV_SURPLUS_REARM_ADDITIONS_PATH = (
+    REPOSITORY_ROOT / "docs/maintainability/config-field-additions-ev-surplus-rearm-v1.json"
 )
 
 _EV_PAGES = {"car", "charger", "ev_policies", "recovery"}
@@ -111,6 +116,7 @@ def rendered_catalogue() -> str:
         EV_EXPORT_BUFFER_ADDITIONS_PATH,
         EV_LOCAL_CONNECTION_ADDITIONS_PATH,
         EV_IMPORT_ADDITIONS_PATH,
+        EV_SURPLUS_REARM_ADDITIONS_PATH,
     ):
         additions = json.loads(path.read_text(encoding="utf-8"))
         if additions["field_count"] != len(additions["fields"]):
@@ -125,6 +131,7 @@ def rendered_catalogue() -> str:
     contract["fields"] = sorted(
         fields, key=lambda field: (page_order.index(field["page"]), field["order"])
     )
+    contract["fields"] = reviewed_field_amendments(contract["fields"])
     lines = [
         "# ruff: noqa: E501\n",
         '"""Generated immutable configuration field catalogue.\n',

@@ -15,13 +15,14 @@ from custom_components.home_energy_orchestrator.config_page_schema import (
 from custom_components.home_energy_orchestrator.field_catalogue import (
     FIELD_KEYS_BY_PAGE,
 )
+from scripts.config_field_amendments import reviewed_field_amendments
 from scripts.config_field_contract import BASELINE_PATH, _default, _input_contract
 
 
 def test_catalogue_pages_exactly_reproduce_frozen_field_contract() -> None:
     contract = json.loads(BASELINE_PATH.read_text(encoding="utf-8"))
     expected_by_page: dict[str, list[dict[str, object]]] = {}
-    for field in contract["fields"]:
+    for field in reviewed_field_amendments(contract["fields"]):
         expected_by_page.setdefault(str(field["page"]), []).append(field)
 
     for page, expected_fields in expected_by_page.items():
@@ -109,9 +110,10 @@ def test_backfill_timing_selector_defaults_to_ready_by_and_rejects_other_choices
         if marker.schema == "ev_pre_free_backfill_timing"
     )
     assert marker.default() == "ready_by"
-    assert validator.config["options"] == ["conservative", "ready_by"]
+    assert validator.config["options"] == ["conservative", "ready_by", "when_connected"]
     assert validator.config["translation_key"] == "ev_pre_free_backfill_timing"
     assert validator("conservative") == "conservative"
     assert validator("ready_by") == "ready_by"
+    assert validator("when_connected") == "when_connected"
     with pytest.raises(vol.Invalid):
         validator("unsupported")

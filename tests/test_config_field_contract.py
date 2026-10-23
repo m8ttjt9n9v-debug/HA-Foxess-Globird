@@ -17,14 +17,14 @@ from scripts.config_field_contract import (
 def test_config_field_contract_matches_reviewed_release_baseline() -> None:
     validate_against_release_baseline()
     assert json.loads(BASELINE_PATH.read_text(encoding="utf-8"))["field_count"] == 135
-    assert json.loads(rendered_contract())["field_count"] == 152
+    assert json.loads(rendered_contract())["field_count"] == 153
 
 
 def test_config_field_contract_covers_every_wizard_field_once() -> None:
     contract = build_config_field_contract()
     expected = [key for fields in ConfigFlow._PAGE_FIELDS.values() for key in fields]
     actual = [item["key"] for item in contract["fields"]]
-    assert contract["field_count"] == 152
+    assert contract["field_count"] == 153
     assert actual == expected
     assert len(actual) == len(set(actual))
     assert all(item["setup_label"] for item in contract["fields"])
@@ -95,18 +95,19 @@ def test_backfill_timing_has_translated_choices_and_shared_ready_time() -> None:
     assert choices == {
         "conservative": "Conservative — finish before free power",
         "ready_by": "Ready by — use available surplus before departure",
+        "when_connected": "Use spare energy when plugged in",
     }
     for step in ("ev_policies", "reconfigure_ev_policies"):
         screen = translations["config"]["step"][step]
         assert screen["data"]["ev_pre_free_backfill_timing"] == "Backfill timing"
         description = screen["data_description"]["ev_pre_free_backfill_timing"]
-        assert "protecting the home" in description
-        assert "No fixed daily kWh allocation" in description
-        assert "overnight after midnight" in description
-        assert "Ready by is the default" in description
+        assert "Ready by waits for the calculated start before departure" in description
+        assert "Conservative retains late pre-free backfill" in description
+        assert "protects the home" in description
+        assert "outside-free limits" in description
         assert "does not enable backfill or automatic EV control" in description
-        assert "After the ready-by time" in description
-        assert "remaining safe surplus can still backfill before free power" in description
+        assert "after the export window until free power" in description
+        assert "already-connected car" in description
         assert "after midnight and before free power" in screen["data_description"][
             "ev_daily_ready_time"
         ]

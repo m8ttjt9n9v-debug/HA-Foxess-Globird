@@ -496,7 +496,7 @@ def test_nonnegative_bridge_preserves_valid_configured_values() -> None:
 
 def test_ev_numeric_snapshot_covers_all_reviewed_defaults_and_is_immutable() -> None:
     numbers = RuntimeConfiguration.from_mapping({}).ev_numbers
-    assert len(numbers.values) == 45
+    assert len(numbers.values) == 46
     for name in config_module._EV_NUMERIC_FIELD_NAMES:  # noqa: SLF001
         key = getattr(heo_const, f"CONF_{name}")
         default = float(getattr(heo_const, f"DEFAULT_{name}"))
@@ -520,6 +520,8 @@ def test_ev_numeric_snapshot_preserves_invalid_finite_fallbacks(value: object) -
             default = 100.0  # A corrupt saved buffer floor disables extra soak.
         if name == "EV_BEFORE_EXPORT_IMPORT_CONFIRM_SECONDS":
             default = 0.0  # A corrupt interval cannot permit import retention.
+        if name == "EV_SURPLUS_REARM_ENERGY":
+            default = 6.0  # An out-of-range sentinel forbids a new surplus start.
         assert numbers.value(key, -999) == pytest.approx(default)
 
 
@@ -534,6 +536,7 @@ def test_ev_numeric_snapshot_preserves_negative_values() -> None:
         heo_const.CONF_EV_SOLAR_SOAK_AVERAGE_MINUTES: 5.0,
         heo_const.CONF_EV_SOLAR_SOAK_ADJUSTMENT_MINUTES: 5.0,
         heo_const.CONF_EV_BEFORE_EXPORT_IMPORT_CONFIRM_SECONDS: 0.0,
+        heo_const.CONF_EV_SURPLUS_REARM_ENERGY: 6.0,
     }
     assert {key: numbers.values[key] for key in bounded} == bounded
     assert {value for key, value in numbers.values.items() if key not in bounded} == {-1.0}

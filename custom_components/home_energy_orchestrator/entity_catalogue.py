@@ -755,6 +755,25 @@ EV_SOLAR_SOAK_DESCRIPTIONS = (
     ),
 )
 
+EV_BACKFILL_TIMING_DESCRIPTION = SelectEntityDescription(
+    key="ev_backfill_timing",
+    name="EV Backfill Timing",
+    translation_key="ev_backfill_timing",
+    icon="mdi:ev-station",
+    entity_category=EntityCategory.CONFIG,
+)
+
+EV_SURPLUS_REARM_ENERGY_DESCRIPTION = NumberEntityDescription(
+    key="ev_surplus_rearm_energy",
+    name="Spare-energy Restart Margin",
+    icon="mdi:battery-sync-outline",
+    native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+    native_min_value=0.0,
+    native_max_value=5.0,
+    native_step=0.01,
+    entity_category=EntityCategory.CONFIG,
+)
+
 HOUSE_OCCUPANCY_DESCRIPTION = SelectEntityDescription(
     key="house_occupancy_mode",
     name="House Energy Occupancy Mode",
@@ -933,6 +952,8 @@ _NON_SENSOR_PROJECTIONS = {
     "ev_solar_soak_average_minutes": "EvSolarSoakNumber.native_value",
     "ev_solar_soak_adjustment_minutes": "EvSolarSoakNumber.native_value",
     "house_occupancy_mode": "HouseOccupancyModeSelect.current_option",
+    "ev_backfill_timing": "EvBackfillTimingSelect.current_option",
+    "ev_surplus_rearm_energy": "EvSurplusRearmEnergyNumber.native_value",
     "safety_lock": "SafetyLockSwitch.is_on",
     "automatic_charge": "AutomaticChargeSwitch.is_on",
     "automatic_export": "AutomaticExportSwitch.is_on",
@@ -969,7 +990,9 @@ def _entity_spec(platform: EntityPlatform, description: EntityDescription) -> En
             "market_configuration" if description.key in _AEMO_CONFIGURATION_KEYS
             else "configuration" if (description in EV_SOLAR_SOAK_DESCRIPTIONS
                                       or description in (EV_BEFORE_EXPORT_BUFFER_DESCRIPTION,
-                                                         EV_BEFORE_EXPORT_IMPORT_DESCRIPTION))
+                                                         EV_BEFORE_EXPORT_IMPORT_DESCRIPTION,
+                                                         EV_SURPLUS_REARM_ENERGY_DESCRIPTION,
+                                                         EV_BACKFILL_TIMING_DESCRIPTION))
             else "coordinator"
         )
     return EntitySpec(platform, description, projection, availability)
@@ -991,6 +1014,8 @@ ENTITY_SPECS = (
     _entity_spec("number", EV_MORNING_SOLAR_RESERVE_DESCRIPTION),
     *(_entity_spec("number", description) for description in EV_SOLAR_SOAK_DESCRIPTIONS),
     _entity_spec("select", HOUSE_OCCUPANCY_DESCRIPTION),
+    _entity_spec("select", EV_BACKFILL_TIMING_DESCRIPTION),
+    _entity_spec("number", EV_SURPLUS_REARM_ENERGY_DESCRIPTION),
     _entity_spec("switch", SAFETY_DESCRIPTION),
     _entity_spec("switch", CHARGE_DESCRIPTION),
     _entity_spec("switch", EXPORT_DESCRIPTION),

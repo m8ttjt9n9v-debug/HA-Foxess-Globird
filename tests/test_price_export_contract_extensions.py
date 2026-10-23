@@ -15,6 +15,7 @@ from scripts.config_contract import (
     EV_EXPORT_BUFFER_CONFIG_KEYS,
     EV_IMPORT_CONFIG_KEYS,
     EV_LOCAL_CONNECTION_CONFIG_KEYS,
+    EV_SURPLUS_REARM_CONFIG_KEYS,
     LOAD_CONFIG_KEYS,
     PRICE_EXPORT_CONFIG_KEYS,
     SOLAR_SOAK_CONFIG_KEYS,
@@ -57,6 +58,7 @@ def test_price_export_adds_only_five_reviewed_configuration_keys() -> None:
         - EV_EXPORT_BUFFER_CONFIG_KEYS
         - EV_LOCAL_CONNECTION_CONFIG_KEYS
         - EV_IMPORT_CONFIG_KEYS
+        - EV_SURPLUS_REARM_CONFIG_KEYS
         == (price_keys)
     )
     assert (
@@ -68,6 +70,7 @@ def test_price_export_adds_only_five_reviewed_configuration_keys() -> None:
         - len(EV_EXPORT_BUFFER_CONFIG_KEYS)
         - len(EV_LOCAL_CONNECTION_CONFIG_KEYS)
         - len(EV_IMPORT_CONFIG_KEYS)
+        - len(EV_SURPLUS_REARM_CONFIG_KEYS)
         == historical["page_field_count"] + 5
     )
 
@@ -98,13 +101,14 @@ def test_capacity_configuration_is_a_separate_three_key_addition() -> None:
         | EV_EXPORT_BUFFER_CONFIG_KEYS
         | EV_LOCAL_CONNECTION_CONFIG_KEYS
         | EV_IMPORT_CONFIG_KEYS
+        | EV_SURPLUS_REARM_CONFIG_KEYS
     )
     assert (
         set(current["declared_config_keys"]) - set(historical["declared_config_keys"])
         == ADDITIVE_CONFIG_KEYS
     )
     assert historical["page_field_count"] == 135
-    assert current["page_field_count"] == 135 + 5 + 3 + 2 + 1 + 3 + 1 + 1 + 1
+    assert current["page_field_count"] == 135 + 5 + 3 + 2 + 1 + 3 + 1 + 1 + 1 + 1
 
 
 def test_price_export_admits_only_monitor_and_one_automatic_request() -> None:
@@ -134,6 +138,8 @@ def test_price_export_admits_only_monitor_and_one_automatic_request() -> None:
     assert new - trip_ids - load_ids - solar_soak_ids - {
         ("number", "ev_before_export_soc_buffer"),
         ("number", "ev_before_export_import_confirm_seconds"),
+        ("select", "ev_backfill_timing"),
+        ("number", "ev_surplus_rearm_energy"),
     } == {
         ("sensor", "aemo_market_status"),
         ("sensor", "aemo_spot_price"),

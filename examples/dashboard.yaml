@@ -260,6 +260,21 @@ views:
               the ready-by cards below. An explicitly saved Conservative choice
               still finishes before free power. Changing the timing default
               does not turn on backfill or automatic EV control.
+          - type: entities
+            show_header_toggle: false
+            entities:
+              - entity: select.home_energy_ev_backfill_timing
+                name: Backfill timing
+              - entity: number.home_energy_ev_surplus_rearm_energy
+                name: Spare-energy restart margin
+          - type: markdown
+            content: >-
+              Use spare energy when plugged in charges promptly after the
+              export window and before free power. It also works when the car
+              is already connected. House reserves, the normal EV target and
+              outside-free power limits still apply.
+              The restart margin prevents tiny surplus changes repeatedly
+              restarting this charging mode; zero removes the extra margin.
           - type: tile
             entity: switch.home_energy_ev_morning_solar
             name: Morning solar EV charging

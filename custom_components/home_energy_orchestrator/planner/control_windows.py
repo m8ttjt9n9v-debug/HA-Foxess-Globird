@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, time, timedelta
+from datetime import UTC, datetime, time, timedelta
 
 
 def derive_force_discharge_finish(
@@ -89,6 +89,29 @@ def daily_ready_cycle_bounds(
     if next_free <= ready_at:
         next_free += timedelta(days=1)
     return ready_at, planning_start, next_free
+
+
+def post_export_daily_planning_start(
+    *, ready_at: datetime, next_free_start: datetime, discharge_finish: time,
+) -> datetime:
+    """Open the existing ready cycle after its preceding configured export.
+
+    Equal finish/free times are deliberately invalid, rather than a whole-day
+    opportunity. Compare elapsed instants across both daylight-saving changes.
+    """
+    if ready_at.tzinfo is None or next_free_start.tzinfo is None:
+        raise ValueError("post-export bounds must be timezone-aware")
+    free_time = next_free_start.timetz().replace(tzinfo=None)
+    if discharge_finish == free_time:
+        raise ValueError("export finish and free start cannot be equal")
+    opening = datetime.combine(
+        next_free_start.date(), discharge_finish, tzinfo=next_free_start.tzinfo,
+    )
+    if discharge_finish >= free_time:
+        opening -= timedelta(days=1)
+    if not opening.astimezone(UTC) < ready_at.astimezone(UTC) < next_free_start.astimezone(UTC):
+        raise ValueError("export finish must precede ready time and free start")
+    return opening
 
 
 def pre_free_window_position(
