@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.12.63.dev2 — Local candidate: Sleeping-EV reservation planning
+
+- Keep a same-vehicle sleeping Tessie SoC measurement usable for Dynamic
+  reservation planning within a separate configurable age bound. Preserve its
+  actual vehicle timestamp; repeated reports and restart cannot renew it.
+- Expose the planning bound in setup and a native dashboard-ready number,
+  default24hours. Keep online/generic observations, actual current, positive
+  charging commands and physical export handoff on their strict live checks.
+- Add sleeping, wake, expiry, source-loss, setting-edit and awaited-boundary
+  lifecycle regressions. Preserve existing settings, journals and dashboards;
+  this is a controlled local candidate, not a published HACS release.
+
 ## 0.12.63.dev1 — Local candidate: Dynamic EV reservation and telemetry
 
 - Add opt-in Dynamic SoC-based reservation alongside the existing Fixed choice,
