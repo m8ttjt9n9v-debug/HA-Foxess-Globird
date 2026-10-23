@@ -1,5 +1,5 @@
 {
-  "schema_version": 1, "entity_count": 1, "attribute_profiles": {},
+  "schema_version": 1, "entity_count": 2, "attribute_profiles": {},
   "entities": [{
     "key": "ev_reservation_mode",
     "definition": "Operator selection between retained fixed daily energy and Dynamic SoC shortfall protection. Dynamic quantifies the current EV shortfall to the existing export minimum plus configured recovery margin, leaving only the protected balance available for export. The existing Prioritise EV before export master enables protection/top-up; selecting a mode does not enable it or change saved fixed kWh.",
@@ -10,6 +10,17 @@
     "state_vocabulary": "fixed or dynamic, displayed as Fixed daily energy or Dynamic SoC shortfall. Unsupported native/setup edits are rejected before persistence.",
     "audience": "primary", "equivalents": {"foxess": null, "globird": null, "tessie": null},
     "consumers": ["EV Charging policies", "Native dashboard settings", "Shared EV reservation calculation"],
+    "decision": "retain", "review_status": "engineering_draft"
+  }, {
+    "key": "ev_reservation_soc_max_age_hours",
+    "definition": "Maximum age of qualified native sleeping-vehicle SoC for Dynamic reservation planning only. It never extends fast telemetry, grants a positive EV command, or proves physical export handover.",
+    "producer": "EvReservationSocMaxAgeNumber.native_value projects the same saved setting as EV Charging policies through RuntimeConfiguration.ev_numbers.",
+    "role": "configuration", "unit_and_sign": "Hours, from 0.025 to 48 in 0.025-hour steps; missing values default to 24 hours. Invalid saved values expire planning authority rather than receiving a new default lease.",
+    "time_basis": "Bound applies to the original qualified native SoC measurement timestamp, not HA refresh or an unrelated Modbus update. Native edits refresh the reservation and reconcile existing controllers.",
+    "availability": "Editable while HEO is loaded, including a telemetry outage or disabled control. All existing command, electrical, owner and handover checks remain independent.",
+    "state_vocabulary": "Finite hours in the supported range. Invalid native or setup values are rejected before saving.",
+    "audience": "advanced", "equivalents": {"foxess": null, "globird": null, "tessie": null},
+    "consumers": ["EV Charging policies", "Native dashboard settings", "Dynamic EV reservation planning"],
     "decision": "retain", "review_status": "engineering_draft"
   }]
 }

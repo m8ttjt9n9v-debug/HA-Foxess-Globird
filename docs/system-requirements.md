@@ -11,6 +11,12 @@ existing EV-before-export switch controls Dynamic protection/recovery. No
 learning prediction, Extended Away mode, dashboard replacement or simultaneous
 forced-export/EV writer is added. See [the shared-budget contract](ev-dynamic-reservation.md).
 
+Only asleep native Tessie reservation planning may retain its genuine SoC
+measurement under the separate configurable planning age (default24hours,
+0.025–48hours). The provider must remain loaded/healthy and exactly vehicle-bound.
+Native online and generic inputs retain the live age, and retained planning
+evidence never qualifies current, physical handoff or charging commands.
+
 ## Prompt EV backfill timing
 
 The optional **Use spare energy when plugged in** timing requires the enabled

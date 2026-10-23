@@ -1,10 +1,17 @@
 {
-  "schema_version": 1, "extension": "ev_reservation_v1", "field_count": 1,
+  "schema_version": 1, "extension": "ev_reservation_v1", "field_count": 2,
   "fields": [{
     "key": "ev_reservation_mode", "page": "ev_policies", "order": 36,
     "required": true, "has_default": true, "default": "fixed", "input_kind": "select",
     "input_config": {"options": ["fixed", "dynamic"], "multiple": false,
                      "custom_value": false, "sort": false, "translation_key": "ev_reservation_mode"},
     "setup_label": "EV energy reservation", "reconfigure_label": "EV energy reservation"
+  }, {
+    "key": "ev_reservation_soc_max_age_hours", "page": "ev_policies", "order": 37,
+    "required": true, "has_default": true, "default": 24.0, "input_kind": "number",
+    "input_config": {"min": 0.025, "max": 48.0, "step": 0.025, "mode": "box",
+                     "unit_of_measurement": "h"},
+    "setup_label": "EV reservation SoC maximum age (hours)",
+    "reconfigure_label": "EV reservation SoC maximum age (hours)"
   }]
 }

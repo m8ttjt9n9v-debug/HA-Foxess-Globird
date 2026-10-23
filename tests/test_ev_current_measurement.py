@@ -12,6 +12,7 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.home_energy_orchestrator.ev_current_measurement import (
     measure_ev_current,
+    measure_ev_planning_soc,
     measure_ev_soc,
 )
 from custom_components.home_energy_orchestrator.ev_observation_adapter import (
@@ -536,3 +537,264 @@ async def test_new_unchanged_native_soc_measurement_uses_no_ha_clock_renewal(has
     rig.provider.data["charge_state_timestamp"] = later.timestamp() * 1000
     assert _soc(hass, now=later) == 41
     assert hass.states.get(ENTITIES.soc_entity).last_reported == original
+
+
+def _planning_soc(hass, *, now=NOW, live_age=90, planning_age=86400, feedback=None):
+    return measure_ev_planning_soc(
+        hass, feedback or capture_ev_feedback(hass, ENTITIES), now=now,
+        max_age_seconds=live_age, planning_max_age_seconds=planning_age,
+    )
+
+
+@pytest.mark.parametrize("age,valid,reason", [
+    (0, True, "fresh_asleep"), (89.999, True, "fresh_asleep"),
+    (90, True, "fresh_asleep"), (90.001, True, "bounded_asleep"),
+    (86399.999, True, "bounded_asleep"), (86400, True, "bounded_asleep"),
+    (86400.001, False, "sleeping_soc_expired"), (-0.001, False, "native_soc_future"),
+])
+async def test_sleeping_planning_soc_has_its_own_exact_original_measurement_boundary(
+    hass, freezer, age, valid, reason,
+):
+    rig = _native_soc(hass, freezer)
+    stamp = NOW - timedelta(seconds=age)
+    rig.provider.data.update({
+        "state": "asleep", "charge_state_timestamp": stamp.timestamp() * 1000,
+    })
+    result = _planning_soc(hass)
+    assert result.valid is valid
+    assert result.value_percent == (41 if valid else None)
+    assert result.source == "tessie_charge_state" and result.observed_at == stamp
+    assert result.reason == reason
+    assert _soc(hass) == (41 if 0 <= age <= 90 else None)
+    assert not _measure(hass).valid  # Planning cannot qualify sleeping physical current.
+    with pytest.raises(FrozenInstanceError):
+        result.observed_at = NOW
+
+
+@pytest.mark.parametrize("age,valid", [(0, True), (90, True), (90.001, False), (86400, False)])
+async def test_online_planning_soc_never_uses_the_sleeping_age(hass, freezer, age, valid):
+    rig = _native_soc(hass, freezer)
+    stamp = NOW - timedelta(seconds=age)
+    rig.provider.data["charge_state_timestamp"] = stamp.timestamp() * 1000
+    result = _planning_soc(hass)
+    assert result.valid is valid
+    assert result.value_percent == _soc(hass)
+    assert result.observed_at == stamp
+    assert result.reason == ("fresh_online" if valid else "native_soc_expired")
+
+
+@pytest.mark.parametrize("age,valid", [(0, True), (90, True), (90.001, False), (86400, False)])
+async def test_generic_planning_soc_retains_only_its_explicit_live_report_contract(
+    hass, freezer, age, valid,
+):
+    stamp = NOW - timedelta(seconds=age)
+    freezer.move_to(stamp)
+    hass.states.async_set(ENTITIES.soc_entity, "53", {"unit_of_measurement": "%"})
+    freezer.move_to(NOW)
+    result = _planning_soc(hass)
+    assert result.valid is valid
+    assert result.value_percent == (53 if valid else None)
+    assert result.source == "entity_report" and result.observed_at == stamp
+    assert result.reason == ("fresh_reported" if valid else "reported_soc_expired")
+
+
+@pytest.mark.parametrize("planning_age", [
+    None, 0, -1, True, "86400", float("nan"), float("inf"), 10**400,
+])
+@pytest.mark.parametrize("state", ["online", "asleep", "generic"])
+async def test_invalid_planning_bound_fails_closed_even_for_fresh_soc(
+    hass, freezer, planning_age, state,
+):
+    if state == "generic":
+        freezer.move_to(NOW)
+        hass.states.async_set(ENTITIES.soc_entity, "41")
+    else:
+        rig = _native_soc(hass, freezer)
+        rig.provider.data["state"] = state
+    result = _planning_soc(hass, planning_age=planning_age)
+    assert not result.valid and result.value_percent is None
+    assert result.reason == "planning_age_invalid" and result.observed_at is None
+    assert _soc(hass) == 41  # The new setting changes no live measurement contract.
+
+
+@pytest.mark.parametrize("live_age", [-1, True, float("nan"), float("inf"), 10**400])
+async def test_planning_bound_cannot_hide_an_invalid_live_age(hass, freezer, live_age):
+    rig = _native_soc(hass, freezer)
+    rig.provider.data["state"] = "asleep"
+    assert not _planning_soc(hass, live_age=live_age).valid
+
+
+@pytest.mark.parametrize("fault", [
+    "online", "offline", "unknown_state", "failed", "unloaded", "wrong_provider",
+    "duplicate_vehicle", "wrong_vehicle", "missing_clock", "bool_clock", "nan_clock",
+    "infinite_clock", "overflow_clock",
+    "future_clock", "missing_native_soc", "bool_native_soc", "mismatched_soc",
+    "unknown_soc", "restored_soc", "negative_soc", "over_100_soc", "future_ha_report",
+    "disabled_soc", "wrong_soc_field", "missing_soc_device", "wrong_vehicle_anchor",
+])
+async def test_sleeping_planning_extension_preserves_all_source_and_value_guards(
+    hass, freezer, fault,
+):
+    rig = _native_soc(hass, freezer)
+    rig.provider.data.update({"state": "asleep", "charge_state_timestamp": (
+        NOW - timedelta(seconds=120)
+    ).timestamp() * 1000})
+    assert _planning_soc(hass).valid and _soc(hass) is None
+    data = rig.provider.data
+    if fault in {"online", "offline", "unknown_state"}:
+        data["state"] = "unknown" if fault == "unknown_state" else fault
+    elif fault == "failed":
+        rig.provider.last_update_success = False
+    elif fault == "unloaded":
+        rig.entry._async_set_state(hass, ConfigEntryState.NOT_LOADED, None)
+    elif fault == "wrong_provider":
+        rig.provider.config_entry = SimpleNamespace(entry_id=rig.entry.entry_id)
+    elif fault == "duplicate_vehicle":
+        rig.entry.runtime_data.vehicles.append(rig.vehicle)
+    elif fault == "wrong_vehicle":
+        rig.vehicle.vin = "DIFFERENTVEHICLE"
+    elif fault == "missing_clock":
+        data.pop("charge_state_timestamp")
+    elif fault in {"bool_clock", "nan_clock", "infinite_clock", "overflow_clock", "future_clock"}:
+        data["charge_state_timestamp"] = {
+            "bool_clock": True, "nan_clock": float("nan"),
+            "infinite_clock": float("inf"), "overflow_clock": 10**400,
+            "future_clock": (NOW + timedelta(seconds=0.001)).timestamp() * 1000,
+        }[fault]
+    elif fault == "missing_native_soc":
+        data.pop("charge_state_usable_battery_level")
+    elif fault == "bool_native_soc":
+        data["charge_state_usable_battery_level"] = True
+    elif fault in {"mismatched_soc", "unknown_soc", "restored_soc", "negative_soc",
+                   "over_100_soc", "future_ha_report"}:
+        value = {"mismatched_soc": "42", "unknown_soc": "unknown", "restored_soc": "41",
+                 "negative_soc": "-1", "over_100_soc": "101", "future_ha_report": "41"}[fault]
+        if fault == "future_ha_report":
+            freezer.move_to(NOW + timedelta(seconds=1))
+        hass.states.async_set(ENTITIES.soc_entity, value, {
+            "unit_of_measurement": "%", "restored": fault == "restored_soc",
+        }, force_update=True)
+        freezer.move_to(NOW)
+        if fault in {"negative_soc", "over_100_soc"}:
+            data["charge_state_usable_battery_level"] = float(value)
+    elif fault == "wrong_vehicle_anchor":
+        other = dr.async_get(hass).async_get_or_create(
+            config_entry_id=rig.entry.entry_id, identifiers={("tessie", "OTHERTESTVEHICLE")},
+        )
+        er.async_get(hass).async_update_entity(ENTITIES.actual_current_entity, device_id=other.id)
+    else:
+        changes = (
+            {"disabled_by": er.RegistryEntryDisabler.USER} if fault == "disabled_soc"
+            else {"device_id": None} if fault == "missing_soc_device"
+            else {"new_unique_id": f"{VIN}-charge_state_battery_level"}
+        )
+        er.async_get(hass).async_update_entity(ENTITIES.soc_entity, **changes)
+    result = _planning_soc(hass)
+    assert not result.valid and result.value_percent is None
+    assert _soc(hass) is None and not _measure(hass).valid
+
+
+async def test_planning_sleep_does_not_require_physical_or_optimistic_ack_values(hass, freezer):
+    rig = _native_soc(hass, freezer)
+    rig.provider.data.update({
+        "state": "asleep", "charge_state_timestamp": (NOW - timedelta(hours=2)).timestamp() * 1000,
+        "charge_state_charger_actual_current": None, "charge_state_charging_state": True,
+        "charge_state_charge_current_request": 99,
+    })
+    hass.states.async_set(ENTITIES.actual_current_entity, "unavailable")
+    hass.states.async_set(ENTITIES.charging_state_entity, "unknown")
+    hass.states.async_set(ENTITIES.current_limit_entity, "unavailable")
+    result = _planning_soc(hass)
+    assert result.valid and result.value_percent == 41 and result.reason == "bounded_asleep"
+    assert result.observed_at == NOW - timedelta(hours=2)
+    assert _soc(hass) is None and not _measure(hass).valid
+
+
+async def test_sleeping_planning_bound_changes_apply_without_a_retained_lease(hass, freezer):
+    rig = _native_soc(hass, freezer)
+    rig.provider.data.update({"state": "asleep", "charge_state_timestamp": (
+        NOW - timedelta(seconds=120)
+    ).timestamp() * 1000})
+    assert _planning_soc(hass, planning_age=120).valid
+    assert not _planning_soc(hass, planning_age=119.999).valid
+    assert _planning_soc(hass, planning_age=120).observed_at == NOW - timedelta(seconds=120)
+    # The asleep planning ceiling is literal, even if the live age is larger.
+    assert not _planning_soc(hass, live_age=300, planning_age=119.999).valid
+    assert _soc(hass, maximum_age=300) == 41
+
+
+async def test_wake_failure_and_offline_immediately_withdraw_sleeping_planning(hass, freezer):
+    rig = _native_soc(hass, freezer)
+    rig.provider.data.update({"state": "asleep", "charge_state_timestamp": (
+        NOW - timedelta(seconds=120)
+    ).timestamp() * 1000})
+    assert _planning_soc(hass).valid
+    rig.provider.data["state"] = "online"
+    assert not _planning_soc(hass).valid
+    rig.provider.data["state"] = "offline"
+    assert not _planning_soc(hass).valid
+    rig.provider.data["state"] = "asleep"
+    rig.provider.last_update_success = False
+    assert not _planning_soc(hass).valid
+    rig.provider.last_update_success = True
+    assert _planning_soc(hass).observed_at == NOW - timedelta(seconds=120)
+    rig.provider.data.update({"state": "online", "charge_state_timestamp": NOW.timestamp() * 1000})
+    assert _planning_soc(hass).reason == "fresh_online" and _soc(hass) == 41
+
+
+async def test_ha_fetch_drive_and_repeated_reads_cannot_renew_sleeping_soc(hass, freezer):
+    rig = _native_soc(hass, freezer)
+    stamp = NOW - timedelta(seconds=120)
+    rig.provider.data.update({
+        "state": "asleep", "charge_state_timestamp": stamp.timestamp() * 1000,
+    })
+    first = _planning_soc(hass, planning_age=180)
+    assert first.valid
+    later = NOW + timedelta(seconds=61)
+    freezer.move_to(later)
+    hass.states.async_set(
+        ENTITIES.soc_entity, "41", {"unit_of_measurement": "%"}, force_update=True,
+    )
+    rig.provider.data.update({"timestamp": later.timestamp() * 1000,
+                              "drive_state_timestamp": later.timestamp() * 1000})
+    for _ in range(2):
+        result = _planning_soc(hass, now=later, planning_age=180)
+        assert not result.valid and result.observed_at == stamp
+    assert first.observed_at == stamp and first.valid
+
+
+async def test_restart_reads_same_original_frame_without_seeding_or_renewing_it(hass, freezer):
+    rig = _native_soc(hass, freezer)
+    stamp = NOW - timedelta(seconds=120)
+    rig.provider.data.update({
+        "state": "asleep", "charge_state_timestamp": stamp.timestamp() * 1000,
+    })
+    assert _planning_soc(hass, planning_age=180).observed_at == stamp
+    frame = dict(rig.provider.data)
+    rig.entry._async_set_state(hass, ConfigEntryState.NOT_LOADED, None)
+    assert not _planning_soc(hass, planning_age=180).valid
+    rig.entry._async_set_state(hass, ConfigEntryState.LOADED, None)
+    rig.vehicle.data_coordinator = SimpleNamespace(
+        config_entry=rig.entry, last_update_success=True, data=dict(frame),
+    )
+    assert _planning_soc(hass, planning_age=180).observed_at == stamp
+    assert not _planning_soc(hass, now=NOW + timedelta(seconds=61), planning_age=180).valid
+    rig.vehicle.data_coordinator.data.pop("charge_state_timestamp")
+    assert not _planning_soc(hass, planning_age=180).valid
+
+
+async def test_new_equal_native_soc_frame_advances_only_the_actual_measurement_clock(hass, freezer):
+    rig = _native_soc(hass, freezer)
+    stamp = NOW - timedelta(seconds=120)
+    rig.provider.data.update({
+        "state": "asleep", "charge_state_timestamp": stamp.timestamp() * 1000,
+    })
+    old_ha_clock = hass.states.get(ENTITIES.soc_entity).last_reported
+    assert _planning_soc(hass).observed_at == stamp
+    assert _soc(hass) is None
+    rig.provider.data["charge_state_timestamp"] = NOW.timestamp() * 1000
+    result = _planning_soc(hass)
+    assert result.value_percent == 41 and result.observed_at == NOW
+    assert result.reason == "fresh_asleep"
+    assert _soc(hass) == 41
+    assert hass.states.get(ENTITIES.soc_entity).last_reported == old_ha_clock

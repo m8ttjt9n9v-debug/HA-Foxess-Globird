@@ -16,6 +16,7 @@ from homeassistant.helpers.event import async_track_time_change, async_track_tim
 from homeassistant.helpers.start import async_at_started
 from homeassistant.util import dt as dt_util
 
+from .configuration import valid_ev_reservation_soc_max_age_hours
 from .const import (
     CONF_BATTERY_CHARGE_EFFICIENCY,
     CONF_BATTERY_FREE_WINDOW_TARGET,
@@ -45,6 +46,7 @@ from .const import (
     CONF_EV_OUTSIDE_INVERTER_PERCENT,
     CONF_EV_PHASE_COUNT,
     CONF_EV_PROTECTED_BASELINE_A,
+    CONF_EV_RESERVATION_SOC_MAX_AGE_HOURS,
     CONF_EV_SMART_RECOVERY_CHARGING_CONFIRM_SECONDS,
     CONF_EV_SMART_RECOVERY_CURRENT_CONFIRM_SECONDS,
     CONF_EV_SMART_RECOVERY_IDLE_CURRENT_A,
@@ -96,6 +98,7 @@ from .const import (
     DEFAULT_EV_OUTSIDE_INVERTER_PERCENT,
     DEFAULT_EV_PHASE_COUNT,
     DEFAULT_EV_PROTECTED_BASELINE_A,
+    DEFAULT_EV_RESERVATION_SOC_MAX_AGE_HOURS,
     DEFAULT_EV_SMART_RECOVERY_CHARGING_CONFIRM_SECONDS,
     DEFAULT_EV_SMART_RECOVERY_CURRENT_CONFIRM_SECONDS,
     DEFAULT_EV_SMART_RECOVERY_IDLE_CURRENT_A,
@@ -130,7 +133,12 @@ from .const import (
 from .coordinator import EnergyCoordinator
 from .ev_adapter import EvEntityMap, EvServiceAdapter, EvWriteBlocked, ev_control_gate_status
 from .ev_capacity import CapacityObservation, resolve_ev_capacity
-from .ev_current_measurement import EvCurrentMeasurement, measure_ev_current, measure_ev_soc
+from .ev_current_measurement import (
+    EvCurrentMeasurement,
+    measure_ev_current,
+    measure_ev_planning_soc,
+    measure_ev_soc,
+)
 from .ev_observation_adapter import (
     EvEntityFeedback,
     EvFeedbackSnapshot,
@@ -3997,12 +4005,22 @@ class ActiveEvController:
         mode = preference.reservation_mode
         dynamic = self.dynamic_reservation_selected()
         feedback = _CYCLE_FEEDBACK.get() or self._capture_feedback()
-        soc = measure_ev_soc(
+        planning_hours = runtime.ev_numbers.value(
+            CONF_EV_RESERVATION_SOC_MAX_AGE_HOURS, DEFAULT_EV_RESERVATION_SOC_MAX_AGE_HOURS,
+        )
+        # Only reservation accounting may use a bounded sleeping-car frame.
+        # Invalid settings fail closed; physical/positive-command consumers
+        # continue to use measure_ev_soc/current and their strict live clock.
+        soc = measure_ev_planning_soc(
             self.hass, feedback, now=now,
             max_age_seconds=self._float(
                 CONF_EV_TELEMETRY_MAX_AGE_SECONDS, DEFAULT_EV_TELEMETRY_MAX_AGE_SECONDS,
             ),
-        ) if dynamic else None
+            planning_max_age_seconds=(
+                planning_hours * 3600 if valid_ev_reservation_soc_max_age_hours(planning_hours)
+                else 0.0
+            ),
+        ).value_percent if dynamic else None
         capacity = self.capacity_evidence(now).value_kwh if dynamic else None
         # Dynamic and Fixed are alternatives. Turning the explicit priority off
         # releases Dynamic, not an invitation to resurrect an old fixed value.

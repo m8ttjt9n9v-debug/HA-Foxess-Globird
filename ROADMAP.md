@@ -12,6 +12,9 @@
 - [x] Share native actual-current qualification with house learning and solar/
   allowance decisions, reject unrelated Modbus freshness, and enforce ordinary
   solar command-boundary and standalone morning service limits.
+- [x] Separate bounded, configurable asleep-native SoC planning evidence from
+  live charging/current/handoff evidence. Preserve measurement time across
+  restart and repeated reads; add sleeping/wake/expiry/setting-edit lifecycles.
 - [ ] Complete combined regression/lifecycle/compatibility qualification and
   separately approved local-candidate pilot acceptance. No public release or
   other-site deployment follows by inference.

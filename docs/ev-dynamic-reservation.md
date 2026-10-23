@@ -21,6 +21,22 @@ current35%, efficiency95% reserves approximately4.42kWh. The configured normal
 non-override target still clips recovery. An invalid or stale SoC, unavailable
 capacity or invalid setting cannot be replaced by zero protection.
 
+Reservation planning has a separate **EV reservation SoC maximum age** setting
+(default24hours, adjustable0.025–48hours in setup and the native
+`number.home_energy_ev_reservation_soc_max_age_hours`). Only an explicitly
+asleep, loaded and healthy native Tessie provider for the mapped vehicle may
+use that planning age. It retains the original charge-state measurement time;
+HA reports, repeated reads, restart and unrelated updates never renew it.
+Online and generic sources keep the live telemetry limit. Failure, unloading,
+identity/value mismatch, future time or expiry makes protection unavailable,
+not zero. A smaller configured ceiling takes effect immediately.
+
+This is NOT fresh current, a stopped-car proof or permission to charge. Every
+physical handoff and positive EV command retains its original live-source
+checks. No timer, poller, cache or persistence schema is added. The age ceiling
+is one evidence-expiry boundary, not a noisy control setpoint: there is no
+hysteresis or grace beyond it, and failed evidence withdraws authority at once.
+
 Battery floor/reserve and discharge efficiency are applied first. Protect the
 remaining house demand and mandatory keepalive exactly once. Reserve the
 selected fixed OR dynamic EV amount from that pool; export gets the non-negative
@@ -76,6 +92,9 @@ Regression coverage includes budget conservation, own-reservation availability,
 both export pathways, connection/return handoff, buffered boundaries and jitter,
 reload/reconnect, changed settings, native expiry/provider failure across awaits,
 and delayed-but-fresh current beside independently fresh Modbus readings.
+Sleeping-car lifecycle cases also cover above/below-minimum reservations,
+ordinary and price export, strict connected-EV rejection, exact planning expiry,
+wake/offline/failure and setting edits during export/checkpoint boundaries.
 
 Installation does not select Dynamic or change any deployed dashboard. A local
 candidate requires a recorded exact commit, version and file hashes, recoverable

@@ -48,35 +48,66 @@ def _native_charge_anchors_match(registry, feedback, entry, device, vin):
     return True
 
 
-def measure_ev_soc(
+@dataclass(frozen=True, slots=True)
+class EvPlanningSocObservation:
+    """Qualified planning SoC; retained sleep evidence is not live authority."""
+
+    value_percent: float | None
+    source: str
+    observed_at: datetime | None
+    reason: str
+
+    @property
+    def valid(self) -> bool:
+        return self.value_percent is not None
+
+
+def _valid_age(value: object, *, positive: bool = False) -> bool:
+    try:
+        return (
+            type(value) in (int, float) and isfinite(value)
+            and (value > 0 if positive else value >= 0)
+        )
+    except OverflowError:
+        return False
+
+
+def _measure_soc_observation(
     hass: HomeAssistant,
     feedback: EvFeedbackSnapshot,
     *,
     now: datetime,
     max_age_seconds: float,
-) -> float | None:
-    """Read independently measured SoC, not permission for a positive command.
-
-    A sleeping or away vehicle may still have a bounded SoC measurement. Its
-    actual current, actuator acknowledgements and other values need not load;
-    native mapped identities must nevertheless describe the same vehicle.
-    """
+    sleeping_max_age_seconds: float | None = None,
+) -> EvPlanningSocObservation:
+    """Share the existing exact source qualification, not physical authority."""
     item = feedback.soc
+    registry = er.async_get(hass)
+    row = registry.async_get(item.entity_id) if item.entity_id else None
+    native = row is not None and row.platform == "tessie"
+    source = "tessie_charge_state" if native else "entity_report"
+
+    def invalid(reason: str, observed_at: datetime | None = None) -> EvPlanningSocObservation:
+        return EvPlanningSocObservation(None, source, observed_at, reason)
+
+    if now.tzinfo is None or now.utcoffset() is None or not _valid_age(max_age_seconds):
+        return invalid("measurement_clock_invalid")
     if (
-        now.tzinfo is None or now.utcoffset() is None
-        or type(max_age_seconds) not in (int, float)
-        or not isfinite(max_age_seconds) or max_age_seconds < 0
-        or item.restored or item.available_state is None
+        item.restored or item.available_state is None
         or type(item.number) not in (int, float) or not isfinite(item.number)
         or not 0 <= item.number <= 100
         or item.last_reported is None or item.last_reported.tzinfo is None
         or item.last_reported.utcoffset() is None or item.last_reported > now
     ):
-        return None
-    registry = er.async_get(hass)
-    row = registry.async_get(item.entity_id) if item.entity_id else None
-    if row is None or row.platform != "tessie":
-        return float(item.number) if item.fresh(now, max_age_seconds) else None
+        return invalid("soc_value_or_report_unavailable")
+    if not native:
+        return (
+            EvPlanningSocObservation(
+                float(item.number), source, item.last_reported, "fresh_reported",
+            )
+            if item.fresh(now, max_age_seconds)
+            else invalid("reported_soc_expired", item.last_reported)
+        )
     entry = hass.config_entries.async_get_entry(row.config_entry_id)
     device = dr.async_get(hass).async_get(row.device_id) if row.device_id else None
     if (
@@ -84,42 +115,96 @@ def measure_ev_soc(
         or entry.state != ConfigEntryState.LOADED or device is None
         or entry.entry_id not in device.config_entries
     ):
-        return None
+        return invalid("native_source_unavailable")
     vins = {value for domain, value in device.identifiers if domain == "tessie"}
     if len(vins) != 1:
-        return None
+        return invalid("native_vehicle_ambiguous")
     vin = next(iter(vins))
     if not _native_charge_anchors_match(registry, feedback, entry, device, vin):
-        return None
+        return invalid("native_policy_source_mismatch")
     vehicles = getattr(getattr(entry, "runtime_data", None), "vehicles", None)
     if isinstance(vehicles, Mapping):
         vehicles = vehicles.values()
     elif not isinstance(vehicles, (list, tuple)):
-        return None
+        return invalid("native_runtime_unavailable")
     matches = [vehicle for vehicle in vehicles if getattr(vehicle, "vin", None) == vin]
     if len(matches) != 1:
-        return None
+        return invalid("native_vehicle_ambiguous")
     provider = getattr(matches[0], "data_coordinator", None)
     if (
         provider is None or getattr(provider, "last_update_success", False) is not True
         or getattr(provider, "config_entry", None) is not entry
     ):
-        return None
+        return invalid("native_provider_unavailable")
     data = getattr(provider, "data", None)
     if not isinstance(data, Mapping) or data.get("state") not in {"online", "asleep"}:
-        return None
+        return invalid("native_state_unavailable")
     stamp = data.get("charge_state_timestamp")
     value = data.get("charge_state_usable_battery_level")
     if (
-        type(stamp) not in (int, float) or not isfinite(stamp)
-        or type(value) not in (int, float) or not isfinite(value) or value != item.number
+        not _valid_age(stamp) or not _valid_age(value) or value != item.number
     ):
-        return None
+        return invalid("native_measurement_unavailable")
     try:
         measured_at = datetime.fromtimestamp(stamp / 1000, UTC)
     except (OverflowError, OSError, ValueError):
-        return None
-    return float(value) if 0 <= (now - measured_at).total_seconds() <= max_age_seconds else None
+        return invalid("native_measurement_unavailable")
+    age = (now - measured_at).total_seconds()
+    if age < 0:
+        return invalid("native_soc_future", measured_at)
+    asleep = data["state"] == "asleep"
+    maximum = sleeping_max_age_seconds if asleep and sleeping_max_age_seconds is not None else (
+        max_age_seconds
+    )
+    if age > maximum:
+        return invalid("sleeping_soc_expired" if asleep else "native_soc_expired", measured_at)
+    reason = (
+        "bounded_asleep" if age > max_age_seconds
+        else "fresh_asleep" if asleep else "fresh_online"
+    )
+    return EvPlanningSocObservation(float(value), source, measured_at, reason)
+
+
+def measure_ev_soc(
+    hass: HomeAssistant,
+    feedback: EvFeedbackSnapshot,
+    *,
+    now: datetime,
+    max_age_seconds: float,
+) -> float | None:
+    """Read independently measured SoC under the unchanged strict live bound.
+
+    Actual current and actuator acknowledgements need not load; native mapped
+    identities must nevertheless describe the same vehicle. This function
+    never uses the longer sleeping-car reservation planning bound.
+    """
+    return _measure_soc_observation(
+        hass, feedback, now=now, max_age_seconds=max_age_seconds,
+    ).value_percent
+
+
+def measure_ev_planning_soc(
+    hass: HomeAssistant,
+    feedback: EvFeedbackSnapshot,
+    *,
+    now: datetime,
+    max_age_seconds: float,
+    planning_max_age_seconds: float,
+) -> EvPlanningSocObservation:
+    """Read bounded SoC for reservation planning, never for positive EV writes.
+
+    Only an explicitly asleep, healthy native same-vehicle provider may use
+    the caller's separate planning ceiling. Online and generic observations
+    retain the strict live age. Every call requalifies binding, health, value
+    and the original charge-state timestamp: HA/fetch/drive clocks, repeated
+    reads and restart cannot renew it. No cache, journal or poller is created.
+    """
+    if not _valid_age(planning_max_age_seconds, positive=True):
+        return EvPlanningSocObservation(None, "unavailable", None, "planning_age_invalid")
+    return _measure_soc_observation(
+        hass, feedback, now=now, max_age_seconds=max_age_seconds,
+        sleeping_max_age_seconds=planning_max_age_seconds,
+    )
 
 
 @dataclass(frozen=True, slots=True)

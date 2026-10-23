@@ -13,17 +13,19 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from . import EnergyConfigEntry
 from .aemo_monitor_controls import AemoThresholdNumber
-from .configuration import valid_ev_surplus_rearm_energy
+from .configuration import valid_ev_reservation_soc_max_age_hours, valid_ev_surplus_rearm_energy
 from .const import (
     CONF_EV_BEFORE_EXPORT_IMPORT_CONFIRM_SECONDS,
     CONF_EV_BEFORE_EXPORT_SOC_BUFFER,
     CONF_EV_BEFORE_EXPORT_SOC_TARGET,
     CONF_EV_MORNING_SOLAR_RESERVE_SOC,
+    CONF_EV_RESERVATION_SOC_MAX_AGE_HOURS,
     CONF_EV_SOLAR_SOAK_ADJUSTMENT_MINUTES,
     CONF_EV_SOLAR_SOAK_AVERAGE_MINUTES,
     CONF_EV_SOLAR_SOAK_BATTERY_SOC,
     CONF_EV_SURPLUS_REARM_ENERGY,
     DEFAULT_EV_BEFORE_EXPORT_IMPORT_CONFIRM_SECONDS,
+    DEFAULT_EV_RESERVATION_SOC_MAX_AGE_HOURS,
     DEFAULT_EV_SOLAR_SOAK_ADJUSTMENT_MINUTES,
     DEFAULT_EV_SOLAR_SOAK_AVERAGE_MINUTES,
     DEFAULT_EV_SOLAR_SOAK_BATTERY_SOC,
@@ -36,6 +38,7 @@ from .entity_catalogue import (
     EV_BEFORE_EXPORT_IMPORT_DESCRIPTION,
     EV_BEFORE_EXPORT_TARGET_DESCRIPTION,
     EV_MORNING_SOLAR_RESERVE_DESCRIPTION,
+    EV_RESERVATION_SOC_MAX_AGE_DESCRIPTION,
     EV_SOLAR_SOAK_DESCRIPTIONS,
     EV_SURPLUS_REARM_ENERGY_DESCRIPTION,
 )
@@ -54,6 +57,9 @@ async def async_setup_entry(
             TripMarginNumber(entry.runtime_data, entry),
             EvSurplusRearmEnergyNumber(
                 entry.runtime_data, entry, EV_SURPLUS_REARM_ENERGY_DESCRIPTION,
+            ),
+            EvReservationSocMaxAgeNumber(
+                entry.runtime_data, entry, EV_RESERVATION_SOC_MAX_AGE_DESCRIPTION,
             ),
             *(TestNumber(entry.runtime_data, entry, description) for description in DESCRIPTIONS),
             *(
@@ -82,6 +88,50 @@ async def async_setup_entry(
             ),
         )
     )
+
+
+class EvReservationSocMaxAgeNumber(CoordinatorEntity[EnergyCoordinator], NumberEntity):
+    """Edit planning-only SoC age without changing fast command telemetry."""
+
+    def __init__(self, coordinator, entry, description) -> None:
+        super().__init__(coordinator)
+        self.entity_description = description
+        self._entry = entry
+        self._attr_unique_id = f"{entry.entry_id}_{description.key}"
+        self.entity_id = "number.home_energy_ev_reservation_soc_max_age_hours"
+        self._attr_has_entity_name = True
+
+    @property
+    def available(self) -> bool:
+        return True
+
+    @property
+    def native_value(self) -> float:
+        return self.coordinator.runtime_config.ev_numbers.value(
+            CONF_EV_RESERVATION_SOC_MAX_AGE_HOURS,
+            DEFAULT_EV_RESERVATION_SOC_MAX_AGE_HOURS,
+        )
+
+    async def async_set_native_value(self, value: float) -> None:
+        if not valid_ev_reservation_soc_max_age_hours(value):
+            raise HomeAssistantError("Use a planning SoC age from 0.025 to 48 hours, step 0.025")
+        numeric = float(value)
+        self.hass.config_entries.async_update_entry(
+            self._entry,
+            data={**self._entry.data, CONF_EV_RESERVATION_SOC_MAX_AGE_HOURS: numeric},
+            options={key: item for key, item in self._entry.options.items()
+                     if key != CONF_EV_RESERVATION_SOC_MAX_AGE_HOURS},
+        )
+        self.coordinator.update_config_value(CONF_EV_RESERVATION_SOC_MAX_AGE_HOURS, numeric)
+        self.async_write_ha_state()
+        # Recompute the shared reservation, then use the existing controller
+        # guards. An age edit creates neither a new writer nor a provider poller.
+        await self.coordinator.async_request_refresh()
+        if (controller := self.coordinator.ev_controller) is not None:
+            await controller.async_reconcile()
+        if (controller := self.coordinator.active_controller) is not None:
+            await controller.async_reconcile()
+        self.coordinator.async_update_listeners()
 
 
 class EvSurplusRearmEnergyNumber(CoordinatorEntity[EnergyCoordinator], NumberEntity):

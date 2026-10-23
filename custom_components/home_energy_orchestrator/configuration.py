@@ -540,6 +540,7 @@ _EV_NUMERIC_FIELD_NAMES = (
     "EV_OUTSIDE_BATTERY_RESERVE_PERCENT",
     "EV_PHASE_COUNT",
     "EV_PROTECTED_BASELINE_A",
+    "EV_RESERVATION_SOC_MAX_AGE_HOURS",
     "EV_SMART_RECOVERY_CHARGING_CONFIRM_SECONDS",
     "EV_SMART_RECOVERY_CURRENT_CONFIRM_SECONDS",
     "EV_SMART_RECOVERY_IDLE_CURRENT_A",
@@ -627,6 +628,13 @@ class EvNumericSettings:
         values[rearm_key] = (
             float(rearm_value) if valid_ev_surplus_rearm_energy(rearm_value) else 6.0
         )
+        age_key = config_const.CONF_EV_RESERVATION_SOC_MAX_AGE_HOURS
+        age_value = data.get(age_key, config_const.DEFAULT_EV_RESERVATION_SOC_MAX_AGE_HOURS)
+        # Invalid saved planning authority expires; it never receives a new
+        # default lease. Fast EV command telemetry retains its separate bound.
+        values[age_key] = (
+            float(age_value) if valid_ev_reservation_soc_max_age_hours(age_value) else 0.0
+        )
         # An existing entry has a reviewed outside-window reserve but no
         # separate morning-solar value.  Use that reserve until the optional
         # dashboard/configuration control is explicitly saved.
@@ -650,6 +658,21 @@ def valid_ev_surplus_rearm_energy(value: object) -> bool:
     return (
         not isinstance(value, bool) and isfinite(numeric) and 0 <= numeric <= 5
         and isclose(numeric * 100, round(numeric * 100), rel_tol=0, abs_tol=1e-7)
+    )
+
+
+def valid_ev_reservation_soc_max_age_hours(value: object) -> bool:
+    """Validate the independent sleeping-SoC planning bound, not command freshness."""
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError, OverflowError):
+        return False
+    step = config_const.STEP_EV_RESERVATION_SOC_MAX_AGE_HOURS
+    return (
+        not isinstance(value, bool) and isfinite(numeric)
+        and config_const.MIN_EV_RESERVATION_SOC_MAX_AGE_HOURS <= numeric
+        <= config_const.MAX_EV_RESERVATION_SOC_MAX_AGE_HOURS
+        and isclose(numeric / step, round(numeric / step), rel_tol=0, abs_tol=1e-7)
     )
 
 
