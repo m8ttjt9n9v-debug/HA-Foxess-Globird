@@ -763,6 +763,14 @@ EV_BACKFILL_TIMING_DESCRIPTION = SelectEntityDescription(
     entity_category=EntityCategory.CONFIG,
 )
 
+EV_RESERVATION_MODE_DESCRIPTION = SelectEntityDescription(
+    key="ev_reservation_mode",
+    name="EV Energy Reservation",
+    translation_key="ev_reservation_mode",
+    icon="mdi:battery-lock",
+    entity_category=EntityCategory.CONFIG,
+)
+
 EV_SURPLUS_REARM_ENERGY_DESCRIPTION = NumberEntityDescription(
     key="ev_surplus_rearm_energy",
     name="Spare-energy Restart Margin",
@@ -953,6 +961,7 @@ _NON_SENSOR_PROJECTIONS = {
     "ev_solar_soak_adjustment_minutes": "EvSolarSoakNumber.native_value",
     "house_occupancy_mode": "HouseOccupancyModeSelect.current_option",
     "ev_backfill_timing": "EvBackfillTimingSelect.current_option",
+    "ev_reservation_mode": "EvReservationModeSelect.current_option",
     "ev_surplus_rearm_energy": "EvSurplusRearmEnergyNumber.native_value",
     "safety_lock": "SafetyLockSwitch.is_on",
     "automatic_charge": "AutomaticChargeSwitch.is_on",
@@ -992,6 +1001,7 @@ def _entity_spec(platform: EntityPlatform, description: EntityDescription) -> En
                                       or description in (EV_BEFORE_EXPORT_BUFFER_DESCRIPTION,
                                                          EV_BEFORE_EXPORT_IMPORT_DESCRIPTION,
                                                          EV_SURPLUS_REARM_ENERGY_DESCRIPTION,
+                                                         EV_RESERVATION_MODE_DESCRIPTION,
                                                          EV_BACKFILL_TIMING_DESCRIPTION))
             else "coordinator"
         )
@@ -1015,6 +1025,7 @@ ENTITY_SPECS = (
     *(_entity_spec("number", description) for description in EV_SOLAR_SOAK_DESCRIPTIONS),
     _entity_spec("select", HOUSE_OCCUPANCY_DESCRIPTION),
     _entity_spec("select", EV_BACKFILL_TIMING_DESCRIPTION),
+    _entity_spec("select", EV_RESERVATION_MODE_DESCRIPTION),
     _entity_spec("number", EV_SURPLUS_REARM_ENERGY_DESCRIPTION),
     _entity_spec("switch", SAFETY_DESCRIPTION),
     _entity_spec("switch", CHARGE_DESCRIPTION),

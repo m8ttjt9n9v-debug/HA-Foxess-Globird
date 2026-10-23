@@ -16,6 +16,7 @@ import pytest
 from custom_components.home_energy_orchestrator.ev_active import ActiveEvController
 from tests.test_ev_backfill_timing import _at, _charging, _services
 from tests.test_ev_pre_free_combined_runtime import _power, _scenario
+from tests.test_ev_pre_free_combined_runtime import coherent_site_clock as coherent_site_clock
 
 
 def _budget(coordinator, energy):

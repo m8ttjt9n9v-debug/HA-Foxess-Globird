@@ -210,6 +210,8 @@ views:
             entities:
               - entity: switch.home_energy_ev_before_export
                 name: Prioritise EV before export
+              - entity: select.home_energy_ev_reservation_mode
+                name: EV energy reservation
               - entity: number.home_energy_ev_before_export_soc_target
                 name: Keep energy for EV until SoC reaches
               - entity: number.home_energy_ev_before_export_soc_buffer

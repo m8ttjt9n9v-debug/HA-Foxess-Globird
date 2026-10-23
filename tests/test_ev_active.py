@@ -1171,6 +1171,9 @@ async def test_morning_solar_runtime_uses_separate_reserve_before_free_window(
     hass: HomeAssistant,
 ) -> None:
     """Morning surplus works below the post-free full threshold, never on it."""
+    # The explicit state timestamps below are UTC; tariff planning and command
+    # rechecks must interpret those configured wall times in the same zone.
+    await hass.config.async_set_time_zone("UTC")
     _set_ev_states(hass)
     hass.states.async_set("sensor.site_grid", "-2", {"unit_of_measurement": "kW"})
     hass.states.async_set(

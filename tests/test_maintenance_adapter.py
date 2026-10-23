@@ -730,6 +730,7 @@ async def test_catalog_only_uses_cached_stable_published_tags(hass):
         ("a" * 40, False, False),
         ("0.12.41+local", False, False),
         ("0.12.41.dev1", False, False),
+        ("v0.12.63.dev1", False, False),
     ]:
         repository.data.published_tags.append(tag)
         repository.releases.objects.append(
@@ -848,7 +849,10 @@ async def test_install_revalidates_catalog_after_a_previous_display(hass):
     assert not entity.calls
 
 
-@pytest.mark.parametrize("version", ["main", "v0.12.40rc1", "v0.12.39", "v0.12.38", "0.12.40"])
+@pytest.mark.parametrize("version", [
+    "main", "v0.12.40rc1", "v0.12.39", "v0.12.38", "0.12.40",
+    "v0.12.63.dev1", "0.12.63.dev1",
+])
 async def test_install_rejects_arbitrary_old_or_non_exact_versions(hass, version):
     _, _, entity = await _hacs(hass)
     with pytest.raises(adapter.MaintenanceAdapterError):

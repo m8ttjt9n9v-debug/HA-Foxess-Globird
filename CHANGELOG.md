@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.12.63.dev1 — Local candidate: Dynamic EV reservation and telemetry
+
+- Add opt-in Dynamic SoC-based reservation alongside the existing Fixed choice,
+  available in setup and a native dashboard select. Reserve only the wall-energy
+  shortfall to the chosen minimum plus buffer; learning remains advisory.
+- Share one protected budget: permit balance export while the EV is away below
+  its minimum, and keep its reserved energy available to the existing EV writer
+  on return. Preserve physical handoff, buffered recovery, reserve/current caps,
+  fixed-choice compatibility and all other policy settings.
+- Qualify native EV actual-current/charging measurements independently of fresh
+  Modbus power, including provider identity and real measurement clocks. Reuse
+  that result for house learning and EV arithmetic without inventing current
+  from commands or whole-house power. Keep genuinely fresh numeric ramp lag.
+- Recheck ordinary solar authority after awaited work and enforce the existing
+  service envelope for standalone morning solar. Retain reducing cleanup and
+  add regression/lifecycle coverage. No new poller, writer or dashboard install.
+- This identifiable local candidate is not a published HACS release. Installation
+  and Dynamic activation require separate named-site approval and verification.
+
 ## 0.12.62 — Use spare energy when the EV is plugged in
 
 - Add an optional third backfill timing choice, **Use spare energy when plugged

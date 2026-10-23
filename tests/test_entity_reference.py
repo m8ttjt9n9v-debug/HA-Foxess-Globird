@@ -17,5 +17,5 @@ def test_entity_reference_contains_every_entity_once() -> None:
         for line in rendered_reference().splitlines()
         if line.startswith("| `")
     ]
-    assert len(rows) == 133
-    assert len(set(rows)) == 133
+    assert len(rows) == 134
+    assert len(set(rows)) == 134

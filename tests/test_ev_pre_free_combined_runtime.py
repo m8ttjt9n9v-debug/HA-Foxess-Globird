@@ -18,6 +18,23 @@ from custom_components.home_energy_orchestrator.planner.export_session import Ex
 from tests.test_ev_backfill_timing import _at, _charging, _fresh, _services, _site
 
 
+@pytest.fixture(autouse=True)
+async def coherent_site_clock(hass, freezer, monkeypatch, request):
+    """Synthetic UTC publications and real command-boundary checks share time."""
+    await hass.config.async_set_time_zone("UTC")
+    freezer.move_to(_at(11))
+    publish_power = _power
+
+    def publish_at(hass, coordinator, now, **values):
+        freezer.move_to(now)
+        publish_power(hass, coordinator, now, **values)
+
+    monkeypatch.setitem(globals(), "_power", publish_at)
+    # The frontload traces reuse these helpers and explicitly import this
+    # fixture; align their local alias as well, without changing fault samples.
+    monkeypatch.setattr(request.module, "_power", publish_at)
+
+
 def _scenario(hass, *, budget=2, **changes):
     config = {
         "solar_configured": True,

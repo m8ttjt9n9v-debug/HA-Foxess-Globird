@@ -1,5 +1,21 @@
 # Project roadmap
 
+## Owner-requested local candidate — Dynamic EV reservation and telemetry
+
+- [x] Add an explicit Fixed/Dynamic setup and native selector, retaining Fixed
+  by default. Dynamic uses the chosen minimum plus buffer/current SoC/capacity
+  and efficiency; learned targets and return-trip predictions remain advisory.
+- [x] Split one house/keepalive-protected budget and keep the EV's own reserved
+  energy available to its existing charging writer. Do not stack reservations.
+- [x] Replace the blanket away-vehicle minimum block only in Dynamic; retain
+  physical return/recovery handoff, existing journal and buffered boundaries.
+- [x] Share native actual-current qualification with house learning and solar/
+  allowance decisions, reject unrelated Modbus freshness, and enforce ordinary
+  solar command-boundary and standalone morning service limits.
+- [ ] Complete combined regression/lifecycle/compatibility qualification and
+  separately approved local-candidate pilot acceptance. No public release or
+  other-site deployment follows by inference.
+
 ## Optional prompt backfill timing — v0.12.62
 
 - [x] [Reuse the existing backfill sessions](docs/ev-post-export-design.md)
@@ -33,16 +49,14 @@
   this timing, activate control or replace a deployed dashboard. Named-site
   release acceptance remains a separate controlled step.
 
-## Deferred until after settling — EV shortfall reservation and Extended Away
+## Deferred beyond current-SoC reservation — prediction and Extended Away
 
-- [ ] Replace the all-or-nothing EV-minimum export hold with a protected EV
-  energy reservation: account for the predicted arrival-home SoC shortfall to
-  the configured minimum plus recovery margin, including charging losses;
-  export only the non-negative balance of otherwise discretionary energy.
+- [x] Bring forward a current-SoC reservation, explicitly requested by the owner;
+  the human chooses a conservative minimum. Predicted arrival remains separate.
 - [ ] Use actual current SoC plus an estimate of the remaining return journey;
   do not count already-observed outward-trip consumption twice. Specify a
   conservative configurable fallback when prediction/evidence is insufficient.
-- [ ] Reconcile with existing house/EV reservations without double-counting.
+- [x] Reconcile with existing house/EV reservations without double-counting.
   Keep the EV's reserved share available to its existing charging controller,
   not hidden from it by reducing a shared Sellable input. Adjust the independent
   EV-minimum export gate consistently; changing a display value alone is not enough.

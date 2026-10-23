@@ -1,0 +1,10 @@
+{
+  "schema_version": 1, "extension": "ev_reservation_v1", "field_count": 1,
+  "fields": [{
+    "key": "ev_reservation_mode", "page": "ev_policies", "order": 36,
+    "required": true, "has_default": true, "default": "fixed", "input_kind": "select",
+    "input_config": {"options": ["fixed", "dynamic"], "multiple": false,
+                     "custom_value": false, "sort": false, "translation_key": "ev_reservation_mode"},
+    "setup_label": "EV energy reservation", "reconfigure_label": "EV energy reservation"
+  }]
+}

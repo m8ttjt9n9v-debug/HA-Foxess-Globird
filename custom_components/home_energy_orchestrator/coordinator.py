@@ -25,6 +25,7 @@ from .const import (
     CONF_EV_MAX_CURRENT,
     CONF_EV_MIN_CURRENT,
     CONF_EV_PHASE_COUNT,
+    CONF_EV_TELEMETRY_MAX_AGE_SECONDS,
     CONF_EV_TELEMETRY_MAX_SKEW_SECONDS,
     CONF_EV_VOLTAGE,
     CONF_EXPORT_ALLOWANCE_KWH,
@@ -54,6 +55,7 @@ from .const import (
     DEFAULT_BONUS_WINDOW_START,
     DEFAULT_DAILY_CHARGE,
     DEFAULT_DAILY_FREE_ALLOWANCE_KWH,
+    DEFAULT_EV_TELEMETRY_MAX_AGE_SECONDS,
     DEFAULT_EV_TELEMETRY_MAX_SKEW_SECONDS,
     DEFAULT_EXPORT_ALLOWANCE_KWH,
     DEFAULT_EXPORT_LIMIT_KW,
@@ -82,6 +84,8 @@ from .const import (
     DOMAIN,
     REASON_INVALID_CONFIGURATION,
 )
+from .ev_current_measurement import measure_ev_current
+from .ev_observation_adapter import capture_ev_feedback, ev_observation_entity_map
 from .models import EnergyLedger, SiteSnapshot
 from .normalise import current_to_a, percent
 from .persistence import TypedStoreRepository, TypedValueStoreRepository
@@ -1231,34 +1235,46 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
         )
 
     def _state_qualified_ev_power_kw(self, now: datetime) -> float | None:
-        """Port the pilot's charging-state-qualified EV power calculation."""
-        ev_telemetry = self.runtime_config.ev_telemetry
-        charging_entity = ev_telemetry.charging_state_entity
-        charging_state = capture_telemetry_source(self.hass, charging_entity)
-        if charging_state is None or charging_state.updated_at is None:
-            return None
-        age_seconds = (now - charging_state.updated_at).total_seconds()
-        if age_seconds < 0 or age_seconds > self._max_telemetry_age():
-            return None
-        if str(charging_state.raw_value).lower() != "charging":
-            return 0.0
-        current_entity = ev_telemetry.actual_current_entity
-        current_state = capture_telemetry_source(self.hass, current_entity)
-        if current_state is None or current_state.updated_at is None:
-            return None
-        current_age_seconds = (now - current_state.updated_at).total_seconds()
-        if current_age_seconds < 0 or current_age_seconds > self._max_telemetry_age():
+        """Subtract only the shared, source-qualified measured EV power."""
+        feedback = capture_ev_feedback(self.hass, ev_observation_entity_map(self.runtime_config))
+        measurement = measure_ev_current(
+            self.hass, feedback, now=now,
+            max_age_seconds=self.runtime_config.ev_numbers.value(
+                CONF_EV_TELEMETRY_MAX_AGE_SECONDS, DEFAULT_EV_TELEMETRY_MAX_AGE_SECONDS,
+            ),
+        )
+        if measurement.source != "tessie_charge_state":
+            # Preserve the pilot's generic publisher/report-clock contract;
+            # it has no native vehicle measurement frame to qualify instead.
+            telemetry = self.runtime_config.ev_telemetry
+            charging = capture_telemetry_source(self.hass, telemetry.charging_state_entity)
+            if charging is None or charging.updated_at is None or not (
+                0 <= (now - charging.updated_at).total_seconds() <= self._max_telemetry_age()
+            ):
+                return None
+            if str(charging.raw_value).lower() != "charging":
+                return 0.0
+            actual = capture_telemetry_source(self.hass, telemetry.actual_current_entity)
+            if actual is None or actual.updated_at is None or not (
+                0 <= (now - actual.updated_at).total_seconds() <= self._max_telemetry_age()
+            ):
+                return None
+            try:
+                current_a = current_to_a(float(actual.raw_value), actual.raw_unit)
+            except (TypeError, ValueError):
+                return None
+            if current_a < 0:
+                return None
+        elif measurement.valid:
+            current_a = measurement.current_a
+        else:
             return None
         try:
-            current_a = current_to_a(
-                float(current_state.raw_value),
-                current_state.raw_unit,
-            )
             voltage_v = self._configured_float(CONF_EV_VOLTAGE)
             phase_count = self._configured_phase_count()
         except (TypeError, ValueError):
             return None
-        if current_a < 0 or voltage_v <= 0:
+        if voltage_v <= 0:
             return None
         return current_a * voltage_v * phase_count / 1000
 

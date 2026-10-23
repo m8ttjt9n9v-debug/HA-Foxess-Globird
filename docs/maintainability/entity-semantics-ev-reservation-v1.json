@@ -1,0 +1,15 @@
+{
+  "schema_version": 1, "entity_count": 1, "attribute_profiles": {},
+  "entities": [{
+    "key": "ev_reservation_mode",
+    "definition": "Operator selection between retained fixed daily energy and Dynamic SoC shortfall protection. Dynamic quantifies the current EV shortfall to the existing export minimum plus configured recovery margin, leaving only the protected balance available for export. The existing Prioritise EV before export master enables protection/top-up; selecting a mode does not enable it or change saved fixed kWh.",
+    "producer": "EvReservationModeSelect.current_option projects RuntimeConfiguration.ev_preferences.reservation_mode from the same saved setup value.",
+    "role": "configuration", "unit_and_sign": "Enumerated choice, no unit. Missing values default to fixed for compatibility; invalid saved values do not silently select another mode.",
+    "time_basis": "Current saved policy, preserved through reload/restart. An edit refreshes shared protection and re-evaluates the existing EV and export controllers; no additional writer or schedule.",
+    "availability": "Editable while HEO is loaded, including when telemetry is unavailable or automatic control is disabled. Selection does not weaken commissioning, owner, energy or source gates.",
+    "state_vocabulary": "fixed or dynamic, displayed as Fixed daily energy or Dynamic SoC shortfall. Unsupported native/setup edits are rejected before persistence.",
+    "audience": "primary", "equivalents": {"foxess": null, "globird": null, "tessie": null},
+    "consumers": ["EV Charging policies", "Native dashboard settings", "Shared EV reservation calculation"],
+    "decision": "retain", "review_status": "engineering_draft"
+  }]
+}

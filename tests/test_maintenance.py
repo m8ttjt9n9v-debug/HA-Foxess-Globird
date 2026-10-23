@@ -142,6 +142,27 @@ async def test_restart_action_still_backs_up_but_never_installs(node_rig):
     rig.native.async_install.assert_not_called()
 
 
+async def test_local_candidate_status_preserves_real_hacs_identity_without_install(node_rig):
+    rig = node_rig
+    rig.catalog.update(installed_version="v0.12.62", versions=["v0.12.62"])
+    candidate = await rig.reboot("0.12.63.dev1")
+    status = await candidate.async_status()
+    assert status["phase"] == "idle" and status["error"] is None
+    assert status["running_version"] == "0.12.63.dev1"
+    assert status["installed_version"] == "v0.12.62"
+    assert status["restart_pending"] is True
+    assert status["available_versions"] == ["v0.12.62"]
+    assert candidate.record is None and rig.events == []
+    with pytest.raises(HomeAssistantError, match="invalid_maintenance_request"):
+        await candidate.async_submit(
+            "update_and_restart", uuid4().hex, datetime.now(UTC).isoformat(),
+            "v0.12.63.dev1", rig.context,
+        )
+    assert candidate.record is None and rig.events == []
+    rig.native.async_install.assert_not_called()
+    rig.native.async_request_restart.assert_not_called()
+
+
 @pytest.mark.parametrize("identity", ["anonymous", "missing", "non_admin", "inactive"])
 async def test_real_auth_blocks_before_persistence_or_native_work(hass, node_rig, identity):
     rig = node_rig

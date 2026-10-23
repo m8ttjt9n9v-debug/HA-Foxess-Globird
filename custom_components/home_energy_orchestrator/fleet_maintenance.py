@@ -30,6 +30,9 @@ _LIMIT = 32 * 1024
 _TIMEOUT = ClientTimeout(total=20)
 _KEY = re.compile(r"[a-z][a-z0-9_]{0,47}\Z")
 _VERSION = re.compile(r"v?\d{1,5}\.\d{1,5}\.\d{1,5}(?:(?:rc|a|b)\d{1,5})?\Z")
+_RUNNING_VERSION = re.compile(
+    r"v?\d{1,5}\.\d{1,5}\.\d{1,5}(?:(?:rc|a|b)\d{1,5})?(?:\.dev\d{1,5})?\Z"
+)
 _ACTIONS = {
     "update_and_restart": "maintenance_update_and_restart",
     "restart": "maintenance_restart",
@@ -107,7 +110,12 @@ def _sanitize(value: object) -> dict[str, object]:
             )
         ),
     }
-    for key in ("running_version", "installed_version", "expected_version"):
+    # A separately authorised local candidate is runtime evidence, never a
+    # published HACS target. Preserve that distinction in the read-only view.
+    running = value.get("running_version")
+    if isinstance(running, str) and _RUNNING_VERSION.fullmatch(running):
+        result["running_version"] = running
+    for key in ("installed_version", "expected_version"):
         if (version := _version(value.get(key))) is not None:
             result[key] = version
     if (request_id := _request_id(value.get("request_id"))) is not None:

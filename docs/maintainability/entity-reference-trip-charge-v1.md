@@ -5,7 +5,7 @@ to the reviewed semantic worksheet. It records the current names, including
 the retained naming approvals and versioned revisions. Edit the catalogue or semantic
 worksheet, then regenerate this file; do not edit rows by hand.
 
-Total entities: **133**.
+Total entities: **134**.
 
 ## Binary Sensor
 
@@ -53,6 +53,7 @@ Total entities: **133**.
 |---|---|---|---|---|---|---|---|---|
 | `select.home_energy_aemo_region` | AEMO Market Region | configuration | advanced | — | `AemoRegionSelect.current_option` | market_configuration | retain | Explicit NEM region selected for the independent price monitor; clearing the region removes that market mapping and is never replaced by an inferred site location. |
 | `select.home_energy_ev_backfill_timing` | EV Backfill Timing | configuration | primary | — | `EvBackfillTimingSelect.current_option` | configuration | retain | The existing backfill timing setting, editable from setup or this native select. Use spare energy when plugged in offers protected discretionary energy promptly after the normal export finish and before free power, including an already-connected vehicle; selecting a choice enables no policy. |
+| `select.home_energy_ev_reservation_mode` | EV Energy Reservation | configuration | primary | — | `EvReservationModeSelect.current_option` | configuration | retain | Operator selection between retained fixed daily energy and Dynamic SoC shortfall protection. Dynamic quantifies the current EV shortfall to the existing export minimum plus configured recovery margin, leaving only the protected balance available for export. The existing Prioritise EV before export master enables protection/top-up; selecting a mode does not enable it or change saved fixed kWh. |
 | `select.home_energy_house_occupancy_mode` | House Energy Occupancy Mode | configuration | primary | — | `HouseOccupancyModeSelect.current_option` | coordinator | retain | Operator-selected policy choosing automatic person-based occupancy or a forced home/away classification. |
 | `select.home_energy_trip_target_soc` | Trip Charge Target | target | primary | — | `TripTargetSelect.current_option` | trip_state | retain | Selected reported EV SoC at which this trip's owned Full request is withdrawn; not a permanent charge ceiling. |
 

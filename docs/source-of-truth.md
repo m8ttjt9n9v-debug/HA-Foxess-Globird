@@ -1,5 +1,28 @@
 # Project source of truth
 
+## Local candidate: Dynamic EV reservation and qualified measurements
+
+Optional **Dynamic SoC shortfall** reserves current wall energy to the human-set
+minimum plus its existing buffer, clipped to the normal target and including
+charging losses. Export may use the balance while the EV is away below its
+minimum. Returning connected minimum-recovery retains the existing physical
+handoff and persistent buffered recovery; no concurrent EV/forced-export writer
+is added. Fixed and Dynamic are exclusive. Learning is advisory; automatic
+presence does not release the reservation and Extended Away remains deferred.
+
+Both export and EV consume the same house/keepalive-protected pool. The EV can
+use its own reservation rather than being capped by its own prior deduction;
+missing selected evidence is not a zero reservation. Setup and the native
+reservation-mode select share one explicit setting, default Fixed on upgrade.
+No installed dashboard or other policy is changed by installation.
+
+The shared native EV measurement qualifier rejects expired/failed/rebound
+vehicle evidence even when local Modbus power is fresh. Valid numeric current
+lag remains an actual measurement, not requested current or inferred house
+watts. Ordinary solar rechecks source, policy and service authority across
+awaited command/checkpoint boundaries; standalone morning solar also respects
+the existing service envelope. See [provenance and lifecycle](ev-dynamic-reservation.md).
+
 ## v0.12.62 optional prompt backfill timing
 
 **Use spare energy when plugged in** is a third opt-in backfill timing choice,

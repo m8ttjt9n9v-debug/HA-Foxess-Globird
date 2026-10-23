@@ -22,6 +22,22 @@ The portable runtime requires an explicitly mapped signed battery-power
 sensor and sign convention. Grid power already has an explicit sign mapping.
 Missing, stale, or incoherent telemetry produces no spill target.
 
+### Native EV measurement qualification
+
+Native Tessie actual current and charging state must belong to one loaded,
+matching vehicle and agree with its bounded charge-state measurement frame.
+Fresh Home Assistant reports cannot renew an old or failed native measurement;
+unchanged values remain usable when a genuine native measurement advances.
+Mapped native policy fields must identify that same vehicle, but their unrelated
+values and command acknowledgements cannot stand in for physical current.
+
+A mixed native/generic physical pair cannot fall back to Home Assistant report
+clocks when its known native publisher is unavailable. Explicitly wholly generic
+physical mappings retain their existing canonical value contract; the separate
+house learner retains its bounded generic report-clock contract. Neither path
+infers EV power from requested current, a maximum rating or house-load changes.
+Command acknowledgement is not proof that physical charging current has settled.
+
 ### Canonical battery-source timing correction
 
 Coherent charge/discharge magnitudes remain preferred. An unchanged inactive

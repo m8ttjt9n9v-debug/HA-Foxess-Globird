@@ -261,17 +261,19 @@ async def test_healthy_frame_expires_without_rewriting_entity_clocks(hass, freez
     assert not _above_baseline(calls)
 
 
-async def test_existing_fresh_mixed_mapping_needs_no_native_cache_fallback(hass, freezer):
+async def test_mixed_physical_mapping_cannot_borrow_missing_native_publisher(hass, freezer):
     rig = _native(hass, freezer, old_seconds=0)
-    # Explicit template/device mappings keep their own strict clock contract;
-    # they cannot borrow a native car's clock when any input expires.
+    # A known native charging-state entity still needs its real publisher.
+    # A generic current mapping and fresh HA reports cannot invent that native
+    # measurement or silently make this a wholly generic physical source.
     er.async_get(hass).async_remove("sensor.car_actual_current")
     hass.states.async_set("sensor.car_actual_current", "0", {"unit_of_measurement": "A"},
                           force_update=True)
     rig.entry.runtime_data = None
     calls = _services(hass)
     await rig.controller.async_reconcile(rig.now)
-    assert _above_baseline(calls)
+    assert not _above_baseline(calls)
+    assert not any(call[:2] == ("switch", "turn_on") for call in calls)
 
 
 @pytest.mark.parametrize("fault", ["old_measurement", "failed_provider"])

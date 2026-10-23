@@ -1,0 +1,9 @@
+{
+  "schema_version": 1, "access_count": 4,
+  "accesses": [
+    {"constant":"CONF_EV_RESERVATION_MODE","key":"ev_reservation_mode","source":"custom_components/home_energy_orchestrator/config_flow.py","scope":"ConfigFlow._apply_defaults","receiver":"data","access":"get","kind":"raw_mapping","layer":"boundary"},
+    {"constant":"CONF_EV_RESERVATION_MODE","key":"ev_reservation_mode","source":"custom_components/home_energy_orchestrator/config_flow.py","scope":"ConfigFlow._validate_input","receiver":"data","access":"get","kind":"raw_mapping","layer":"boundary"},
+    {"constant":"CONF_EV_RESERVATION_MODE","key":"ev_reservation_mode","source":"custom_components/home_energy_orchestrator/configuration.py","scope":"RuntimeConfiguration.from_mapping","receiver":"data","access":"get","kind":"raw_mapping","layer":"boundary"},
+    {"constant":"CONF_EV_RESERVATION_MODE","key":"ev_reservation_mode","source":"custom_components/home_energy_orchestrator/select.py","scope":"EvReservationModeSelect.async_select_option","receiver":"self.coordinator","access":"update_config_value","kind":"managed_mutation","layer":"runtime"}
+  ]
+}

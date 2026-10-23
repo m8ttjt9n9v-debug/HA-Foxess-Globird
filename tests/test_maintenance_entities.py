@@ -18,6 +18,7 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import entity_registry as er
 from homeassistant.setup import async_setup_component
 from homeassistant.util import dt as dt_util
+from packaging.version import Version
 from pytest_homeassistant_custom_component.common import MockConfigEntry, async_fire_time_changed
 
 from custom_components.home_energy_orchestrator import FLEET_KEY
@@ -32,8 +33,10 @@ RUNNING_VERSION = json.loads(
 )["version"]
 CATALOG = {
     "entity_id": "update.verified_heo_release",
-    "installed_version": f"v{RUNNING_VERSION}",
-    "versions": [f"v{RUNNING_VERSION}", "v0.12.40", "v0.12.39"],
+    # HACS retains its published stable installation during a local candidate.
+    # Never invent a published release from the component's running manifest.
+    "installed_version": "v0.12.62",
+    "versions": ["v0.12.62", "v0.12.40", "v0.12.39"],
     "in_progress": False,
 }
 LOCAL = {"key": "alpha", "name": "Local site", "local": True}
@@ -121,7 +124,10 @@ async def test_default_setup_adds_readonly_node_status_but_no_fleet_controls(has
     assert status.attributes["schema_version"] == 1
     assert status.attributes["installed_version"] == CATALOG["installed_version"]
     assert status.attributes["available_versions"] == CATALOG["versions"]
-    assert status.attributes["restart_pending"] is False
+    assert status.attributes["running_version"] == RUNNING_VERSION
+    assert status.attributes["restart_pending"] is (
+        Version(RUNNING_VERSION) != Version(CATALOG["installed_version"])
+    )
     assert status.attributes["backup_verified"] is False
     assert FLEET_KEY not in hass.data
     registry = er.async_get(hass)
@@ -222,6 +228,38 @@ async def test_actual_ha_cold_start_populates_node_hub_and_release_selector(hass
     await hass.data[NODE_KEY].async_status()
     await hass.data[FLEET_KEY].async_refresh()
     repository.update_repository.assert_awaited_once_with(ignore_issues=True, force=True)
+    assert events == [] and entity.calls == []
+    for method in never.values():
+        method.assert_not_called()
+
+
+async def test_local_candidate_reports_runtime_separately_from_verified_hacs_release(
+    hass, monkeypatch,
+):
+    """A local build is observable, never advertised as a HACS release target."""
+    from tests.test_maintenance_adapter import _hacs
+
+    _, repository, entity = await _hacs(hass)
+    repository.display_installed_version = "v0.12.62"
+    repository.data.published_tags = list(CATALOG["versions"])
+    repository.releases.objects = [
+        SimpleNamespace(tag_name=tag, draft=False, prerelease=False)
+        for tag in CATALOG["versions"]
+    ]
+    hass.data["heo_running_version"] = "0.12.63.dev1"
+    entry, events, never = await _setup(hass, monkeypatch, fleet=True, catalog=False)
+    for key in ("maintenance", "fleet_alpha_maintenance"):
+        status = hass.states.get(_id(hass, entry, "sensor", key))
+        assert status.state == "idle"
+        assert status.attributes.get("error") is None
+        assert status.attributes["running_version"] == "0.12.63.dev1"
+        assert status.attributes["installed_version"] == "v0.12.62"
+        assert status.attributes["restart_pending"] is True
+        assert status.attributes["available_versions"] == CATALOG["versions"]
+    selector = hass.states.get(_id(hass, entry, "select", "fleet_alpha_release"))
+    assert selector.attributes["options"] == CATALOG["versions"]
+    assert hass.states.get("sensor.home_energy_status").state == "observe"
+    assert hass.data[NODE_KEY].record is None
     assert events == [] and entity.calls == []
     for method in never.values():
         method.assert_not_called()

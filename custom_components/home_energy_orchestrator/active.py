@@ -204,6 +204,17 @@ class ActiveFoxessController:
             paid = self._paid_exported_kwh()
             if paid is None or paid >= runtime.export.automatic_limit_kwh:
                 return False
+            if runtime.ev_preferences.reservation_mode == "dynamic":
+                feedback = capture_foxess_feedback(self.hass, FoxessEntityMap(
+                    runtime.inverter.work_mode_entity, runtime.inverter.force_charge_power_entity,
+                    runtime.inverter.force_discharge_power_entity,
+                ))
+                current = evaluate_foxess_export_policy(
+                    self._export_context(feedback, dt_util.now()),
+                )
+                if (not current.effective_enabled or current.export_plan is None
+                        or current.export_plan.sellable_energy_kwh <= 0):
+                    return False
         if self._price_write_deadline is None:
             return True
         now = dt_util.now()
@@ -492,11 +503,16 @@ class ActiveFoxessController:
             window = None
         protected_ev = self._protected_keepalive_energy_kwh(self._hours_until_next_free(now))
         ev = getattr(self.coordinator, "ev_controller", None)
-        protected_ev = compose_protected_ev_energy_kwh(
-            keepalive_kwh=protected_ev,
-            daily_backfill_kwh=ev.daily_backfill_protection_kwh(now)
-            if protected_ev is not None and ev
-            else None,
+        reservation = ev.daily_backfill_protection_kwh(now) if ev else (
+            None if runtime.ev_preferences.reservation_mode == "dynamic"
+            and runtime.ev_preferences.before_export_enabled else 0.0
+        )
+        # Missing selected reservation evidence is not a zero reservation.
+        # Fixed absence retains the original optional composition contract.
+        protected_ev = (
+            compose_protected_ev_energy_kwh(
+                keepalive_kwh=protected_ev, daily_backfill_kwh=reservation,
+            ) if reservation is not None else None
         )
         ledger = self.coordinator.data
         available = getattr(ledger, "available_after_reserve_kwh", None)
@@ -511,8 +527,13 @@ class ActiveFoxessController:
                 now, min(runtime.inverter.discharge_limit_kw, feedback.discharge_power_max_kw)
             )
         return FoxessExportPolicyContext(
-            requested_enabled=runtime.automation.battery_export_enabled,
-            before_export_enabled=runtime.ev_preferences.before_export_enabled,
+            requested_enabled=(
+                runtime.automation.battery_export_enabled and protected_ev is not None
+            ),
+            before_export_enabled=(
+                runtime.ev_preferences.before_export_enabled
+                and runtime.ev_preferences.reservation_mode != "dynamic"
+            ),
             ev_soc_percent=getattr(self.coordinator.snapshot, "ev_soc", None),
             before_export_target_percent=runtime.ev_preferences.before_export_soc_target,
             before_export_recovery_target_percent=(
@@ -553,6 +574,12 @@ class ActiveFoxessController:
         It creates no session, timer, price lease or command authority.
         """
         manual_test = getattr(self.coordinator, "manual_test", None)
+        ev = getattr(self.coordinator, "ev_controller", None)
+        runtime = self.coordinator.runtime_config
+        if runtime.ev_preferences.reservation_mode == "dynamic":
+            if (runtime.ev_preferences.before_export_enabled
+                    and (ev is None or ev.dynamic_topup_requested(now))):
+                return False  # Logical EV recovery precedes physical export handoff.
         if (
             self._reconcile_stopped
             or maintenance_writes_blocked(self.hass)
@@ -617,7 +644,9 @@ class ActiveFoxessController:
         runtime = self.coordinator.runtime_config
         connection = runtime.ev_connection
         ev = getattr(self.coordinator, "ev_controller", None)
-        minimum_enabled = runtime.ev_preferences.before_export_enabled
+        dynamic = runtime.ev_preferences.reservation_mode == "dynamic"
+        reservation_handoff = dynamic and runtime.ev_preferences.before_export_enabled
+        minimum_enabled = runtime.ev_preferences.before_export_enabled and not dynamic
         prompt_handoff = (
             runtime.ev_policy.pre_free_enabled and (
                 runtime.ev_policy.pre_free_backfill_timing
@@ -635,8 +664,13 @@ class ActiveFoxessController:
             # prompt-cleanup marker before the existing EV journal is restored.
             # Restoration always runs, including while EV control is disabled.
             return False
-        if not (minimum_enabled or prompt_handoff):
+        if not (minimum_enabled or reservation_handoff or prompt_handoff):
             return True
+        if reservation_handoff and (
+            ev is None or ev.dynamic_topup_requested(now)
+        ):
+            self.ev_export_handoff_reason = "dynamic_ev_recovery_requested"
+            return False
         feedback = capture_ev_feedback(self.hass, ev_observation_entity_map(runtime))
         maximum_age = runtime.telemetry.max_age_seconds
         release = (ev.before_export_release_target()
@@ -1077,6 +1111,21 @@ class ActiveFoxessController:
         """Apply either permission through the same protected export session."""
         context = self._export_context(feedback, now)
         policy = evaluate_foxess_export_policy(context)
+        if self.coordinator.runtime_config.ev_preferences.reservation_mode == "dynamic":
+            funded = (
+                policy.export_plan is not None
+                and policy.export_plan.sellable_energy_kwh > 0
+                and context.protected_ev_kwh is not None
+            )
+            policy = replace(
+                policy,
+                before_export_decision=EvBeforeExportDecision(
+                    funded, "dynamic_reserved" if funded else "dynamic_energy_unavailable",
+                ),
+                effective_enabled=policy.effective_enabled and funded,
+                session_window_active=policy.session_window_active and funded,
+                finish_requested=policy.finish_requested or not funded,
+            )
         if (
             policy.before_export_decision.export_allowed
             and not self._ev_before_export_handoff_ready(now)

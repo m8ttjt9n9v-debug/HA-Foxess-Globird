@@ -17,6 +17,7 @@ from scripts.config_contract import (
     EV_EXPORT_BUFFER_CONFIG_KEYS,
     EV_IMPORT_CONFIG_KEYS,
     EV_LOCAL_CONNECTION_CONFIG_KEYS,
+    EV_RESERVATION_CONFIG_KEYS,
     EV_SURPLUS_REARM_CONFIG_KEYS,
     LOAD_CONFIG_KEYS,
     SOLAR_SOAK_CONFIG_KEYS,
@@ -62,6 +63,9 @@ EV_BACKFILL_TIMING_ADDITIONS_PATH = (
 )
 EV_SURPLUS_REARM_ADDITIONS_PATH = (
     REPOSITORY_ROOT / "docs/maintainability/config-usage-additions-ev-surplus-rearm-v1.json"
+)
+EV_RESERVATION_ADDITIONS_PATH = (
+    REPOSITORY_ROOT / "docs/maintainability/config-usage-additions-ev-reservation-v1.json"
 )
 RECONFIGURE_TRANSITION_PATH = (
     REPOSITORY_ROOT / "docs" / "maintainability" / "config-usage-transition-reconfigure-v1.json"
@@ -227,6 +231,14 @@ def build_config_usage_contract(*, include_extensions: bool = False) -> dict[str
         visitor.visit(tree)
         records.extend(visitor.records)
     if not include_extensions:
+        reservation = json.loads(EV_RESERVATION_ADDITIONS_PATH.read_text(encoding="utf-8"))
+        accesses = [item for item in records if item["key"] in EV_RESERVATION_CONFIG_KEYS]
+        if reservation["access_count"] != len(reservation["accesses"]) or sorted(
+            json.dumps(item, sort_keys=True) for item in accesses
+        ) != sorted(json.dumps(item, sort_keys=True) for item in reservation["accesses"]):
+            raise ValueError("Reviewed EV reservation configuration usage changed")
+        for reviewed in reservation["accesses"]:
+            records.remove(reviewed)
         rearm = json.loads(EV_SURPLUS_REARM_ADDITIONS_PATH.read_text(encoding="utf-8"))
         accesses = [item for item in records if item["key"] in EV_SURPLUS_REARM_CONFIG_KEYS]
         if rearm["access_count"] != len(rearm["accesses"]) or sorted(

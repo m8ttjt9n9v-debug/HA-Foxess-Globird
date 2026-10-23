@@ -1,5 +1,16 @@
 # System requirements and integration map
 
+## Optional Dynamic EV reservation (local candidate)
+
+Dynamic needs valid current vehicle SoC and qualified planning capacity/charge
+efficiency. It reserves the wall-energy shortfall to the configured EV minimum
+plus existing buffer, clipped to the normal target. Unknown/stale evidence
+cannot grant export by becoming zero protection. Fixed is the upgrade default;
+setup and `select.home_energy_ev_reservation_mode` share the same choice. The
+existing EV-before-export switch controls Dynamic protection/recovery. No
+learning prediction, Extended Away mode, dashboard replacement or simultaneous
+forced-export/EV writer is added. See [the shared-budget contract](ev-dynamic-reservation.md).
+
 ## Prompt EV backfill timing
 
 The optional **Use spare energy when plugged in** timing requires the enabled

@@ -58,6 +58,9 @@ EV_IMPORT_ADDITIONS_PATH = (
 EV_SURPLUS_REARM_ADDITIONS_PATH = (
     REPOSITORY_ROOT / "docs/maintainability/config-field-additions-ev-surplus-rearm-v1.json"
 )
+EV_RESERVATION_ADDITIONS_PATH = (
+    REPOSITORY_ROOT / "docs/maintainability/config-field-additions-ev-reservation-v1.json"
+)
 
 
 def _json_value(value: Any) -> Any:
@@ -158,6 +161,7 @@ def validate_against_release_baseline() -> None:
             EV_LOCAL_CONNECTION_ADDITIONS_PATH,
             EV_IMPORT_ADDITIONS_PATH,
             EV_SURPLUS_REARM_ADDITIONS_PATH,
+            EV_RESERVATION_ADDITIONS_PATH,
         )
     ]
     extension = {"schema_version": baseline["schema_version"], "fields": []}

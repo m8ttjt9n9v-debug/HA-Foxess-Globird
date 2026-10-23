@@ -102,6 +102,52 @@ async def test_restart_needs_no_version_but_preserves_admin_context(hass, admin)
     assert hass.data["heo_maintenance_node"].async_submit.call_args.kwargs["version"] is None
 
 
+async def test_local_candidate_version_is_readonly_not_a_release_target(hass):
+    hub = _hub(hass)
+    node = hass.data["heo_maintenance_node"]
+    node.async_status.return_value = _status(
+        running_version="0.12.63.dev1",
+        installed_version="v0.12.62",
+        available_versions=["v0.12.62"],
+        expected_version="0.12.63.dev1",
+        restart_pending=True,
+    )
+    await hub.async_refresh()
+    assert hub.data["alpha"]["phase"] == "idle"
+    assert hub.data["alpha"]["running_version"] == "0.12.63.dev1"
+    assert hub.data["alpha"]["installed_version"] == "v0.12.62"
+    assert hub.data["alpha"]["restart_pending"] is True
+    assert hub.data["alpha"]["available_versions"] == ["v0.12.62"]
+    assert "expected_version" not in hub.data["alpha"]
+    with pytest.raises(HomeAssistantError, match="not available"):
+        await hub.async_select_version("alpha", "0.12.63.dev1")
+    node.async_submit.assert_not_called()
+
+
+@pytest.mark.parametrize("version", ["main", "0.12.63.dev1+local", "0.12.63.dev100000", _TOKEN])
+async def test_runtime_version_presentation_remains_bounded(hass, version):
+    hub = _hub(hass)
+    node = hass.data["heo_maintenance_node"]
+    node.async_status.return_value = _status(running_version=version)
+    await hub.async_refresh()
+    assert hub.data["alpha"]["phase"] == "idle"
+    assert "running_version" not in hub.data["alpha"]
+    node.async_submit.assert_not_called()
+
+
+@pytest.mark.parametrize("version", ["0.12.63.dev1", "v0.12.63.dev1"])
+async def test_candidate_in_release_catalog_fails_closed(hass, version):
+    hub = _hub(hass)
+    node = hass.data["heo_maintenance_node"]
+    node.async_status.return_value = _status(available_versions=[_VERSION, version])
+    await hub.async_refresh()
+    assert hub.data["alpha"]["phase"] == "unknown"
+    assert hub.data["alpha"]["available_versions"] == []
+    with pytest.raises(HomeAssistantError, match="not available"):
+        await hub.async_select_version("alpha", version)
+    node.async_submit.assert_not_called()
+
+
 @pytest.mark.parametrize("identity", ["anonymous", "missing", "non_admin", "inactive"])
 async def test_real_ha_auth_denies_before_any_node_or_network_access(hass, admin, identity):
     hub = _hub(hass)

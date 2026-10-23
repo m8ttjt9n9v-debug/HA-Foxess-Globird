@@ -81,6 +81,9 @@ EV_IMPORT_EXTENSIONS_PATH = (
 EV_BACKFILL_TIMING_EXTENSIONS_PATH = (
     REPOSITORY_ROOT / "docs/maintainability/entity-semantics-ev-backfill-timing-v1.json"
 )
+EV_RESERVATION_EXTENSIONS_PATH = (
+    REPOSITORY_ROOT / "docs/maintainability/entity-semantics-ev-reservation-v1.json"
+)
 _ROLES = {
     "accumulator",
     "actuator_setting",
@@ -120,6 +123,7 @@ def load_semantic_contract() -> dict[str, Any]:
         EV_LOCAL_CONNECTION_EXTENSIONS_PATH,
         EV_IMPORT_EXTENSIONS_PATH,
         EV_BACKFILL_TIMING_EXTENSIONS_PATH,
+        EV_RESERVATION_EXTENSIONS_PATH,
     ):
         extension = json.loads(path.read_text(encoding="utf-8"))
         if extension.get("schema_version") != baseline.get("schema_version"):

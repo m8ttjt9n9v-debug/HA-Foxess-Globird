@@ -130,6 +130,7 @@ from .const import (
 from .coordinator import EnergyCoordinator
 from .ev_adapter import EvEntityMap, EvServiceAdapter, EvWriteBlocked, ev_control_gate_status
 from .ev_capacity import CapacityObservation, resolve_ev_capacity
+from .ev_current_measurement import EvCurrentMeasurement, measure_ev_current, measure_ev_soc
 from .ev_observation_adapter import (
     EvEntityFeedback,
     EvFeedbackSnapshot,
@@ -290,6 +291,11 @@ from .planner.ev_persistence import (
     EvPersistenceState,
 )
 from .planner.ev_power_constraints import inverter_backed_current_ceiling
+from .planner.ev_reservation import (
+    EvReservationBudget,
+    EvReservationInputs,
+    calculate_ev_reservation_budget,
+)
 from .planner.ev_solar_soak import SolarSoakAverage
 from .planner.learning import DemandHistory
 from .planner.ledger import calculate_ledger
@@ -333,6 +339,7 @@ class ActiveEvController:
         self.when_connected_owned = False
         self._when_connected_decision_config = None
         self._when_connected_issued_current_a = None
+        self._dynamic_backfill_decision_config = None
         self.ev_average = TimedAverageWindow(timedelta(minutes=3))
         self.solar_soak_average = SolarSoakAverage(timedelta(minutes=self._float(
             CONF_EV_SOLAR_SOAK_AVERAGE_MINUTES, DEFAULT_EV_SOLAR_SOAK_AVERAGE_MINUTES,
@@ -573,10 +580,7 @@ class ActiveEvController:
             now = now or dt_util.now()
             if maintenance_writes_blocked(self.hass):
                 return
-            feedback = capture_ev_feedback(
-                self.hass,
-                ev_observation_entity_map(self.coordinator.runtime_config),
-            )
+            feedback = self._capture_feedback()
             _CYCLE_FEEDBACK.set(feedback)
             self.capacity_evidence(now)
             await self._async_update_before_export_recovery(now)
@@ -1018,7 +1022,7 @@ class ActiveEvController:
                 self.requested_current_a = observation.requested_current_a
                 self.applied_limit_percent = observation.charge_limit_percent
                 self.charge_switch_on = observation.charge_switch_on
-                current, valid = feedback.actual_current_result
+                current, valid = self._actual_ev_current_a()
                 self.actual_current_a = current if valid else None
             if self.outside_stop_requested:
                 await self._async_reconcile_outside_stop(now, observation, gate=gate)
@@ -1067,6 +1071,26 @@ class ActiveEvController:
             self.last_reason = transition.plan.reason
             if runtime.save_reconciliation:
                 await self._async_save(now)
+                if self._dynamic_backfill_target_selected() and (
+                    self.gate_status != "ready" or not self._dynamic_backfill_write_authorized()
+                ):
+                    fresh = self._capture_feedback()
+                    _CYCLE_FEEDBACK.set(fresh)
+                    await self._async_restore_ready_by_baseline(
+                        dt_util.now(), fresh.direct_observation, gate=self.gate_status,
+                    )
+                    return
+                if self._ordinary_solar_target_selected() and (
+                    self.gate_status != "ready" or not self._ordinary_solar_write_authorized()
+                ):
+                    # A matching request sends no command, so the per-command
+                    # adapter guard alone cannot withdraw lost source authority.
+                    fresh = self._capture_feedback()
+                    _CYCLE_FEEDBACK.set(fresh)
+                    await self._async_restore_ready_by_baseline(
+                        dt_util.now(), fresh.direct_observation, gate=self.gate_status,
+                    )
+                    return
                 if (self.when_connected_backfill_selected() or self.when_connected_owned) and (
                     self.decision_phase in {"daily_ready_backfill", "pre_free_backfill"}
                 ):
@@ -1101,6 +1125,16 @@ class ActiveEvController:
                     self.last_write_at = now
                 self.last_reason = "ev_write_gate_closed"
                 await self._async_save(now)
+                if (self._ordinary_solar_target_selected()
+                        or self._dynamic_backfill_target_selected()):
+                    # A source can fail between two awaited service calls.
+                    # Withdraw the existing surplus request through its normal
+                    # durable reducing path, not by inventing a new grace period.
+                    fresh = self._capture_feedback()
+                    _CYCLE_FEEDBACK.set(fresh)
+                    await self._async_restore_ready_by_baseline(
+                        dt_util.now(), fresh.direct_observation, gate=self.gate_status,
+                    )
                 return
             except Exception:  # service failure is retained for bounded retry diagnostics
                 self.last_actions = self._adapter.last_executed  # type: ignore[union-attr]
@@ -1365,6 +1399,13 @@ class ActiveEvController:
         self.pre_free_session = PreFreeSessionState()
         self.measured_solar_adjustment = MeasuredSolarAdjustmentState()
         self.outside_target_active = False
+        if self.decision_phase.startswith(("solar_spill", "morning_solar")) or (
+            self.decision_phase in {
+                "daily_ready_backfill", "pre_free_backfill", "ev_before_export_charging",
+            }
+        ):
+            self.decision_phase = "protected_baseline"
+        self._reset_solar_soak()
         if self.when_connected_owned and not self.daily_backfill_stop_pending:
             self._apply_daily_backfill_stop_state(
                 DailyBackfillStopState(pending=True, outside_control_active=True)
@@ -1382,6 +1423,7 @@ class ActiveEvController:
         baseline = self._float(CONF_EV_PROTECTED_BASELINE_A, DEFAULT_EV_PROTECTED_BASELINE_A)
         if baseline <= 0:
             self.target_current_a = 0.0
+            self.outside_stop_requested = True
             if not self.daily_backfill_stop_pending:
                 self._apply_daily_backfill_stop_state(
                     DailyBackfillStopState(pending=True, outside_control_active=True)
@@ -2261,6 +2303,9 @@ class ActiveEvController:
 
     def _observed_outside_target(self, now: datetime, observation: DirectEvseObservation) -> bool:
         """Port solar spill and latest-start backfill without touching FoxESS."""
+        # An in-flight Dynamic plan remains bound after an operator mode edit;
+        # only the next normal planning epoch may adopt its replacement policy.
+        self._dynamic_backfill_decision_config = self.coordinator.runtime_config
         if self.when_connected_backfill_selected():
             self._when_connected_decision_config = self.coordinator.runtime_config
             previous = self.reconciliation
@@ -2481,7 +2526,7 @@ class ActiveEvController:
             planned_export_energy = (
                 self._when_connected_energy_budget(now, retain_existing=True)
                 if prompt else
-                export_plan.planned_export_energy_kwh if export_plan is not None else None
+                self._backfill_energy_pool(now, export_plan) if export_plan is not None else None
             )
             if (
                 self._ready_by_backfill_selected()
@@ -2702,22 +2747,27 @@ class ActiveEvController:
                 current_step_a=current_step,
             )
 
-        if (self.coordinator.runtime_config.ev_policy.pre_free_enabled
-                and self.coordinator.runtime_config.ev_policy.morning_solar_enabled):
-            # Solar-only is a legitimate successor to a lost battery budget,
-            # not a bypass around a rejected/zero service-headroom ceiling.
-            bounded_solar = min(self.morning_solar.current_a, pre_free_ceiling)
-            if bounded_solar < current_minimum:
-                bounded_solar = 0.0
-            if bounded_solar != self.morning_solar.current_a:
-                self.morning_solar = SolarSpillDecision(
-                    bounded_solar, self.morning_solar.reconstructed_surplus_kw,
-                    "morning_solar_service_limited",
-                )
+        # Every solar branch shares the measured service envelope. Previously
+        # standalone morning spill bypassed it unless pre-free was also enabled.
+        # Apply after held-target hysteresis, so a prior target cannot evade a
+        # newly reduced electrical ceiling. The existing joint-policy inverter
+        # percentage still bounds the morning/pre-free successor as before.
+        solar_ceilings = {"solar_spill": service_ceiling, "morning_solar": service_ceiling}
+        if self.coordinator.runtime_config.ev_policy.pre_free_enabled:
+            solar_ceilings["morning_solar"] = pre_free_ceiling
+        for name, solar_ceiling in solar_ceilings.items():
+            decision = getattr(self, name)
+            bounded = min(decision.current_a, solar_ceiling)
+            if bounded < current_minimum:
+                bounded = 0.0
+            if bounded != decision.current_a:
+                setattr(self, name, SolarSpillDecision(
+                    bounded, decision.reconstructed_surplus_kw, name + "_service_limited",
+                ))
                 if not combined_pre_free:
                     self.measured_solar_adjustment = (
-                        replace(self.measured_solar_adjustment, target_current_a=bounded_solar)
-                        if bounded_solar > 0 else MeasuredSolarAdjustmentState()
+                        replace(self.measured_solar_adjustment, target_current_a=bounded)
+                        if bounded > 0 else MeasuredSolarAdjustmentState()
                     )
 
         self.outside_stage_candidates = build_outside_stage_candidates(
@@ -2747,7 +2797,7 @@ class ActiveEvController:
 
         self.outside_stage_selection = select_outside_stage_candidate(
             self.outside_stage_candidates,
-            current_ceiling_a=ceiling,
+            current_ceiling_a=min(ceiling, service_ceiling),
         )
         selected = EvCurrentDecision(
             self.outside_stage_selection.target_current_a,
@@ -3154,11 +3204,15 @@ class ActiveEvController:
                 now, start=runtime.windows.effective_free_charge_start,
             ), voltage_v=connection.voltage_v, phase_count=connection.phase_count,
         )
+        reservation = self.daily_backfill_protection_kwh(now)
+        if reservation is None:
+            return None
         live_protected_ev = compose_protected_ev_energy_kwh(
-            keepalive_kwh=keepalive, daily_backfill_kwh=self.daily_backfill_protection_kwh(now),
+            keepalive_kwh=keepalive, daily_backfill_kwh=reservation,
         )
         if live_protected_ev is None:
             return None
+        published_protected_ev = protected_ev
         protected_ev = max(protected_ev, live_protected_ev)
         if soc > 100 or soc <= self._float(
             CONF_EV_OUTSIDE_BATTERY_RESERVE_PERCENT, DEFAULT_EV_OUTSIDE_BATTERY_RESERVE_PERCENT,
@@ -3173,6 +3227,22 @@ class ActiveEvController:
         # Cached Sellable and the fresh ledger are ceilings on the SAME pool,
         # not cumulative deductions. New plug-in keepalive cannot be omitted.
         budget = min(sellable, max(ac - house - protected_ev, 0))
+        fixed_beneficiary = False
+        if (when_connected and runtime.ev_preferences.reservation_mode == "fixed"
+                and self._fixed_daily_backfill_protection_kwh(now) > 0):
+            ready_at, planning_start, _ = self._daily_ready_cycle(now)
+            fixed_beneficiary = planning_start <= now < ready_at
+        if runtime.ev_preferences.reservation_mode == "dynamic" or fixed_beneficiary:
+            shared = self.reservation_budget(
+                now, available_ac_kwh=ac, protected_house_kwh=house, keepalive_kwh=keepalive,
+            )
+            if not shared.valid:
+                return None
+            # Export's unreserved balance is not the beneficiary EV's cap.
+            # Both cached and current evidence bound the same pool; keepalive
+            # stays protected and no fixed+dynamic amount is added twice.
+            cached_ev_pool = sellable + max(published_protected_ev - keepalive, 0.0)
+            budget = min(cached_ev_pool, shared.ev_available_kwh)
         importing = telemetry.grid_power.value > import_threshold
         if not retain_existing:
             return None if importing else budget
@@ -3448,12 +3518,16 @@ class ActiveEvController:
                 ),
                 protected_house_kwh=float(protected_house),
                 sellable_energy_kwh=(
-                    budget if prompt else float(export_plan.planned_export_energy_kwh)
+                    budget if prompt else self._backfill_energy_pool(
+                        now, export_plan, fixed_allocation_owned=True,
+                    )
                 ),
-                protected_ev_allocation_kwh=self._float(
+                protected_ev_allocation_kwh=(0.0 if (
+                    self.coordinator.runtime_config.ev_preferences.reservation_mode == "dynamic"
+                ) else self._float(
                     CONF_EV_DAILY_BACKFILL_ENERGY,
                     DEFAULT_EV_DAILY_BACKFILL_ENERGY,
-                ),
+                )),
                 delivered_this_cycle_kwh=self.daily_backfill_delivered_kwh,
                 stored_vehicle_energy_kwh=stored_energy,
                 vehicle_soc_percent=vehicle_soc,
@@ -3668,6 +3742,61 @@ class ActiveEvController:
             return "ready_by_grid_import"
         return None
 
+    def _backfill_energy_pool(
+        self, now: datetime, export_plan, *, fixed_allocation_owned: bool = False,
+    ) -> float | None:
+        """Return the same protected pool including the EV's own allocation.
+
+        Keep the no-reservation pilot branch unchanged. A selected reservation
+        is not stranded behind its own deduction or a paid-export allowance;
+        existing timing, room, reserve and current guards remain independent.
+        """
+        runtime = self.coordinator.runtime_config
+        fixed = self._fixed_daily_backfill_protection_kwh(now)
+        if runtime.ev_preferences.reservation_mode == "fixed" and (
+            fixed == 0 or not fixed_allocation_owned
+        ):
+            return export_plan.planned_export_energy_kwh
+        active = getattr(self.coordinator, "active_controller", None)
+        available = getattr(self.coordinator.data, "available_after_reserve_kwh", None)
+        house = getattr(self.coordinator, "learning_remaining_kwh", None)
+        if active is None or available is None or house is None:
+            return None
+        connection = runtime.ev_connection
+        feedback = _CYCLE_FEEDBACK.get() or self._capture_feedback()
+        keepalive = calculate_protected_keepalive_energy_kwh(
+            ev_configured=connection.configured,
+            control_commissioned=connection.control_commissioned,
+            protected_baseline_a=connection.protected_baseline_a,
+            home_state=feedback.at_home.available_state,
+            cable_state=feedback.cable_connected.available_state,
+            hours_until_free=hours_until_next_window(
+                now, start=runtime.windows.effective_free_charge_start,
+            ), voltage_v=connection.voltage_v, phase_count=connection.phase_count,
+        )
+        if keepalive is None:
+            return None
+        shared = self.reservation_budget(
+            now, available_ac_kwh=available * runtime.export.discharge_efficiency_percent / 100,
+            protected_house_kwh=house, keepalive_kwh=keepalive,
+        )
+        if not shared.valid:
+            return None
+        protected = getattr(active, "export_protected_ev_kwh", None)
+        if (isinstance(protected, bool) or not isinstance(protected, (int, float))
+                or not isfinite(protected) or protected < 0):
+            # Without proof that the selected amount was actually withheld,
+            # the old plan is the only cache ceiling; do not add a reservation
+            # from settings to an unrelated or shrinking Sellable publication.
+            return (
+                min(export_plan.planned_export_energy_kwh, shared.ev_available_kwh)
+                if runtime.ev_preferences.reservation_mode == "fixed" else None
+            )
+        return min(
+            export_plan.sellable_energy_kwh + max(protected - keepalive, 0.0),
+            shared.ev_available_kwh,
+        )
+
     def _daily_backfill_enabled(self) -> bool:
         return (
             self._float(
@@ -3675,6 +3804,7 @@ class ActiveEvController:
                 DEFAULT_EV_DAILY_BACKFILL_ENERGY,
             )
             > 0
+            and self.coordinator.runtime_config.ev_preferences.reservation_mode == "fixed"
             or self._ready_by_backfill_selected()
         )
 
@@ -3852,7 +3982,92 @@ class ActiveEvController:
         self.daily_backfill_last_sample_at = transition.last_sample_at
         self.daily_backfill_last_actual_current_a = transition.last_actual_current_a
 
-    def daily_backfill_protection_kwh(self, now: datetime) -> float:
+    def dynamic_reservation_selected(self) -> bool:
+        """An explicit mode, never inferred from automatic presence or learning."""
+        preference = self.coordinator.runtime_config.ev_preferences
+        return preference.reservation_mode == "dynamic" and preference.before_export_enabled
+
+    def reservation_budget(
+        self, now: datetime, *, available_ac_kwh: float, protected_house_kwh: float,
+        keepalive_kwh: float,
+    ) -> EvReservationBudget:
+        """One AC pool shared by export and EV; a reservation is not new energy."""
+        runtime = self.coordinator.runtime_config
+        preference = runtime.ev_preferences
+        mode = preference.reservation_mode
+        dynamic = self.dynamic_reservation_selected()
+        feedback = _CYCLE_FEEDBACK.get() or self._capture_feedback()
+        soc = measure_ev_soc(
+            self.hass, feedback, now=now,
+            max_age_seconds=self._float(
+                CONF_EV_TELEMETRY_MAX_AGE_SECONDS, DEFAULT_EV_TELEMETRY_MAX_AGE_SECONDS,
+            ),
+        ) if dynamic else None
+        capacity = self.capacity_evidence(now).value_kwh if dynamic else None
+        # Dynamic and Fixed are alternatives. Turning the explicit priority off
+        # releases Dynamic, not an invitation to resurrect an old fixed value.
+        effective_mode = "fixed" if mode == "dynamic" and not dynamic else mode
+        return calculate_ev_reservation_budget(EvReservationInputs(
+            available_ac_after_reserve_kwh=available_ac_kwh,
+            protected_house_kwh=protected_house_kwh,
+            keepalive_kwh=keepalive_kwh,
+            mode=effective_mode,
+            fixed_remaining_kwh=(
+                self._fixed_daily_backfill_protection_kwh(now) if mode == "fixed" else 0.0
+            ),
+            soc_percent=soc,
+            minimum_soc_percent=preference.before_export_soc_target,
+            buffer_soc_percent=preference.before_export_soc_buffer,
+            normal_target_soc_percent=min(self._float(
+                CONF_EV_FREE_WINDOW_CHARGE_LIMIT, DEFAULT_EV_FREE_WINDOW_CHARGE_LIMIT,
+            ), NON_OVERRIDE_CHARGE_LIMIT_MAX_PERCENT),
+            capacity_kwh=capacity,
+            charge_efficiency_percent=self._float(
+                CONF_EV_CHARGE_EFFICIENCY, DEFAULT_EV_CHARGE_EFFICIENCY,
+            ),
+        ))
+
+    def dynamic_topup_requested(self, now: datetime) -> bool:
+        """Withdraw export for a returned connected car's existing recovery.
+
+        Away/unplugged reservation does not block export. Once home-connected,
+        the existing physical handoff, persistent buffer and EV writer take
+        over; this adds no concurrent force-discharge/EV owner.
+        """
+        if not self.dynamic_reservation_selected():
+            return False
+        feedback = self._capture_feedback()
+        token = _CYCLE_FEEDBACK.set(feedback)
+        try:
+            connected = self._connected_at_home()[0]
+        finally:
+            _CYCLE_FEEDBACK.reset(token)
+        if not connected:
+            return False
+        soc = measure_ev_soc(self.hass, feedback, now=now, max_age_seconds=self._float(
+            CONF_EV_TELEMETRY_MAX_AGE_SECONDS, DEFAULT_EV_TELEMETRY_MAX_AGE_SECONDS,
+        ))
+        preference = self.coordinator.runtime_config.ev_preferences
+        ceiling = min(self._float(
+            CONF_EV_FREE_WINDOW_CHARGE_LIMIT, DEFAULT_EV_FREE_WINDOW_CHARGE_LIMIT,
+        ), NON_OVERRIDE_CHARGE_LIMIT_MAX_PERCENT)
+        release = self.before_export_release_target()
+        return not decide_ev_before_export(
+            enabled=True, ev_soc_percent=soc,
+            target_soc_percent=min(preference.before_export_soc_target, ceiling),
+            recovery_target_soc_percent=min(release, ceiling) if release is not None else None,
+        ).export_allowed
+
+    def daily_backfill_protection_kwh(self, now: datetime) -> float | None:
+        """Selected EV protection; Dynamic is SoC-based, never daily-delivery based."""
+        if self.coordinator.runtime_config.ev_preferences.reservation_mode == "fixed":
+            return self._fixed_daily_backfill_protection_kwh(now)
+        budget = self.reservation_budget(
+            now, available_ac_kwh=0.0, protected_house_kwh=0.0, keepalive_kwh=0.0,
+        )
+        return budget.requested_reservation_kwh if budget.valid else None
+
+    def _fixed_daily_backfill_protection_kwh(self, now: datetime) -> float:
         """Energy Local-Modbus export must retain for the next ready deadline."""
         if not self._daily_backfill_enabled():
             return 0.0
@@ -4218,22 +4433,36 @@ class ActiveEvController:
             return 0.0, False
         return telemetry.site_grid_current.value, True
 
+    def _capture_feedback(self) -> EvFeedbackSnapshot:
+        """Capture one synchronous mapped field cohort, without republishing it."""
+        return capture_ev_feedback(
+            self.hass, ev_observation_entity_map(self.coordinator.runtime_config),
+        )
+
+    def _current_measurement(self) -> EvCurrentMeasurement:
+        maximum_age = self._float(
+            CONF_EV_TELEMETRY_MAX_AGE_SECONDS, DEFAULT_EV_TELEMETRY_MAX_AGE_SECONDS,
+        )
+        feedback = _CYCLE_FEEDBACK.get() or self._capture_feedback()
+        measurement = measure_ev_current(
+            self.hass, feedback, now=dt_util.now(), max_age_seconds=maximum_age,
+            retain_generic_values=True,
+        )
+        if measurement.source != "tessie_charge_state":
+            # The canonical generic path still reads its immutable cycle once;
+            # an HA report clock is not relabelled a vehicle measurement clock.
+            return measurement
+        # Read the physical fields and native frame together NOW, not old HA
+        # fields against a publisher that advanced during a storage await.
+        # Scheduling time stays separate. No cache or measurement clock renewal.
+        return measure_ev_current(
+            self.hass, self._capture_feedback(), now=dt_util.now(),
+            max_age_seconds=maximum_age,
+        )
+
     def _actual_ev_current_a(self) -> tuple[float, bool]:
-        feedback = _CYCLE_FEEDBACK.get()
-        if feedback is not None:
-            return feedback.actual_current_result
-        ev_telemetry = self.coordinator.runtime_config.ev_telemetry
-        charging = self._mapped_state(ev_telemetry.charging_state_entity)
-        if charging is None:
-            return 0.0, False
-        if charging != "charging":
-            return 0.0, True
-        value = self._entity_feedback(ev_telemetry.actual_current_entity).current_a
-        if value is None:
-            return 0.0, False
-        if value < 0:
-            return 0.0, False
-        return value, True
+        measurement = self._current_measurement()
+        return measurement.current_a, measurement.valid
 
     def _observation(self) -> DirectEvseObservation | None:
         feedback = _CYCLE_FEEDBACK.get()
@@ -4317,6 +4546,10 @@ class ActiveEvController:
             self.decision_phase in {"daily_ready_backfill", "pre_free_backfill"}
         ):
             return self._when_connected_write_authorized()
+        if self._ordinary_solar_target_selected():
+            return self._ordinary_solar_write_authorized()
+        if self._dynamic_backfill_target_selected():
+            return self._dynamic_backfill_write_authorized()
         if self.decision_phase != "ev_before_export_charging":
             return True
         now = dt_util.now()
@@ -4357,6 +4590,146 @@ class ActiveEvController:
             ) * self._float(CONF_EV_PHASE_COUNT, DEFAULT_EV_PHASE_COUNT) / 1000 * 3 / 60
             return self.target_current_a is not None and self.target_current_a <= ceiling and (
                 budget >= required
+            )
+        finally:
+            _CYCLE_FEEDBACK.reset(token)
+
+    def _dynamic_backfill_target_selected(self) -> bool:
+        """Keep ordinary Dynamic decisions bound, without changing Fixed/prompt."""
+        bound = self._dynamic_backfill_decision_config
+        return (
+            bound is not None and bound.ev_preferences.reservation_mode == "dynamic"
+            and bound.ev_policy.pre_free_backfill_timing
+            != EV_PRE_FREE_BACKFILL_TIMING_WHEN_CONNECTED
+            and not self.outside_stop_requested
+            and self.decision_phase in {"daily_ready_backfill", "pre_free_backfill"}
+        )
+
+    def _dynamic_backfill_write_authorized(self) -> bool:
+        """Recheck the existing full protected pool, never grant a new lease."""
+        runtime = self.coordinator.runtime_config
+        if runtime != self._dynamic_backfill_decision_config:
+            return False
+        now = dt_util.now()
+        feedback = self._capture_feedback()
+        token = _CYCLE_FEEDBACK.set(feedback)
+        try:
+            observation = feedback.direct_observation
+            soc = feedback.soc.number
+            normal_target = min(self._float(
+                CONF_EV_FREE_WINDOW_CHARGE_LIMIT, DEFAULT_EV_FREE_WINDOW_CHARGE_LIMIT,
+            ), NON_OVERRIDE_CHARGE_LIMIT_MAX_PERCENT)
+            if (
+                observation is None or observation.current_step_a is None
+                or not isfinite(observation.current_step_a) or observation.current_step_a <= 0
+                or soc is None or not isfinite(soc) or not 0 <= soc < normal_target
+                or self._charge_to_full_requested() or not runtime.ev_policy.pre_free_enabled
+                or not self._connected_at_home()[0] or self._free_window(now)[0]
+                or not self._pre_free_window(now)[1] or self._boosted_window_active(now)
+            ):
+                return False
+            if self._ready_by_backfill_selected() and self._ready_by_backfill_hold(now) is not None:
+                return False
+            if self.decision_phase == "daily_ready_backfill":
+                ready_at, planning_start, _ = self._daily_ready_cycle(now)
+                if not self.daily_backfill_active or not planning_start <= now < ready_at:
+                    return False
+            budget = self._before_export_energy_budget(now)
+            if budget is None:
+                return False
+            ceiling = min(
+                self._outside_service_ceiling_a(
+                    self._path_ceiling_a(), current_step=observation.current_step_a,
+                ),
+                self._outside_inverter_ceiling_a(
+                    self._path_ceiling_a(), current_step=observation.current_step_a,
+                ), observation.current_maximum_a or 0,
+            )
+            target = self.target_current_a
+            baseline = self._float(CONF_EV_PROTECTED_BASELINE_A, 0)
+            if target is None or not isfinite(target) or target > ceiling:
+                return False
+            required = max(target - baseline, 0) * self._float(
+                CONF_EV_VOLTAGE, DEFAULT_EV_VOLTAGE,
+            ) * self._float(CONF_EV_PHASE_COUNT, DEFAULT_EV_PHASE_COUNT) / 1000 * 3 / 60
+            capacity = self.capacity_evidence(now)
+            if capacity.value_kwh is None:
+                return False
+            room = estimate_vehicle_energy_to_target_kwh(
+                stored_energy_kwh=self._mapped_energy(runtime.ev_telemetry.stored_energy_entity),
+                current_soc_percent=soc, target_soc_percent=normal_target,
+                charge_efficiency_percent=self._float(
+                    CONF_EV_CHARGE_EFFICIENCY, DEFAULT_EV_CHARGE_EFFICIENCY,
+                ), planning_capacity_kwh=(
+                    capacity.value_kwh if runtime.ev_capacity.source != "legacy_ratio" else None
+                ),
+            )
+            if self.decision_phase == "daily_ready_backfill":
+                room = min(room, max(self.daily_backfill_session_target_kwh - max(
+                    self.daily_backfill_delivered_kwh
+                    - self.daily_backfill_session_start_delivered_kwh,
+                    0.0,
+                ), 0.0))
+            return min(budget, room) >= required
+        except (TypeError, ValueError):
+            return False
+        finally:
+            _CYCLE_FEEDBACK.reset(token)
+
+    def _ordinary_solar_target_selected(self) -> bool:
+        return (
+            not self.outside_stop_requested
+            and not self._solar_soak_active
+            and self.decision_phase.startswith(("solar_spill", "morning_solar"))
+            and not self._charge_to_full_requested()
+        )
+
+    def _ordinary_solar_write_authorized(self) -> bool:
+        """Use the same shared measurement at every solar command boundary."""
+        now = dt_util.now()
+        feedback = self._capture_feedback()
+        token = _CYCLE_FEEDBACK.set(feedback)
+        try:
+            observation = feedback.direct_observation
+            runtime = self.coordinator.runtime_config
+            soc = feedback.soc.number
+            battery_soc = feedback.battery_soc.number
+            if (
+                observation is None or observation.current_step_a is None
+                or not isfinite(observation.current_step_a) or observation.current_step_a <= 0
+                or not self._connected_at_home()[0]
+                or self._free_window(now)[0]
+                or not self._measured_ev_telemetry(now).telemetry_valid
+                or soc is None or not isfinite(soc) or not 0 <= soc <= 100
+                or soc >= min(self._float(
+                    CONF_EV_FREE_WINDOW_CHARGE_LIMIT, DEFAULT_EV_FREE_WINDOW_CHARGE_LIMIT,
+                ), NON_OVERRIDE_CHARGE_LIMIT_MAX_PERCENT)
+                or battery_soc is None or not isfinite(battery_soc) or not 0 <= battery_soc <= 100
+                or battery_soc <= self._float(
+                    CONF_EV_OUTSIDE_BATTERY_RESERVE_PERCENT,
+                    DEFAULT_EV_OUTSIDE_BATTERY_RESERVE_PERCENT,
+                )
+                or self.target_current_a is None
+                or self.target_current_a > self._outside_service_ceiling_a(
+                    self._path_ceiling_a(), current_step=observation.current_step_a,
+                )
+            ):
+                return False
+            policy = runtime.ev_policy
+            morning = self.decision_phase.startswith("morning_solar")
+            threshold = self._float(
+                CONF_EV_MORNING_SOLAR_RESERVE_SOC if morning else CONF_EV_SOLAR_SPILL_BATTERY_SOC,
+                (DEFAULT_EV_MORNING_SOLAR_RESERVE_SOC if morning
+                 else DEFAULT_EV_SOLAR_SPILL_BATTERY_SOC),
+            )
+            return (
+                isfinite(threshold) and 0 <= threshold <= 100 and battery_soc >= threshold
+                and (
+                    policy.morning_solar_enabled and self._pre_free_window(now)[1]
+                    if morning else (
+                        policy.solar_spill_enabled and not self._boosted_window_active(now)
+                    )
+                )
             )
         finally:
             _CYCLE_FEEDBACK.reset(token)

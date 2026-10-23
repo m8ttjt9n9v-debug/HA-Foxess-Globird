@@ -77,6 +77,7 @@ from .const import (
     CONF_EV_PRE_FREE_BACKFILL_TIMING,
     CONF_EV_PRE_FREE_ENABLED,
     CONF_EV_PROTECTED_BASELINE_A,
+    CONF_EV_RESERVATION_MODE,
     CONF_EV_SMART_SOCKET,
     CONF_EV_SMART_SOCKET_CURRENT_LIMIT,
     CONF_EV_SMART_SOCKET_POWER_SWITCHING,
@@ -166,6 +167,7 @@ from .const import (
     DEFAULT_EV_PRE_FREE_BACKFILL_TIMING,
     DEFAULT_EV_PRE_FREE_ENABLED,
     DEFAULT_EV_PROTECTED_BASELINE_A,
+    DEFAULT_EV_RESERVATION_MODE,
     DEFAULT_EV_SMART_SOCKET_CURRENT_LIMIT,
     DEFAULT_EV_SMART_SOCKET_POWER_SWITCHING,
     DEFAULT_EV_SOLAR_SPILL_ENABLED,
@@ -387,6 +389,7 @@ class EvPreferenceSettings:
     before_export_enabled: bool
     before_export_soc_target: float
     before_export_soc_buffer: float
+    reservation_mode: str
     charge_to_full_configured: bool
     charge_to_full_enabled: bool
     legacy_charge_to_full_entity: str | None
@@ -1106,6 +1109,9 @@ class RuntimeConfiguration:
                     DEFAULT_EV_BEFORE_EXPORT_SOC_TARGET,
                 ),
                 before_export_soc_buffer=_before_export_buffer(data),
+                reservation_mode=str(data.get(
+                    CONF_EV_RESERVATION_MODE, DEFAULT_EV_RESERVATION_MODE,
+                )),
                 charge_to_full_configured=(
                     CONF_EV_CHARGE_TO_FULL_ENABLED in data
                 ),
