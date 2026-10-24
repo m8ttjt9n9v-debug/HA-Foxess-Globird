@@ -496,8 +496,9 @@ async def test_ev_allowance_target_does_not_cycle_with_inclusive_house_load(
 
 
 @pytest.mark.freeze_time("2026-09-17 12:29:15+00:00")
+@pytest.mark.parametrize("reported_limit", [90, 100])
 async def test_ev_soc_update_holds_allowance_during_ramp_but_not_service_overrun(
-    hass, monkeypatch
+    hass, monkeypatch, reported_limit
 ) -> None:
     """A SoC event holds a settling target without masking an electrical limit."""
     harness = LifecycleHarness(hass)
@@ -516,6 +517,9 @@ async def test_ev_soc_update_holds_allowance_during_ramp_but_not_service_overrun
         stored_energy=45,
         house_load=2.07,
         site_current=38,
+    )
+    await harness.set_state(
+        "number.test_ev_limit", reported_limit, {"min": 50, "max": 100, "step": 1}
     )
     now = [datetime(2026, 9, 17, 12, 29, 15, tzinfo=UTC)]
     monkeypatch.setattr(
@@ -632,7 +636,9 @@ async def test_ev_soc_update_holds_allowance_during_ramp_but_not_service_overrun
     )
     assert controller.target_current_a is not None
     assert controller.target_current_a < 16
-    assert controller.last_actions == ("would_set_charge_current",)
+    limit_actions = ("would_set_charge_limit",) if reported_limit != 100 else ()
+    assert controller.target_limit_percent == 100
+    assert controller.last_actions == (*limit_actions, "would_set_charge_current")
     assert harness.service_calls == ()
     await harness.unload(entry)
     hass.services.async_remove("number", "set_value")

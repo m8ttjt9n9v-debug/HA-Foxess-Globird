@@ -224,6 +224,45 @@ async def test_runtime_uses_saved_inverter_percentage_after_rounding(
     assert controller.target_current_a * 230 * phases / 1000 <= inverter * percent / 100
 
 
+@pytest.mark.parametrize(
+    "normal_target,vehicle_soc", [(80, 79), (90, 89), (95, 94), (100, 91), (100, 99)]
+)
+async def test_native_solar_soak_uses_configured_normal_target_without_full(
+    hass, freezer, normal_target, vehicle_soc
+):
+    now = _now()
+    freezer.move_to(now)
+    calls = _services(hass)
+    coordinator, controller = _rig(
+        hass, now, ev_free_window_charge_limit_percent=normal_target
+    )
+    hass.states.async_set("sensor.car_soc", str(vehicle_soc), {"unit_of_measurement": "%"})
+    _power(hass, coordinator, now)
+    await controller.async_reconcile(now)
+    assert controller.decision_phase == "solar_spill"
+    assert controller.target_limit_percent == normal_target
+    assert controller.target_current_a == 5
+    assert controller._solar_soak_write_authorized()
+    assert not controller._charge_to_full_requested()
+    assert all(domain in {"number", "switch"} for domain, _, _ in calls)
+
+
+@pytest.mark.parametrize("vehicle_soc", [100, 100.0])
+async def test_native_normal_100_stops_solar_soak_at_target_without_full(
+    hass, freezer, vehicle_soc
+):
+    now = _now()
+    freezer.move_to(now)
+    _services(hass)
+    coordinator, controller = _rig(hass, now, ev_free_window_charge_limit_percent=100)
+    hass.states.async_set("sensor.car_soc", str(vehicle_soc), {"unit_of_measurement": "%"})
+    _power(hass, coordinator, now)
+    await controller.async_reconcile(now)
+    assert controller.target_current_a in {None, 0}
+    assert not controller._solar_soak_write_authorized()
+    assert not controller._charge_to_full_requested()
+
+
 async def test_clouds_cannot_reset_five_minute_clock_or_make_every_tick_write(hass, freezer):
     now = _now()
     freezer.move_to(now)

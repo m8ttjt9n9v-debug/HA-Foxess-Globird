@@ -1,5 +1,22 @@
 # Changelog
 
+## Unreleased — Respect configured EV charging targets
+
+- Remove the arbitrary90% non-Full ceiling from normal EV command planning,
+  free-window/surplus/backfill room and Dynamic reservation calculations. Use
+  the existing configured target, live actuator constraints and valid0–100%
+  percentage domain. Preserve the90% default without making it a policy cap.
+- Keep Full/Trip intent, existing learned-general and keepalive headroom,
+  electrical limits, protected energy, freshness, persistence and handoffs.
+  Selecting a normal100% target does not enable a paid-grid Full override.
+- Use consistent minimum-origin actuator steps for both target rounding and
+  supported maximum, including Full; never round to an off-step upper bound
+  or beyond100%. Preserve the normal Tessie1% increment behavior.
+- Correct setup/reconfigure help and reusable documentation; add configured
+  target, upper-range, setting-change, restart and safety regressions. No saved
+  settings, store schema or installed dashboards change. Commit only; release
+  and any further installation remain deliberately held during settling.
+
 ## 0.12.63.dev2 — Local candidate: Sleeping-EV reservation planning
 
 - Keep a same-vehicle sleeping Tessie SoC measurement usable for Dynamic

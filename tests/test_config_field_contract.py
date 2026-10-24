@@ -79,7 +79,12 @@ def test_ev_policy_screen_explains_each_field_and_groups_outside_safeguards() ->
         screen = translations[step]
         assert set(screen["data_description"]) == set(keys)
         assert all(screen["data_description"][key].strip() for key in keys)
-        assert "90%" in screen["data_description"]["ev_free_window_charge_limit_percent"]
+        target_help = screen["data_description"]["ev_free_window_charge_limit_percent"]
+        assert "configured" in target_help and "100%" in target_help
+        assert "90%" not in target_help
+        assert "does not enable paid-grid Charge to Full" in target_help
+        headroom_help = screen["data_description"]["ev_direct_limit_headroom_percent"]
+        assert "90%" not in headroom_help and "100%" in headroom_help
         assert "keep-alive" in screen["data_description"]["ev_outside_battery_reserve_percent"]
     assert translations["ev_policies"]["data"] == translations[
         "reconfigure_ev_policies"

@@ -1,5 +1,16 @@
 # Project roadmap
 
+## Unreleased — Configured EV targets, without a hidden90% ceiling
+
+- [x] Replace the retained non-Full90% clamp with the physical percentage bound
+  across ordinary EV commands, backfill/soak room and Dynamic reserve paths.
+  Preserve the existing configurable target/default, actuator constraints,
+  energy/current authority and persistent handoffs; do not enable Full.
+- [x] Add configured80/90/95/100, representability, target crossings, setting
+  changes and restart/lifecycle regressions; correct setup/help/source guidance.
+- [ ] Publish only after separately requested settled-release qualification.
+  No release, live installation or monitoring follows from this repository fix.
+
 ## Owner-requested local candidate — Dynamic EV reservation and telemetry
 
 - [x] Add an explicit Fixed/Dynamic setup and native selector, retaining Fixed
@@ -954,13 +965,11 @@ earlier HACS pre-free selected its target exclusively. See the
 - [x] Pure Working Single Phase Pilot Site free-window EV current planner with golden branch-order
   tests, separate charge-policy/anti-pause limit planning, and a topology-aware
   daily-allowance ceiling that is inert for ordinary sessions that fit.
-- [x] Direct-EVSE anti-pause charge-limit guard retains the protected 1 A
-  baseline/headroom behavior but cannot raise the Tesla limit above 90% while
-  Charge to Full is off. Charge to Full remains the sole path to the mapped
-  actuator maximum (100% where supported), and turning it off re-applies the
-  90% ceiling. Final direct-actuator rounding is downward-bounded by that
-  ceiling; an actuator without a representable limit at or below 90% is
-  rejected rather than sent an unsafe higher value.
+- [x] Direct-EVSE anti-pause charge-limit guard retains the configured protected
+  baseline/headroom behavior within live actuator constraints and the physical
+  percentage range. The arbitrary90% ceiling is removed: normal configured
+  targets up to100% do not require Full. Final actuator rounding remains bounded;
+  Full remains an independent energy/intent override, not a new physical limit.
 - [x] Fail-closed direct-EVSE command boundary and Tessie service adapter.
 - [x] Explicit direct-path commissioning schema and restart-serializable
   three-minute feedback primitive with coverage/source-validity evidence.

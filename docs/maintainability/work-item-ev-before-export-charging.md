@@ -22,7 +22,9 @@ Free power and Full/Trip retain authority. An already-active daily-ready session
 is not stolen; inactive daily-ready cannot acquire/credit a top-up. No solar or
 ready-by/latest-start condition is added. Missing/stale energy or physical
 evidence, exhausted budget, reserve and target crossings withdraw top-up.
-Normal 90% ceiling and configured lower soft limit remain. The existing opt-in
+The configured normal soft limit and live actuator constraints remain; the later
+configured-target correction removes the arbitrary90% non-Full ceiling. The
+existing opt-in
 being off preserves prior behaviour. This does not promise retailer payment or
 eliminate physical/polling transients. No new device writer or stored schema.
 
@@ -41,7 +43,7 @@ No threshold deficit is added to the protection ledger a second time.
 
 Tests cover enable/disable, 0/1A baseline, no solar, different times/topologies,
 cap-exhausted but Sellable-positive cases, minimum/tiny/shrinking energy, stale
-sources, source loss, home/cable, reserve/target/90% boundaries, daily and Full/
+sources, source loss, home/cable, configured reserve/target boundaries, daily and Full/
 free collisions, both callback orders, restart and saving/command failures.
 Frozen suite, Ruff, previous-release upgrade/rollback and independent review
 are required before release. Controlled pilot preserves settings and dashboards,

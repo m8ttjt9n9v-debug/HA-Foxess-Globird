@@ -127,8 +127,9 @@ The planning window runs from midnight to that morning's ready deadline.
 Current remains bounded by the outside-window inverter percentage, connector
 rating, actuator step and service headroom. The configured outside-window
 house-battery reserve, which defaults to 20%, and the normal EV charge-limit
-policy still apply; direct-EVSE commands remain capped at 90% while Charge to
-Full is off. The existing duration and planning-buffer arithmetic determines
+policy still apply, within live actuator constraints and the physical percentage
+range rather than a separate90% non-Full ceiling. The existing duration and
+planning-buffer arithmetic determines
 the latest start. Ready by uses elapsed time across daylight-saving changes
 and displays the resulting start in the configured local time zone.
 

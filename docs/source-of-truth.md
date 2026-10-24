@@ -1,5 +1,19 @@
 # Project source of truth
 
+## Unreleased configured EV charge-limit correction
+
+The existing normal EV target is configurable through0–100%;90% remains its
+default, not a separate cap. Remove the former arbitrary non-Full90% clamp from
+direct commands, ordinary charging room, backfill and Dynamic reservation.
+Physical percentage bounds and qualified live actuator maximum/steps remain.
+Learned-general selection and protected-baseline headroom retain their existing
+semantics; the effective actuator setpoint is not necessarily the normal policy
+target. Full/Trip remains independent energy/intent authority, not a prerequisite
+for an otherwise-authorised normal100% target. See
+[source mapping and regression contract](configured-ev-charge-limits.md).
+This explicitly requested correction supersedes the reference's90% policy;
+it is not a claim of unchanged source parity or a published/deployed release.
+
 ## Local candidate: Dynamic EV reservation and qualified measurements
 
 Optional **Dynamic SoC shortfall** reserves current wall energy to the human-set
@@ -655,11 +669,12 @@ by this correction. Repository regressions do not establish live acceptance.
   never issues a pause; the separate configured-zero-baseline policy may stop
   a connected, unauthorised charge and requires off feedback. If
   the powered direct-path anti-pause guard is active, it retains its configured
-  SoC headroom but is capped at 90% whenever Charge to Full is off, including
-  after final actuator-step rounding. If that actuator cannot represent a
-  value at or below 90%, the direct path issues no command. Charge to Full is
-  the only exception and may use the mapped actuator's live maximum (100%
-  where supported). If outside-window charging reaches its battery
+  SoC headroom within the qualified actuator constraints and physical0–100%
+  percentage range, including after final actuator-step rounding. There is no
+  separate90% policy cap: normal charging uses the configured normal target,
+  while the effective anti-pause actuator setpoint retains its distinct role.
+  Full may use the mapped actuator maximum without creating physical/current
+  authority beyond its existing gates. If outside-window charging reaches its battery
   reserve, HEO ends the paid
   session but retains a non-zero configured protected baseline through that
   same reconciliation path; only a configured 0 A baseline may stop the

@@ -21,6 +21,7 @@ from custom_components.home_energy_orchestrator.planner.ev_outside_window import
     evaluate_outside_current_envelope,
     evaluate_pre_free_plan,
     evaluate_solar_spill_telemetry,
+    plan_combined_pre_free_current,
     plan_morning_solar_current,
     plan_pre_free_current,
     plan_solar_spill_current,
@@ -103,7 +104,7 @@ OUTSIDE_LIMIT = OutsideChargeLimitEvidence(
         (
             {"vehicle_soc_percent": 89, "protected_baseline_a": 1},
             80,
-            90,
+            91,
         ),
     ],
 )
@@ -574,6 +575,36 @@ def test_three_phase_pre_free_extension_uses_configured_phase_count():
         )
     )
     assert decision.current_a == 11
+
+
+@pytest.mark.parametrize("normal_target", [80, 90, 95, 100])
+@pytest.mark.parametrize("delta", [-1, 0, 1])
+def test_combined_pre_free_uses_configured_soc_room_not_fixed_90(normal_target, delta):
+    inputs = PreFreeCurrentInputs(
+        session_active=True, planned_energy_kwh=4, hours_until_free=1,
+        voltage_v=230, phase_count=3, current_step_a=1, baseline_a=1,
+        current_ceiling_a=10, vehicle_soc_percent=min(normal_target + delta, 100),
+        vehicle_soft_limit_percent=normal_target,
+    )
+    decision = plan_combined_pre_free_current(
+        inputs, solar_surplus_kw=3, charger_minimum_a=1, telemetry_valid=True,
+    )
+    assert (decision.current_a > inputs.baseline_a) is (delta < 0)
+    assert decision.current_a <= inputs.current_ceiling_a
+
+
+@pytest.mark.parametrize("fault", ["telemetry", "budget", "window", "session"])
+def test_combined_pre_free_normal_100_does_not_grant_new_energy_authority(fault):
+    inputs = PreFreeCurrentInputs(
+        session_active=fault != "session", planned_energy_kwh=0 if fault == "budget" else 4,
+        hours_until_free=0 if fault == "window" else 1, voltage_v=230,
+        phase_count=3, current_step_a=1, baseline_a=1, current_ceiling_a=10,
+        vehicle_soc_percent=91, vehicle_soft_limit_percent=100,
+    )
+    decision = plan_combined_pre_free_current(
+        inputs, solar_surplus_kw=3, charger_minimum_a=1, telemetry_valid=fault != "telemetry",
+    )
+    assert decision.current_a == inputs.baseline_a
 
 
 def test_outside_branch_order_keeps_active_backfill_fixed_over_solar_spill():

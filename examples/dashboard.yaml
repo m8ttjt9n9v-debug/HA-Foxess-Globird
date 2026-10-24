@@ -504,7 +504,7 @@ views:
             content: >-
               Scheduling is off by default. This uses HEO's existing paid Charge
               to Full override: it may import paid grid energy and bypass normal
-              battery-reserve/90% policies, but not commissioning, Safety Lock,
+              battery-reserve/normal-target policies, but not commissioning, Safety Lock,
               connector or service limits. Start time and reported SoC are
               estimates, not exact-time or physical-percentage guarantees.
               Cancel to withdraw the trip-owned request and return to existing

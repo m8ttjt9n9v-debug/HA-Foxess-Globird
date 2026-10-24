@@ -319,7 +319,7 @@ async def test_late_pre_free_keeps_current_through_inactive_zero_skew_then_real_
         assert not controller.daily_backfill_active
         assert controller.outside_stage_selection.stage == "pre_free"
         assert controller.target_current_a == 8
-        assert controller.target_limit_percent == 90
+        assert controller.target_limit_percent == 100
         if frozen_start is None:
             frozen_start = controller.pre_free_session.frozen_start
         assert controller.pre_free_session.frozen_start == frozen_start
@@ -871,18 +871,24 @@ async def test_after_ready_combined_pre_free_takes_over_then_free_window_uses_ma
     assert controller.decision_phase == "ev_priority_maximum"
 
 
-async def test_ready_by_shrinks_live_budget_and_plans_only_to_normal_90_percent_cap(hass):
+@pytest.mark.parametrize("normal_target", [80, 90, 95, 100])
+async def test_ready_by_shrinks_live_budget_and_stops_at_configured_normal_target(
+    hass, normal_target
+):
     _services(hass)
-    coordinator, controller = _site(hass, ev_free_window_charge_limit_percent=100)
-    hass.states.async_set("sensor.car_soc", "89", {"unit_of_measurement": "%"})
-    hass.states.async_set("sensor.car_energy", "53.4", {"unit_of_measurement": "kWh"})
+    coordinator, controller = _site(hass, ev_free_window_charge_limit_percent=normal_target)
+    hass.states.async_set("sensor.car_soc", str(normal_target - 1), {"unit_of_measurement": "%"})
+    hass.states.async_set(
+        "sensor.car_energy", str((normal_target - 1) * 0.6), {"unit_of_measurement": "kWh"}
+    )
     _fresh(coordinator, _at(7, 55))
     await controller.async_reconcile(_at(7, 55))
     assert controller.daily_backfill_plan.planned_energy_kwh == pytest.approx(0.667, abs=0.001)
     assert controller.daily_backfill_active
-    assert controller.target_limit_percent == 90
+    assert controller.target_limit_percent == normal_target
+    assert not controller._charge_to_full_requested()
     _charging(hass)
-    hass.states.async_set("sensor.car_soc", "90", {"unit_of_measurement": "%"})
+    hass.states.async_set("sensor.car_soc", str(normal_target), {"unit_of_measurement": "%"})
     _fresh(coordinator, _at(7, 56), current_a=8)
     await controller.async_reconcile(_at(7, 56))
     assert not controller.daily_backfill_active

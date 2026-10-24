@@ -109,8 +109,9 @@ the clock; it must not save a target that needs another immediate decrease just
 because its horizon reset. Ordinary increases still wait for the existing cadence.
 
 The existing morning battery threshold and global outside-window EV battery
-cutoff remain distinct and binding. The existing normal EV charge-limit policy,
-including the direct-EVSE 90% hard cap without Charge to Full, is unchanged.
+cutoff remain distinct and binding. The configured normal EV target, live
+actuator constraints and physical percentage bounds remain binding; there is no
+separate90% non-Full ceiling.
 When both policies are enabled, the morning threshold also binds the joint
 pre-free battery path on its no-solar latest-start branch, even if the separate
 global outside-window cutoff is lower.

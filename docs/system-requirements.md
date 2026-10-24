@@ -1,5 +1,14 @@
 # System requirements and integration map
 
+## Configured EV target correction (unreleased)
+
+Normal charging supports its existing configured0–100% target, subject to live
+actuator capability and all original energy/electrical gates;90% is the default,
+not a separate non-Full ceiling. Existing learned/general and keepalive headroom
+semantics remain separate from that policy target. Selecting100% does not enable
+Full, change charging-energy authority or rewrite saved settings. See
+[the configured-target contract](configured-ev-charge-limits.md).
+
 ## Optional Dynamic EV reservation (local candidate)
 
 Dynamic needs valid current vehicle SoC and qualified planning capacity/charge
@@ -408,8 +417,8 @@ fresh mapped house load and valid energy protection are required. Import above
 the commissioned ZEROHERO zero-import threshold or lost energy authority
 curtails extra charging through the existing stop or protected baseline.
 The outside-window house-battery reserve (20% default), electrical limits and
-normal charge-limit policy remain in force, including the direct-EVSE 90% cap
-unless Charge to Full is on. Ready by shares the existing session and restart
+configured normal charge-limit policy remain in force, within live actuator and
+physical percentage bounds. Ready by shares the existing session and restart
 ledger; paid Charge to Full and free-window charging are excluded from its
 delivery accounting. With the v0.12.30 handoff correction, Ready by ends at
 its deadline and the original pre-free planner becomes eligible again, using

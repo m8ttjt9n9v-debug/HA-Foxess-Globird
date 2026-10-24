@@ -159,7 +159,7 @@ BASE = PreFreeCurrentInputs(
             1 / 6,
             1,
             14,
-            id="below-normal-hard-90-cap",
+            id="below-configured100-target",
         ),
         pytest.param(
             {"vehicle_soc_percent": 79.9, "vehicle_soft_limit_percent": 80},
@@ -191,10 +191,10 @@ def test_frontload_power_oracles(changes, solar_kw, horizon_h, minimum_a, expect
         pytest.param({"session_active": False}, id="not-admitted"),
         pytest.param({"planned_energy_kwh": 0}, id="budget-exhausted"),
         pytest.param({"hours_until_free": 0}, id="free-boundary"),
-        pytest.param({"vehicle_soc_percent": 90}, id="normal-hard-cap"),
+        pytest.param({"vehicle_soc_percent": 90}, id="configured90-target-met"),
         pytest.param(
-            {"vehicle_soc_percent": 90, "vehicle_soft_limit_percent": 100},
-            id="configured100-not-full-authority",
+            {"vehicle_soc_percent": 100, "vehicle_soft_limit_percent": 100},
+            id="configured100-target-met",
         ),
         pytest.param(
             {"vehicle_soc_percent": 80, "vehicle_soft_limit_percent": 80},
@@ -213,6 +213,25 @@ def test_frontload_never_grants_new_energy_or_charge_authority(baseline, changes
 
     assert decision.current_a == baseline
     assert decision.phase == "pre_free_inactive"
+
+
+@pytest.mark.parametrize("normal_target", [80, 90, 95, 100])
+@pytest.mark.parametrize("delta", [-1, 0, 1])
+@pytest.mark.parametrize("baseline", [0, 1])
+def test_frontload_configured_target_boundary_preserves_existing_funding_and_cap(
+    normal_target, delta, baseline,
+):
+    soc = min(normal_target + delta, 100)
+    decision = plan_combined_pre_free_current(
+        replace(
+            BASE, baseline_a=baseline, vehicle_soc_percent=soc,
+            vehicle_soft_limit_percent=normal_target,
+        ),
+        solar_surplus_kw=40, charger_minimum_a=1, telemetry_valid=True,
+        battery_spending_hours=1 / 6,
+    )
+    assert decision.current_a == (32 if soc < normal_target else baseline)
+    assert decision.phase == ("pre_free_combined" if soc < normal_target else "pre_free_inactive")
 
 
 @pytest.mark.parametrize("baseline", [0, 1])

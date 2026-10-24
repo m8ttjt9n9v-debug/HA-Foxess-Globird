@@ -258,18 +258,52 @@ async def test_reserve_cutoff_immediately_discards_combined_hold(hass, baseline)
         assert not any(service == "turn_off" for _, service, _ in calls[before:])
 
 
-async def test_ev_hard90_target_ends_combined_without_waiting_for_solar_cadence(hass):
-    _services(hass)
-    coordinator, controller = _scenario(hass, ev_free_window_charge_limit_percent=100)
+@pytest.mark.parametrize("normal_target", [80, 90, 95, 100])
+async def test_configured_ev_target_ends_combined_without_waiting_for_solar_cadence(
+    hass, normal_target,
+):
+    calls = _services(hass)
+    coordinator, controller = _scenario(
+        hass, ev_free_window_charge_limit_percent=normal_target,
+    )
     await controller.async_reconcile(_at(11))
     _charging(hass, 6)
-    hass.states.async_set("sensor.car_soc", "90", {"unit_of_measurement": "%"})
+    hass.states.async_set(
+        "number.car_limit", str(normal_target), {"min": 50, "max": 100, "step": 1},
+    )
+    hass.states.async_set("sensor.car_soc", str(normal_target - 1), {"unit_of_measurement": "%"})
+    hass.states.async_set(
+        "sensor.car_energy", str((normal_target - 1) * 0.6), {"unit_of_measurement": "kWh"},
+    )
     _power(hass, coordinator, _at(11, 1), current=6)
     await controller.async_reconcile(_at(11, 1))
+    assert controller.target_current_a > 0
+    assert controller.target_limit_percent == normal_target
+    assert controller.pre_free_session.active
+    assert not controller._charge_to_full_requested()
+
+    before = len(calls)
+    hass.states.async_set("sensor.car_soc", str(normal_target), {"unit_of_measurement": "%"})
+    hass.states.async_set(
+        "sensor.car_energy", str(normal_target * 0.6), {"unit_of_measurement": "kWh"},
+    )
+    _power(hass, coordinator, _at(11, 1, 30), current=6)
+    await controller.async_reconcile(_at(11, 1, 30))
 
     assert controller.target_current_a == 0
-    assert controller.target_limit_percent <= 90
+    # Once this active policy stops, the existing idle learned-limit policy
+    # resumes at this fixture's 50% actuator minimum. It is not a new cap.
+    idle_minimum = float(hass.states.get("number.car_limit").attributes["min"])
+    assert idle_minimum == 50
+    assert (
+        controller.target_limit_percent
+        == controller.learned_charge_limit.limit_percent
+        == idle_minimum
+    )
+    assert coordinator.config["ev_free_window_charge_limit_percent"] == normal_target
     assert not controller.pre_free_session.active
+    assert not controller._charge_to_full_requested()
+    assert any(service == "turn_off" for _, service, _ in calls[before:])
 
 
 async def test_large_solar_still_honours_total_outside_cap(hass):

@@ -13,10 +13,9 @@ from datetime import datetime, timedelta
 from math import ceil, floor, isfinite
 from typing import Literal
 
-# The direct-path anti-pause guard may keep a fault-prone powered connector
-# accepting its protected baseline, but it is never authority to charge above
-# this operator safety ceiling. Charge to Full is the sole exception.
-NON_OVERRIDE_CHARGE_LIMIT_MAX_PERCENT = 90.0
+# Physical percentage domain only, NOT an arbitrary normal-policy ceiling.
+# Normal policy uses the configured target and live actuator constraints.
+EV_SOC_MAX_PERCENT = 100.0
 
 # Direct Tessie feedback can take time to converge, and some chargers briefly
 # reject an otherwise valid request. Retrying is therefore elapsed-time based,
@@ -50,12 +49,12 @@ def cap_direct_charge_limit_target(
     *,
     charge_to_full: bool,
 ) -> float:
-    """Enforce the direct-path charge-limit ceiling at every write boundary."""
-    return (
-        target_limit_percent
-        if charge_to_full
-        else min(target_limit_percent, NON_OVERRIDE_CHARGE_LIMIT_MAX_PERCENT)
-    )
+    """Keep every direct-path target in the physical percentage domain.
+
+    Full changes charging authority, never the meaning of a percentage. Retain
+    its keyword for caller compatibility, not as an exception to this bound.
+    """
+    return min(target_limit_percent, EV_SOC_MAX_PERCENT)
 
 
 @dataclass(frozen=True, slots=True)
@@ -1254,21 +1253,19 @@ def plan_direct_evse_commands(
     bounded_current = floor(bounded_current / current_step) * current_step
     if not start_allowed or bounded_current < current_minimum:
         return EvCommandPlan((), "direct_path_not_allowed")
-    bounded_limit = _clip(
-        ceil(target_limit_percent / limit_step) * limit_step,
-        limit_minimum,
-        limit_maximum,
-    )
-    if not charge_to_full:
-        # The policy cap must still hold after the actuator's discrete-step
-        # rounding. Rounding up a 90% target on (for example) a 7%-step number
-        # would otherwise issue a 91% command and defeat the cap.
-        if limit_minimum > NON_OVERRIDE_CHARGE_LIMIT_MAX_PERCENT:
-            return EvCommandPlan((), "direct_path_charge_limit_cap_unrepresentable")
-        capped_limit = limit_minimum + floor(
-            (NON_OVERRIDE_CHARGE_LIMIT_MAX_PERCENT - limit_minimum) / limit_step
-        ) * limit_step
-        bounded_limit = min(bounded_limit, capped_limit)
+    # Use the same minimum-origin increment for target and upper bound. Clipping
+    # an upward-rounded target to an off-step maximum must not emit that value.
+    # Full changes energy authority, not actuator constraints or percentage range.
+    upper_limit = min(limit_maximum, EV_SOC_MAX_PERCENT)
+    if limit_minimum > upper_limit:
+        return EvCommandPlan((), "direct_path_charge_limit_cap_unrepresentable")
+    representable_upper = limit_minimum + floor(
+        (upper_limit - limit_minimum) / limit_step
+    ) * limit_step
+    rounded_limit = limit_minimum + ceil(
+        (target_limit_percent - limit_minimum) / limit_step
+    ) * limit_step
+    bounded_limit = min(max(rounded_limit, limit_minimum), representable_upper)
     commands: list[EvCommand] = []
     if abs(observation.charge_limit_percent - bounded_limit) >= limit_step:
         commands.append(EvCommand("set_charge_limit", bounded_limit))
@@ -1558,13 +1555,9 @@ class GeneralChargeLimitDecision:
 
 
 def plan_charge_limit_target(inputs: ChargeLimitInputs) -> float:
-    """Preserve anti-pause headroom without overriding the 90% safety ceiling."""
+    """Preserve anti-pause headroom within actuator and percentage bounds."""
     _validate_charge_limit_inputs(inputs)
-    maximum = (
-        inputs.maximum_percent
-        if inputs.charge_to_full
-        else min(inputs.maximum_percent, NON_OVERRIDE_CHARGE_LIMIT_MAX_PERCENT)
-    )
+    maximum = min(inputs.maximum_percent, EV_SOC_MAX_PERCENT)
     if not inputs.connected:
         return round(min(inputs.current_limit_percent, maximum), 3)
     policy = _clip(inputs.policy_limit_percent, inputs.minimum_percent, maximum)

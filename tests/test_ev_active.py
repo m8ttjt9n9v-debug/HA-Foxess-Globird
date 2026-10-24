@@ -727,10 +727,7 @@ async def test_soc_update_does_not_recalculate_whole_house_allowance_during_curr
 
     assert controller.target_current_a == 1
     assert controller.allowance_phase == "allowance_exhausted"
-    assert controller.last_actions == (
-        "would_set_charge_limit",
-        "would_set_charge_current",
-    )
+    assert controller.last_actions == ("would_set_charge_current",)
 
 
 @pytest.mark.parametrize(
@@ -877,7 +874,7 @@ async def test_safety_lock_calculates_rehearsal_plan_without_writing(
     assert calls == []
 
 
-async def test_direct_anti_pause_reconciliation_cannot_raise_limit_above_90(
+async def test_direct_anti_pause_reconciliation_retains_existing_headroom_without_fixed_90_cap(
     hass: HomeAssistant,
 ) -> None:
     _set_ev_states(hass)
@@ -895,7 +892,7 @@ async def test_direct_anti_pause_reconciliation_cannot_raise_limit_above_90(
 
     await controller.async_reconcile(datetime(2026, 9, 7, 12, 1, tzinfo=UTC))
 
-    assert controller.target_limit_percent == 90
+    assert controller.target_limit_percent == 97
     assert "would_set_charge_limit" in controller.last_actions
 
 
@@ -1725,9 +1722,9 @@ async def test_restart_free_window_holds_current_until_grid_average_recovers(
     await controller.async_reconcile(start)
 
     assert controller.target_current_a == 15
-    assert controller.target_limit_percent == 90
-    assert controller.last_reason == "rehearsal_direct_path_ready"
-    assert controller.last_actions == ("would_set_charge_limit",)
+    assert controller.target_limit_percent == 100
+    assert controller.last_reason == "rehearsal_feedback_confirmed"
+    assert controller.last_actions == ()
 
     coordinator.telemetry = replace(
         coordinator.telemetry,
@@ -1751,19 +1748,16 @@ async def test_restart_free_window_holds_current_until_grid_average_recovers(
     await controller.async_reconcile(start + timedelta(seconds=30))
 
     assert controller.target_current_a == 15
-    assert controller.target_limit_percent == 90
-    assert controller.last_reason == "rehearsal_direct_path_ready"
-    assert controller.last_actions == ("would_set_charge_limit",)
+    assert controller.target_limit_percent == 100
+    assert controller.last_reason == "rehearsal_feedback_confirmed"
+    assert controller.last_actions == ()
 
     await controller.async_reconcile(start + timedelta(seconds=121))
 
     assert controller.target_current_a == 16
     assert controller.decision_phase == "ev_priority_maximum"
     assert "would_set_charge_current" in controller.last_actions
-    assert controller.last_actions == (
-        "would_set_charge_limit",
-        "would_set_charge_current",
-    )
+    assert controller.last_actions == ("would_set_charge_current",)
 
 
 def test_daily_backfill_facade_composes_efficiency_and_live_vehicle_room(
@@ -2334,17 +2328,15 @@ async def test_ev_battery_reserve_reverts_to_configured_protected_baseline(
 
     assert controller.decision_phase == "ev_battery_reserve_reached"
     assert controller.target_current_a == 1
-    assert controller.target_limit_percent == 90
+    assert controller.target_limit_percent == 91
     assert controller.daily_backfill_active is False
     assert controller.daily_backfill_stop_pending is False
     assert controller.outside_stop_requested is False
     assert controller.last_actions == (
-        "set_charge_limit",
         "set_charge_current",
         "start_charging",
     )
     assert actions == [
-        ("set_charge_current", 90),
         ("set_charge_current", 1),
         ("start_charging", None),
     ]

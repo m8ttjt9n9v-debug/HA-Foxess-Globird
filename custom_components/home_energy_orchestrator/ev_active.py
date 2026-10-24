@@ -168,7 +168,7 @@ from .planner.control_windows import (
 )
 from .planner.ev import (
     DIRECT_EVSE_RECONCILIATION_PHASES,
-    NON_OVERRIDE_CHARGE_LIMIT_MAX_PERCENT,
+    EV_SOC_MAX_PERCENT,
     AllowanceProjectionInputs,
     ChargeLimitInputs,
     DirectEvseObservation,
@@ -2377,7 +2377,7 @@ class ActiveEvController:
         vehicle_soc = self._mapped_number(self.coordinator.runtime_config.ev_telemetry.soc_entity)
         soft_limit = min(
             self._float(CONF_EV_FREE_WINDOW_CHARGE_LIMIT, DEFAULT_EV_FREE_WINDOW_CHARGE_LIMIT),
-            NON_OVERRIDE_CHARGE_LIMIT_MAX_PERCENT,
+            EV_SOC_MAX_PERCENT,
         )
         charge_to_full = self._charge_to_full_requested()
         if charge_to_full and not envelope.service_supports_charging:
@@ -2898,7 +2898,7 @@ class ActiveEvController:
         release = before_export_recovery_target(
             preference.before_export_soc_target, preference.before_export_soc_buffer,
             min(self._float(CONF_EV_FREE_WINDOW_CHARGE_LIMIT, DEFAULT_EV_FREE_WINDOW_CHARGE_LIMIT),
-                NON_OVERRIDE_CHARGE_LIMIT_MAX_PERCENT),
+                EV_SOC_MAX_PERCENT),
         )
         if (not isfinite(release) or self._before_export_storage_error
                 or self._before_export_checkpoint_in_progress
@@ -2941,7 +2941,7 @@ class ActiveEvController:
                     min(self._float(
                         CONF_EV_FREE_WINDOW_CHARGE_LIMIT, DEFAULT_EV_FREE_WINDOW_CHARGE_LIMIT,
                     ),
-                        NON_OVERRIDE_CHARGE_LIMIT_MAX_PERCENT),
+                        EV_SOC_MAX_PERCENT),
                 )
                 candidate = advance_before_export_recovery(
                     self.before_export_recovery, binding=self._before_export_recovery_binding(),
@@ -3481,7 +3481,7 @@ class ActiveEvController:
                 self.last_reason = self.daily_backfill_hold_reason
                 return None
             vehicle_soft_limit = min(
-                vehicle_soft_limit, NON_OVERRIDE_CHARGE_LIMIT_MAX_PERCENT
+                vehicle_soft_limit, EV_SOC_MAX_PERCENT
             )
         data = self.coordinator.data
         protected_house = getattr(self.coordinator, "learning_remaining_kwh", None)
@@ -4038,7 +4038,7 @@ class ActiveEvController:
             buffer_soc_percent=preference.before_export_soc_buffer,
             normal_target_soc_percent=min(self._float(
                 CONF_EV_FREE_WINDOW_CHARGE_LIMIT, DEFAULT_EV_FREE_WINDOW_CHARGE_LIMIT,
-            ), NON_OVERRIDE_CHARGE_LIMIT_MAX_PERCENT),
+            ), EV_SOC_MAX_PERCENT),
             capacity_kwh=capacity,
             charge_efficiency_percent=self._float(
                 CONF_EV_CHARGE_EFFICIENCY, DEFAULT_EV_CHARGE_EFFICIENCY,
@@ -4068,7 +4068,7 @@ class ActiveEvController:
         preference = self.coordinator.runtime_config.ev_preferences
         ceiling = min(self._float(
             CONF_EV_FREE_WINDOW_CHARGE_LIMIT, DEFAULT_EV_FREE_WINDOW_CHARGE_LIMIT,
-        ), NON_OVERRIDE_CHARGE_LIMIT_MAX_PERCENT)
+        ), EV_SOC_MAX_PERCENT)
         release = self.before_export_release_target()
         return not decide_ev_before_export(
             enabled=True, ev_soc_percent=soc,
@@ -4585,7 +4585,7 @@ class ActiveEvController:
                 or not isfinite(target)
                 or soc >= min(target, self._float(
                     CONF_EV_FREE_WINDOW_CHARGE_LIMIT, DEFAULT_EV_FREE_WINDOW_CHARGE_LIMIT,
-                ), NON_OVERRIDE_CHARGE_LIMIT_MAX_PERCENT)
+                ), EV_SOC_MAX_PERCENT)
                 or self._free_window(now)[0] or self._charge_to_full_requested()
                 or not self._connected_at_home()[0]
             ):
@@ -4636,7 +4636,7 @@ class ActiveEvController:
             soc = feedback.soc.number
             normal_target = min(self._float(
                 CONF_EV_FREE_WINDOW_CHARGE_LIMIT, DEFAULT_EV_FREE_WINDOW_CHARGE_LIMIT,
-            ), NON_OVERRIDE_CHARGE_LIMIT_MAX_PERCENT)
+            ), EV_SOC_MAX_PERCENT)
             if (
                 observation is None or observation.current_step_a is None
                 or not isfinite(observation.current_step_a) or observation.current_step_a <= 0
@@ -4721,7 +4721,7 @@ class ActiveEvController:
                 or soc is None or not isfinite(soc) or not 0 <= soc <= 100
                 or soc >= min(self._float(
                     CONF_EV_FREE_WINDOW_CHARGE_LIMIT, DEFAULT_EV_FREE_WINDOW_CHARGE_LIMIT,
-                ), NON_OVERRIDE_CHARGE_LIMIT_MAX_PERCENT)
+                ), EV_SOC_MAX_PERCENT)
                 or battery_soc is None or not isfinite(battery_soc) or not 0 <= battery_soc <= 100
                 or battery_soc <= self._float(
                     CONF_EV_OUTSIDE_BATTERY_RESERVE_PERCENT,
@@ -4767,7 +4767,7 @@ class ActiveEvController:
                     or self._charge_to_full_requested()
                     or soc >= min(self._float(
                         CONF_EV_FREE_WINDOW_CHARGE_LIMIT, DEFAULT_EV_FREE_WINDOW_CHARGE_LIMIT,
-                    ), NON_OVERRIDE_CHARGE_LIMIT_MAX_PERCENT)):
+                    ), EV_SOC_MAX_PERCENT)):
                 return False
             prior_import = self.before_export_import
             budget = self._when_connected_energy_budget(now, retain_existing=retain_existing)
@@ -4800,7 +4800,7 @@ class ActiveEvController:
                 current_soc_percent=soc,
                 target_soc_percent=min(self._float(
                     CONF_EV_FREE_WINDOW_CHARGE_LIMIT, DEFAULT_EV_FREE_WINDOW_CHARGE_LIMIT,
-                ), NON_OVERRIDE_CHARGE_LIMIT_MAX_PERCENT),
+                ), EV_SOC_MAX_PERCENT),
                 charge_efficiency_percent=self._float(
                     CONF_EV_CHARGE_EFFICIENCY, DEFAULT_EV_CHARGE_EFFICIENCY,
                 ),
@@ -4864,7 +4864,7 @@ class ActiveEvController:
                 return False
             if soc >= min(self._float(
                 CONF_EV_FREE_WINDOW_CHARGE_LIMIT, DEFAULT_EV_FREE_WINDOW_CHARGE_LIMIT,
-            ), NON_OVERRIDE_CHARGE_LIMIT_MAX_PERCENT):
+            ), EV_SOC_MAX_PERCENT):
                 return False
             preference = runtime.ev_preferences
             if not decide_ev_before_export(

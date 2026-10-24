@@ -25,6 +25,7 @@ from custom_components.home_energy_orchestrator.planner.ev import (
     SmartSocketRecoveryState,
     SmartSocketStageState,
     apply_daily_allowance_ceiling,
+    cap_direct_charge_limit_target,
     charging_path_ceiling_a,
     direct_evse_response_matches,
     direct_evse_retry_interval,
@@ -421,13 +422,17 @@ def test_charge_limit_retained_away_and_guard_is_capped_without_charge_to_full()
         step_percent=1,
     )
     assert plan_charge_limit_target(base) == 90
-    assert plan_charge_limit_target(replace(base, current_limit_percent=100)) == 90
-    assert plan_charge_limit_target(replace(base, connected=True)) == 90
+    assert plan_charge_limit_target(replace(base, current_limit_percent=100)) == 100
+    assert plan_charge_limit_target(replace(base, connected=True)) == 91
     assert plan_charge_limit_target(replace(base, connected=True, vehicle_soc_percent=60)) == 80
 
 
-@pytest.mark.parametrize("vehicle_soc", (88, 89, 90, 95, 100))
-def test_direct_anti_pause_headroom_never_exceeds_90_percent(vehicle_soc):
+@pytest.mark.parametrize(
+    "vehicle_soc,expected", [(88, 90), (89, 91), (90, 92), (95, 97), (100, 100)]
+)
+def test_direct_anti_pause_headroom_retains_existing_rule_with_physical_soc_bound(
+    vehicle_soc, expected
+):
     target = plan_charge_limit_target(
         ChargeLimitInputs(
             connected=True,
@@ -442,10 +447,10 @@ def test_direct_anti_pause_headroom_never_exceeds_90_percent(vehicle_soc):
         )
     )
 
-    assert target == 90
+    assert target == expected
 
 
-def test_charge_to_full_permits_100_and_switching_it_off_restores_90_percent_cap():
+def test_normal_configured_100_does_not_require_or_enable_charge_to_full():
     inputs = ChargeLimitInputs(
         connected=True,
         policy_limit_percent=100,
@@ -460,7 +465,54 @@ def test_charge_to_full_permits_100_and_switching_it_off_restores_90_percent_cap
     )
 
     assert plan_charge_limit_target(inputs) == 100
-    assert plan_charge_limit_target(replace(inputs, charge_to_full=False)) == 90
+    assert plan_charge_limit_target(replace(inputs, charge_to_full=False)) == 100
+    assert (
+        plan_charge_limit_target(
+            replace(
+                inputs,
+                charge_to_full=False,
+                policy_limit_percent=80,
+                vehicle_soc_percent=60,
+            )
+        )
+        == 80
+    )
+
+
+@pytest.mark.parametrize("policy_target", [80, 90, 95, 100])
+@pytest.mark.parametrize("vehicle_soc", [60, 89, 90, 91, 99, 100])
+def test_configured_normal_target_is_not_replaced_by_a_fixed_90_or_100(policy_target, vehicle_soc):
+    inputs = ChargeLimitInputs(
+        connected=True,
+        policy_limit_percent=policy_target,
+        current_limit_percent=90,
+        vehicle_soc_percent=vehicle_soc,
+        protected_baseline_required=False,
+        direct_limit_headroom_percent=2,
+        minimum_percent=50,
+        maximum_percent=100,
+        step_percent=1,
+        charge_to_full=False,
+    )
+    assert plan_charge_limit_target(inputs) == policy_target
+    assert inputs.charge_to_full is False
+
+
+@pytest.mark.parametrize("entity_maximum", [80, 90, 95, 100])
+def test_configured_100_retains_actuator_maximum_without_full(entity_maximum):
+    inputs = ChargeLimitInputs(
+        connected=True,
+        policy_limit_percent=100,
+        current_limit_percent=80,
+        vehicle_soc_percent=91,
+        protected_baseline_required=True,
+        direct_limit_headroom_percent=2,
+        minimum_percent=50,
+        maximum_percent=entity_maximum,
+        step_percent=1,
+        charge_to_full=False,
+    )
+    assert plan_charge_limit_target(inputs) == entity_maximum
 
 
 GENERAL_LIMIT = GeneralChargeLimitEvidence(
@@ -1384,7 +1436,7 @@ def test_direct_path_orders_limit_current_then_start():
     ]
 
 
-def test_direct_path_caps_a_retained_limit_above_90_without_charge_to_full():
+def test_direct_path_retains_a_valid_limit_above_90_without_charge_to_full():
     plan = plan_direct_evse_commands(
         replace(DIRECT, charge_limit_percent=91, charge_switch_on=True),
         target_current_a=6,
@@ -1393,15 +1445,23 @@ def test_direct_path_caps_a_retained_limit_above_90_without_charge_to_full():
         start_allowed=True,
     )
 
-    assert plan.commands == (EvCommand("set_charge_limit", 90),)
+    assert plan.commands == ()
 
 
 @pytest.mark.parametrize(
-    ("limit_minimum", "expected_limit"),
-    ((50, 85), (88, 88)),
+    ("limit_minimum", "requested_limit", "expected_limit"),
+    [
+        (50, 89, 92),
+        (50, 90, 92),
+        (50, 91, 92),
+        (50, 100, 99),
+        (88, 89, 95),
+        (88, 90, 95),
+        (88, 91, 95),
+        (88, 100, 95),
+    ],
 )
-@pytest.mark.parametrize("requested_limit", (89, 90, 91, 100))
-def test_direct_path_never_rounds_a_non_override_cap_above_90(
+def test_direct_path_never_rounds_a_normal_target_above_physical_soc_bound(
     limit_minimum,
     expected_limit,
     requested_limit,
@@ -1409,7 +1469,7 @@ def test_direct_path_never_rounds_a_non_override_cap_above_90(
     plan = plan_direct_evse_commands(
         replace(
             DIRECT,
-            charge_limit_percent=100,
+            charge_limit_percent=limit_minimum,
             charge_switch_on=True,
             limit_minimum_percent=limit_minimum,
             limit_step_percent=7,
@@ -1420,17 +1480,20 @@ def test_direct_path_never_rounds_a_non_override_cap_above_90(
         start_allowed=True,
     )
 
-    assert plan.commands == (EvCommand("set_charge_limit", expected_limit),)
-    assert plan.commands[0].value <= 90
+    assert plan.commands == (
+        () if expected_limit is None else (EvCommand("set_charge_limit", expected_limit),)
+    )
+    assert all(command.value <= 100 for command in plan.commands)
 
 
-def test_direct_path_refuses_an_unrepresentable_non_override_cap():
+def test_direct_path_refuses_an_unrepresentable_physical_soc_bound():
     plan = plan_direct_evse_commands(
         replace(
             DIRECT,
             charge_limit_percent=100,
             charge_switch_on=True,
-            limit_minimum_percent=91,
+            limit_minimum_percent=101,
+            limit_maximum_percent=105,
         ),
         target_current_a=6,
         target_limit_percent=100,
@@ -1442,25 +1505,97 @@ def test_direct_path_refuses_an_unrepresentable_non_override_cap():
     assert plan.reason == "direct_path_charge_limit_cap_unrepresentable"
 
 
-def test_direct_path_permits_full_charge_only_when_explicitly_requested():
+@pytest.mark.parametrize("charge_to_full", [False, True])
+def test_direct_path_permits_configured_100_with_or_without_full(charge_to_full):
     plan = plan_direct_evse_commands(
         replace(DIRECT, charge_limit_percent=90, charge_switch_on=True),
         target_current_a=6,
         target_limit_percent=100,
         physical_ceiling_a=15,
         start_allowed=True,
-        charge_to_full=True,
+        charge_to_full=charge_to_full,
     )
 
     assert plan.commands == (EvCommand("set_charge_limit", 100),)
 
 
-def test_direct_reconciliation_reduces_a_full_target_when_override_ends():
+@pytest.mark.parametrize("charge_to_full", [False, True])
+@pytest.mark.parametrize(
+    "minimum,maximum,step,target,expected",
+    [
+        (50, 100, 7, 95, 99),
+        (50, 96, 7, 95, 92),
+        (88, 100, 7, 90, 95),
+        (88, 94, 7, 90, 88),
+        (50, 105, 7, 100, 99),
+        (50, 100, 1, 95, 95),
+        (50, 100, 1, 100, 100),
+    ],
+)
+def test_charge_limit_command_and_feedback_share_minimum_origin_steps(
+    charge_to_full, minimum, maximum, step, target, expected
+):
+    observation = replace(
+        DIRECT,
+        charge_limit_percent=minimum,
+        charge_switch_on=True,
+        limit_minimum_percent=minimum,
+        limit_maximum_percent=maximum,
+        limit_step_percent=step,
+    )
+    plan = plan_direct_evse_commands(
+        observation,
+        target_current_a=6,
+        target_limit_percent=target,
+        physical_ceiling_a=15,
+        start_allowed=True,
+        charge_to_full=charge_to_full,
+    )
+    assert plan.commands == (
+        () if expected == minimum else (EvCommand("set_charge_limit", expected),)
+    )
+    assert minimum <= expected <= min(maximum, 100)
+    assert (expected - minimum) / step == pytest.approx(round((expected - minimum) / step))
+    assert direct_evse_response_matches(
+        replace(observation, charge_limit_percent=expected),
+        target_current_a=6,
+        target_limit_percent=target,
+        physical_ceiling_a=15,
+        charge_to_full=charge_to_full,
+    )
+
+
+@pytest.mark.parametrize("charge_to_full", [False, True])
+def test_full_changes_energy_authority_not_physical_percentage_domain(charge_to_full):
+    assert cap_direct_charge_limit_target(105, charge_to_full=charge_to_full) == 100
+    inputs = ChargeLimitInputs(
+        connected=True,
+        policy_limit_percent=100,
+        current_limit_percent=100,
+        vehicle_soc_percent=99,
+        protected_baseline_required=True,
+        direct_limit_headroom_percent=2,
+        minimum_percent=50,
+        maximum_percent=105,
+        step_percent=1,
+        charge_to_full=charge_to_full,
+    )
+    assert plan_charge_limit_target(inputs) == 100
+    plan = plan_direct_evse_commands(
+        replace(DIRECT, limit_minimum_percent=101, limit_maximum_percent=105),
+        target_current_a=6,
+        target_limit_percent=100,
+        physical_ceiling_a=15,
+        start_allowed=True,
+        charge_to_full=charge_to_full,
+    )
+    assert not plan.commands and plan.reason == "direct_path_charge_limit_cap_unrepresentable"
+
+
+def test_direct_reconciliation_retains_configured_100_when_full_override_ends():
     now = datetime(2026, 9, 7, 12, 1, tzinfo=UTC)
     transition = reconcile_direct_evse(
-        DirectEvseReconciliationState(
-            6, 100, 1, now - timedelta(minutes=1), "confirmed"
-        ),
+        DirectEvseReconciliationState(6, 100, 1, now - timedelta(minutes=1), "confirmed"),
         replace(DIRECT, charge_limit_percent=100, charge_switch_on=True),
         target_current_a=6,
         target_limit_percent=100,
@@ -1469,15 +1604,16 @@ def test_direct_reconciliation_reduces_a_full_target_when_override_ends():
         charge_to_full=False,
     )
 
-    assert transition.state.target_limit_percent == 90
-    assert transition.plan.commands == (EvCommand("set_charge_limit", 90),)
+    assert transition.state.target_limit_percent == 100
+    assert transition.plan.commands == ()
 
 
-def test_live_transport_max_bounds_write_but_does_not_change_physical_rating():
+@pytest.mark.parametrize("target_limit", [80, 100])
+def test_live_transport_max_bounds_write_but_does_not_change_physical_rating(target_limit):
     plan = plan_direct_evse_commands(
         DIRECT,
         target_current_a=15,
-        target_limit_percent=80,
+        target_limit_percent=target_limit,
         physical_ceiling_a=32,
         start_allowed=True,
     )
@@ -1487,7 +1623,7 @@ def test_live_transport_max_bounds_write_but_does_not_change_physical_rating():
     lowered_transport = plan_direct_evse_commands(
         replace(DIRECT, current_maximum_a=10),
         target_current_a=15,
-        target_limit_percent=80,
+        target_limit_percent=target_limit,
         physical_ceiling_a=32,
         start_allowed=True,
     )
@@ -1496,11 +1632,12 @@ def test_live_transport_max_bounds_write_but_does_not_change_physical_rating():
     ]
 
 
-def test_direct_path_never_emits_stop_when_policy_is_not_allowed():
+@pytest.mark.parametrize("target_limit", [80, 100])
+def test_direct_path_never_emits_stop_when_policy_is_not_allowed(target_limit):
     plan = plan_direct_evse_commands(
         replace(DIRECT, charge_switch_on=True),
         target_current_a=0,
-        target_limit_percent=80,
+        target_limit_percent=target_limit,
         physical_ceiling_a=16,
         start_allowed=False,
     )
@@ -1508,16 +1645,57 @@ def test_direct_path_never_emits_stop_when_policy_is_not_allowed():
     assert plan.reason == "direct_path_not_allowed"
 
 
-def test_missing_live_writable_range_fails_closed_without_fallback_current():
+@pytest.mark.parametrize("target_limit", [80, 100])
+def test_missing_live_writable_range_fails_closed_without_fallback_current(target_limit):
     plan = plan_direct_evse_commands(
         replace(DIRECT, current_maximum_a=None),
         target_current_a=15,
-        target_limit_percent=80,
+        target_limit_percent=target_limit,
         physical_ceiling_a=32,
         start_allowed=True,
     )
     assert plan.commands == ()
     assert plan.reason == "actuator_metadata_unavailable"
+
+
+@pytest.mark.parametrize(
+    "metadata",
+    [
+        {"current_maximum_a": 0},
+        {"current_step_a": 0},
+        {"current_minimum_a": 20, "current_maximum_a": 16},
+        {"limit_maximum_percent": 0},
+        {"limit_step_percent": 0},
+        {"limit_minimum_percent": 96, "limit_maximum_percent": 95},
+    ],
+)
+def test_normal_100_never_authorizes_invalid_actuator_metadata(metadata):
+    plan = plan_direct_evse_commands(
+        replace(DIRECT, **metadata),
+        target_current_a=15,
+        target_limit_percent=100,
+        physical_ceiling_a=16,
+        start_allowed=True,
+        charge_to_full=False,
+    )
+    assert plan.commands == ()
+    assert plan.reason == "actuator_metadata_invalid"
+
+
+def test_normal_100_command_remains_inside_entity_soc_and_current_limits():
+    plan = plan_direct_evse_commands(
+        replace(DIRECT, current_maximum_a=10, limit_maximum_percent=95),
+        target_current_a=16,
+        target_limit_percent=100,
+        physical_ceiling_a=15,
+        start_allowed=True,
+        charge_to_full=False,
+    )
+    assert plan.commands == (
+        EvCommand("set_charge_limit", 95),
+        EvCommand("set_charge_current", 10),
+        EvCommand("start_charging"),
+    )
 
 
 def test_direct_feedback_match_requires_current_limit_and_switch():

@@ -11,7 +11,7 @@ from datetime import UTC, datetime, timedelta
 from math import ceil, floor, isfinite
 
 from .ev import (
-    NON_OVERRIDE_CHARGE_LIMIT_MAX_PERCENT,
+    EV_SOC_MAX_PERCENT,
     ChargeLimitInputs,
     EvCurrentDecision,
     estimate_vehicle_energy_to_target_kwh,
@@ -737,7 +737,7 @@ def plan_combined_pre_free_current(
         or inputs.hours_until_free <= 0
         or inputs.planned_energy_kwh <= 0
         or inputs.vehicle_soc_percent
-        >= min(inputs.vehicle_soft_limit_percent, NON_OVERRIDE_CHARGE_LIMIT_MAX_PERCENT)
+        >= min(inputs.vehicle_soft_limit_percent, EV_SOC_MAX_PERCENT)
     ):
         return EvCurrentDecision(inputs.baseline_a, "pre_free_inactive")
     horizon = inputs.hours_until_free

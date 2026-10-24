@@ -308,7 +308,7 @@ BASE = PreFreeCurrentInputs(
             1,
             1,
             12,
-            id="below-normal-hard-cap-even-with-target100",
+            id="below-configured100-target",
         ),
         pytest.param(
             {"planned_energy_kwh": 0.125, "baseline_a": 6},
@@ -346,10 +346,10 @@ def test_combined_pre_free_synthetic_power_oracles(changes, solar_kw, minimum_a,
         pytest.param({"session_active": False}, id="not-admitted"),
         pytest.param({"planned_energy_kwh": 0}, id="no-battery-budget"),
         pytest.param({"hours_until_free": 0}, id="exact-free-boundary"),
-        pytest.param({"vehicle_soc_percent": 90}, id="at-normal-hard-cap"),
+        pytest.param({"vehicle_soc_percent": 90}, id="at-configured90-target"),
         pytest.param(
-            {"vehicle_soc_percent": 90, "vehicle_soft_limit_percent": 100},
-            id="target100-cannot-bypass-normal-hard-cap",
+            {"vehicle_soc_percent": 100, "vehicle_soft_limit_percent": 100},
+            id="at-configured100-target",
         ),
         pytest.param(
             {"vehicle_soc_percent": 80, "vehicle_soft_limit_percent": 80},
@@ -371,6 +371,26 @@ def test_noneligible_combined_opportunity_returns_only_protected_baseline(baseli
 
     assert decision.current_a == baseline
     assert decision.phase == "pre_free_inactive"
+
+
+@pytest.mark.parametrize("normal_target", [80, 90, 95, 100])
+@pytest.mark.parametrize("delta", [-1, 0, 1])
+@pytest.mark.parametrize("baseline", [0, 1])
+def test_combined_configured_target_boundary_preserves_power_and_immediate_curtailment(
+    normal_target, delta, baseline,
+):
+    # Above 100% is not a valid battery observation; 100% is the physical
+    # endpoint. Lower configured limits are exercised on both sides.
+    soc = min(normal_target + delta, 100)
+    decision = plan_combined_pre_free_current(
+        replace(
+            BASE, baseline_a=baseline, vehicle_soc_percent=soc,
+            vehicle_soft_limit_percent=normal_target,
+        ),
+        solar_surplus_kw=20, charger_minimum_a=1, telemetry_valid=True,
+    )
+    assert decision.current_a == (32 if soc < normal_target else baseline)
+    assert decision.phase == ("pre_free_combined" if soc < normal_target else "pre_free_inactive")
 
 
 @pytest.mark.parametrize("baseline", [0, 1])
