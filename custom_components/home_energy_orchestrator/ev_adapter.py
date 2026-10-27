@@ -5,8 +5,10 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
+from datetime import datetime
 
 from homeassistant.core import HomeAssistant
+from homeassistant.util import dt as dt_util
 
 from .configuration import RuntimeConfiguration
 from .const import EV_CHARGE_PATH_SMART_SOCKET
@@ -26,6 +28,14 @@ class EvEntityMap:
     charge_limit_entity: str
     charge_switch_entity: str
     smart_socket_entity: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class EvCommandReceipt:
+    """One completed HA action, not a vehicle measurement/acknowledgement."""
+
+    action: str
+    completed_at: datetime
 
 
 class EvServiceAdapter:
@@ -54,6 +64,8 @@ class EvServiceAdapter:
         self.write_guard = write_guard
         self._lock = asyncio.Lock()
         self.last_executed: tuple[str, ...] = ()
+        self.last_invoked: tuple[str, ...] = ()
+        self.last_receipts: tuple[EvCommandReceipt, ...] = ()
 
     async def async_execute(self, plan: EvCommandPlan) -> tuple[str, ...]:
         """Execute commands in order, or fail before the first write."""
@@ -61,6 +73,8 @@ class EvServiceAdapter:
             return ()
         async with self._lock:
             self.last_executed = ()
+            self.last_invoked = ()
+            self.last_receipts = ()
             if not self.allow_writes or (
                 self.write_guard is not None and not self.write_guard()
             ):
@@ -71,9 +85,11 @@ class EvServiceAdapter:
                     raise EvWriteBlocked("HEO maintenance is in progress")
                 if self.write_guard is not None and not self.write_guard():
                     raise EvWriteBlocked("EV write gate closed during command plan")
+                self.last_invoked += (command.action,)
                 await self._async_execute_command(command)
                 executed.append(command.action)
                 self.last_executed = tuple(executed)
+                self.last_receipts += (EvCommandReceipt(command.action, dt_util.utcnow()),)
             return tuple(executed)
 
     async def _async_execute_command(self, command: EvCommand) -> None:

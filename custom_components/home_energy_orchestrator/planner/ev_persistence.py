@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime
 from math import isfinite
 
 from .ev import (
+    DIRECT_EVSE_FEEDBACK_SETTLE_INTERVAL,
     DIRECT_EVSE_RECONCILIATION_PHASES,
+    DirectEvseCurrentProof,
     DirectEvseReconciliationState,
+    DirectEvseRetryState,
     SmartSocketRecoveryState,
 )
 from .ev_before_export import EvBeforeExportImport, EvBeforeExportRecovery
@@ -187,6 +190,7 @@ class EvPersistenceState:
                     else None
                 ),
                 "phase": reconciliation.phase,
+                **_retry_channels_payload(reconciliation),
             },
             "pre_free_session": {
                 "active": self.pre_free_session.active,
@@ -340,13 +344,133 @@ def _reconciliation(payload: object, now: datetime) -> DirectEvseReconciliationS
     # migrate their terminal latch into an ordinary feedback wait.
     if phase == "fault_maximum_attempts":
         phase = "awaiting_feedback"
-    return DirectEvseReconciliationState(
+    state = DirectEvseReconciliationState(
         target_current_a=target_current,
         target_limit_percent=target_limit,
         attempts=attempts,
         last_command_at=last_at,
         phase=phase,
     )
+    return _retry_channels(payload.get("retry_channels"), state, now)
+
+
+def _retry_channels_payload(state: DirectEvseReconciliationState) -> dict[str, object]:
+    """Append only; old readers retain the conservative aggregate retry clock."""
+    channels = (state.current_retry, state.limit_retry, state.start_retry)
+    if all(channel is None for channel in channels):
+        return {}
+
+    def clock(value):
+        return value.isoformat() if value is not None else None
+
+    def channel(value):
+        if value is None:
+            return None
+        return {"target": value.target, "attempts": value.attempts,
+                "last_command_at": clock(value.last_command_at)}
+
+    proof = state.current_proof
+    return {"retry_channels": {
+        "version": 1,
+        "current": channel(state.current_retry), "limit": channel(state.limit_retry),
+        "start": channel(state.start_retry),
+        "current_signature": list(state.current_signature) if state.current_signature else None,
+        "current_proof": {
+            "binding": proof.binding, "completed_at": clock(proof.completed_at),
+            "stable_since": clock(proof.stable_since), "stable_last": clock(proof.stable_last),
+            "acknowledged_at": clock(proof.acknowledged_at), "seen_at": clock(proof.seen_at),
+            "acknowledged_since": clock(proof.acknowledged_since),
+            "armed": proof.armed,
+        },
+    }}
+
+
+def _retry_channels(payload, legacy, now):
+    """Malformed optional state cannot erase existing stop/ownership journals."""
+    if payload is None:
+        return legacy
+    try:
+        if not isinstance(payload, dict) or type(payload.get("version")) is not int or (
+            payload["version"] != 1
+        ):
+            raise ValueError
+        channels = tuple(_retry_channel(payload[key], now) for key in ("current", "limit", "start"))
+        signature = payload.get("current_signature")
+        if not isinstance(signature, list) or len(signature) != 3 or any(
+            type(value) not in (int, float) or not isfinite(value) or value < 0
+            for value in signature
+        ) or signature[2] <= 0 or channels[0].target != signature[0]:
+            raise ValueError
+        if channels[1].target > 100 or channels[2].target != 1:
+            raise ValueError
+    except (KeyError, TypeError, ValueError, OverflowError):
+        # Legacy aggregate attempts/time intentionally overprotect every
+        # unknown channel. A corrupt extension is not a fresh episode.
+        return legacy
+    proof = _current_proof(payload.get("current_proof"), now)
+    if proof.completed_at is not None and (
+        channels[0].last_command_at is None
+        or proof.completed_at < channels[0].last_command_at
+    ):
+        proof = DirectEvseCurrentProof()
+    return replace(
+        legacy, current_retry=channels[0], limit_retry=channels[1], start_retry=channels[2],
+        current_signature=tuple(signature),
+        current_proof=proof,
+    )
+
+
+def _retry_clock(value, now):
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise ValueError
+    stamp = datetime.fromisoformat(value)
+    if stamp.tzinfo is None or stamp.utcoffset() is None or stamp > now:
+        raise ValueError
+    return stamp
+
+
+def _retry_channel(payload, now):
+    if not isinstance(payload, dict):
+        raise ValueError
+    target, attempts = payload.get("target"), payload.get("attempts")
+    last = _retry_clock(payload.get("last_command_at"), now)
+    if type(target) not in (int, float) or not isfinite(target) or target < 0 or (
+        type(attempts) is not int or attempts < 0
+    ) or (attempts > 0) != (last is not None):
+        raise ValueError
+    return DirectEvseRetryState(float(target), attempts, last)
+
+
+def _current_proof(payload, now):
+    try:
+        if not isinstance(payload, dict) or type(payload.get("armed")) is not bool:
+            raise ValueError
+        binding = payload.get("binding")
+        if binding is not None and (not isinstance(binding, str) or not 0 < len(binding) <= 256):
+            raise ValueError
+        clocks = {key: _retry_clock(payload.get(key), now) for key in (
+            "completed_at", "stable_since", "stable_last", "acknowledged_at", "seen_at",
+            "acknowledged_since",
+        )}
+        completed, since, last, acknowledged, seen, acknowledged_since = clocks.values()
+        if (binding is None) != (completed is None) or (
+            any(value is not None for value in (since, last, acknowledged, acknowledged_since))
+            and completed is None
+        ) or (since is None) != (last is None) or (
+            since is not None and (since <= completed or last < since)
+        ) or (last is not None and (seen is None or last > seen)) or (
+            (acknowledged is None) != (acknowledged_since is None)
+        ) or (acknowledged is not None and (
+            acknowledged <= completed or seen is None or acknowledged > seen
+            or acknowledged_since <= completed
+            or acknowledged - acknowledged_since < DIRECT_EVSE_FEEDBACK_SETTLE_INTERVAL
+        )) or (payload["armed"] and acknowledged is None):
+            raise ValueError
+        return DirectEvseCurrentProof(binding=binding, **clocks, armed=payload["armed"])
+    except (TypeError, ValueError, OverflowError):
+        return DirectEvseCurrentProof()
 
 
 def _pre_free(payload: object, now: datetime) -> PreFreeSessionState:

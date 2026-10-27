@@ -325,6 +325,15 @@ an actuator request/maximum during that wait still requires the normal
 curtailment, even when the older feedback already matched. Optimistic native
 command-cache mutations cannot substitute for measured vehicle feedback.
 
+Direct-EVSE retries retain separate persistent current, percentage-limit and
+start clocks. An unrelated limit edit or supervisor repair must not reset
+current backoff. One prompt correction may be earned only after a completed
+current call and advancing, source-bound settled physical measurements, using
+the existing EV telemetry age limit. Startup/reload cannot invent or renew
+that proof; a definite disconnect withdraws it without erasing unrelated
+cleanup duties. Physical current above baseline must still block automatic
+export. See [retry episode requirements and provenance](ev-retry-episodes.md).
+
 Restored active Full/Trip intent waits for completed Home Assistant startup
 and its initial vehicle/actuator feedback before becoming ready. The original
 timeout still counts; missing startup data is not a new permission to charge.

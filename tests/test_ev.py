@@ -1779,7 +1779,7 @@ def test_direct_reconciliation_retries_progressively_without_terminal_fault():
     assert direct_evse_retry_interval(100) == timedelta(minutes=30)
 
 
-def test_confirmed_attempt_budget_rearms_after_thirty_minutes():
+def test_requested_confirmation_alone_never_rearms_the_attempt_budget():
     now = datetime(2026, 9, 7, 20, tzinfo=UTC)
     matched = replace(
         DIRECT,
@@ -1806,8 +1806,9 @@ def test_confirmed_attempt_budget_rearms_after_thirty_minutes():
 
     assert rearmed.plan.reason == "feedback_confirmed"
     assert rearmed.state.phase == "confirmed"
-    assert rearmed.state.attempts == 0
-    assert rearmed.state.last_command_at is None
+    assert rearmed.state.attempts == 3
+    assert rearmed.state.last_command_at == stale.last_command_at
+    assert rearmed.state.current_proof.armed is False
 
 
 def test_direct_reconciliation_continues_at_capped_retry_interval():
@@ -1953,14 +1954,15 @@ def test_new_target_starts_a_fresh_reconciliation_episode():
     exhausted = DirectEvseReconciliationState(14, 90, 7, now, "awaiting_feedback")
     changed = reconcile_direct_evse(
         exhausted,
-        DIRECT,
+        replace(DIRECT, requested_current_a=14, charge_limit_percent=90, charge_switch_on=True),
         target_current_a=10,
         target_limit_percent=90,
         physical_ceiling_a=15,
         now=now + timedelta(seconds=1),
     )
     assert changed.plan.commands
-    assert changed.state.attempts == 1
+    assert changed.state.current_retry.attempts == 1
+    assert changed.state.limit_retry.attempts == changed.state.start_retry.attempts == 7
 
 
 def test_matching_feedback_confirms_without_rearming_same_target():

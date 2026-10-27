@@ -146,6 +146,7 @@ from .ev_observation_adapter import (
     capture_ev_feedback,
     ev_observation_entity_map,
 )
+from .ev_retry_feedback import capture_direct_evse_current_feedback
 from .ev_source_feedback import (
     before_export_inverter_feedback_valid,
     before_export_physical_feedback_valid,
@@ -171,7 +172,10 @@ from .planner.ev import (
     EV_SOC_MAX_PERCENT,
     AllowanceProjectionInputs,
     ChargeLimitInputs,
+    DirectEvseCurrentFeedback,
+    DirectEvseCurrentProof,
     DirectEvseObservation,
+    DirectEvseReconciliation,
     DirectEvseReconciliationState,
     EvCommandPlan,
     EvCurrentDecision,
@@ -205,7 +209,9 @@ from .planner.ev import (
     reconcile_direct_evse,
     reconcile_smart_socket_recovery,
     reconcile_smart_socket_stage,
+    record_direct_evse_current_completion,
     reset_smart_state_for_path,
+    settle_direct_evse_dispatch,
 )
 from .planner.ev_before_export import (
     EvBeforeExportImport,
@@ -539,13 +545,8 @@ class ActiveEvController:
                 self._full_startup_task = None
 
     async def async_supervisory_repair(self, now: datetime) -> None:
-        """Open one fresh, rate-bounded reconciliation epoch."""
-        if self.gate_status != "ready":
-            return
-        self.last_decision_at = None
-        self._decision_fingerprint = None
-        self.reconciliation = DirectEvseReconciliationState()
-        await self.async_reconcile(now)
+        """Re-evaluate under the owner lock without erasing pending retries."""
+        await self.async_reconcile(now, force_decision=True)
 
     async def _async_tick(self, _now) -> None:
         await self.async_reconcile()
@@ -574,20 +575,35 @@ class ActiveEvController:
             self.driving_history.add(now, transition.sample_kwh)
         await self._async_save(now)
 
-    async def async_reconcile(self, now: datetime | None = None) -> None:
+    async def async_reconcile(
+        self, now: datetime | None = None, *, force_decision: bool = False,
+    ) -> None:
         """Run one reconciliation with task-local feedback that cannot leak."""
         token = _CYCLE_FEEDBACK.set(None)
         try:
-            await self._async_reconcile_cycle(now)
+            if force_decision:
+                await self._async_reconcile_cycle(now, force_decision=True)
+            else:
+                await self._async_reconcile_cycle(now)
         finally:
             _CYCLE_FEEDBACK.reset(token)
 
-    async def _async_reconcile_cycle(self, now: datetime | None = None) -> None:
+    async def _async_reconcile_cycle(
+        self, now: datetime | None = None, *, force_decision: bool = False,
+    ) -> None:
         """Sample feedback, make a three-minute decision, then reconcile safely."""
         async with self._lock:
             now = now or dt_util.now()
             if maintenance_writes_blocked(self.hass):
                 return
+            if force_decision:
+                if self.gate_status != "ready":
+                    return
+                # A supervisor may have waited behind an in-flight command.
+                # Evaluate its new cohort at the clock after acquiring ownership.
+                now = max(now, dt_util.now().astimezone(now.tzinfo))
+                self.last_decision_at = None
+                self._decision_fingerprint = None
             feedback = self._capture_feedback()
             _CYCLE_FEEDBACK.set(feedback)
             self.capacity_evidence(now)
@@ -624,6 +640,7 @@ class ActiveEvController:
                 self.charge_switch_on = observation.charge_switch_on
             # Retirement is a read-only lifecycle transition, including while
             # control is disabled or phase-current telemetry is unavailable.
+            await self._async_disarm_disconnected_current_proof(now)
             await self._async_retire_disconnected_reconciliation(now)
             await self._async_complete_baseline_handoff(now)
             vehicle_soc = self._mapped_number(
@@ -1059,6 +1076,7 @@ class ActiveEvController:
                 # normal direct-EVSE reconciliation remains rate-bounded from
                 # this fresh epoch onward.
                 self.reconciliation = DirectEvseReconciliationState()
+            retry_feedback = self._direct_retry_feedback(now)
             runtime = finalize_direct_evse_reconciliation(
                 reconcile_direct_evse(
                     self.reconciliation,
@@ -1068,6 +1086,11 @@ class ActiveEvController:
                     physical_ceiling_a=self._float(CONF_EV_MAX_CURRENT, 0.0),
                     now=now,
                     charge_to_full=charge_to_full_requested,
+                    current_feedback=retry_feedback,
+                    current_feedback_max_age_seconds=self._float(
+                        CONF_EV_TELEMETRY_MAX_AGE_SECONDS,
+                        DEFAULT_EV_TELEMETRY_MAX_AGE_SECONDS,
+                    ),
                 ),
                 in_free_window=in_window,
                 outside_enabled=availability.outside_enabled,
@@ -1128,6 +1151,8 @@ class ActiveEvController:
                 self.last_actions = await self._adapter.async_execute(transition.plan)  # type: ignore[union-attr]
             except EvWriteBlocked:
                 self.last_actions = self._adapter.last_executed  # type: ignore[union-attr]
+                self._settle_direct_dispatch(transition)
+                self._record_direct_current_receipt(retry_feedback)
                 self.writes_performed += len(self.last_actions)
                 if self.last_actions:
                     self.last_write_at = now
@@ -1146,6 +1171,8 @@ class ActiveEvController:
                 return
             except Exception:  # service failure is retained for bounded retry diagnostics
                 self.last_actions = self._adapter.last_executed  # type: ignore[union-attr]
+                self._settle_direct_dispatch(transition)
+                self._record_direct_current_receipt(retry_feedback)
                 self.writes_performed += len(self.last_actions)
                 if self.last_actions:
                     self.last_write_at = now
@@ -1153,10 +1180,45 @@ class ActiveEvController:
                 _LOGGER.exception("Direct EVSE reconciliation service call failed")
                 await self._async_save(now)
                 return
+            self._settle_direct_dispatch(transition)
+            self._record_direct_current_receipt(retry_feedback)
             self.writes_performed += len(self.last_actions)
             self.last_write_at = now
             self.last_reason = "ev_commands_sent_awaiting_feedback"
             await self._async_save(now)
+
+    def _direct_retry_feedback(self, now: datetime) -> DirectEvseCurrentFeedback | None:
+        """Read existing native measurements; never grant charge/export authority."""
+        if self.coordinator.runtime_config.ev_policy.charge_path == EV_CHARGE_PATH_SMART_SOCKET:
+            return None
+        return capture_direct_evse_current_feedback(
+            self.hass, self._capture_feedback(), now=now,
+            max_age_seconds=self._float(
+                CONF_EV_TELEMETRY_MAX_AGE_SECONDS, DEFAULT_EV_TELEMETRY_MAX_AGE_SECONDS,
+            ),
+        )
+
+    def _settle_direct_dispatch(self, transition: DirectEvseReconciliation) -> None:
+        """Refund only a proven never-invoked suffix, not uncertain delivery."""
+        invoked = getattr(self._adapter, "last_invoked", None)
+        if isinstance(invoked, tuple):
+            self.reconciliation = settle_direct_evse_dispatch(
+                transition, invoked_actions=invoked,
+            )
+
+    def _record_direct_current_receipt(
+        self, feedback: DirectEvseCurrentFeedback | None,
+    ) -> None:
+        """Only an action-specific completed current call can start proof dwell."""
+        if self.coordinator.runtime_config.ev_policy.charge_path == EV_CHARGE_PATH_SMART_SOCKET:
+            return
+        for receipt in getattr(self._adapter, "last_receipts", ()):
+            if receipt.action == "set_charge_current":
+                self.reconciliation = record_direct_evse_current_completion(
+                    self.reconciliation, completed_at=receipt.completed_at,
+                    binding=(feedback.binding if feedback is not None
+                             and self.gate_status == "ready" else None),
+                )
 
     async def _async_complete_baseline_handoff(self, now: datetime) -> None:
         """Retire a backfill stop only after the protected baseline is proved.
@@ -1253,6 +1315,22 @@ class ActiveEvController:
             self._apply_daily_backfill_cycle_state(prior)
             self.outside_stop_requested = prior_outside_stop
             self.when_connected_owned = prior_prompt_owner
+            raise
+
+    async def _async_disarm_disconnected_current_proof(self, now: datetime) -> None:
+        """A proved unplug ends eligibility, not pending retry/owner duties."""
+        if (
+            self.reconciliation.current_proof == DirectEvseCurrentProof()
+            or self.coordinator.runtime_config.ev_policy.charge_path == EV_CHARGE_PATH_SMART_SOCKET
+            or not self._zero_stop_feedback_confirmed(now, disconnected=True)
+        ):
+            return
+        previous = self.reconciliation
+        self.reconciliation = replace(previous, current_proof=DirectEvseCurrentProof())
+        try:
+            await self._async_save(now)
+        except Exception:
+            self.reconciliation = previous
             raise
 
     async def _async_retire_disconnected_reconciliation(self, now: datetime) -> None:
@@ -1458,16 +1536,27 @@ class ActiveEvController:
             observation.charge_limit_percent, charge_to_full=False
         )
         self.decision_phase = "protected_baseline"
+        retry_feedback = self._direct_retry_feedback(now)
         transition = reconcile_direct_evse(
             self.reconciliation, observation,
             target_current_a=target, target_limit_percent=self.target_limit_percent,
             physical_ceiling_a=self._path_ceiling_a(), now=now, charge_to_full=False,
+            current_feedback=retry_feedback,
+            current_feedback_max_age_seconds=self._float(
+                CONF_EV_TELEMETRY_MAX_AGE_SECONDS,
+                DEFAULT_EV_TELEMETRY_MAX_AGE_SECONDS,
+            ),
         )
         if gate == "safety_locked":
             self.last_actions = tuple(f"would_{cmd.action}" for cmd in transition.plan.commands)
             return
         self.reconciliation = transition.state
-        await self._async_execute_ev_plan(transition.plan, now)
+        # Reducing cleanup uses the same durable intent-before-dispatch rule:
+        # a crash must not resurrect a consumed repair token or old cooldown.
+        await self._async_save(now)
+        await self._async_execute_ev_plan(
+            transition.plan, now, retry_feedback=retry_feedback, retry_transition=transition,
+        )
         await self._async_complete_baseline_handoff(now)
 
     async def _async_reconcile_outside_stop(
@@ -1997,7 +2086,11 @@ class ActiveEvController:
         self.smart_stage_started_at = transition.state.started_at
         return transition.plan
 
-    async def _async_execute_ev_plan(self, plan: EvCommandPlan, now: datetime) -> None:
+    async def _async_execute_ev_plan(
+        self, plan: EvCommandPlan, now: datetime, *,
+        retry_feedback: DirectEvseCurrentFeedback | None = None,
+        retry_transition: DirectEvseReconciliation | None = None,
+    ) -> None:
         try:
             self.last_actions = await self._adapter.async_execute(plan)  # type: ignore[union-attr]
         except EvWriteBlocked:
@@ -2009,6 +2102,10 @@ class ActiveEvController:
             _LOGGER.exception("Smart-socket EV service call failed")
         else:
             self.last_reason = plan.reason
+        if retry_transition is not None and plan.commands:
+            self._settle_direct_dispatch(retry_transition)
+        if any(command.action == "set_charge_current" for command in plan.commands):
+            self._record_direct_current_receipt(retry_feedback)
         self.writes_performed += len(self.last_actions)
         if self.last_actions:
             self.last_write_at = now
@@ -5063,6 +5160,12 @@ class ActiveEvController:
 
     async def _async_save(self, now: datetime | None = None) -> None:
         saved_at = now or dt_util.now()
+        completed_at = self.reconciliation.current_proof.completed_at
+        if completed_at is not None and completed_at > saved_at:
+            # An awaited service may finish after the decision's clock. Validate
+            # its receipt against the real checkpoint time, not the old cycle
+            # time; a genuinely future/corrupt receipt still fails the codec.
+            saved_at = max(saved_at, dt_util.now())
         persisted = EvPersistenceState(
             restored_at=saved_at,
             grid_average_payload=self.grid_average.to_payload(),

@@ -1061,6 +1061,14 @@ earlier HACS pre-free selected its target exclusively. See the
   operation; rc15 replaces its terminal three-attempt latch with progressively
   slower retries capped at a 30-minute interval until off feedback arrives.
 
+- [x] Refine direct-EVSE retry isolation locally: independent current, limit
+  and start timing; source-bound measured settling before one prompt repair;
+  conservative persistence, startup/reconnect and partial-action handling.
+  Preserve physical baseline proof before forced export and all energy/current
+  limits. Planner, codec, adapter and joint native lifecycle regressions cover
+  these boundaries. Implementation is unreleased and not deployed; see
+  [provenance and limits](docs/ev-retry-episodes.md).
+
 - [x] Decouple EV driving and charge-limit learning from the live cable-
   connection gate. A disconnected vehicle currently causes the EV controller
   to return before evaluating otherwise valid stored-energy, SoC, actuator

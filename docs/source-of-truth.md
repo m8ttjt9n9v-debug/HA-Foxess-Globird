@@ -684,6 +684,12 @@ by this correction. Repository regressions do not establish live acceptance.
   target has no terminal attempt-count latch: retry intervals progress from
   30 seconds through 1, 2, 4, 8 and 16 minutes, then remain capped at 30
   minutes; the episode and its timing survive restart.
+  The unreleased retry refinement separates current, percentage-limit and start
+  clocks in that same journal. Only completed current actions followed by
+  advancing, settled native measurements can earn one prompt current repair;
+  limit edits and optimistic echoes cannot. This is not physical export proof:
+  actual current above the protected baseline still withholds forced export.
+  See [retry provenance and lifecycle](ev-retry-episodes.md).
 - Charge-to-full operator intent is an integration-owned, persistent switch;
   it is not a site entity mapping. Existing installations retain the effective
   state of the pilot-style external helper until the HEO switch is first used.

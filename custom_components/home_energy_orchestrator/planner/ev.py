@@ -8,7 +8,7 @@ silently replace its branch order.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta
 from math import ceil, floor, isfinite
 from typing import Literal
@@ -414,6 +414,39 @@ def reset_smart_state_for_path(
 
 
 @dataclass(frozen=True, slots=True)
+class DirectEvseRetryState:
+    """One action's durable retry clock, independent of other setpoints."""
+
+    target: float | None = None
+    attempts: int = 0
+    last_command_at: datetime | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class DirectEvseCurrentFeedback:
+    """An already-qualified original vehicle measurement, never a HA echo."""
+
+    binding: str
+    measured_at: datetime
+    requested_current_a: float
+    actual_current_a: float
+
+
+@dataclass(frozen=True, slots=True)
+class DirectEvseCurrentProof:
+    """One source-bound, completed-current episode's correction eligibility."""
+
+    binding: str | None = None
+    completed_at: datetime | None = None
+    stable_since: datetime | None = None
+    stable_last: datetime | None = None
+    acknowledged_at: datetime | None = None
+    seen_at: datetime | None = None
+    armed: bool = False
+    acknowledged_since: datetime | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class DirectEvseReconciliationState:
     """Restart-safe, rate-bounded command/feedback state for one direct EVSE."""
 
@@ -422,6 +455,11 @@ class DirectEvseReconciliationState:
     attempts: int = 0
     last_command_at: datetime | None = None
     phase: str = "idle"
+    current_retry: DirectEvseRetryState | None = None
+    limit_retry: DirectEvseRetryState | None = None
+    start_retry: DirectEvseRetryState | None = None
+    current_signature: tuple[float, float, float] | None = None
+    current_proof: DirectEvseCurrentProof = field(default_factory=DirectEvseCurrentProof)
 
 
 @dataclass(frozen=True, slots=True)
@@ -430,6 +468,10 @@ class DirectEvseReconciliation:
 
     state: DirectEvseReconciliationState
     plan: EvCommandPlan
+    # Ephemeral rollback evidence for a known, uninvoked suffix of this exact
+    # plan. The durable state is still checkpointed before dispatch, so a crash
+    # or uncertain service outcome conservatively retains its attempted clock.
+    pre_dispatch_state: DirectEvseReconciliationState | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -1213,6 +1255,36 @@ def plan_direct_evse_commands(
     rehearsal: bool = False,
 ) -> EvCommandPlan:
     """Port the pilot site's direct path without adding stop/pause behavior."""
+    bounded_current, bounded_limit, reason = _direct_evse_effective_targets(
+        observation, target_current_a=target_current_a,
+        target_limit_percent=target_limit_percent, physical_ceiling_a=physical_ceiling_a,
+        start_allowed=start_allowed, charge_to_full=charge_to_full, rehearsal=rehearsal,
+    )
+    if bounded_current is None or bounded_limit is None:
+        return EvCommandPlan((), reason)
+    current_step = float(observation.current_step_a)
+    limit_step = float(observation.limit_step_percent)
+    commands: list[EvCommand] = []
+    if abs(observation.charge_limit_percent - bounded_limit) >= limit_step:
+        commands.append(EvCommand("set_charge_limit", bounded_limit))
+    if abs(observation.requested_current_a - bounded_current) >= current_step:
+        commands.append(EvCommand("set_charge_current", round(bounded_current, 3)))
+    if not observation.charge_switch_on:
+        commands.append(EvCommand("start_charging"))
+    return EvCommandPlan(tuple(commands), "direct_path_ready")
+
+
+def _direct_evse_effective_targets(
+    observation: DirectEvseObservation,
+    *,
+    target_current_a: float,
+    target_limit_percent: float,
+    physical_ceiling_a: float,
+    start_allowed: bool,
+    charge_to_full: bool = False,
+    rehearsal: bool = False,
+) -> tuple[float | None, float | None, str]:
+    """Share the original rounding/caps between planning and retry identity."""
     _validate_direct_observation(
         observation, target_current_a, target_limit_percent, physical_ceiling_a
     )
@@ -1221,7 +1293,7 @@ def plan_direct_evse_commands(
         charge_to_full=charge_to_full,
     )
     if rehearsal:
-        return EvCommandPlan((), "rehearsal_mode")
+        return None, None, "rehearsal_mode"
     metadata = (
         observation.current_minimum_a,
         observation.current_maximum_a,
@@ -1231,7 +1303,7 @@ def plan_direct_evse_commands(
         observation.limit_step_percent,
     )
     if any(value is None for value in metadata):
-        return EvCommandPlan((), "actuator_metadata_unavailable")
+        return None, None, "actuator_metadata_unavailable"
     current_minimum = float(observation.current_minimum_a)
     current_maximum = float(observation.current_maximum_a)
     current_step = float(observation.current_step_a)
@@ -1248,17 +1320,17 @@ def plan_direct_evse_commands(
         or current_minimum > current_maximum
         or limit_minimum > limit_maximum
     ):
-        return EvCommandPlan((), "actuator_metadata_invalid")
+        return None, None, "actuator_metadata_invalid"
     bounded_current = min(target_current_a, physical_ceiling_a, current_maximum)
     bounded_current = floor(bounded_current / current_step) * current_step
     if not start_allowed or bounded_current < current_minimum:
-        return EvCommandPlan((), "direct_path_not_allowed")
+        return None, None, "direct_path_not_allowed"
     # Use the same minimum-origin increment for target and upper bound. Clipping
     # an upward-rounded target to an off-step maximum must not emit that value.
     # Full changes energy authority, not actuator constraints or percentage range.
     upper_limit = min(limit_maximum, EV_SOC_MAX_PERCENT)
     if limit_minimum > upper_limit:
-        return EvCommandPlan((), "direct_path_charge_limit_cap_unrepresentable")
+        return None, None, "direct_path_charge_limit_cap_unrepresentable"
     representable_upper = limit_minimum + floor(
         (upper_limit - limit_minimum) / limit_step
     ) * limit_step
@@ -1266,14 +1338,7 @@ def plan_direct_evse_commands(
         (target_limit_percent - limit_minimum) / limit_step
     ) * limit_step
     bounded_limit = min(max(rounded_limit, limit_minimum), representable_upper)
-    commands: list[EvCommand] = []
-    if abs(observation.charge_limit_percent - bounded_limit) >= limit_step:
-        commands.append(EvCommand("set_charge_limit", bounded_limit))
-    if abs(observation.requested_current_a - bounded_current) >= current_step:
-        commands.append(EvCommand("set_charge_current", round(bounded_current, 3)))
-    if not observation.charge_switch_on:
-        commands.append(EvCommand("start_charging"))
-    return EvCommandPlan(tuple(commands), "direct_path_ready")
+    return bounded_current, bounded_limit, "direct_path_ready"
 
 
 def direct_evse_response_matches(
@@ -1317,120 +1382,316 @@ def reconcile_direct_evse(
     now: datetime,
     charge_to_full: bool = False,
     feedback_settle_interval: timedelta = DIRECT_EVSE_FEEDBACK_SETTLE_INTERVAL,
+    current_feedback: DirectEvseCurrentFeedback | None = None,
+    current_feedback_max_age_seconds: float | None = None,
 ) -> DirectEvseReconciliation:
-    """Rate-bound feedback retries without abandoning a valid target."""
+    """Rate-bound each action; only measured settled current earns a repair.
+
+    The original command planner still owns all physical targets. A completed
+    service is merely a receipt, not physical confirmation or export authority.
+    The optional feedback must already have passed the native source boundary.
+    """
     if now.tzinfo is None or now.utcoffset() is None:
         raise ValueError("reconciliation time must be timezone-aware")
     if feedback_settle_interval < timedelta(0):
         raise ValueError("feedback settle interval must be non-negative")
+    maximum_age = (
+        feedback_settle_interval.total_seconds()
+        if current_feedback_max_age_seconds is None else current_feedback_max_age_seconds
+    )
+    if not isfinite(maximum_age) or maximum_age < 0:
+        raise ValueError("current feedback age must be finite and non-negative")
     target_limit_percent = cap_direct_charge_limit_target(
         target_limit_percent,
         charge_to_full=charge_to_full,
     )
-    target_changed = (
-        state.target_current_a != target_current_a
-        or state.target_limit_percent != target_limit_percent
+    bounded_current, bounded_limit, reason = _direct_evse_effective_targets(
+        observation, target_current_a=target_current_a,
+        target_limit_percent=target_limit_percent, physical_ceiling_a=physical_ceiling_a,
+        start_allowed=True, charge_to_full=charge_to_full,
     )
-    if target_changed:
-        state = DirectEvseReconciliationState(
-            target_current_a=target_current_a,
-            target_limit_percent=target_limit_percent,
-            phase="target_changed",
-        )
-    elif (
-        state.attempts > 0
-        and state.last_command_at is not None
-        and state.phase == "confirmed"
-        and now - state.last_command_at >= DIRECT_EVSE_RETRY_INTERVALS[-1]
-    ):
-        # A target that remained confirmed for the full capped interval starts
-        # a fresh episode if another writer later changes it.
-        state = DirectEvseReconciliationState(
-            target_current_a=target_current_a,
-            target_limit_percent=target_limit_percent,
-            phase="cooldown_rearmed",
-        )
-    if direct_evse_response_matches(
-        observation,
-        target_current_a=target_current_a,
-        target_limit_percent=target_limit_percent,
-        physical_ceiling_a=physical_ceiling_a,
-        charge_to_full=charge_to_full,
-    ):
+    if bounded_current is None or bounded_limit is None:
         return DirectEvseReconciliation(
-            DirectEvseReconciliationState(
-                target_current_a,
-                target_limit_percent,
-                state.attempts,
-                state.last_command_at,
-                "confirmed",
-            ),
-            EvCommandPlan((), "feedback_confirmed"),
+            replace(state, phase="blocked", current_proof=DirectEvseCurrentProof()),
+            EvCommandPlan((), reason),
         )
-    retry_interval = direct_evse_retry_interval(state.attempts)
-    if state.last_command_at is not None and now - state.last_command_at < retry_interval:
-        return DirectEvseReconciliation(
-            DirectEvseReconciliationState(
-                target_current_a,
-                target_limit_percent,
-                state.attempts,
-                state.last_command_at,
-                "awaiting_feedback",
-            ),
-            EvCommandPlan((), "awaiting_feedback"),
+
+    # Legacy payloads did not say which action was attempted. Carry their
+    # elapsed-time bound into every potentially pending action, not a new lease.
+    legacy_current = state.target_current_a
+    if legacy_current is not None:
+        legacy_current = floor(min(
+            legacy_current, physical_ceiling_a, float(observation.current_maximum_a),
+        ) / float(observation.current_step_a)) * float(observation.current_step_a)
+    current = state.current_retry or DirectEvseRetryState(
+        legacy_current, state.attempts, state.last_command_at,
+    )
+    legacy_limit = state.target_limit_percent
+    if legacy_limit is not None:
+        _, legacy_limit, _ = _direct_evse_effective_targets(
+            observation, target_current_a=target_current_a,
+            target_limit_percent=legacy_limit, physical_ceiling_a=physical_ceiling_a,
+            start_allowed=True, charge_to_full=charge_to_full,
         )
+    limit = state.limit_retry or DirectEvseRetryState(
+        legacy_limit, state.attempts, state.last_command_at,
+    )
+    start = state.start_retry or DirectEvseRetryState(
+        1.0 if state.target_current_a is not None else None,
+        state.attempts, state.last_command_at,
+    )
+    signature = (
+        bounded_current, float(observation.current_minimum_a), float(observation.current_step_a),
+    )
+    current_changed = current.target != bounded_current or (
+        state.current_signature is not None and state.current_signature != signature
+    )
+    proof = state.current_proof
+    if current_changed:
+        current = DirectEvseRetryState(bounded_current)
+        proof = DirectEvseCurrentProof()
+    if limit.target != bounded_limit:
+        limit = DirectEvseRetryState(bounded_limit)
+    if start.target != 1.0:
+        start = DirectEvseRetryState(1.0)
+
+    qualified = _direct_current_feedback_valid(
+        current_feedback, observation, now, maximum_age,
+    )
+    if qualified and proof.seen_at is not None and current_feedback.measured_at < proof.seen_at:
+        qualified = False
+    if qualified and proof.binding is not None and current_feedback.binding != proof.binding:
+        proof = DirectEvseCurrentProof()
+    matched = qualified and (
+        current_feedback.requested_current_a == bounded_current
+        and current_feedback.actual_current_a <= bounded_current
+    )
+    post_receipt = qualified and (
+        proof.binding == current_feedback.binding and proof.completed_at is not None
+        and current_feedback.measured_at > proof.completed_at
+    )
+    if not observation.charge_switch_on:
+        # A genuinely running, settled session may restart promptly once. An
+        # optimistic ON echo or an unsuccessful start cannot rearm this clock.
+        if qualified and proof.armed and proof.binding == current_feedback.binding and (
+            proof.acknowledged_at is not None
+            and current_feedback.measured_at > proof.acknowledged_at
+            and (proof.seen_at is None or current_feedback.measured_at > proof.seen_at)
+        ):
+            start = DirectEvseRetryState(1.0)
+        # Connected/off is not a new current command. Keep only the same-source
+        # completed-current receipt; after START, advancing ON measurements must
+        # earn a new full dwell. No prior ACK or running dwell crosses the stop.
+        # Definite unplug is separately retired by the runtime. Unknown/off HA
+        # echoes are not qualified and cannot preserve or rearm this evidence.
+        proof = (
+            DirectEvseCurrentProof(
+                binding=proof.binding, completed_at=proof.completed_at,
+                seen_at=current_feedback.measured_at,
+            )
+            if post_receipt else DirectEvseCurrentProof()
+        )
+    elif matched and post_receipt:
+        stamp = current_feedback.measured_at
+        gap = proof.stable_last is not None and (
+            stamp - proof.stable_last
+        ).total_seconds() > maximum_age
+        since = stamp if proof.stable_since is None or gap else proof.stable_since
+        advancing = proof.seen_at is None or stamp > proof.seen_at
+        if (proof.stable_last is not None and stamp > proof.stable_last) or (
+            proof.stable_last is None and advancing
+        ):
+            proof = replace(proof, stable_since=since, stable_last=stamp)
+            if stamp - since >= max(
+                feedback_settle_interval, DIRECT_EVSE_FEEDBACK_SETTLE_INTERVAL,
+            ):
+                proof = replace(
+                    proof, armed=True, acknowledged_at=stamp, acknowledged_since=since,
+                )
+    elif not matched:
+        proof = replace(proof, stable_since=None, stable_last=None)
+
+    # A measured overcurrent still needs a reducing setpoint even when the
+    # requested-number cache says the target is already set. This grants no
+    # extra amps and does not replace the independent physical export gate.
+    adjusted = observation
+    if qualified and current_feedback.actual_current_a > bounded_current:
+        adjusted = replace(observation, requested_current_a=max(
+            observation.requested_current_a, current_feedback.actual_current_a,
+        ))
     plan = plan_direct_evse_commands(
-        observation,
-        target_current_a=target_current_a,
-        target_limit_percent=target_limit_percent,
-        physical_ceiling_a=physical_ceiling_a,
-        start_allowed=True,
-        charge_to_full=charge_to_full,
+        adjusted, target_current_a=bounded_current, target_limit_percent=target_limit_percent,
+        physical_ceiling_a=physical_ceiling_a, start_allowed=True, charge_to_full=charge_to_full,
     )
-    current_feedback_changed_after_command = (
-        state.attempts > 0
-        and state.last_command_at is not None
-        and observation.requested_current_changed_at is not None
-        and observation.requested_current_changed_at <= now
-        and observation.requested_current_changed_at > state.last_command_at
+    has_current = any(command.action == "set_charge_current" for command in plan.commands)
+    rearmed = bool(
+        qualified and observation.charge_switch_on and proof.armed and has_current
+        and proof.acknowledged_at is not None
+        and current_feedback.measured_at > proof.acknowledged_at
+        and (current_feedback.requested_current_a > bounded_current
+             or current_feedback.actual_current_a > bounded_current)
     )
-    current_feedback_is_settling = (
-        current_feedback_changed_after_command
-        and now - observation.requested_current_changed_at < feedback_settle_interval
-        and any(command.action == "set_charge_current" for command in plan.commands)
-    )
-    if current_feedback_is_settling:
-        return DirectEvseReconciliation(
-            DirectEvseReconciliationState(
-                target_current_a,
-                target_limit_percent,
-                state.attempts,
-                state.last_command_at,
-                "awaiting_stable_current_feedback",
-            ),
-            EvCommandPlan((), "awaiting_stable_current_feedback"),
+    if rearmed:
+        current = DirectEvseRetryState(bounded_current)
+        proof = replace(proof, armed=False, stable_since=None, stable_last=None)
+    if qualified:
+        proof = replace(proof, seen_at=current_feedback.measured_at)
+
+    retries = {"set_charge_current": current, "set_charge_limit": limit, "start_charging": start}
+    pre_dispatch_retries = dict(retries)
+    pre_dispatch_proof = proof
+    permitted: list[EvCommand] = []
+    settling = False
+    for command in plan.commands:
+        retry = retries[command.action]
+        if command.action == "set_charge_current" and bounded_current >= max(
+            observation.requested_current_a,
+            current_feedback.actual_current_a if qualified else 0.0,
+        ) and any(
+            earlier.action == "set_charge_limit" and earlier not in permitted
+            for earlier in plan.commands
+        ):
+            # A protective reduction may proceed while an independent limit
+            # retry waits; an increase still needs the original staged limit.
+            continue
+        if command.action == "start_charging" and any(
+            earlier.action in {"set_charge_current", "set_charge_limit"}
+            and earlier not in permitted for earlier in plan.commands
+        ):
+            # Independent clocks cannot start at an uncorrected higher current
+            # or limit. Awaited adapter ordering still guards partial failures.
+            continue
+        if retry.last_command_at is not None and (
+            now - retry.last_command_at < direct_evse_retry_interval(retry.attempts)
+        ):
+            continue
+        if command.action == "set_charge_current" and not rearmed and (
+            retry.attempts > 0 and retry.last_command_at is not None
+            and observation.requested_current_changed_at is not None
+            and retry.last_command_at < observation.requested_current_changed_at <= now
+            and now - observation.requested_current_changed_at < feedback_settle_interval
+        ):
+            settling = True
+            continue
+        retries[command.action] = replace(
+            retry, attempts=retry.attempts + 1, last_command_at=now,
         )
-    if not plan.commands:
-        return DirectEvseReconciliation(
-            DirectEvseReconciliationState(
-                target_current_a,
-                target_limit_percent,
-                state.attempts,
-                state.last_command_at,
-                "blocked",
-            ),
-            plan,
-        )
+        if command.action == "set_charge_current":
+            # Pre-dispatch persistence is not successful completion. Unknown
+            # service outcomes retain cooldown but cannot earn a new token.
+            proof = DirectEvseCurrentProof()
+        permitted.append(command)
+    phase = "confirmed" if not plan.commands else (
+        "awaiting_stable_current_feedback" if settling and not permitted else "awaiting_feedback"
+    )
+    next_reason = (
+        "feedback_confirmed" if not plan.commands else
+        "direct_path_ready" if permitted else
+        "awaiting_stable_current_feedback" if settling else "awaiting_feedback"
+    )
+    attempts = max(retry.attempts for retry in retries.values())
+    clocks = [
+        retry.last_command_at for retry in retries.values() if retry.last_command_at is not None
+    ]
+    next_state = DirectEvseReconciliationState(
+        target_current_a, target_limit_percent, attempts, max(clocks) if clocks else None,
+        phase, retries["set_charge_current"], retries["set_charge_limit"],
+        retries["start_charging"], signature, proof,
+    )
+    pre_dispatch_clocks = [
+        retry.last_command_at for retry in pre_dispatch_retries.values()
+        if retry.last_command_at is not None
+    ]
     return DirectEvseReconciliation(
-        DirectEvseReconciliationState(
-            target_current_a,
-            target_limit_percent,
-            state.attempts + 1,
-            now,
-            "awaiting_feedback",
+        next_state, EvCommandPlan(tuple(permitted), next_reason),
+        replace(
+            next_state,
+            attempts=max(retry.attempts for retry in pre_dispatch_retries.values()),
+            last_command_at=max(pre_dispatch_clocks) if pre_dispatch_clocks else None,
+            current_retry=pre_dispatch_retries["set_charge_current"],
+            limit_retry=pre_dispatch_retries["set_charge_limit"],
+            start_retry=pre_dispatch_retries["start_charging"],
+            current_proof=pre_dispatch_proof,
         ),
-        plan,
     )
+
+
+def settle_direct_evse_dispatch(
+    reconciliation: DirectEvseReconciliation, *, invoked_actions: tuple[str, ...],
+) -> DirectEvseReconciliationState:
+    """Undo only a known-uninvoked plan suffix, never an uncertain invocation.
+
+    Call after the adapter outcome and before attaching completed-current
+    receipts. A timed-out invoked action retains its persisted cooldown; an
+    earlier failed limit must not consume the untouched current/start clocks.
+    This is local command bookkeeping, not feedback or permission to export.
+    """
+    planned = tuple(command.action for command in reconciliation.plan.commands)
+    state, previous = reconciliation.state, reconciliation.pre_dispatch_state
+    if previous is None or not isinstance(invoked_actions, tuple) or (
+        len(invoked_actions) > len(planned)
+        or invoked_actions != planned[:len(invoked_actions)]
+    ):
+        # Invalid evidence cannot prove a command was not invoked.
+        return state
+    uninvoked = set(planned[len(invoked_actions):])
+    if not uninvoked:
+        return state
+    channels = {
+        action: getattr(previous if action in uninvoked else state, name)
+        for action, name in (
+            ("set_charge_current", "current_retry"),
+            ("set_charge_limit", "limit_retry"),
+            ("start_charging", "start_retry"),
+        )
+    }
+    if any(channel is None for channel in channels.values()):
+        return state
+    clocks = [
+        channel.last_command_at for channel in channels.values()
+        if channel.last_command_at is not None
+    ]
+    return replace(
+        state, attempts=max(channel.attempts for channel in channels.values()),
+        last_command_at=max(clocks) if clocks else None,
+        current_retry=channels["set_charge_current"],
+        limit_retry=channels["set_charge_limit"], start_retry=channels["start_charging"],
+        current_proof=(previous.current_proof if "set_charge_current" in uninvoked
+                       else state.current_proof),
+    )
+
+
+def _direct_current_feedback_valid(feedback, observation, now, maximum_age):
+    """Defend the pure boundary in addition to the native adapter's checks."""
+    try:
+        return bool(
+            isinstance(feedback, DirectEvseCurrentFeedback)
+            and isinstance(feedback.binding, str) and 0 < len(feedback.binding) <= 256
+            and isinstance(feedback.measured_at, datetime)
+            and feedback.measured_at.tzinfo is not None
+            and feedback.measured_at.utcoffset() is not None
+            and 0 <= (now - feedback.measured_at).total_seconds() <= maximum_age
+            and all(type(value) in (int, float) and isfinite(value) and value >= 0 for value in (
+                feedback.requested_current_a, feedback.actual_current_a,
+            ))
+            and feedback.requested_current_a == observation.requested_current_a
+        )
+    except (TypeError, ValueError, OverflowError):
+        return False
+
+
+def record_direct_evse_current_completion(
+    state: DirectEvseReconciliationState, *, completed_at: datetime, binding: str | None,
+) -> DirectEvseReconciliationState:
+    """Attach only an awaited current-service receipt, never a physical ACK."""
+    if completed_at.tzinfo is None or completed_at.utcoffset() is None:
+        raise ValueError("completion time must be timezone-aware")
+    retry = state.current_retry
+    if retry is None or retry.last_command_at is None or completed_at < retry.last_command_at:
+        return replace(state, current_proof=DirectEvseCurrentProof())
+    if not isinstance(binding, str) or not 0 < len(binding) <= 256:
+        return replace(state, current_proof=DirectEvseCurrentProof())
+    return replace(state, current_proof=DirectEvseCurrentProof(binding, completed_at))
 
 
 def plan_free_window_current(inputs: FreeWindowCurrentInputs) -> EvCurrentDecision:

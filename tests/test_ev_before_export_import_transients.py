@@ -206,14 +206,17 @@ async def test_duration_edit_during_import_does_not_renew_the_hold(hass, freezer
     assert any(call[:2] == ("switch", "turn_off") for call in calls)
 
 
-async def test_confirmed_session_remains_stable_after_retry_episode_rearms(hass, freezer):
+async def test_confirmed_session_retains_current_history_without_import_chatter(hass, freezer):
     now, calls, coordinator, controller = await _running(hass, freezer)
-    # The retained direct reconciler retires its old command count after a
-    # healthy capped retry interval. Confirmed physical ownership still exists.
+    current_retry = controller.reconciliation.current_retry
+    assert current_retry.attempts == 1
+    # Elapsed time or a matching request must not erase the independent retry
+    # history. Confirmed ownership still permits the existing short-import hold.
     now += timedelta(minutes=31)
     await _tick(hass, freezer, coordinator, controller, now)
     assert controller.reconciliation.phase == "confirmed"
-    assert controller.reconciliation.attempts == 0
+    assert controller.reconciliation.current_retry == current_retry
+    assert not calls
     await _tick(hass, freezer, coordinator, controller, now + timedelta(seconds=10), grid=0.5)
     assert controller.target_current_a == 8
     assert not any(call[:2] == ("switch", "turn_off") for call in calls)

@@ -1,6 +1,21 @@
 # Changelog
 
-## Unreleased — Respect configured EV charging targets
+## 0.12.63.dev3 — Local candidate: Independent, measured EV retry recovery
+
+- Separate direct-EVSE current, percentage-limit and start retry episodes in
+  the existing persistent journal. Limit edits and optimistic current echoes
+  no longer reset current backoff; supervisor repair preserves pending timing.
+- Permit one prompt correction after a completed current action and genuinely
+  advancing, settled native current feedback. Retain bounded retries for an
+  unresolved mismatch, source qualification, startup/reconnect handling and
+  conservative legacy/corrupt journal behavior.
+- Preserve all energy, inverter, electrical and physical export-handoff gates.
+  Requested baseline with actual current above baseline still blocks automatic
+  selling. Add local planner, lifecycle, persistence and joint-export regressions.
+  Preserve settings and dashboards. Installation requires named-site approval;
+  this local candidate is not an official GitHub/HACS release.
+
+### Included configured EV charging-target correction
 
 - Remove the arbitrary90% non-Full ceiling from normal EV command planning,
   free-window/surplus/backfill room and Dynamic reservation calculations. Use
@@ -14,8 +29,8 @@
   or beyond100%. Preserve the normal Tessie1% increment behavior.
 - Correct setup/reconfigure help and reusable documentation; add configured
   target, upper-range, setting-change, restart and safety regressions. No saved
-  settings, store schema or installed dashboards change. Commit only; release
-  and any further installation remain deliberately held during settling.
+  settings, store schema or installed dashboards change. Official release and
+  any further installation remain separately authorised during settling.
 
 ## 0.12.63.dev2 — Local candidate: Sleeping-EV reservation planning
 

@@ -101,7 +101,7 @@ async def test_unverified_external_discharge_alerts_but_is_never_repaired(
     assert "not verifiable" in events[0].data["message"]
 
 
-async def test_ev_mismatch_opens_a_fresh_reconciliation_after_grace(
+async def test_ev_mismatch_requests_supervisory_reevaluation_after_grace(
     hass: HomeAssistant, monkeypatch
 ) -> None:
     supervisor = _supervisor(hass)

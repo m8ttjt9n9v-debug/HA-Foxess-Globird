@@ -11,14 +11,16 @@ import subprocess
 import sys
 import tarfile
 import tempfile
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
 from custom_components.home_energy_orchestrator.planner.charge_session import (
     ChargeSessionState,
 )
 from custom_components.home_energy_orchestrator.planner.ev import (
+    DirectEvseCurrentProof,
     DirectEvseReconciliationState,
+    DirectEvseRetryState,
     SmartSocketRecoveryState,
 )
 from custom_components.home_energy_orchestrator.planner.ev_learning import (
@@ -79,6 +81,24 @@ def _current_rollback_bundle() -> dict[str, object]:
             attempts=2,
             last_command_at=recorded_at,
             phase="awaiting_feedback",
+            current_retry=DirectEvseRetryState(
+                5.0, 2, recorded_at - timedelta(seconds=120),
+            ),
+            limit_retry=DirectEvseRetryState(82.0, 2, recorded_at),
+            start_retry=DirectEvseRetryState(
+                1.0, 1, recorded_at - timedelta(seconds=180),
+            ),
+            current_signature=(5.0, 0.0, 1.0),
+            current_proof=DirectEvseCurrentProof(
+                binding="synthetic-rollback-binding",
+                completed_at=recorded_at - timedelta(seconds=90),
+                stable_since=recorded_at - timedelta(seconds=60),
+                stable_last=recorded_at - timedelta(seconds=30),
+                acknowledged_at=recorded_at - timedelta(seconds=30),
+                seen_at=recorded_at - timedelta(seconds=30),
+                armed=True,
+                acknowledged_since=recorded_at - timedelta(seconds=60),
+            ),
         ),
         pre_free_session=PreFreeSessionState(True, recorded_at),
         daily_backfill=DailyBackfillPersistenceState(
