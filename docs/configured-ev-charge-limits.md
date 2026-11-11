@@ -16,39 +16,34 @@ charging algorithm, add another writer or activate any setting.
 | Existing input or boundary | Corrected use |
 | --- | --- |
 | `ev_free_window_charge_limit_percent`, default90 | Retain the configured normal target, including95/100 where supported |
-| Learned general limit and direct baseline headroom | Keep their existing separate policy/anti-pause calculations |
+| Learned general limit and direct baseline headroom | Apply their existing calculations within the configured normal ceiling |
 | Direct-current writer's live charge-limit min/max/step | Qualify and use one minimum-origin increment for both target and supported upper value |
-| Former `NON_OVERRIDE_CHARGE_LIMIT_MAX_PERCENT=90` | Remove; use only the physical percentage-domain bound where a bound is needed |
+| Former `NON_OVERRIDE_CHARGE_LIMIT_MAX_PERCENT=90` | Use the site's configured normal ceiling, with the explicit Full/Trip override |
 | Before-export minimum plus recovery buffer | Clip to the existing configured normal target, not a hidden90 cap |
 | Dynamic wall-energy shortfall and backfill vehicle room | Use the same corrected normal target, without a second reservation |
 | Full/Trip intent | Preserve its independent paid-grid-capable authority and lifecycle |
 | Energy, reserve, source, ownership and electrical gates | Preserve at selection, continuation and every positive write |
 
-The normal target determines discretionary charging eligibility. The effective
-charge-limit setpoint sent to a connected protected-baseline vehicle may still
-include its configured anti-pause headroom. That was already a separate actuator
-contract; this correction does not turn off keepalive or invent a stricter cap.
-Selecting a normal100% target does not turn on Full, remove house protection or
-authorise paid grid energy outside the existing policy.
+The normal target determines discretionary charging eligibility and caps the
+effective charge-limit setpoint, including connected keepalive headroom. The
+controller skips ordinary starts at the effective limit. A configured 100%
+normal target uses ordinary charging authority. Full and Trip retain their
+separate override authority.
 
 At the direct write boundary, round the target upward on the actuator's
 minimum-origin increment, then cap it to the greatest supported increment no
-higher than the live maximum or100%. This corrects inconsistent zero-/minimum-
-origin rounding; Full is not an exception. With min50/max100/step7, target95
-becomes99, not98; with max96 it becomes92. The native Tessie50–100/step1 case
-is unchanged. Command construction and feedback confirmation use the same
-calculation, so a valid accepted step cannot create a false retry loop.
-This rounding correction is scoped to direct-current reconciliation; the
-separate learned/general limit-only writer retains its existing calculation.
-The supported native Tessie1% actuator behaves identically in both paths.
+higher than the configured ceiling and live actuator maximum. Full and Trip
+use the live maximum up to 100%. With a minimum of 50, a step of 7, and a
+ceiling of 90, the highest supported value is 85. Direct reconciliation and
+the learned/general limit writer share this calculation. The command adapter
+rechecks the ceiling before dispatch if settings or override state change.
 
 ## Stability and persistence
 
-No new hysteresis threshold, timer or owner is added. Existing buffered minimum
-recovery, solar/budget continuation, stop boundaries and persistent handoff state
-remain authoritative. A target edit is read through existing runtime configuration;
-restart/reconnect must still requalify sources and current energy authority.
-Headroom and a valid target never delay a safety stop or revive an expired intent.
+The charge ceiling is a hard upper bound at every measured SoC. The existing
+retry intervals bound repeated requests during unsettled feedback. Restart and
+reconnect requalify sources and current energy authority. A lower configured
+ceiling also bounds a target retained in the retry journal.
 
 ## Regression and compatibility contract
 

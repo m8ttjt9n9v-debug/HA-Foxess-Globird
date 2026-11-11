@@ -48,13 +48,13 @@ def cap_direct_charge_limit_target(
     target_limit_percent: float,
     *,
     charge_to_full: bool,
+    normal_limit_percent: float = EV_SOC_MAX_PERCENT,
 ) -> float:
-    """Keep every direct-path target in the physical percentage domain.
-
-    Full changes charging authority, never the meaning of a percentage. Retain
-    its keyword for caller compatibility, not as an exception to this bound.
-    """
-    return min(target_limit_percent, EV_SOC_MAX_PERCENT)
+    """Apply the site's normal ceiling or the physical bound for Full."""
+    return min(
+        target_limit_percent, EV_SOC_MAX_PERCENT,
+        EV_SOC_MAX_PERCENT if charge_to_full else normal_limit_percent,
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -1252,24 +1252,34 @@ def plan_direct_evse_commands(
     physical_ceiling_a: float,
     start_allowed: bool,
     charge_to_full: bool = False,
+    normal_limit_percent: float = EV_SOC_MAX_PERCENT,
+    vehicle_soc_percent: float | None = None,
     rehearsal: bool = False,
 ) -> EvCommandPlan:
     """Port the pilot site's direct path without adding stop/pause behavior."""
     bounded_current, bounded_limit, reason = _direct_evse_effective_targets(
         observation, target_current_a=target_current_a,
         target_limit_percent=target_limit_percent, physical_ceiling_a=physical_ceiling_a,
-        start_allowed=start_allowed, charge_to_full=charge_to_full, rehearsal=rehearsal,
+        start_allowed=start_allowed, charge_to_full=charge_to_full,
+        normal_limit_percent=normal_limit_percent, rehearsal=rehearsal,
     )
     if bounded_current is None or bounded_limit is None:
         return EvCommandPlan((), reason)
     current_step = float(observation.current_step_a)
     limit_step = float(observation.limit_step_percent)
     commands: list[EvCommand] = []
-    if abs(observation.charge_limit_percent - bounded_limit) >= limit_step:
+    if (observation.charge_limit_percent > cap_direct_charge_limit_target(
+            float(observation.limit_maximum_percent), charge_to_full=charge_to_full,
+            normal_limit_percent=normal_limit_percent,
+        ) or abs(observation.charge_limit_percent - bounded_limit) >= limit_step):
         commands.append(EvCommand("set_charge_limit", bounded_limit))
     if abs(observation.requested_current_a - bounded_current) >= current_step:
         commands.append(EvCommand("set_charge_current", round(bounded_current, 3)))
-    if not observation.charge_switch_on:
+    at_normal_limit = (
+        not charge_to_full and vehicle_soc_percent is not None
+        and vehicle_soc_percent >= bounded_limit
+    )
+    if not observation.charge_switch_on and not at_normal_limit:
         commands.append(EvCommand("start_charging"))
     return EvCommandPlan(tuple(commands), "direct_path_ready")
 
@@ -1282,6 +1292,7 @@ def _direct_evse_effective_targets(
     physical_ceiling_a: float,
     start_allowed: bool,
     charge_to_full: bool = False,
+    normal_limit_percent: float = EV_SOC_MAX_PERCENT,
     rehearsal: bool = False,
 ) -> tuple[float | None, float | None, str]:
     """Share the original rounding/caps between planning and retry identity."""
@@ -1291,6 +1302,7 @@ def _direct_evse_effective_targets(
     target_limit_percent = cap_direct_charge_limit_target(
         target_limit_percent,
         charge_to_full=charge_to_full,
+        normal_limit_percent=normal_limit_percent,
     )
     if rehearsal:
         return None, None, "rehearsal_mode"
@@ -1325,20 +1337,26 @@ def _direct_evse_effective_targets(
     bounded_current = floor(bounded_current / current_step) * current_step
     if not start_allowed or bounded_current < current_minimum:
         return None, None, "direct_path_not_allowed"
-    # Use the same minimum-origin increment for target and upper bound. Clipping
-    # an upward-rounded target to an off-step maximum must not emit that value.
-    # Full changes energy authority, not actuator constraints or percentage range.
-    upper_limit = min(limit_maximum, EV_SOC_MAX_PERCENT)
-    if limit_minimum > upper_limit:
+    upper_limit = cap_direct_charge_limit_target(
+        limit_maximum, charge_to_full=charge_to_full, normal_limit_percent=normal_limit_percent,
+    )
+    bounded_limit = _representable_charge_limit(
+        target_limit_percent, limit_minimum, upper_limit, limit_step,
+    )
+    if bounded_limit is None:
         return None, None, "direct_path_charge_limit_cap_unrepresentable"
-    representable_upper = limit_minimum + floor(
-        (upper_limit - limit_minimum) / limit_step
-    ) * limit_step
-    rounded_limit = limit_minimum + ceil(
-        (target_limit_percent - limit_minimum) / limit_step
-    ) * limit_step
-    bounded_limit = min(max(rounded_limit, limit_minimum), representable_upper)
     return bounded_current, bounded_limit, "direct_path_ready"
+
+
+def _representable_charge_limit(
+    target: float, minimum: float, maximum: float, step: float,
+) -> float | None:
+    """Round to a supported setting without crossing the ceiling."""
+    if minimum > maximum:
+        return None
+    upper = minimum + floor((maximum - minimum) / step) * step
+    rounded = minimum + ceil((target - minimum) / step) * step
+    return min(max(rounded, minimum), upper)
 
 
 def direct_evse_response_matches(
@@ -1381,6 +1399,8 @@ def reconcile_direct_evse(
     physical_ceiling_a: float,
     now: datetime,
     charge_to_full: bool = False,
+    normal_limit_percent: float = EV_SOC_MAX_PERCENT,
+    vehicle_soc_percent: float | None = None,
     feedback_settle_interval: timedelta = DIRECT_EVSE_FEEDBACK_SETTLE_INTERVAL,
     current_feedback: DirectEvseCurrentFeedback | None = None,
     current_feedback_max_age_seconds: float | None = None,
@@ -1404,11 +1424,13 @@ def reconcile_direct_evse(
     target_limit_percent = cap_direct_charge_limit_target(
         target_limit_percent,
         charge_to_full=charge_to_full,
+        normal_limit_percent=normal_limit_percent,
     )
     bounded_current, bounded_limit, reason = _direct_evse_effective_targets(
         observation, target_current_a=target_current_a,
         target_limit_percent=target_limit_percent, physical_ceiling_a=physical_ceiling_a,
         start_allowed=True, charge_to_full=charge_to_full,
+        normal_limit_percent=normal_limit_percent,
     )
     if bounded_current is None or bounded_limit is None:
         return DirectEvseReconciliation(
@@ -1522,6 +1544,8 @@ def reconcile_direct_evse(
     plan = plan_direct_evse_commands(
         adjusted, target_current_a=bounded_current, target_limit_percent=target_limit_percent,
         physical_ceiling_a=physical_ceiling_a, start_allowed=True, charge_to_full=charge_to_full,
+        normal_limit_percent=normal_limit_percent,
+        vehicle_soc_percent=vehicle_soc_percent,
     )
     has_current = any(command.action == "set_charge_current" for command in plan.commands)
     rearmed = bool(
@@ -1786,6 +1810,7 @@ class ChargeLimitInputs:
     maximum_percent: float
     step_percent: float
     charge_to_full: bool = False
+    normal_limit_percent: float = EV_SOC_MAX_PERCENT
 
 
 @dataclass(frozen=True, slots=True)
@@ -1802,6 +1827,7 @@ class GeneralChargeLimitEvidence:
     maximum_percent: float
     step_percent: float
     previous_write_fingerprint: tuple[float, float] | None
+    normal_limit_percent: float = EV_SOC_MAX_PERCENT
 
 
 @dataclass(frozen=True, slots=True)
@@ -1818,9 +1844,16 @@ class GeneralChargeLimitDecision:
 def plan_charge_limit_target(inputs: ChargeLimitInputs) -> float:
     """Preserve anti-pause headroom within actuator and percentage bounds."""
     _validate_charge_limit_inputs(inputs)
-    maximum = min(inputs.maximum_percent, EV_SOC_MAX_PERCENT)
+    maximum = cap_direct_charge_limit_target(
+        inputs.maximum_percent, charge_to_full=inputs.charge_to_full,
+        normal_limit_percent=inputs.normal_limit_percent,
+    )
     if not inputs.connected:
-        return round(min(inputs.current_limit_percent, maximum), 3)
+        return round(min(
+            inputs.current_limit_percent, inputs.maximum_percent, EV_SOC_MAX_PERCENT,
+        ), 3)
+    if maximum < inputs.minimum_percent:
+        return maximum
     policy = _clip(inputs.policy_limit_percent, inputs.minimum_percent, maximum)
     if not inputs.protected_baseline_required or inputs.vehicle_soc_percent is None:
         return round(min(policy, maximum), 3)
@@ -1851,9 +1884,23 @@ def evaluate_general_charge_limit(
             maximum_percent=evidence.maximum_percent,
             step_percent=evidence.step_percent,
             charge_to_full=evidence.charge_to_full,
+            normal_limit_percent=evidence.normal_limit_percent,
         )
     )
-    if abs(target - evidence.current_limit_percent) < evidence.step_percent:
+    maximum = cap_direct_charge_limit_target(
+        evidence.maximum_percent, charge_to_full=evidence.charge_to_full,
+        normal_limit_percent=evidence.normal_limit_percent,
+    )
+    target = _representable_charge_limit(
+        target, evidence.minimum_percent, maximum, evidence.step_percent,
+    )
+    if target is None:
+        return GeneralChargeLimitDecision(
+            maximum, "direct_path_charge_limit_cap_unrepresentable",
+            EvCommandPlan((), "direct_path_charge_limit_cap_unrepresentable"), None, "clear",
+        )
+    if (evidence.current_limit_percent <= maximum
+            and abs(target - evidence.current_limit_percent) < evidence.step_percent):
         return GeneralChargeLimitDecision(
             target,
             "outside_window_general_limit_confirmed",

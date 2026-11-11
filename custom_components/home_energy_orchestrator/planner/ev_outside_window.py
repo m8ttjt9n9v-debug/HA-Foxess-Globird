@@ -387,6 +387,7 @@ class OutsideChargeLimitEvidence:
     minimum_percent: float
     maximum_percent: float
     step_percent: float
+    normal_limit_percent: float = EV_SOC_MAX_PERCENT
 
 
 @dataclass(frozen=True, slots=True)
@@ -420,6 +421,7 @@ def evaluate_outside_charge_limit(
             maximum_percent=evidence.maximum_percent,
             step_percent=evidence.step_percent,
             charge_to_full=evidence.charge_to_full,
+            normal_limit_percent=evidence.normal_limit_percent,
         )
     )
     return OutsideChargeLimitEvaluation(policy_limit, target)

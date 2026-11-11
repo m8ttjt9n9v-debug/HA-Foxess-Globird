@@ -428,15 +428,15 @@ def test_charge_limit_retained_away_and_guard_is_capped_without_charge_to_full()
 
 
 @pytest.mark.parametrize(
-    "vehicle_soc,expected", [(88, 90), (89, 91), (90, 92), (95, 97), (100, 100)]
+    "vehicle_soc,expected", [(86, 88), (88, 90), (89, 90), (90, 90), (92, 90)]
 )
-def test_direct_anti_pause_headroom_retains_existing_rule_with_physical_soc_bound(
+def test_direct_anti_pause_headroom_respects_the_configured_ceiling(
     vehicle_soc, expected
 ):
     target = plan_charge_limit_target(
         ChargeLimitInputs(
             connected=True,
-            policy_limit_percent=90,
+            policy_limit_percent=85,
             current_limit_percent=90,
             vehicle_soc_percent=vehicle_soc,
             protected_baseline_required=True,
@@ -444,10 +444,34 @@ def test_direct_anti_pause_headroom_retains_existing_rule_with_physical_soc_boun
             minimum_percent=50,
             maximum_percent=100,
             step_percent=1,
+            normal_limit_percent=90,
         )
     )
 
     assert target == expected
+
+
+@pytest.mark.parametrize(
+    ("ceiling", "full", "step", "applied", "expected"),
+    [(90, False, 1, 92, 90), (90, False, 1, 90.2, 90), (90, False, 7, 92, 85),
+     (90, True, 1, 90, 100), (100, False, 1, 90, 100), (49, False, 1, 92, None)],
+)
+def test_direct_reconciliation_rechecks_configured_ceiling(ceiling, full, step, applied, expected):
+    observation = DirectEvseObservation(
+        requested_current_a=1, charge_limit_percent=applied, charge_switch_on=True,
+        current_minimum_a=1, current_maximum_a=16, current_step_a=1,
+        limit_minimum_percent=50, limit_maximum_percent=100, limit_step_percent=step,
+    )
+    result = reconcile_direct_evse(
+        DirectEvseReconciliationState(target_current_a=1, target_limit_percent=applied),
+        observation, target_current_a=1, target_limit_percent=100, physical_ceiling_a=16,
+        now=datetime(2026, 1, 1, tzinfo=UTC), charge_to_full=full, normal_limit_percent=ceiling,
+    )
+    if expected is None:
+        assert result.plan.reason == "direct_path_charge_limit_cap_unrepresentable"
+        assert not result.plan.commands
+    else:
+        assert result.plan.commands == (EvCommand("set_charge_limit", expected),)
 
 
 def test_normal_configured_100_does_not_require_or_enable_charge_to_full():
@@ -537,6 +561,15 @@ def test_general_limit_plans_one_deferred_write():
     assert decision.command_plan.commands == (EvCommand("set_charge_limit", 76),)
     assert decision.proposed_write_fingerprint == (76, 80)
     assert decision.fingerprint_transition == "set_on_execute"
+
+
+def test_general_limit_only_corrects_a_substep_ceiling_violation():
+    decision = evaluate_general_charge_limit(replace(
+        GENERAL_LIMIT, vehicle_soc_percent=90, current_limit_percent=90.2,
+        protected_baseline_required=True, normal_limit_percent=90,
+    ))
+
+    assert decision.command_plan.commands == (EvCommand("set_charge_limit", 90),)
 
 
 def test_general_limit_retains_duplicate_write_while_feedback_is_pending():

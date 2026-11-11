@@ -6,10 +6,10 @@ The existing normal EV target is configurable through0–100%;90% remains its
 default, not a separate cap. Remove the former arbitrary non-Full90% clamp from
 direct commands, ordinary charging room, backfill and Dynamic reservation.
 Physical percentage bounds and qualified live actuator maximum/steps remain.
-Learned-general selection and protected-baseline headroom retain their existing
-semantics; the effective actuator setpoint is not necessarily the normal policy
-target. Full/Trip remains independent energy/intent authority, not a prerequisite
-for an otherwise-authorised normal100% target. See
+The configured normal target also bounds learned-general targets, keepalive
+headroom and the final actuator write. A normal charge at its effective
+limit does not issue another start. Full and Trip retain their separate
+override authority. See
 [source mapping and regression contract](configured-ev-charge-limits.md).
 This explicitly requested correction supersedes the reference's90% policy;
 it is not a claim of unchanged source parity or a published/deployed release.

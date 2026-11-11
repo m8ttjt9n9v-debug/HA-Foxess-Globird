@@ -233,9 +233,8 @@ async def test_actual_heo_and_restored_wrapper_survive_split_projection_and_comp
         assert not site.ev._charge_to_full_requested()
         assert site.trip._state.full_generation == original_generation + 1
         assert full_calls == ["turn_off"]
-        # Releasing Full restores the existing normal 90% policy plus its
-        # configured 2-point anti-pause headroom, not an unrelated 90% cap.
-        assert site.ev.target_limit_percent == 92
+        # Releasing Full restores the normal ceiling, including at the baseline.
+        assert site.ev.target_limit_percent == 90
         assert not site.ev._charge_to_full_requested()
         assert site.ev.policy_route.route == "outside_window"
     finally:

@@ -48,6 +48,7 @@ class EvServiceAdapter:
         *,
         allow_writes: bool = False,
         write_guard: Callable[[], bool] | None = None,
+        charge_limit_guard: Callable[[float], bool] | None = None,
     ) -> None:
         if any(
             not entity.strip()
@@ -62,6 +63,7 @@ class EvServiceAdapter:
         self.entities = entities
         self.allow_writes = allow_writes
         self.write_guard = write_guard
+        self.charge_limit_guard = charge_limit_guard
         self._lock = asyncio.Lock()
         self.last_executed: tuple[str, ...] = ()
         self.last_invoked: tuple[str, ...] = ()
@@ -85,6 +87,9 @@ class EvServiceAdapter:
                     raise EvWriteBlocked("HEO maintenance is in progress")
                 if self.write_guard is not None and not self.write_guard():
                     raise EvWriteBlocked("EV write gate closed during command plan")
+                if (command.action == "set_charge_limit" and self.charge_limit_guard is not None
+                        and (command.value is None or not self.charge_limit_guard(command.value))):
+                    raise EvWriteBlocked("EV charge limit exceeds the active ceiling")
                 self.last_invoked += (command.action,)
                 await self._async_execute_command(command)
                 executed.append(command.action)

@@ -8,6 +8,9 @@
   energy/current authority and persistent handoffs; do not enable Full.
 - [x] Add configured80/90/95/100, representability, target crossings, setting
   changes and restart/lifecycle regressions; correct setup/help/source guidance.
+- [x] Enforce the configured normal ceiling on keepalive, learned/general
+  targets, retries and final writes. Cover start suppression at the ceiling,
+  representable actuator steps and the Full/Trip return to normal charging.
 - [ ] Publish only after separately requested settled-release qualification.
   No release, live installation or monitoring follows from this repository fix.
 

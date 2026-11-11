@@ -164,6 +164,25 @@ async def test_ev_adapter_maps_smart_socket_commands_only_to_explicit_outlet(
     ]
 
 
+async def test_ev_adapter_rechecks_the_limit_after_an_override_ends(hass: HomeAssistant) -> None:
+    ceiling = 100
+
+    async def end_override(_call) -> None:
+        nonlocal ceiling
+        ceiling = 90
+
+    hass.services.async_register("number", "set_value", end_override)
+    adapter = EvServiceAdapter(
+        hass, ENTITIES, allow_writes=True, charge_limit_guard=lambda limit: limit <= ceiling,
+    )
+    with pytest.raises(EvWriteBlocked, match="exceeds the active ceiling"):
+        await adapter.async_execute(EvCommandPlan(
+            (EvCommand("set_charge_current", 1), EvCommand("set_charge_limit", 100)), "test",
+        ))
+
+    assert adapter.last_invoked == ("set_charge_current",)
+
+
 async def test_ev_adapter_stops_only_the_explicit_vehicle_charge_switch(
     hass: HomeAssistant,
 ) -> None:

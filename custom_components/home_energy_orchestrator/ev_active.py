@@ -919,6 +919,7 @@ class ActiveEvController:
                 self.target_limit_percent = cap_direct_charge_limit_target(
                     observation.charge_limit_percent,
                     charge_to_full=self._charge_to_full_requested(),
+                    normal_limit_percent=self._normal_charge_limit(),
                 )
                 self.decision_phase = "startup_telemetry_hold"
                 self.allowance_phase = "startup_telemetry_hold"
@@ -1031,6 +1032,7 @@ class ActiveEvController:
             self.target_limit_percent = cap_direct_charge_limit_target(
                 self.target_limit_percent,
                 charge_to_full=charge_to_full_requested,
+                normal_limit_percent=self._normal_charge_limit(),
             )
             if not in_window and self._outside_uses_current_budget(now):
                 # Selection used a post-checkpoint cohort. Reconcile against
@@ -1060,6 +1062,8 @@ class ActiveEvController:
                     physical_ceiling_a=self._float(CONF_EV_MAX_CURRENT, 0.0),
                     start_allowed=True,
                     charge_to_full=charge_to_full_requested,
+                    normal_limit_percent=self._normal_charge_limit(),
+                    vehicle_soc_percent=vehicle_soc,
                 )
                 self.last_actions = tuple(
                     f"would_{command.action}" for command in rehearsal_plan.commands
@@ -1086,6 +1090,8 @@ class ActiveEvController:
                     physical_ceiling_a=self._float(CONF_EV_MAX_CURRENT, 0.0),
                     now=now,
                     charge_to_full=charge_to_full_requested,
+                    normal_limit_percent=self._normal_charge_limit(),
+                    vehicle_soc_percent=vehicle_soc,
                     current_feedback=retry_feedback,
                     current_feedback_max_age_seconds=self._float(
                         CONF_EV_TELEMETRY_MAX_AGE_SECONDS,
@@ -1295,6 +1301,7 @@ class ActiveEvController:
                 observation, target_current_a=expected,
                 target_limit_percent=self.target_limit_percent,
                 physical_ceiling_a=ceiling, start_allowed=True, charge_to_full=False,
+                normal_limit_percent=self._normal_charge_limit(),
             )
         except (TypeError, ValueError):
             return
@@ -1533,7 +1540,8 @@ class ActiveEvController:
             return
         self.target_current_a = target
         self.target_limit_percent = cap_direct_charge_limit_target(
-            observation.charge_limit_percent, charge_to_full=False
+            observation.charge_limit_percent, charge_to_full=False,
+            normal_limit_percent=self._normal_charge_limit(),
         )
         self.decision_phase = "protected_baseline"
         retry_feedback = self._direct_retry_feedback(now)
@@ -1541,6 +1549,7 @@ class ActiveEvController:
             self.reconciliation, observation,
             target_current_a=target, target_limit_percent=self.target_limit_percent,
             physical_ceiling_a=self._path_ceiling_a(), now=now, charge_to_full=False,
+            normal_limit_percent=self._normal_charge_limit(),
             current_feedback=retry_feedback,
             current_feedback_max_age_seconds=self._float(
                 CONF_EV_TELEMETRY_MAX_AGE_SECONDS,
@@ -1731,6 +1740,7 @@ class ActiveEvController:
                 maximum_percent=maximum,
                 step_percent=step,
                 previous_write_fingerprint=self._general_limit_write_fingerprint,
+                normal_limit_percent=self._normal_charge_limit(),
             )
         )
         self.target_current_a = None
@@ -2265,6 +2275,7 @@ class ActiveEvController:
                 maximum_percent=limit_max,
                 step_percent=limit_step,
                 charge_to_full=charge_to_full,
+                normal_limit_percent=self._normal_charge_limit(),
             )
         )
         self.free_window_candidate = build_ev_stage_candidate(
@@ -2500,6 +2511,7 @@ class ActiveEvController:
                 charge_limit_percent=cap_direct_charge_limit_target(
                     observation.charge_limit_percent,
                     charge_to_full=charge_to_full,
+                    normal_limit_percent=self._normal_charge_limit(),
                 ),
                 protected_baseline_a=baseline,
             )
@@ -2967,6 +2979,7 @@ class ActiveEvController:
                 minimum_percent=limit_min,
                 maximum_percent=limit_max,
                 step_percent=limit_step,
+                normal_limit_percent=soft_limit,
             )
         )
         self.target_current_a = selected.current_a
@@ -3169,8 +3182,10 @@ class ActiveEvController:
             ), minimum_percent=observation.limit_minimum_percent,
             maximum_percent=observation.limit_maximum_percent,
             step_percent=observation.limit_step_percent,
+            normal_limit_percent=self._normal_charge_limit(),
         )).target_limit_percent if valid_soc else cap_direct_charge_limit_target(
             observation.charge_limit_percent, charge_to_full=False,
+            normal_limit_percent=self._normal_charge_limit(),
         )
         if not self.outside_target_active and not self.outside_control_active:
             self.last_reason = result.phase
@@ -4645,6 +4660,13 @@ class ActiveEvController:
             ),
             allow_writes=True,
             write_guard=self._writes_still_authorized,
+            charge_limit_guard=self._charge_limit_write_allowed,
+        )
+
+    def _charge_limit_write_allowed(self, limit: float) -> bool:
+        return limit == cap_direct_charge_limit_target(
+            limit, charge_to_full=self._charge_to_full_requested(),
+            normal_limit_percent=self._normal_charge_limit(),
         )
 
     def _writes_still_authorized(self) -> bool:
@@ -5093,6 +5115,9 @@ class ActiveEvController:
 
     def _float(self, key: str, default: float) -> float:
         return self.coordinator.runtime_config.ev_numbers.value(key, default)
+
+    def _normal_charge_limit(self) -> float:
+        return self._float(CONF_EV_FREE_WINDOW_CHARGE_LIMIT, DEFAULT_EV_FREE_WINDOW_CHARGE_LIMIT)
 
     def _path_ceiling_a(self) -> float:
         return charging_path_ceiling_a(

@@ -2,11 +2,10 @@
 
 ## Configured EV target correction (unreleased)
 
-Normal charging supports its existing configured0–100% target, subject to live
-actuator capability and all original energy/electrical gates;90% is the default,
-not a separate non-Full ceiling. Existing learned/general and keepalive headroom
-semantics remain separate from that policy target. Selecting100% does not enable
-Full, change charging-energy authority or rewrite saved settings. See
+Normal charging uses the configured 0–100% target as its ceiling, subject to
+live actuator capability and the existing energy and electrical gates. The
+default is 90%. Learned/general targets and keepalive headroom fit within that
+ceiling. Full and Trip use their existing override authority. See
 [the configured-target contract](configured-ev-charge-limits.md).
 
 ## Optional Dynamic EV reservation (local candidate)

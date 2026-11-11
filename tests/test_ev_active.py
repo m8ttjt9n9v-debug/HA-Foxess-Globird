@@ -874,8 +874,9 @@ async def test_safety_lock_calculates_rehearsal_plan_without_writing(
     assert calls == []
 
 
-async def test_direct_anti_pause_reconciliation_retains_existing_headroom_without_fixed_90_cap(
-    hass: HomeAssistant,
+@pytest.mark.parametrize(("ceiling", "expected"), [(90, 90), (95, 95), (100, 100)])
+async def test_direct_anti_pause_reconciliation_caps_at_configured_limit(
+    hass: HomeAssistant, ceiling: int, expected: int,
 ) -> None:
     _set_ev_states(hass)
     hass.states.async_set("sensor.car_soc", "95", {"unit_of_measurement": "%"})
@@ -885,6 +886,7 @@ async def test_direct_anti_pause_reconciliation_retains_existing_headroom_withou
         _coordinator(
             _controller_config(
                 ev_protected_baseline_a=1,
+                ev_free_window_charge_limit_percent=ceiling,
                 rehearsal_mode=True,
             )
         ),
@@ -892,8 +894,9 @@ async def test_direct_anti_pause_reconciliation_retains_existing_headroom_withou
 
     await controller.async_reconcile(datetime(2026, 9, 7, 12, 1, tzinfo=UTC))
 
-    assert controller.target_limit_percent == 97
-    assert "would_set_charge_limit" in controller.last_actions
+    assert controller.target_limit_percent == expected
+    assert ("would_set_charge_limit" in controller.last_actions) is (ceiling < 100)
+    assert ("would_start_charging" in controller.last_actions) is (ceiling > 95)
 
 
 async def test_ev_runtime_only_applies_general_limit_outside_free_window(
@@ -2294,8 +2297,8 @@ async def test_ev_battery_reserve_reverts_to_configured_protected_baseline(
     )
     actions = []
 
-    async def set_current(call):
-        actions.append(("set_charge_current", call.data["value"]))
+    async def set_current_or_limit(call):
+        actions.append((call.data["entity_id"], call.data["value"]))
 
     async def start(call):
         actions.append(("start_charging", None))
@@ -2303,7 +2306,7 @@ async def test_ev_battery_reserve_reverts_to_configured_protected_baseline(
     async def stop(call):
         actions.append(("stop_charging", None))
 
-    hass.services.async_register("number", "set_value", set_current)
+    hass.services.async_register("number", "set_value", set_current_or_limit)
     hass.services.async_register("switch", "turn_on", start)
     hass.services.async_register("switch", "turn_off", stop)
     coordinator = _coordinator(
@@ -2328,16 +2331,18 @@ async def test_ev_battery_reserve_reverts_to_configured_protected_baseline(
 
     assert controller.decision_phase == "ev_battery_reserve_reached"
     assert controller.target_current_a == 1
-    assert controller.target_limit_percent == 91
+    assert controller.target_limit_percent == 90
     assert controller.daily_backfill_active is False
     assert controller.daily_backfill_stop_pending is False
     assert controller.outside_stop_requested is False
     assert controller.last_actions == (
+        "set_charge_limit",
         "set_charge_current",
         "start_charging",
     )
     assert actions == [
-        ("set_charge_current", 1),
+        ("number.car_limit", 90),
+        ("number.car_current", 1),
         ("start_charging", None),
     ]
 

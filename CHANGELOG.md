@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.12.63.dev4 — Configured EV charging ceiling
+
+- Apply the site's configured normal charge limit to keepalive headroom and
+  every ordinary Tesla limit write. Preserve the explicit Full/Trip override.
+- Use the highest supported actuator step at or below the ceiling and restore
+  that limit when an earlier command or override left the vehicle above it.
+- Suppress ordinary charging starts at the effective limit.
+
 ## 0.12.63.dev3 — Local candidate: Independent, measured EV retry recovery
 
 - Separate direct-EVSE current, percentage-limit and start retry episodes in
