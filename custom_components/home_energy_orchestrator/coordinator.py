@@ -1270,8 +1270,10 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
         elif measurement.valid:
             current_a = measurement.current_a
         else:
-            local_cable = self.runtime_config.ev_connection.local_connection_entity
-            if local_cable and self.hass.states.is_state(local_cable, "on"):
+            local_cable = capture_telemetry_source(
+                self.hass, self.runtime_config.ev_connection.local_connection_entity,
+            )
+            if local_cable is not None and local_cable.raw_value == "on":
                 return None
             # Reuse the existing bounded sleeping-frame age. The result is a
             # learning-only zero and cannot qualify live current or a handoff.
