@@ -1,5 +1,8 @@
 {
   "schema_version": 1, "extension": "ev_reservation_v1", "config_entry_version": 6,
-  "additional_config_keys": ["ev_reservation_mode", "ev_reservation_soc_max_age_hours"],
+  "additional_config_keys": [
+    "ev_reservation_mode", "ev_reservation_soc_max_age_hours",
+    "ev_reservation_unplugged_soc_max_age_minutes"
+  ],
   "automatic_control_defaults_changed": false
 }

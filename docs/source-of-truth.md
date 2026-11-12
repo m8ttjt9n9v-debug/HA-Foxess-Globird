@@ -40,11 +40,13 @@ missing selected evidence is not a zero reservation. Setup and the native
 reservation-mode select share one explicit setting, default Fixed on upgrade.
 No installed dashboard or other policy is changed by installation.
 
-Dynamic reservation alone can use a bounded sleeping native Tessie SoC frame,
-with an independent setup/native-number age setting (default24hours). Its real
-vehicle measurement clock and exact identity/health remain mandatory. Online
-and generic sources, actual current, physical handoff and positive EV commands
-retain the original live limit. No report/fetch/restart renews the measurement;
+Dynamic reservation alone can use a bounded native Tessie SoC frame when the
+vehicle is explicitly asleep (default 24 hours) or online with confirmed
+disconnection (default 90 minutes, home or away). Each age is independently
+configurable in setup and by native number. Both require the original vehicle
+measurement clock and exact identity and health. Online plugged vehicles,
+generic sources, actual current, physical handoff and positive EV commands
+retain their existing checks. No report/fetch/restart renews the measurement;
 invalid/expired evidence cannot become zero protection. This corrects normal
 sleep blanking an otherwise valid export budget, without a new poller or writer.
 

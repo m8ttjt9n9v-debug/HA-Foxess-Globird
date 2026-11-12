@@ -21,21 +21,30 @@ current35%, efficiency95% reserves approximately4.42kWh. The configured normal
 non-override target still clips recovery. An invalid or stale SoC, unavailable
 capacity or invalid setting cannot be replaced by zero protection.
 
-Reservation planning has a separate **EV reservation SoC maximum age** setting
-(default24hours, adjustable0.025–48hours in setup and the native
-`number.home_energy_ev_reservation_soc_max_age_hours`). Only an explicitly
-asleep, loaded and healthy native Tessie provider for the mapped vehicle may
-use that planning age. It retains the original charge-state measurement time;
-HA reports, repeated reads, restart and unrelated updates never renew it.
-Online and generic sources keep the live telemetry limit. Failure, unloading,
-identity/value mismatch, future time or expiry makes protection unavailable,
-not zero. A smaller configured ceiling takes effect immediately.
+Dynamic reservation planning can retain a healthy, exactly vehicle-bound
+native Tessie SoC under two configurable limits:
 
-This is NOT fresh current, a stopped-car proof or permission to charge. Every
-physical handoff and positive EV command retains its original live-source
-checks. No timer, poller, cache or persistence schema is added. The age ceiling
-is one evidence-expiry boundary, not a noisy control setpoint: there is no
-hysteresis or grace beyond it, and failed evidence withdraws authority at once.
+- **EV reservation SoC maximum age** applies when the provider explicitly reports
+  asleep. It defaults to 24 hours and accepts 0.025–48 hours.
+- **Unplugged EV reservation SoC maximum age** applies when the provider reports
+  online and its charge-state frame and the mapped native cable and charging
+  entities agree that the vehicle is unplugged. It applies both at home and
+  away, defaults to 90 minutes, and accepts 0–1,440 whole minutes. Zero disables
+  the extension. The live limit still applies to plugged vehicles and to
+  generic sources.
+
+Both settings are available in setup and as native numbers
+(`number.home_energy_ev_reservation_soc_max_age_hours` and
+`number.home_energy_ev_reservation_unplugged_soc_max_age_minutes`). The
+original vehicle measurement time governs age. HA reports, repeated reads,
+restart and unrelated updates cannot renew it. Provider failure, offline status,
+unloading, identity/value mismatch, future time and expiry make protection
+unavailable. Loss of unplugged evidence or a shorter setting takes effect on
+the next evaluation.
+
+The age bounds apply only to energy accounting. Current, physical handoff
+and EV commands retain their original checks. Expiry is an evidence validity
+boundary, so there is no grace period or hysteresis when evidence expires.
 
 Battery floor/reserve and discharge efficiency are applied first. Protect the
 remaining house demand and mandatory keepalive exactly once. Reserve the
@@ -50,8 +59,11 @@ Cached withholding proof and the current protected pool are both ceilings;
 changing a setting alone cannot invent energy previously withheld from export.
 
 Away/unplugged vehicles retain Dynamic protection. Ordinary automatic presence
-or a manual house-energy Away choice does not release it. A separate Extended
-Away feature and journey prediction remain deferred; this candidate adds neither.
+or a manual house-energy Away choice does not release it. If the car is
+unreachable for an extended absence, missing qualified SoC can withhold
+automatic export with Dynamic priority enabled. Other house modes retain
+their own controls. A separate, explicitly selected Extended Away policy
+and journey prediction remain deferred.
 
 ## Timing, hysteresis and ownership
 

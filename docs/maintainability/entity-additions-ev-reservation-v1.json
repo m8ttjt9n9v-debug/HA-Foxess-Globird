@@ -1,5 +1,5 @@
 {
-  "schema_version": 1, "entity_count": 2,
+  "schema_version": 1, "entity_count": 3,
   "entities": [{
     "default_entity_id": "select.home_energy_ev_reservation_mode",
     "device_class": null, "enabled_by_default": true, "entity_category": "config",
@@ -13,5 +13,12 @@
     "platform": "number", "state_class": null,
     "translation_key": "ev_reservation_soc_max_age_hours",
     "unique_id_template": "{config_entry_id}_ev_reservation_soc_max_age_hours", "unit": "h"
+  }, {
+    "default_entity_id": "number.home_energy_ev_reservation_unplugged_soc_max_age_minutes",
+    "device_class": null, "enabled_by_default": true, "entity_category": "config",
+    "key": "ev_reservation_unplugged_soc_max_age_minutes", "name": "Unplugged EV SoC Maximum Age",
+    "platform": "number", "state_class": null,
+    "translation_key": "ev_reservation_unplugged_soc_max_age_minutes",
+    "unique_id_template": "{config_entry_id}_ev_reservation_unplugged_soc_max_age_minutes", "unit": "min"
   }]
 }

@@ -11,11 +11,13 @@ import voluptuous as vol
 from homeassistant.data_entry_flow import section
 from homeassistant.helpers import selector
 
+from .configuration import valid_ev_reservation_unplugged_soc_max_age_minutes
 from .const import (
     CONF_EV_BEFORE_EXPORT_IMPORT_CONFIRM_SECONDS,
     CONF_EV_BEFORE_EXPORT_SOC_BUFFER,
     CONF_EV_CAPACITY_FALLBACK_KWH,
     CONF_EV_RESERVATION_SOC_MAX_AGE_HOURS,
+    CONF_EV_RESERVATION_UNPLUGGED_SOC_MAX_AGE_MINUTES,
     CONF_EV_SOLAR_SOAK_ADJUSTMENT_MINUTES,
     CONF_EV_SOLAR_SOAK_AVERAGE_MINUTES,
     CONF_EV_SOLAR_SOAK_BATTERY_SOC,
@@ -40,6 +42,16 @@ class CapacityCoerce(vol.Coerce):
         if not isfinite(result) or not 0 <= result <= 1000:
             raise vol.Invalid("Capacity must be finite and between 0 and 1000 kWh")
         return result
+
+
+class WholeMinuteSelector(selector.NumberSelector):
+    """Keep the numeric UI without coercing invalid planning durations."""
+
+    def __call__(self, data: Any) -> float:
+        if not valid_ev_reservation_unplugged_soc_max_age_minutes(data):
+            raise vol.Invalid("Use a whole number of minutes from 0 to 1440")
+        return super().__call__(data)
+
 
 GRID_PHASE_SECTIONS: dict[str, tuple[str, str]] = {
     phase: (
@@ -88,6 +100,8 @@ def _validator(spec: FieldSpec) -> Any:
         else json.loads(spec.selector_config_json)
     )
     if spec.selector_kind == "number":
+        if spec.key == CONF_EV_RESERVATION_UNPLUGGED_SOC_MAX_AGE_MINUTES:
+            return WholeMinuteSelector(selector.NumberSelectorConfig(**config))
         if (spec.key in SOLAR_SOAK_SECTION["solar_soak"]
                 or spec.key in {CONF_EV_BEFORE_EXPORT_SOC_BUFFER,
                                 CONF_EV_BEFORE_EXPORT_IMPORT_CONFIRM_SECONDS,

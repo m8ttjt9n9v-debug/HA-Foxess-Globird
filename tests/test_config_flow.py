@@ -279,6 +279,7 @@ async def test_user_flow_creates_a_config_entry(hass):
         "ev_surplus_rearm_energy_kwh": 0.1,
         "ev_reservation_mode": "fixed",
         "ev_reservation_soc_max_age_hours": 24.0,
+        "ev_reservation_unplugged_soc_max_age_minutes": 90.0,
         "ev_solar_soak_average_minutes": 5.0,
         "ev_solar_soak_adjustment_minutes": 5.0,
         "ev_morning_solar_reserve_soc_percent": 20.0,

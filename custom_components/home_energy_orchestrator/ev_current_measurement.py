@@ -48,9 +48,30 @@ def _native_charge_anchors_match(registry, feedback, entry, device, vin):
     return True
 
 
+def _native_unplugged_for_planning(registry, feedback, data, now):
+    """Confirm unplugged from the same bound native frame and its mapped states."""
+    if (
+        data.get("charge_state_conn_charge_cable") != "<invalid>"
+        or data.get("charge_state_charging_state") != "Disconnected"
+        or feedback.charge_switch.available_state == "on"
+    ):
+        return False
+    for item, expected in (
+        (feedback.cable_connected, "off"), (feedback.charging_state, "disconnected"),
+    ):
+        row = registry.async_get(item.entity_id) if item.entity_id else None
+        stamp = item.last_reported
+        if (
+            row is None or row.platform != "tessie" or item.available_state != expected
+            or item.restored or stamp is None or stamp.utcoffset() is None or stamp > now
+        ):
+            return False
+    return True
+
+
 @dataclass(frozen=True, slots=True)
 class EvPlanningSocObservation:
-    """Qualified planning SoC; retained sleep evidence is not live authority."""
+    """Qualified planning SoC with its original measurement time."""
 
     value_percent: float | None
     source: str
@@ -79,6 +100,7 @@ def _measure_soc_observation(
     now: datetime,
     max_age_seconds: float,
     sleeping_max_age_seconds: float | None = None,
+    unplugged_max_age_seconds: float = 0.0,
 ) -> EvPlanningSocObservation:
     """Share the existing exact source qualification, not physical authority."""
     item = feedback.soc
@@ -153,15 +175,19 @@ def _measure_soc_observation(
     if age < 0:
         return invalid("native_soc_future", measured_at)
     asleep = data["state"] == "asleep"
-    maximum = sleeping_max_age_seconds if asleep and sleeping_max_age_seconds is not None else (
-        max_age_seconds
-    )
-    if age > maximum:
-        return invalid("sleeping_soc_expired" if asleep else "native_soc_expired", measured_at)
-    reason = (
-        "bounded_asleep" if age > max_age_seconds
-        else "fresh_asleep" if asleep else "fresh_online"
-    )
+    if asleep:
+        maximum = max_age_seconds if sleeping_max_age_seconds is None else sleeping_max_age_seconds
+        if age > maximum:
+            return invalid("sleeping_soc_expired", measured_at)
+        reason = "bounded_asleep" if age > max_age_seconds else "fresh_asleep"
+    elif age <= max_age_seconds:
+        reason = "fresh_online"
+    elif age <= unplugged_max_age_seconds and _native_unplugged_for_planning(
+        registry, feedback, data, now,
+    ):
+        reason = "bounded_unplugged"
+    else:
+        return invalid("native_soc_expired", measured_at)
     return EvPlanningSocObservation(float(value), source, measured_at, reason)
 
 
@@ -176,7 +202,7 @@ def measure_ev_soc(
 
     Actual current and actuator acknowledgements need not load; native mapped
     identities must nevertheless describe the same vehicle. This function
-    never uses the longer sleeping-car reservation planning bound.
+    always uses the live age, including when the vehicle is unplugged or asleep.
     """
     return _measure_soc_observation(
         hass, feedback, now=now, max_age_seconds=max_age_seconds,
@@ -190,20 +216,23 @@ def measure_ev_planning_soc(
     now: datetime,
     max_age_seconds: float,
     planning_max_age_seconds: float,
+    unplugged_max_age_seconds: float = 0.0,
 ) -> EvPlanningSocObservation:
     """Read bounded SoC for reservation planning, never for positive EV writes.
 
-    Only an explicitly asleep, healthy native same-vehicle provider may use
-    the caller's separate planning ceiling. Online and generic observations
-    retain the strict live age. Every call requalifies binding, health, value
-    and the original charge-state timestamp: HA/fetch/drive clocks, repeated
-    reads and restart cannot renew it. No cache, journal or poller is created.
+    Healthy native frames can use separate ceilings for explicit sleep and
+    confirmed unplugged online vehicles. Generic reports use the live limit.
+    Binding, health, value and the original charge-state clock are requalified
+    on every call. HA publications, repeated reads and restart do not renew it.
     """
     if not _valid_age(planning_max_age_seconds, positive=True):
         return EvPlanningSocObservation(None, "unavailable", None, "planning_age_invalid")
     return _measure_soc_observation(
         hass, feedback, now=now, max_age_seconds=max_age_seconds,
         sleeping_max_age_seconds=planning_max_age_seconds,
+        unplugged_max_age_seconds=(
+            unplugged_max_age_seconds if _valid_age(unplugged_max_age_seconds) else 0.0
+        ),
     )
 
 

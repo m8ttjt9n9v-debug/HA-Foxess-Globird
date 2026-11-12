@@ -5,7 +5,7 @@ to the reviewed semantic worksheet. It records the current names, including
 the retained naming approvals and versioned revisions. Edit the catalogue or semantic
 worksheet, then regenerate this file; do not edit rows by hand.
 
-Total entities: **135**.
+Total entities: **136**.
 
 ## Binary Sensor
 
@@ -39,6 +39,7 @@ Total entities: **135**.
 | `number.home_energy_ev_before_export_soc_target` | EV Before Export SoC Target | configuration | primary | % | `EvBeforeExportTargetNumber.native_value` | coordinator | retain | Operator-adjustable EV SoC threshold below which the enabled EV-before-export preference withholds discretionary export. |
 | `number.home_energy_ev_morning_solar_reserve_soc` | Morning Solar EV Reserve SoC | configuration | primary | % | `EvMorningSolarReserveNumber.native_value` | coordinator | retain | Operator-adjustable minimum house-battery state of charge required before morning measured solar surplus may be allocated to the EV. |
 | `number.home_energy_ev_reservation_soc_max_age_hours` | EV Reservation SoC Maximum Age | configuration | advanced | h | `EvReservationSocMaxAgeNumber.native_value` | configuration | retain | Maximum age of qualified native sleeping-vehicle SoC for Dynamic reservation planning only. It never extends fast telemetry, grants a positive EV command, or proves physical export handover. |
+| `number.home_energy_ev_reservation_unplugged_soc_max_age_minutes` | Unplugged EV SoC Maximum Age | configuration | advanced | min | `EvReservationUnpluggedSocMaxAgeNumber.native_value` | configuration | retain | Maximum age of qualified native SoC for Dynamic reservation planning when an online source confirms the EV is unplugged. |
 | `number.home_energy_ev_solar_soak_adjustment_minutes` | Solar Soak Adjustment Period | configuration | advanced | min | `EvSolarSoakNumber.native_value` | configuration | retain | Saved cadence for ordinary afternoon solar-soak current changes using the latest qualified mean. Safety cuts, verified import, lower safe ceilings and permission loss do not wait for this interval. |
 | `number.home_energy_ev_solar_soak_average_minutes` | Solar Soak Averaging Period | configuration | advanced | min | `EvSolarSoakNumber.native_value` | configuration | retain | Saved time-weighted averaging window for reconstructed afternoon solar opportunity before upward supported-amp rounding and existing limits. Not a second measurement source, poller or EV writer. |
 | `number.home_energy_ev_solar_soak_battery_soc` | Solar Soak Battery Floor | configuration | primary | % | `EvSolarSoakNumber.native_value` | configuration | retain | Saved minimum house-battery SoC for additional afternoon direct-EVSE solar buffering while qualified solar and protected Sellable remain. A higher outside-window reserve still wins; 100% disables this extra buffer, not a separately configured keepalive. |

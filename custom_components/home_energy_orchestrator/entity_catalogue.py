@@ -24,8 +24,11 @@ from homeassistant.helpers.entity import EntityDescription
 
 from .const import (
     MAX_EV_RESERVATION_SOC_MAX_AGE_HOURS,
+    MAX_EV_RESERVATION_UNPLUGGED_SOC_MAX_AGE_MINUTES,
     MIN_EV_RESERVATION_SOC_MAX_AGE_HOURS,
+    MIN_EV_RESERVATION_UNPLUGGED_SOC_MAX_AGE_MINUTES,
     STEP_EV_RESERVATION_SOC_MAX_AGE_HOURS,
+    STEP_EV_RESERVATION_UNPLUGGED_SOC_MAX_AGE_MINUTES,
 )
 
 EntityPlatform = Literal[
@@ -802,6 +805,19 @@ EV_RESERVATION_SOC_MAX_AGE_DESCRIPTION = NumberEntityDescription(
     entity_category=EntityCategory.CONFIG,
 )
 
+EV_RESERVATION_UNPLUGGED_SOC_MAX_AGE_DESCRIPTION = NumberEntityDescription(
+    key="ev_reservation_unplugged_soc_max_age_minutes",
+    name="Unplugged EV SoC Maximum Age",
+    translation_key="ev_reservation_unplugged_soc_max_age_minutes",
+    icon="mdi:battery-clock-outline",
+    native_unit_of_measurement=UnitOfTime.MINUTES,
+    native_min_value=MIN_EV_RESERVATION_UNPLUGGED_SOC_MAX_AGE_MINUTES,
+    native_max_value=MAX_EV_RESERVATION_UNPLUGGED_SOC_MAX_AGE_MINUTES,
+    native_step=STEP_EV_RESERVATION_UNPLUGGED_SOC_MAX_AGE_MINUTES,
+    mode=NumberMode.BOX,
+    entity_category=EntityCategory.CONFIG,
+)
+
 HOUSE_OCCUPANCY_DESCRIPTION = SelectEntityDescription(
     key="house_occupancy_mode",
     name="House Energy Occupancy Mode",
@@ -983,6 +999,8 @@ _NON_SENSOR_PROJECTIONS = {
     "ev_backfill_timing": "EvBackfillTimingSelect.current_option",
     "ev_reservation_mode": "EvReservationModeSelect.current_option",
     "ev_reservation_soc_max_age_hours": "EvReservationSocMaxAgeNumber.native_value",
+    "ev_reservation_unplugged_soc_max_age_minutes":
+        "EvReservationUnpluggedSocMaxAgeNumber.native_value",
     "ev_surplus_rearm_energy": "EvSurplusRearmEnergyNumber.native_value",
     "safety_lock": "SafetyLockSwitch.is_on",
     "automatic_charge": "AutomaticChargeSwitch.is_on",
@@ -1024,6 +1042,7 @@ def _entity_spec(platform: EntityPlatform, description: EntityDescription) -> En
                                                          EV_SURPLUS_REARM_ENERGY_DESCRIPTION,
                                                          EV_RESERVATION_MODE_DESCRIPTION,
                                                          EV_RESERVATION_SOC_MAX_AGE_DESCRIPTION,
+                                                         EV_RESERVATION_UNPLUGGED_SOC_MAX_AGE_DESCRIPTION,
                                                          EV_BACKFILL_TIMING_DESCRIPTION))
             else "coordinator"
         )
@@ -1049,6 +1068,7 @@ ENTITY_SPECS = (
     _entity_spec("select", EV_BACKFILL_TIMING_DESCRIPTION),
     _entity_spec("select", EV_RESERVATION_MODE_DESCRIPTION),
     _entity_spec("number", EV_RESERVATION_SOC_MAX_AGE_DESCRIPTION),
+    _entity_spec("number", EV_RESERVATION_UNPLUGGED_SOC_MAX_AGE_DESCRIPTION),
     _entity_spec("number", EV_SURPLUS_REARM_ENERGY_DESCRIPTION),
     _entity_spec("switch", SAFETY_DESCRIPTION),
     _entity_spec("switch", CHARGE_DESCRIPTION),

@@ -541,6 +541,7 @@ _EV_NUMERIC_FIELD_NAMES = (
     "EV_PHASE_COUNT",
     "EV_PROTECTED_BASELINE_A",
     "EV_RESERVATION_SOC_MAX_AGE_HOURS",
+    "EV_RESERVATION_UNPLUGGED_SOC_MAX_AGE_MINUTES",
     "EV_SMART_RECOVERY_CHARGING_CONFIRM_SECONDS",
     "EV_SMART_RECOVERY_CURRENT_CONFIRM_SECONDS",
     "EV_SMART_RECOVERY_IDLE_CURRENT_A",
@@ -635,6 +636,14 @@ class EvNumericSettings:
         values[age_key] = (
             float(age_value) if valid_ev_reservation_soc_max_age_hours(age_value) else 0.0
         )
+        unplugged_age_key = config_const.CONF_EV_RESERVATION_UNPLUGGED_SOC_MAX_AGE_MINUTES
+        unplugged_age = data.get(
+            unplugged_age_key, config_const.DEFAULT_EV_RESERVATION_UNPLUGGED_SOC_MAX_AGE_MINUTES,
+        )
+        values[unplugged_age_key] = (
+            float(unplugged_age)
+            if valid_ev_reservation_unplugged_soc_max_age_minutes(unplugged_age) else 0.0
+        )
         # An existing entry has a reviewed outside-window reserve but no
         # separate morning-solar value.  Use that reserve until the optional
         # dashboard/configuration control is explicitly saved.
@@ -673,6 +682,20 @@ def valid_ev_reservation_soc_max_age_hours(value: object) -> bool:
         and config_const.MIN_EV_RESERVATION_SOC_MAX_AGE_HOURS <= numeric
         <= config_const.MAX_EV_RESERVATION_SOC_MAX_AGE_HOURS
         and isclose(numeric / step, round(numeric / step), rel_tol=0, abs_tol=1e-7)
+    )
+
+
+def valid_ev_reservation_unplugged_soc_max_age_minutes(value: object) -> bool:
+    """Accept whole minutes within the unplugged SoC planning bound."""
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError, OverflowError):
+        return False
+    return (
+        not isinstance(value, bool)
+        and config_const.MIN_EV_RESERVATION_UNPLUGGED_SOC_MAX_AGE_MINUTES <= numeric
+        <= config_const.MAX_EV_RESERVATION_UNPLUGGED_SOC_MAX_AGE_MINUTES
+        and numeric.is_integer()
     )
 
 

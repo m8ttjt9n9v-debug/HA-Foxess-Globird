@@ -23,6 +23,7 @@ from .configuration import (
     EvCapacitySettings,
     RuntimeConfiguration,
     valid_ev_reservation_soc_max_age_hours,
+    valid_ev_reservation_unplugged_soc_max_age_minutes,
     valid_ev_surplus_rearm_energy,
 )
 from .const import (
@@ -103,6 +104,7 @@ from .const import (
     CONF_EV_PROTECTED_BASELINE_A,
     CONF_EV_RESERVATION_MODE,
     CONF_EV_RESERVATION_SOC_MAX_AGE_HOURS,
+    CONF_EV_RESERVATION_UNPLUGGED_SOC_MAX_AGE_MINUTES,
     CONF_EV_SMART_RECOVERY_CHARGING_CONFIRM_SECONDS,
     CONF_EV_SMART_RECOVERY_CURRENT_CONFIRM_SECONDS,
     CONF_EV_SMART_RECOVERY_IDLE_CURRENT_A,
@@ -236,6 +238,7 @@ from .const import (
     DEFAULT_EV_PROTECTED_BASELINE_A,
     DEFAULT_EV_RESERVATION_MODE,
     DEFAULT_EV_RESERVATION_SOC_MAX_AGE_HOURS,
+    DEFAULT_EV_RESERVATION_UNPLUGGED_SOC_MAX_AGE_MINUTES,
     DEFAULT_EV_SMART_RECOVERY_CHARGING_CONFIRM_SECONDS,
     DEFAULT_EV_SMART_RECOVERY_CURRENT_CONFIRM_SECONDS,
     DEFAULT_EV_SMART_RECOVERY_IDLE_CURRENT_A,
@@ -776,6 +779,10 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     CONF_EV_RESERVATION_SOC_MAX_AGE_HOURS:
                         valid_ev_reservation_soc_max_age_hours(
                             data[CONF_EV_RESERVATION_SOC_MAX_AGE_HOURS],
+                        ),
+                    CONF_EV_RESERVATION_UNPLUGGED_SOC_MAX_AGE_MINUTES:
+                        valid_ev_reservation_unplugged_soc_max_age_minutes(
+                            data[CONF_EV_RESERVATION_UNPLUGGED_SOC_MAX_AGE_MINUTES],
                         ),
                     CONF_EV_SURPLUS_REARM_ENERGY:
                         valid_ev_surplus_rearm_energy(data[CONF_EV_SURPLUS_REARM_ENERGY]),
@@ -2264,6 +2271,10 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 CONF_EV_RESERVATION_SOC_MAX_AGE_HOURS,
                 DEFAULT_EV_RESERVATION_SOC_MAX_AGE_HOURS,
             ),
+            CONF_EV_RESERVATION_UNPLUGGED_SOC_MAX_AGE_MINUTES: data.get(
+                CONF_EV_RESERVATION_UNPLUGGED_SOC_MAX_AGE_MINUTES,
+                DEFAULT_EV_RESERVATION_UNPLUGGED_SOC_MAX_AGE_MINUTES,
+            ),
             CONF_EV_SURPLUS_REARM_ENERGY: data.get(
                 CONF_EV_SURPLUS_REARM_ENERGY, DEFAULT_EV_SURPLUS_REARM_ENERGY,
             ),
@@ -2417,6 +2428,10 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             data.get(CONF_EV_RESERVATION_SOC_MAX_AGE_HOURS),
         ):
             return {CONF_EV_RESERVATION_SOC_MAX_AGE_HOURS: "invalid_site_limits"}
+        if not valid_ev_reservation_unplugged_soc_max_age_minutes(
+            data.get(CONF_EV_RESERVATION_UNPLUGGED_SOC_MAX_AGE_MINUTES),
+        ):
+            return {CONF_EV_RESERVATION_UNPLUGGED_SOC_MAX_AGE_MINUTES: "invalid_site_limits"}
         if not valid_ev_surplus_rearm_energy(data.get(CONF_EV_SURPLUS_REARM_ENERGY)):
             return {CONF_EV_SURPLUS_REARM_ENERGY: "invalid_site_limits"}
         for key, minimum, maximum in (

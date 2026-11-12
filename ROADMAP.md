@@ -83,6 +83,10 @@
   Keep the EV's reserved share available to its existing charging controller,
   not hidden from it by reducing a shared Sellable input. Adjust the independent
   EV-minimum export gate consistently; changing a display value alone is not enough.
+- [x] Keep native Tessie SoC eligible for Dynamic planning when healthy online
+  charge-state and mapped cable/charging evidence agree the vehicle is unplugged.
+  The separate configurable age defaults to 90 minutes at home or away.
+  Missing evidence and physical export handoff keep their existing gates.
 - [ ] Add explicit, manually selected **Extended Away** semantics: release the
   anticipated EV-return reservation and EV-SoC export hold. Never infer this
   from automatic house occupancy, a normal day trip or vehicle-away detection.

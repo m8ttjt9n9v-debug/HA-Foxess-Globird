@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.12.63.dev6 — Unplugged EV reservation planning
+
+- Give a healthy online Tessie vehicle with confirmed disconnection a separate
+  Dynamic reservation age limit, default 90 minutes, configurable in setup and
+  by native number. Applies at home and away and uses the original vehicle
+  measurement time.
+- Preserve fail-closed behavior for unavailable provider evidence, the separate
+  sleeping-vehicle age and the existing physical handoff and EV current checks.
+
 ## 0.12.63.dev5 — House learning with a sleeping, unplugged EV
 
 - Continue house learning when a healthy native Tessie provider confirms a

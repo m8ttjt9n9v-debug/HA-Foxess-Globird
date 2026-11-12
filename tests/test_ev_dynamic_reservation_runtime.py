@@ -234,7 +234,7 @@ async def test_invalid_dynamic_evidence_cannot_release_normal_or_price_export(
             hass.states.async_set("sensor.car_soc", value, attrs)
     elif fault in {"expired_frame", "future_frame"}:
         rig.provider.data["charge_state_timestamp"] = (
-            rig.now + timedelta(seconds=-91 if fault == "expired_frame" else 1)
+            rig.now + timedelta(seconds=-5401 if fault == "expired_frame" else 1)
         ).timestamp() * 1000
     elif fault == "missing_frame":
         rig.provider.data.pop("charge_state_timestamp")

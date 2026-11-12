@@ -1,5 +1,5 @@
 {
-  "schema_version": 1, "entity_count": 2, "attribute_profiles": {},
+  "schema_version": 1, "entity_count": 3, "attribute_profiles": {},
   "entities": [{
     "key": "ev_reservation_mode",
     "definition": "Operator selection between retained fixed daily energy and Dynamic SoC shortfall protection. Dynamic quantifies the current EV shortfall to the existing export minimum plus configured recovery margin, leaving only the protected balance available for export. The existing Prioritise EV before export master enables protection/top-up; selecting a mode does not enable it or change saved fixed kWh.",
@@ -19,6 +19,17 @@
     "time_basis": "Bound applies to the original qualified native SoC measurement timestamp, not HA refresh or an unrelated Modbus update. Native edits refresh the reservation and reconcile existing controllers.",
     "availability": "Editable while HEO is loaded, including a telemetry outage or disabled control. All existing command, electrical, owner and handover checks remain independent.",
     "state_vocabulary": "Finite hours in the supported range. Invalid native or setup values are rejected before saving.",
+    "audience": "advanced", "equivalents": {"foxess": null, "globird": null, "tessie": null},
+    "consumers": ["EV Charging policies", "Native dashboard settings", "Dynamic EV reservation planning"],
+    "decision": "retain", "review_status": "engineering_draft"
+  }, {
+    "key": "ev_reservation_unplugged_soc_max_age_minutes",
+    "definition": "Maximum age of qualified native SoC for Dynamic reservation planning when an online source confirms the EV is unplugged.",
+    "producer": "EvReservationUnpluggedSocMaxAgeNumber.native_value projects the same saved setting as EV Charging policies through RuntimeConfiguration.ev_numbers.",
+    "role": "configuration", "unit_and_sign": "Whole minutes from 0 to 1440. Missing values default to 90 minutes. Zero and invalid saved values disable the extension.",
+    "time_basis": "Age is measured from the original native SoC measurement. Native edits refresh the reservation and reconcile existing controllers.",
+    "availability": "Editable while HEO is loaded, including a telemetry outage or disabled control. Charging commands and physical export handover use separate freshness checks.",
+    "state_vocabulary": "Whole minutes in the supported range. Setup and native edits reject values outside that range.",
     "audience": "advanced", "equivalents": {"foxess": null, "globird": null, "tessie": null},
     "consumers": ["EV Charging policies", "Native dashboard settings", "Dynamic EV reservation planning"],
     "decision": "retain", "review_status": "engineering_draft"

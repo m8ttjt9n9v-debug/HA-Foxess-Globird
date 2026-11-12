@@ -81,7 +81,7 @@ def test_amber_price_configuration_is_only_its_separate_two_key_extension():
     current = build_config_contract(include_extensions=True)
     assert retained["config_entry_version"] == current["config_entry_version"] == 6
     assert retained["page_field_count"] == 135
-    assert current["page_field_count"] == 155
+    assert current["page_field_count"] == 156
     assert set(current["declared_config_keys"]) - set(retained["declared_config_keys"]) == (
         ADDITIVE_CONFIG_KEYS
     )

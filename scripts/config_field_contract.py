@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 import voluptuous as vol
+from homeassistant.helpers.selector import NumberSelector
 
 from custom_components.home_energy_orchestrator.config_flow import ConfigFlow
 from custom_components.home_energy_orchestrator.config_page_schema import (
@@ -89,6 +90,8 @@ def _input_contract(validator: Any) -> tuple[str, dict[str, Any] | None]:
     if isinstance(validator, vol.Coerce):
         coerced_type = getattr(validator, "type", None)
         return "number", {"coerce": getattr(coerced_type, "__name__", str(coerced_type))}
+    if isinstance(validator, NumberSelector):
+        return "number", _json_value(validator.config) if validator.config else None
     if not class_name.endswith("Selector"):
         raise ValueError(f"unsupported configuration validator {class_name!r}")
     input_kind = class_name.removesuffix("Selector")

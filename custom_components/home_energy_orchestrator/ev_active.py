@@ -47,6 +47,7 @@ from .const import (
     CONF_EV_PHASE_COUNT,
     CONF_EV_PROTECTED_BASELINE_A,
     CONF_EV_RESERVATION_SOC_MAX_AGE_HOURS,
+    CONF_EV_RESERVATION_UNPLUGGED_SOC_MAX_AGE_MINUTES,
     CONF_EV_SMART_RECOVERY_CHARGING_CONFIRM_SECONDS,
     CONF_EV_SMART_RECOVERY_CURRENT_CONFIRM_SECONDS,
     CONF_EV_SMART_RECOVERY_IDLE_CURRENT_A,
@@ -99,6 +100,7 @@ from .const import (
     DEFAULT_EV_PHASE_COUNT,
     DEFAULT_EV_PROTECTED_BASELINE_A,
     DEFAULT_EV_RESERVATION_SOC_MAX_AGE_HOURS,
+    DEFAULT_EV_RESERVATION_UNPLUGGED_SOC_MAX_AGE_MINUTES,
     DEFAULT_EV_SMART_RECOVERY_CHARGING_CONFIRM_SECONDS,
     DEFAULT_EV_SMART_RECOVERY_CURRENT_CONFIRM_SECONDS,
     DEFAULT_EV_SMART_RECOVERY_IDLE_CURRENT_A,
@@ -4120,9 +4122,11 @@ class ActiveEvController:
         planning_hours = runtime.ev_numbers.value(
             CONF_EV_RESERVATION_SOC_MAX_AGE_HOURS, DEFAULT_EV_RESERVATION_SOC_MAX_AGE_HOURS,
         )
-        # Only reservation accounting may use a bounded sleeping-car frame.
-        # Invalid settings fail closed; physical/positive-command consumers
-        # continue to use measure_ev_soc/current and their strict live clock.
+        unplugged_minutes = runtime.ev_numbers.value(
+            CONF_EV_RESERVATION_UNPLUGGED_SOC_MAX_AGE_MINUTES,
+            DEFAULT_EV_RESERVATION_UNPLUGGED_SOC_MAX_AGE_MINUTES,
+        )
+        # The longer evidence ceilings apply only to reservation accounting.
         soc = measure_ev_planning_soc(
             self.hass, feedback, now=now,
             max_age_seconds=self._float(
@@ -4132,6 +4136,7 @@ class ActiveEvController:
                 planning_hours * 3600 if valid_ev_reservation_soc_max_age_hours(planning_hours)
                 else 0.0
             ),
+            unplugged_max_age_seconds=unplugged_minutes * 60,
         ).value_percent if dynamic else None
         capacity = self.capacity_evidence(now).value_kwh if dynamic else None
         # Dynamic and Fixed are alternatives. Turning the explicit priority off

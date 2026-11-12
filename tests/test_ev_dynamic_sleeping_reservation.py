@@ -92,7 +92,8 @@ async def test_active_export_withdraws_when_sleeping_planning_authority_is_lost(
 ):
     rig = await _rig(hass, freezer)
     calls = _services(hass, monkeypatch, rig)
-    _sleep(hass, rig)
+    # This frame is within the asleep window, but past the online unplugged one.
+    _sleep(hass, rig, age_seconds=7200 if fault == "online" else 450)
     await rig.fox.async_reconcile()
     assert any(value == "Force Discharge" for _, value in calls)
     calls.clear()
