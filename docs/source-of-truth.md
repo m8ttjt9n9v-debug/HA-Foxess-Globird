@@ -40,15 +40,15 @@ missing selected evidence is not a zero reservation. Setup and the native
 reservation-mode select share one explicit setting, default Fixed on upgrade.
 No installed dashboard or other policy is changed by installation.
 
-Dynamic reservation alone can use a bounded native Tessie SoC frame when the
-vehicle is explicitly asleep (default 24 hours) or online with confirmed
-disconnection (default 90 minutes, home or away). Each age is independently
-configurable in setup and by native number. Both require the original vehicle
-measurement clock and exact identity and health. Online plugged vehicles,
-generic sources, actual current, physical handoff and positive EV commands
-retain their existing checks. No report/fetch/restart renews the measurement;
-invalid/expired evidence cannot become zero protection. This corrects normal
-sleep blanking an otherwise valid export budget, without a new poller or writer.
+Dynamic reservation can use bounded healthy native Tessie SoC when the
+vehicle is explicitly asleep or confirmed unplugged. If no planning reading
+qualifies, export accounting can use the last verified SoC for the same mapped
+source. The default timed policy expires at the configurable age (90 minutes);
+the opt-in last-known policy retains the reading across a longer outage. The
+existing EV journal stores the original value and timestamp with a source
+binding. Repeated reads, offline data and restart cannot renew it. A new
+verified reading re-evaluates the same energy pool. Actual current, physical
+handoff and positive EV commands keep their original qualification.
 
 The shared native EV measurement qualifier rejects expired/failed/rebound
 vehicle evidence even when local Modbus power is fresh. Valid numeric current

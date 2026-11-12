@@ -1,4 +1,4 @@
-"""Setup and native controls for the unplugged EV reservation planning age."""
+"""Setup and native controls for unavailable EV reservation data."""
 
 from unittest.mock import AsyncMock
 
@@ -17,6 +17,9 @@ from custom_components.home_energy_orchestrator.const import (
     CONF_EV_RESERVATION_SOC_MAX_AGE_HOURS as SLEEPING_KEY,
 )
 from custom_components.home_energy_orchestrator.const import (
+    CONF_EV_RESERVATION_UNAVAILABLE_BEHAVIOR as BEHAVIOR,
+)
+from custom_components.home_energy_orchestrator.const import (
     CONF_EV_RESERVATION_UNPLUGGED_SOC_MAX_AGE_MINUTES as KEY,
 )
 from custom_components.home_energy_orchestrator.const import (
@@ -33,13 +36,16 @@ from .test_reconfigure_concurrency import _apply
 from .test_setup import ENTRY_DATA
 
 ENTITY = "number.home_energy_ev_reservation_unplugged_soc_max_age_minutes"
+BEHAVIOR_ENTITY = "select.home_energy_ev_reservation_unavailable_behavior"
 INVALID = (None, True, False, -1, 0.5, 90.1, 1441, "bad", float("nan"), float("inf"))
 OTHER_AGES = {SLEEPING_KEY: 24.0, FAST_KEY: 90.0}
 
 
 def test_missing_value_defaults_to_90_minutes_without_writing_to_entry():
     data = {**ENTRY_DATA, **OTHER_AGES}
-    numbers = RuntimeConfiguration.from_mapping(data).ev_numbers
+    config = RuntimeConfiguration.from_mapping(data)
+    numbers = config.ev_numbers
+    assert config.ev_preferences.reservation_unavailable_behavior == "timeout"
     assert numbers.value(KEY, -1) == DEFAULT == 90.0
     assert KEY not in data
     for key, age in OTHER_AGES.items():
@@ -49,7 +55,7 @@ def test_missing_value_defaults_to_90_minutes_without_writing_to_entry():
 @pytest.mark.parametrize("value", (0.0, 1.0, 90.0, 1439.0, 1440.0))
 def test_whole_minutes_share_setup_and_runtime_values(value):
     flow = ConfigFlow()
-    data = flow._apply_defaults({"name": "Unplugged age", **ENTRY_DATA, KEY: value})
+    data = flow._apply_defaults({"name": "EV data timeout", **ENTRY_DATA, KEY: value})
     assert valid_ev_reservation_unplugged_soc_max_age_minutes(value)
     assert flow._validate_input(data) == {}
     assert RuntimeConfiguration.from_mapping(data).ev_numbers.value(KEY, -1) == value
@@ -70,7 +76,7 @@ def test_invalid_input_is_rejected_and_saved_value_disables_extension(value):
 async def test_setup_can_save_zero_without_enabling_dynamic_or_automatic_control(hass):
     result = await hass.config_entries.flow.async_init(
         DOMAIN, context={"source": SOURCE_USER},
-        data={"name": "Unplugged age", **ENTRY_DATA, KEY: 0.0},
+        data={"name": "EV data timeout", **ENTRY_DATA, KEY: 0.0},
     )
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["data"][KEY] == 0.0
@@ -87,19 +93,22 @@ async def test_reconfigure_displays_default_and_saves_only_after_review(hass):
     flow = await _open_reconfigure_page(hass, flow, "ev_policies")
     values = _schema_values(flow["data_schema"])
     assert values[KEY] == DEFAULT
+    assert values[BEHAVIOR] == "timeout"
     for invalid in (True, 90.5):
         with pytest.raises(InvalidData):
             await hass.config_entries.flow.async_configure(
                 flow["flow_id"], user_input={**values, KEY: invalid},
             )
     flow = await hass.config_entries.flow.async_configure(
-        flow["flow_id"], user_input={**values, KEY: 1440.0},
+        flow["flow_id"], user_input={**values, KEY: 1440.0, BEHAVIOR: "last_known"},
     )
     assert dict(entry.data) == before
     assert (await _apply(hass, flow))["reason"] == "reconfigure_successful"
     await hass.async_block_till_done(wait_background_tasks=True)
     assert entry.data[KEY] == 1440.0
     assert float(hass.states.get(ENTITY).state) == 1440.0
+    assert entry.data[BEHAVIOR] == "last_known"
+    assert hass.states.get(BEHAVIOR_ENTITY).state == "last_known"
     assert await hass.config_entries.async_unload(entry.entry_id)
 
 
@@ -144,4 +153,58 @@ async def test_native_control_validates_and_persists_zero_through_reload(hass, m
     assert await hass.config_entries.async_reload(entry.entry_id)
     await hass.async_block_till_done(wait_background_tasks=True)
     assert float(hass.states.get(ENTITY).state) == 0.0
+    assert await hass.config_entries.async_unload(entry.entry_id)
+
+
+
+@pytest.mark.parametrize("value", [None, "", True, "always_export", "Last Known"])
+def test_invalid_behavior_is_rejected_in_setup_and_runtime_keeps_timeout(value):
+    flow = ConfigFlow()
+    data = flow._apply_defaults({**ENTRY_DATA, BEHAVIOR: value, KEY: 30.0})
+    assert flow._validate_input(data) == {BEHAVIOR: "invalid_ev_reservation_behavior"}
+    config = RuntimeConfiguration.from_mapping(data)
+    assert config.ev_preferences.reservation_unavailable_behavior == "timeout"
+    assert config.ev_numbers.value(KEY, -1) == 30.0
+
+
+async def test_native_behavior_select_reconciles_and_persists_only_its_setting(hass, monkeypatch):
+    entry = await _setup(
+        hass,
+        data={**OTHER_AGES, KEY: 45.0, "ev_reservation_mode": "dynamic"},
+        options={BEHAVIOR: "timeout", "reserve_kwh": 4.0},
+    )
+    owner = entry.runtime_data
+    before = dict(entry.data), dict(entry.options)
+    native = next(
+        platform.entities[BEHAVIOR_ENTITY]
+        for platform in entity_platform.async_get_platforms(hass, DOMAIN)
+        if BEHAVIOR_ENTITY in platform.entities
+    )
+    assert hass.states.get(BEHAVIOR_ENTITY).attributes["options"] == ["last_known", "timeout"]
+    assert hass.states.get(BEHAVIOR_ENTITY).state == "timeout"
+    with pytest.raises(HomeAssistantError):
+        await native.async_select_option("always_export")
+    assert (dict(entry.data), dict(entry.options)) == before
+
+    refresh = AsyncMock()
+    ev_reconcile = AsyncMock()
+    export_reconcile = AsyncMock()
+    monkeypatch.setattr(owner, "async_request_refresh", refresh)
+    monkeypatch.setattr(owner.ev_controller, "async_reconcile", ev_reconcile)
+    monkeypatch.setattr(owner.active_controller, "async_reconcile", export_reconcile)
+    await hass.services.async_call(
+        "select", "select_option",
+        {"entity_id": BEHAVIOR_ENTITY, "option": "last_known"},
+        blocking=True,
+    )
+    refresh.assert_awaited_once()
+    ev_reconcile.assert_awaited_once()
+    export_reconcile.assert_awaited_once()
+    assert entry.data == {**before[0], BEHAVIOR: "last_known"}
+    assert entry.options == {"reserve_kwh": 4.0}
+    assert owner.runtime_config.ev_numbers.value(KEY, -1) == 45.0
+    assert owner.runtime_config.ev_preferences.reservation_mode == "dynamic"
+    assert await hass.config_entries.async_reload(entry.entry_id)
+    await hass.async_block_till_done(wait_background_tasks=True)
+    assert hass.states.get(BEHAVIOR_ENTITY).state == "last_known"
     assert await hass.config_entries.async_unload(entry.entry_id)

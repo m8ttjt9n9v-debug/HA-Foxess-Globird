@@ -27,6 +27,19 @@ Restore the former direct Store load/save calls and remove the repository and
 typed persistence model. No payload migration or stored-data rollback is
 needed.
 
+## Dynamic reservation SoC evidence
+
+The EV Store can also retain one optional `reservation_soc` record with the
+last verified battery percentage, its original timezone-aware measurement
+time, and a binding to the mapped source. The record supports reservation
+accounting after restart. Physical handoff and current qualification continue
+to obtain live evidence independently.
+
+An absent, malformed, or future-dated record is discarded without resetting
+valid charging sessions or recovery state. The key, privacy flag, and
+version 1 are retained. Legacy payloads load without a reservation record,
+and previous releases can ignore the extra field when rolling back.
+
 ## Verification
 
 - A complete existing payload round-trips without shape or value drift.

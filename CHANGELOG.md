@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.12.63.dev7 — Dynamic EV reservation during telemetry outages
+
+- Offer **Use last known SoC** and **Pause automatic export after a timeout**
+  when verified planning telemetry is unavailable. Default to the timed policy
+  with a 90-minute timeout. Retain the verified reading and its original
+  measurement time across restart for the same configured source.
+- Keep physical export handoff and EV charging on their existing evidence.
+
 ## 0.12.63.dev6 — Unplugged EV reservation planning
 
 - Give a healthy online Tessie vehicle with confirmed disconnection a separate

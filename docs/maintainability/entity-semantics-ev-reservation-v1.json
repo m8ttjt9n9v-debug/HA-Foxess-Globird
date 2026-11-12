@@ -1,5 +1,5 @@
 {
-  "schema_version": 1, "entity_count": 3, "attribute_profiles": {},
+  "schema_version": 1, "entity_count": 4, "attribute_profiles": {},
   "entities": [{
     "key": "ev_reservation_mode",
     "definition": "Operator selection between retained fixed daily energy and Dynamic SoC shortfall protection. Dynamic quantifies the current EV shortfall to the existing export minimum plus configured recovery margin, leaving only the protected balance available for export. The existing Prioritise EV before export master enables protection/top-up; selecting a mode does not enable it or change saved fixed kWh.",
@@ -10,6 +10,17 @@
     "state_vocabulary": "fixed or dynamic, displayed as Fixed daily energy or Dynamic SoC shortfall. Unsupported native/setup edits are rejected before persistence.",
     "audience": "primary", "equivalents": {"foxess": null, "globird": null, "tessie": null},
     "consumers": ["EV Charging policies", "Native dashboard settings", "Shared EV reservation calculation"],
+    "decision": "retain", "review_status": "engineering_draft"
+  }, {
+    "key": "ev_reservation_unavailable_behavior",
+    "definition": "Chooses how Dynamic reservation handles a missing qualified EV battery level. Both options require a previously verified same-vehicle measurement. The timeout choice pauses automatic export when the retained reading is too old.",
+    "producer": "EvReservationUnavailableSelect.current_option projects RuntimeConfiguration.ev_preferences.reservation_unavailable_behavior from the same saved setup value.",
+    "role": "configuration", "unit_and_sign": "Enumerated choice, no unit. Missing and invalid values use the bounded timeout policy.",
+    "time_basis": "Current saved policy, preserved through reload and restart. An edit refreshes the shared budget and reconciles the existing controllers.",
+    "availability": "Editable while HEO is loaded, including during an EV telemetry outage. Export handoff and charging commands use their own current evidence.",
+    "state_vocabulary": "last_known or timeout. Unsupported native or setup edits are rejected before saving.",
+    "audience": "advanced", "equivalents": {"foxess": null, "globird": null, "tessie": null},
+    "consumers": ["EV Charging policies", "Native dashboard settings", "Dynamic EV reservation planning"],
     "decision": "retain", "review_status": "engineering_draft"
   }, {
     "key": "ev_reservation_soc_max_age_hours",
@@ -24,10 +35,10 @@
     "decision": "retain", "review_status": "engineering_draft"
   }, {
     "key": "ev_reservation_unplugged_soc_max_age_minutes",
-    "definition": "Maximum age of qualified native SoC for Dynamic reservation planning when an online source confirms the EV is unplugged.",
+    "definition": "Maximum age of the last verified EV SoC used by the Dynamic reservation timeout policy when qualified battery data is unavailable.",
     "producer": "EvReservationUnpluggedSocMaxAgeNumber.native_value projects the same saved setting as EV Charging policies through RuntimeConfiguration.ev_numbers.",
-    "role": "configuration", "unit_and_sign": "Whole minutes from 0 to 1440. Missing values default to 90 minutes. Zero and invalid saved values disable the extension.",
-    "time_basis": "Age is measured from the original native SoC measurement. Native edits refresh the reservation and reconcile existing controllers.",
+    "role": "configuration", "unit_and_sign": "Whole minutes from 0 to 1440. Missing values default to 90 minutes. Zero and invalid saved values permit no timed fallback.",
+    "time_basis": "Age is measured from the original verified SoC measurement. Native edits refresh the reservation and reconcile existing controllers.",
     "availability": "Editable while HEO is loaded, including a telemetry outage or disabled control. Charging commands and physical export handover use separate freshness checks.",
     "state_vocabulary": "Whole minutes in the supported range. Setup and native edits reject values outside that range.",
     "audience": "advanced", "equivalents": {"foxess": null, "globird": null, "tessie": null},

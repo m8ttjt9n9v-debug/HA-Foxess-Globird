@@ -19,8 +19,7 @@ ceiling. Full and Trip use their existing override authority. See
 
 ## Optional Dynamic EV reservation (local candidate)
 
-Dynamic needs valid current vehicle SoC and qualified planning capacity/charge
-efficiency. It reserves the wall-energy shortfall to the configured EV minimum
+Dynamic needs qualified SoC and planning capacity/charge efficiency. It reserves the wall-energy shortfall to the configured EV minimum
 plus existing buffer, clipped to the normal target. Unknown/stale evidence
 cannot grant export by becoming zero protection. Fixed is the upgrade default;
 setup and `select.home_energy_ev_reservation_mode` share the same choice. The
@@ -28,14 +27,14 @@ existing EV-before-export switch controls Dynamic protection/recovery. No
 learning prediction, Extended Away mode, dashboard replacement or simultaneous
 forced-export/EV writer is added. See [the shared-budget contract](ev-dynamic-reservation.md).
 
-Healthy, exactly vehicle-bound native Tessie reservation planning can
-retain the original SoC measurement for explicitly asleep vehicles (default
-24 hours, 0.025–48 hours) or confirmed unplugged online vehicles (default 90
-minutes, 0–1,440 whole minutes, zero disables the extension). The unplugged
-limit works at home or away and requires agreement between the native
-charge-state frame and the mapped native cable and charging entities. Generic
-reports and online plugged vehicles use the live age. Current, physical
-handoff and charging commands retain their existing qualification.
+If live or separately qualified sleeping or unplugged planning evidence is
+unavailable, only export accounting may use the most recent verified SoC for
+the same configured source. The existing EV journal retains its value and
+original timestamp. Setup and the native selector offer a timed automatic
+export hold (90 minutes by default, inclusive, with 0 meaning an immediate
+hold) and an explicit last-known option. A changed binding or absent verified
+history withholds export when planning evidence is missing. Physical handoff
+and EV current and command qualification retain their existing checks.
 
 ## Prompt EV backfill timing
 

@@ -112,7 +112,7 @@ def test_capacity_configuration_is_a_separate_three_key_addition() -> None:
         == ADDITIVE_CONFIG_KEYS
     )
     assert historical["page_field_count"] == 135
-    assert current["page_field_count"] == 135 + 5 + 3 + 2 + 1 + 3 + 1 + 1 + 1 + 1 + 3
+    assert current["page_field_count"] == 135 + 5 + 3 + 2 + 1 + 3 + 1 + 1 + 1 + 1 + 4
 
 
 def test_price_export_admits_only_monitor_and_one_automatic_request() -> None:
@@ -145,6 +145,7 @@ def test_price_export_admits_only_monitor_and_one_automatic_request() -> None:
         ("select", "ev_backfill_timing"),
         ("number", "ev_surplus_rearm_energy"),
         ("select", "ev_reservation_mode"),
+        ("select", "ev_reservation_unavailable_behavior"),
         ("number", "ev_reservation_soc_max_age_hours"),
         ("number", "ev_reservation_unplugged_soc_max_age_minutes"),
     } == {

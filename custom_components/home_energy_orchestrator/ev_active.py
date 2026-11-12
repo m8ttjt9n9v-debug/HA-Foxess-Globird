@@ -130,6 +130,8 @@ from .const import (
     EV_CHARGE_PATH_SMART_SOCKET,
     EV_PRE_FREE_BACKFILL_TIMING_READY_BY,
     EV_PRE_FREE_BACKFILL_TIMING_WHEN_CONNECTED,
+    EV_RESERVATION_UNAVAILABLE_LAST_KNOWN,
+    EV_RESERVATION_UNAVAILABLE_TIMEOUT,
     FOXESS_CONTROL_OWNER_MODBUS,
 )
 from .coordinator import EnergyCoordinator
@@ -137,9 +139,11 @@ from .ev_adapter import EvEntityMap, EvServiceAdapter, EvWriteBlocked, ev_contro
 from .ev_capacity import CapacityObservation, resolve_ev_capacity
 from .ev_current_measurement import (
     EvCurrentMeasurement,
+    EvPlanningSocObservation,
     measure_ev_current,
     measure_ev_planning_soc,
     measure_ev_soc,
+    reservation_soc_binding,
 )
 from .ev_observation_adapter import (
     EvEntityFeedback,
@@ -305,6 +309,7 @@ from .planner.ev_outside_window import (
 from .planner.ev_persistence import (
     DailyBackfillPersistenceState,
     EvPersistenceState,
+    EvReservationSocRecord,
 )
 from .planner.ev_power_constraints import inverter_backed_current_ceiling
 from .planner.ev_reservation import (
@@ -403,6 +408,7 @@ class ActiveEvController:
         self._decision_fingerprint: EvDecisionFingerprint | None = None
         self._general_limit_write_fingerprint: tuple[float, float] | None = None
         self.last_saved_at: datetime | None = None
+        self._reservation_soc: EvReservationSocRecord | None = None
         self.target_current_a: float | None = None
         self.target_limit_percent: float | None = None
         self.free_window_candidate: EvStageCandidate | None = None
@@ -609,6 +615,7 @@ class ActiveEvController:
             feedback = self._capture_feedback()
             _CYCLE_FEEDBACK.set(feedback)
             self.capacity_evidence(now)
+            reservation_changed = self._remember_reservation_soc(now, feedback)
             await self._async_update_before_export_recovery(now)
             trip = getattr(self.coordinator, "trip_charge", None)
             if trip is not None and not await trip.async_reconcile_before_ev_locked(now):
@@ -659,7 +666,8 @@ class ActiveEvController:
                 ev_current if ev_valid else None,
             )
             if not self._before_export_storage_error and (
-                self.last_saved_at is None or now - self.last_saved_at >= timedelta(minutes=1)
+                reservation_changed or self.last_saved_at is None
+                or now - self.last_saved_at >= timedelta(minutes=1)
             ):
                 await self._async_save(now)
 
@@ -4109,25 +4117,18 @@ class ActiveEvController:
         preference = self.coordinator.runtime_config.ev_preferences
         return preference.reservation_mode == "dynamic" and preference.before_export_enabled
 
-    def reservation_budget(
-        self, now: datetime, *, available_ac_kwh: float, protected_house_kwh: float,
-        keepalive_kwh: float,
-    ) -> EvReservationBudget:
-        """One AC pool shared by export and EV; a reservation is not new energy."""
-        runtime = self.coordinator.runtime_config
-        preference = runtime.ev_preferences
-        mode = preference.reservation_mode
-        dynamic = self.dynamic_reservation_selected()
-        feedback = _CYCLE_FEEDBACK.get() or self._capture_feedback()
-        planning_hours = runtime.ev_numbers.value(
+    def _reservation_soc_observation(
+        self, now: datetime, feedback: EvFeedbackSnapshot,
+    ) -> EvPlanningSocObservation:
+        numbers = self.coordinator.runtime_config.ev_numbers
+        planning_hours = numbers.value(
             CONF_EV_RESERVATION_SOC_MAX_AGE_HOURS, DEFAULT_EV_RESERVATION_SOC_MAX_AGE_HOURS,
         )
-        unplugged_minutes = runtime.ev_numbers.value(
+        timeout_minutes = numbers.value(
             CONF_EV_RESERVATION_UNPLUGGED_SOC_MAX_AGE_MINUTES,
             DEFAULT_EV_RESERVATION_UNPLUGGED_SOC_MAX_AGE_MINUTES,
         )
-        # The longer evidence ceilings apply only to reservation accounting.
-        soc = measure_ev_planning_soc(
+        return measure_ev_planning_soc(
             self.hass, feedback, now=now,
             max_age_seconds=self._float(
                 CONF_EV_TELEMETRY_MAX_AGE_SECONDS, DEFAULT_EV_TELEMETRY_MAX_AGE_SECONDS,
@@ -4136,8 +4137,82 @@ class ActiveEvController:
                 planning_hours * 3600 if valid_ev_reservation_soc_max_age_hours(planning_hours)
                 else 0.0
             ),
-            unplugged_max_age_seconds=unplugged_minutes * 60,
-        ).value_percent if dynamic else None
+            unplugged_max_age_seconds=timeout_minutes * 60,
+        )
+
+    def _remember_reservation_soc(self, now: datetime, feedback: EvFeedbackSnapshot) -> bool:
+        """Observe qualified SoC on the existing EV cycle; flag material changes for saving."""
+        if not self.dynamic_reservation_selected():
+            return False
+        observation = self._reservation_soc_observation(now, feedback)
+        if not observation.valid:
+            return False
+        binding = reservation_soc_binding(self.hass, feedback)
+        if binding is None or observation.observed_at is None or observation.value_percent is None:
+            return False
+        observed_at = observation.observed_at.astimezone(UTC)
+        previous = self._reservation_soc
+        if (
+            previous is not None and previous.binding == binding
+            and observed_at <= previous.observed_at
+        ):
+            return False
+        self._reservation_soc = EvReservationSocRecord(
+            value_percent=observation.value_percent, observed_at=observed_at, binding=binding,
+        )
+        return (
+            previous is None or previous.binding != binding
+            or previous.value_percent != observation.value_percent
+        )
+
+    def _retained_reservation_soc(
+        self, now: datetime, feedback: EvFeedbackSnapshot, observation: EvPlanningSocObservation,
+    ) -> EvReservationSocRecord | None:
+        """Use a previously verified measurement only for an absent or expired source."""
+        record = self._reservation_soc
+        if (
+            record is None or observation.reason not in {
+                "soc_value_or_report_unavailable", "reported_soc_expired",
+                "native_source_unavailable", "native_runtime_unavailable",
+                "native_provider_unavailable", "native_state_unavailable",
+                "sleeping_soc_expired", "native_soc_expired",
+            }
+            or not record.valid_at(now)
+            or record.binding != reservation_soc_binding(self.hass, feedback)
+        ):
+            return None
+        runtime = self.coordinator.runtime_config
+        behavior = runtime.ev_preferences.reservation_unavailable_behavior
+        if behavior == EV_RESERVATION_UNAVAILABLE_LAST_KNOWN:
+            return record
+        minutes = runtime.ev_numbers.value(
+            CONF_EV_RESERVATION_UNPLUGGED_SOC_MAX_AGE_MINUTES,
+            DEFAULT_EV_RESERVATION_UNPLUGGED_SOC_MAX_AGE_MINUTES,
+        )
+        if behavior == EV_RESERVATION_UNAVAILABLE_TIMEOUT and minutes > 0 and (
+            now.astimezone(UTC) - record.observed_at <= timedelta(minutes=minutes)
+        ):
+            return record
+        return None
+
+    def reservation_budget(
+        self, now: datetime, *, available_ac_kwh: float, protected_house_kwh: float,
+        keepalive_kwh: float, allow_retained_soc: bool = False,
+    ) -> EvReservationBudget:
+        """One AC pool shared by export and EV; a reservation is not new energy."""
+        runtime = self.coordinator.runtime_config
+        preference = runtime.ev_preferences
+        mode = preference.reservation_mode
+        dynamic = self.dynamic_reservation_selected()
+        soc = None
+        if dynamic:
+            feedback = _CYCLE_FEEDBACK.get() or self._capture_feedback()
+            observation = self._reservation_soc_observation(now, feedback)
+            soc = observation.value_percent
+            if soc is None and allow_retained_soc:
+                retained = self._retained_reservation_soc(now, feedback, observation)
+                if retained is not None:
+                    soc = retained.value_percent
         capacity = self.capacity_evidence(now).value_kwh if dynamic else None
         # Dynamic and Fixed are alternatives. Turning the explicit priority off
         # releases Dynamic, not an invitation to resurrect an old fixed value.
@@ -4193,12 +4268,15 @@ class ActiveEvController:
             recovery_target_soc_percent=min(release, ceiling) if release is not None else None,
         ).export_allowed
 
-    def daily_backfill_protection_kwh(self, now: datetime) -> float | None:
+    def daily_backfill_protection_kwh(
+        self, now: datetime, *, allow_retained_soc: bool = False,
+    ) -> float | None:
         """Selected EV protection; Dynamic is SoC-based, never daily-delivery based."""
         if self.coordinator.runtime_config.ev_preferences.reservation_mode == "fixed":
             return self._fixed_daily_backfill_protection_kwh(now)
         budget = self.reservation_budget(
             now, available_ac_kwh=0.0, protected_house_kwh=0.0, keepalive_kwh=0.0,
+            allow_retained_soc=allow_retained_soc,
         )
         return budget.requested_reservation_kwh if budget.valid else None
 
@@ -5147,6 +5225,7 @@ class ActiveEvController:
         )
         self.before_export_import = persisted.before_export_import
         self.when_connected_owned = persisted.when_connected_owned
+        self._reservation_soc = persisted.reservation_soc
         if self._repository.last_restore_status != "restored":
             return
         now = persisted.restored_at
@@ -5226,6 +5305,7 @@ class ActiveEvController:
             before_export_recovery=self.before_export_recovery,
             before_export_import=self.before_export_import,
             when_connected_owned=self.when_connected_owned,
+            reservation_soc=self._reservation_soc,
         )
         await self._repository.async_save(persisted.validated_for_storage())
         self.last_saved_at = saved_at

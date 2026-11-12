@@ -781,6 +781,14 @@ EV_RESERVATION_MODE_DESCRIPTION = SelectEntityDescription(
     entity_category=EntityCategory.CONFIG,
 )
 
+EV_RESERVATION_UNAVAILABLE_DESCRIPTION = SelectEntityDescription(
+    key="ev_reservation_unavailable_behavior",
+    name="When EV Battery Data Is Unavailable",
+    translation_key="ev_reservation_unavailable_behavior",
+    icon="mdi:battery-clock-outline",
+    entity_category=EntityCategory.CONFIG,
+)
+
 EV_SURPLUS_REARM_ENERGY_DESCRIPTION = NumberEntityDescription(
     key="ev_surplus_rearm_energy",
     name="Spare-energy Restart Margin",
@@ -807,7 +815,7 @@ EV_RESERVATION_SOC_MAX_AGE_DESCRIPTION = NumberEntityDescription(
 
 EV_RESERVATION_UNPLUGGED_SOC_MAX_AGE_DESCRIPTION = NumberEntityDescription(
     key="ev_reservation_unplugged_soc_max_age_minutes",
-    name="Unplugged EV SoC Maximum Age",
+    name="EV Battery Data Timeout",
     translation_key="ev_reservation_unplugged_soc_max_age_minutes",
     icon="mdi:battery-clock-outline",
     native_unit_of_measurement=UnitOfTime.MINUTES,
@@ -998,6 +1006,7 @@ _NON_SENSOR_PROJECTIONS = {
     "house_occupancy_mode": "HouseOccupancyModeSelect.current_option",
     "ev_backfill_timing": "EvBackfillTimingSelect.current_option",
     "ev_reservation_mode": "EvReservationModeSelect.current_option",
+    "ev_reservation_unavailable_behavior": "EvReservationUnavailableSelect.current_option",
     "ev_reservation_soc_max_age_hours": "EvReservationSocMaxAgeNumber.native_value",
     "ev_reservation_unplugged_soc_max_age_minutes":
         "EvReservationUnpluggedSocMaxAgeNumber.native_value",
@@ -1041,6 +1050,7 @@ def _entity_spec(platform: EntityPlatform, description: EntityDescription) -> En
                                                          EV_BEFORE_EXPORT_IMPORT_DESCRIPTION,
                                                          EV_SURPLUS_REARM_ENERGY_DESCRIPTION,
                                                          EV_RESERVATION_MODE_DESCRIPTION,
+                                                         EV_RESERVATION_UNAVAILABLE_DESCRIPTION,
                                                          EV_RESERVATION_SOC_MAX_AGE_DESCRIPTION,
                                                          EV_RESERVATION_UNPLUGGED_SOC_MAX_AGE_DESCRIPTION,
                                                          EV_BACKFILL_TIMING_DESCRIPTION))
@@ -1067,6 +1077,7 @@ ENTITY_SPECS = (
     _entity_spec("select", HOUSE_OCCUPANCY_DESCRIPTION),
     _entity_spec("select", EV_BACKFILL_TIMING_DESCRIPTION),
     _entity_spec("select", EV_RESERVATION_MODE_DESCRIPTION),
+    _entity_spec("select", EV_RESERVATION_UNAVAILABLE_DESCRIPTION),
     _entity_spec("number", EV_RESERVATION_SOC_MAX_AGE_DESCRIPTION),
     _entity_spec("number", EV_RESERVATION_UNPLUGGED_SOC_MAX_AGE_DESCRIPTION),
     _entity_spec("number", EV_SURPLUS_REARM_ENERGY_DESCRIPTION),

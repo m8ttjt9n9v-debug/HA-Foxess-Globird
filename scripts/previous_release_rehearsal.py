@@ -32,6 +32,7 @@ from custom_components.home_energy_orchestrator.planner.ev_outside_window import
 from custom_components.home_energy_orchestrator.planner.ev_persistence import (
     DailyBackfillPersistenceState,
     EvPersistenceState,
+    EvReservationSocRecord,
 )
 from custom_components.home_energy_orchestrator.planner.export_session import (
     ExportSessionState,
@@ -114,6 +115,11 @@ def _current_rollback_bundle() -> dict[str, object]:
         ),
         charge_to_full_started_at=recorded_at,
         outside_control_active=True,
+        reservation_soc=EvReservationSocRecord(
+            66.0,
+            recorded_at - timedelta(days=7),
+            ("tessie", "synthetic-entity", "synthetic-entry", "synthetic-device", "synthetic-soc"),
+        ),
         smart_recovery=SmartSocketRecoveryState(
             attempted=True,
             phase="fault",

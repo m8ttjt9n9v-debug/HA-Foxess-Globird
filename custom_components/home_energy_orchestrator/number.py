@@ -148,7 +148,7 @@ class EvReservationSocMaxAgeNumber(CoordinatorEntity[EnergyCoordinator], NumberE
 
 
 class EvReservationUnpluggedSocMaxAgeNumber(EvReservationSocMaxAgeNumber):
-    """Edit the planning age for an online, explicitly unplugged EV."""
+    """Edit the timeout for Dynamic reservation when EV SoC is missing."""
 
     @property
     def native_value(self) -> float:

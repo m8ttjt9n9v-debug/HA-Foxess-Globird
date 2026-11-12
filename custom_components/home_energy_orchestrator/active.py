@@ -503,7 +503,7 @@ class ActiveFoxessController:
             window = None
         protected_ev = self._protected_keepalive_energy_kwh(self._hours_until_next_free(now))
         ev = getattr(self.coordinator, "ev_controller", None)
-        reservation = ev.daily_backfill_protection_kwh(now) if ev else (
+        reservation = ev.daily_backfill_protection_kwh(now, allow_retained_soc=True) if ev else (
             None if runtime.ev_preferences.reservation_mode == "dynamic"
             and runtime.ev_preferences.before_export_enabled else 0.0
         )

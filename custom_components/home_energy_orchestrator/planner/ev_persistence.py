@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
-from datetime import datetime
+from datetime import UTC, datetime
 from math import isfinite
 
 from .ev import (
@@ -19,6 +19,9 @@ from .ev_learning import DrivingSnapshotState
 from .ev_outside_window import MeasuredSolarAdjustmentState, PreFreeSessionState
 from .learning import DemandHistory
 
+_MAX_RESERVATION_BINDING_PARTS = 8
+_MAX_RESERVATION_BINDING_PART_LENGTH = 256
+
 
 @dataclass(frozen=True, slots=True)
 class DailyBackfillPersistenceState:
@@ -33,6 +36,37 @@ class DailyBackfillPersistenceState:
     stop_pending: bool = False
     stop_attempts: int = 0
     last_stop_at: datetime | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class EvReservationSocRecord:
+    """The last verified SoC and original measurement time for one vehicle."""
+
+    value_percent: float
+    observed_at: datetime
+    binding: tuple[str, ...]
+
+    def valid_at(self, now: datetime) -> bool:
+        """Validate the journal record without granting live telemetry authority."""
+        if not (
+            type(self.value_percent) in (int, float)
+            and 0 <= self.value_percent <= 100
+            and isinstance(self.observed_at, datetime)
+            and self.observed_at.utcoffset() is not None
+            and now.utcoffset() is not None
+            and isinstance(self.binding, tuple)
+            and 0 < len(self.binding) <= _MAX_RESERVATION_BINDING_PARTS
+            and all(
+                isinstance(part, str) and len(part) <= _MAX_RESERVATION_BINDING_PART_LENGTH
+                and part.strip()
+                for part in self.binding
+            )
+        ):
+            return False
+        try:
+            return self.observed_at.astimezone(UTC) <= now.astimezone(UTC)
+        except (OverflowError, ValueError):
+            return False
 
 
 @dataclass(frozen=True, slots=True)
@@ -64,6 +98,7 @@ class EvPersistenceState:
     smart_recovery: SmartSocketRecoveryState = field(
         default_factory=SmartSocketRecoveryState
     )
+    reservation_soc: EvReservationSocRecord | None = None
 
     @classmethod
     def from_payload(
@@ -158,13 +193,15 @@ class EvPersistenceState:
             ),
             smart_recovery=smart_recovery,
             before_export_import=_before_export_import(mapping.get("before_export_import"), now),
+            reservation_soc=_reservation_soc(mapping.get("reservation_soc"), now),
         )
 
     def to_payload(self) -> dict[str, object]:
-        """Retain the composite Store with optional bounded solar history."""
+        """Retain the composite Store and append only qualified optional evidence."""
         reconciliation = self.reconciliation
         daily = self.daily_backfill
         recovery = self.smart_recovery
+        reservation_soc = self.reservation_soc
         return {
             "grid_average": self.grid_average_payload,
             "ev_average": self.ev_average_payload,
@@ -259,6 +296,12 @@ class EvPersistenceState:
                 "binding": list(self.before_export_recovery.binding),
                 "valid": self.before_export_recovery.valid,
             }} if self.before_export_recovery != EvBeforeExportRecovery() else {}),
+            **({"reservation_soc": {
+                "value_percent": reservation_soc.value_percent,
+                "observed_at": reservation_soc.observed_at.isoformat(),
+                "binding": list(reservation_soc.binding),
+            }} if isinstance(reservation_soc, EvReservationSocRecord)
+                and reservation_soc.valid_at(self.restored_at) else {}),
             "smart_recovery": {
                 "attempted": recovery.attempted,
                 "phase": recovery.phase,
@@ -274,6 +317,25 @@ class EvPersistenceState:
     def validated_for_storage(self) -> EvPersistenceState:
         """Apply the established grouped fallbacks before writing a snapshot."""
         return type(self).from_payload(self.to_payload(), self.restored_at)
+
+
+def _reservation_soc(payload: object, now: datetime) -> EvReservationSocRecord | None:
+    """Discard malformed reservation evidence independently of control state."""
+    if not isinstance(payload, dict):
+        return None
+    raw_stamp = payload.get("observed_at")
+    binding = payload.get("binding")
+    if (
+        not isinstance(raw_stamp, str) or not isinstance(binding, list)
+        or not 0 < len(binding) <= _MAX_RESERVATION_BINDING_PARTS
+    ):
+        return None
+    try:
+        observed_at = datetime.fromisoformat(raw_stamp)
+    except ValueError:
+        return None
+    record = EvReservationSocRecord(payload.get("value_percent"), observed_at, tuple(binding))
+    return record if record.valid_at(now) else None
 
 
 def _before_export_import(payload: object, now: datetime) -> EvBeforeExportImport:

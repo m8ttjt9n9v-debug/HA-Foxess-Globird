@@ -1,5 +1,5 @@
 {
-  "schema_version": 1, "extension": "ev_reservation_v1", "field_count": 3,
+  "schema_version": 1, "extension": "ev_reservation_v1", "field_count": 4,
   "fields": [{
     "key": "ev_reservation_mode", "page": "ev_policies", "order": 36,
     "required": true, "has_default": true, "default": "fixed", "input_kind": "select",
@@ -14,11 +14,19 @@
     "setup_label": "EV reservation SoC maximum age (hours)",
     "reconfigure_label": "EV reservation SoC maximum age (hours)"
   }, {
-    "key": "ev_reservation_unplugged_soc_max_age_minutes", "page": "ev_policies", "order": 38,
+    "key": "ev_reservation_unavailable_behavior", "page": "ev_policies", "order": 38,
+    "required": true, "has_default": true, "default": "timeout", "input_kind": "select",
+    "input_config": {"options": ["last_known", "timeout"], "multiple": false,
+                     "custom_value": false, "sort": false,
+                     "translation_key": "ev_reservation_unavailable_behavior"},
+    "setup_label": "When EV battery data is unavailable",
+    "reconfigure_label": "When EV battery data is unavailable"
+  }, {
+    "key": "ev_reservation_unplugged_soc_max_age_minutes", "page": "ev_policies", "order": 39,
     "required": true, "has_default": true, "default": 90.0, "input_kind": "number",
     "input_config": {"min": 0.0, "max": 1440.0, "step": 1.0, "mode": "box",
                      "unit_of_measurement": "min"},
-    "setup_label": "Unplugged EV SoC maximum age (minutes)",
-    "reconfigure_label": "Unplugged EV SoC maximum age (minutes)"
+    "setup_label": "EV battery data timeout (minutes)",
+    "reconfigure_label": "EV battery data timeout (minutes)"
   }]
 }

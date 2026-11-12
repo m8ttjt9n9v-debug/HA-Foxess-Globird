@@ -78,6 +78,7 @@ from .const import (
     CONF_EV_PRE_FREE_ENABLED,
     CONF_EV_PROTECTED_BASELINE_A,
     CONF_EV_RESERVATION_MODE,
+    CONF_EV_RESERVATION_UNAVAILABLE_BEHAVIOR,
     CONF_EV_SMART_SOCKET,
     CONF_EV_SMART_SOCKET_CURRENT_LIMIT,
     CONF_EV_SMART_SOCKET_POWER_SWITCHING,
@@ -168,6 +169,7 @@ from .const import (
     DEFAULT_EV_PRE_FREE_ENABLED,
     DEFAULT_EV_PROTECTED_BASELINE_A,
     DEFAULT_EV_RESERVATION_MODE,
+    DEFAULT_EV_RESERVATION_UNAVAILABLE_BEHAVIOR,
     DEFAULT_EV_SMART_SOCKET_CURRENT_LIMIT,
     DEFAULT_EV_SMART_SOCKET_POWER_SWITCHING,
     DEFAULT_EV_SOLAR_SPILL_ENABLED,
@@ -390,6 +392,7 @@ class EvPreferenceSettings:
     before_export_soc_target: float
     before_export_soc_buffer: float
     reservation_mode: str
+    reservation_unavailable_behavior: str
     charge_to_full_configured: bool
     charge_to_full_enabled: bool
     legacy_charge_to_full_entity: str | None
@@ -685,8 +688,15 @@ def valid_ev_reservation_soc_max_age_hours(value: object) -> bool:
     )
 
 
+def _reservation_unavailable_behavior(value: object) -> str:
+    """Keep a corrupt setting on the bounded timeout policy."""
+    if isinstance(value, str) and value in config_const.EV_RESERVATION_UNAVAILABLE_BEHAVIORS:
+        return value
+    return DEFAULT_EV_RESERVATION_UNAVAILABLE_BEHAVIOR
+
+
 def valid_ev_reservation_unplugged_soc_max_age_minutes(value: object) -> bool:
-    """Accept whole minutes within the unplugged SoC planning bound."""
+    """Accept whole minutes within the reservation timeout range."""
     try:
         numeric = float(value)
     except (TypeError, ValueError, OverflowError):
@@ -1157,6 +1167,10 @@ class RuntimeConfiguration:
                 before_export_soc_buffer=_before_export_buffer(data),
                 reservation_mode=str(data.get(
                     CONF_EV_RESERVATION_MODE, DEFAULT_EV_RESERVATION_MODE,
+                )),
+                reservation_unavailable_behavior=_reservation_unavailable_behavior(data.get(
+                    CONF_EV_RESERVATION_UNAVAILABLE_BEHAVIOR,
+                    DEFAULT_EV_RESERVATION_UNAVAILABLE_BEHAVIOR,
                 )),
                 charge_to_full_configured=(
                     CONF_EV_CHARGE_TO_FULL_ENABLED in data

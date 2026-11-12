@@ -10,6 +10,7 @@ import pytest
 
 from custom_components.home_energy_orchestrator.planner.ev_persistence import (
     EvPersistenceState,
+    EvReservationSocRecord,
 )
 
 NOW = datetime(2026, 9, 17, 12, tzinfo=UTC)
@@ -73,7 +74,67 @@ def test_ev_persistence_state_round_trips_complete_existing_payload() -> None:
 
     state = EvPersistenceState.from_payload(payload, NOW)
 
+    assert state.reservation_soc is None
     assert state.to_payload() == payload
+
+
+@pytest.mark.parametrize("value", [0, 37.25, 100])
+def test_verified_reservation_soc_keeps_its_original_clock_across_restart(value: float) -> None:
+    observed_at = NOW - timedelta(days=20)
+    binding = ("tessie", "synthetic-vehicle-binding")
+    record = EvReservationSocRecord(value, observed_at, binding)
+    existing = EvPersistenceState.from_payload(complete_payload(), NOW)
+
+    saved = replace(existing, reservation_soc=record).validated_for_storage().to_payload()
+    restored = EvPersistenceState.from_payload(saved, NOW + timedelta(days=1))
+
+    assert saved["reservation_soc"] == {
+        "value_percent": value,
+        "observed_at": observed_at.isoformat(),
+        "binding": list(binding),
+    }
+    assert restored.reservation_soc == record
+    assert replace(restored, reservation_soc=None).to_payload() == existing.to_payload()
+
+
+@pytest.mark.parametrize("changes", [
+    {"value_percent": -1}, {"value_percent": 101}, {"value_percent": True},
+    {"value_percent": float("nan")}, {"value_percent": float("inf")},
+    {"value_percent": "90"}, {"value_percent": 10**400}, {"value_percent": None},
+    {"observed_at": "invalid"}, {"observed_at": "2026-09-17T12:00:00"},
+    {"observed_at": "2026-09-17T12:00:00.000001+00:00"}, {"observed_at": 42},
+    {"observed_at": "0001-01-01T00:00:00+14:00"},
+    {"binding": "synthetic-vehicle-binding"}, {"binding": []}, {"binding": [" "]},
+    {"binding": [True]}, {"binding": ["a" * 257]}, {"binding": ["a"] * 9},
+])
+def test_malformed_reservation_soc_leaves_other_journal_fields_intact(changes) -> None:
+    original = complete_payload()
+    payload = {**original, "reservation_soc": {
+        "value_percent": 48,
+        "observed_at": NOW.isoformat(),
+        "binding": ["synthetic-vehicle-binding"],
+        **changes,
+    }}
+
+    restored = EvPersistenceState.from_payload(payload, NOW)
+
+    assert restored.reservation_soc is None
+    assert restored.to_payload() == original
+
+
+@pytest.mark.parametrize("changes", [
+    {"value_percent": False},
+    {"observed_at": NOW + timedelta(microseconds=1)},
+    {"observed_at": NOW.replace(tzinfo=None)},
+    {"binding": ()},
+])
+def test_invalid_runtime_reservation_soc_is_omitted_when_serializing(changes) -> None:
+    record = replace(EvReservationSocRecord(48, NOW, ("synthetic-binding",)), **changes)
+    existing = EvPersistenceState.from_payload(complete_payload(), NOW)
+    state = replace(existing, reservation_soc=record)
+
+    assert state.to_payload() == existing.to_payload()
+    assert state.validated_for_storage().reservation_soc is None
 
 
 def test_zero_baseline_stop_retry_survives_more_than_three_attempts() -> None:

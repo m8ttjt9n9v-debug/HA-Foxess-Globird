@@ -21,30 +21,44 @@ current35%, efficiency95% reserves approximately4.42kWh. The configured normal
 non-override target still clips recovery. An invalid or stale SoC, unavailable
 capacity or invalid setting cannot be replaced by zero protection.
 
-Dynamic reservation planning can retain a healthy, exactly vehicle-bound
-native Tessie SoC under two configurable limits:
+Dynamic reservation planning uses the original measurement time. Live SoC
+uses the existing telemetry age. An explicitly asleep, healthy, vehicle-bound
+Tessie frame has its own **EV reservation SoC maximum age** (default 24 hours,
+0.025–48 hours). A healthy online Tessie frame can also qualify within the
+configured timeout when its native and mapped cable and charging states
+confirm disconnection.
 
-- **EV reservation SoC maximum age** applies when the provider explicitly reports
-  asleep. It defaults to 24 hours and accepts 0.025–48 hours.
-- **Unplugged EV reservation SoC maximum age** applies when the provider reports
-  online and its charge-state frame and the mapped native cable and charging
-  entities agree that the vehicle is unplugged. It applies both at home and
-  away, defaults to 90 minutes, and accepts 0–1,440 whole minutes. Zero disables
-  the extension. The live limit still applies to plugged vehicles and to
-  generic sources.
+**When EV battery data is unavailable** applies when those planning sources
+cannot supply a reading for export accounting:
 
-Both settings are available in setup and as native numbers
-(`number.home_energy_ev_reservation_soc_max_age_hours` and
-`number.home_energy_ev_reservation_unplugged_soc_max_age_minutes`). The
-original vehicle measurement time governs age. HA reports, repeated reads,
-restart and unrelated updates cannot renew it. Provider failure, offline status,
-unloading, identity/value mismatch, future time and expiry make protection
-unavailable. Loss of unplugged evidence or a shorter setting takes effect on
-the next evaluation.
+- **Use last known SoC** keeps using the most recent verified reading for that
+  configured source until a newer verified reading arrives.
+- **Pause automatic export after a timeout** is the default. It uses the last
+  verified reading through the configured age, inclusive, then pauses automatic
+  forced export. The **EV SoC outage timeout** defaults to 90 minutes and
+  accepts 0–1,440 whole minutes. Zero pauses export as soon as no planning
+  reading qualifies. A separately qualified sleeping reading follows its own
+  age limit.
 
-The age bounds apply only to energy accounting. Current, physical handoff
-and EV commands retain their original checks. Expiry is an evidence validity
-boundary, so there is no grace period or hysteresis when evidence expires.
+Both choices are available in setup and as native controls
+(`select.home_energy_ev_reservation_unavailable_behavior` and
+`number.home_energy_ev_reservation_unplugged_soc_max_age_minutes`). The timeout
+reuses the previous unplugged-age entity and saved value. The age starts at the
+original vehicle measurement time for native Tessie, or the qualifying report
+time for a registered generic SoC source. The existing EV journal checkpoints the
+value, time and source identity on its normal save cycle and on unload. Provider outages and restart do not renew it.
+A restored state, a changed source, a future timestamp or conflicting evidence
+cannot create a verified reading. With no usable reading for the configured
+source, Dynamic still withholds automatic export. Unregistered generic reports
+can qualify live but have no persistent source identity.
+
+The fallback estimates return energy. A vehicle can use energy while off-grid,
+so the retained reading can understate the top-up it needs on arrival. The
+fallback applies only to export accounting. Current, positive EV commands and
+physical handoff retain their original qualification. Independent physical
+evidence may still be required while a provider is unavailable. The expiry
+boundary is inclusive and needs no hysteresis. A newer verified reading or a
+setting change is applied on the next reconciliation.
 
 Battery floor/reserve and discharge efficiency are applied first. Protect the
 remaining house demand and mandatory keepalive exactly once. Reserve the
@@ -60,10 +74,10 @@ changing a setting alone cannot invent energy previously withheld from export.
 
 Away/unplugged vehicles retain Dynamic protection. Ordinary automatic presence
 or a manual house-energy Away choice does not release it. If the car is
-unreachable for an extended absence, missing qualified SoC can withhold
-automatic export with Dynamic priority enabled. Other house modes retain
-their own controls. A separate, explicitly selected Extended Away policy
-and journey prediction remain deferred.
+unreachable for an extended absence, the selected unavailable-data option
+determines whether Dynamic export can continue using the last verified SoC.
+A separate, explicitly selected Extended Away policy and journey prediction
+remain deferred.
 
 ## Timing, hysteresis and ownership
 
@@ -90,6 +104,7 @@ outside-window inverter percentage and electrical limits remain binding.
 | Pilot vehicle room and wall-energy conversion (`configuration_v1.4.24.yaml:4119–4188`) | Existing capacity/efficiency and normal SoC ceiling; new Dynamic amount is a separately selected extension. |
 | Fixed ready-cycle allocation | Keep configured allocation minus confirmed policy delivery. Do not stack it with Dynamic or strand it behind its own export deduction. |
 | Existing before-export recovery/handoff | Retain the same bound recovery journal and physical stop/baseline proof. Dynamic replaces only the blanket away-vehicle SoC block. |
+| Dynamic SoC during an outage | Local configuration extension. Retain a previously verified, source-bound reading in the existing EV journal and feed it into the same export budget under the selected policy. Existing physical and energy gates still apply. |
 | Native numeric current versus fresh local power | Shared measurement qualification uses the native vehicle measurement clock and identity, not request amps, HTTP/report publication or unrelated Modbus freshness. |
 
 The telemetry correction distinguishes fresh numeric ramp lag from an expired

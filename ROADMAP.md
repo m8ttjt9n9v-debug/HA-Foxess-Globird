@@ -87,6 +87,10 @@
   charge-state and mapped cable/charging evidence agree the vehicle is unplugged.
   The separate configurable age defaults to 90 minutes at home or away.
   Missing evidence and physical export handoff keep their existing gates.
+- [x] Allow Dynamic export accounting to retain the last verified same-source
+  SoC across a coverage gap and restart. Offer a configurable timed hold
+  (default 90 minutes) and an explicit last-known option. Keep physical
+  handoff, house reserve, tariff and current checks independent.
 - [ ] Add explicit, manually selected **Extended Away** semantics: release the
   anticipated EV-return reservation and EV-SoC export hold. Never infer this
   from automatic house occupancy, a normal day trip or vehicle-away detection.

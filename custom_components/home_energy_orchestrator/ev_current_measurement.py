@@ -10,6 +10,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from hashlib import sha256
 from math import isfinite
 
 from homeassistant.config_entries import ConfigEntryState
@@ -46,6 +47,37 @@ def _native_charge_anchors_match(registry, feedback, entry, device, vin):
         ):
             return False
     return True
+
+
+def reservation_soc_binding(
+    hass: HomeAssistant, feedback: EvFeedbackSnapshot,
+) -> tuple[str, ...] | None:
+    """Identify the configured SoC publisher even during a provider outage."""
+    registry = er.async_get(hass)
+    row = registry.async_get(feedback.soc.entity_id) if feedback.soc.entity_id else None
+    if row is None or row.disabled_by is not None:
+        return None
+    entry = (
+        hass.config_entries.async_get_entry(row.config_entry_id) if row.config_entry_id else None
+    )
+    device = dr.async_get(hass).async_get(row.device_id) if row.device_id else None
+    if (
+        row.config_entry_id and (entry is None or entry.disabled_by is not None)
+        or row.device_id and device is None
+    ):
+        return None
+    if row.platform == "tessie":
+        if entry is None or entry.domain != "tessie" or device is None:
+            return None
+        vins = {value for domain, value in device.identifiers if domain == "tessie"}
+        if len(vins) != 1 or entry.entry_id not in device.config_entries:
+            return None
+        if not _native_charge_anchors_match(registry, feedback, entry, device, next(iter(vins))):
+            return None
+    return (
+        row.platform, row.id, row.config_entry_id or "-", row.device_id or "-",
+        sha256(row.unique_id.encode()).hexdigest(),
+    )
 
 
 def _native_unplugged_for_planning(registry, feedback, data, now):
@@ -114,14 +146,14 @@ def _measure_soc_observation(
 
     if now.tzinfo is None or now.utcoffset() is None or not _valid_age(max_age_seconds):
         return invalid("measurement_clock_invalid")
+    if item.restored or item.available_state is None or item.last_reported is None:
+        return invalid("soc_value_or_report_unavailable")
     if (
-        item.restored or item.available_state is None
-        or type(item.number) not in (int, float) or not isfinite(item.number)
+        type(item.number) not in (int, float) or not isfinite(item.number)
         or not 0 <= item.number <= 100
-        or item.last_reported is None or item.last_reported.tzinfo is None
         or item.last_reported.utcoffset() is None or item.last_reported > now
     ):
-        return invalid("soc_value_or_report_unavailable")
+        return invalid("soc_value_or_report_invalid")
     if not native:
         return (
             EvPlanningSocObservation(
@@ -153,10 +185,9 @@ def _measure_soc_observation(
     if len(matches) != 1:
         return invalid("native_vehicle_ambiguous")
     provider = getattr(matches[0], "data_coordinator", None)
-    if (
-        provider is None or getattr(provider, "last_update_success", False) is not True
-        or getattr(provider, "config_entry", None) is not entry
-    ):
+    if provider is not None and getattr(provider, "config_entry", None) is not entry:
+        return invalid("native_policy_source_mismatch")
+    if provider is None or getattr(provider, "last_update_success", False) is not True:
         return invalid("native_provider_unavailable")
     data = getattr(provider, "data", None)
     if not isinstance(data, Mapping) or data.get("state") not in {"online", "asleep"}:

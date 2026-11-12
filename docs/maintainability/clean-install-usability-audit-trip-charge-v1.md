@@ -8,9 +8,9 @@ remain separate.
 
 | Measure | Result |
 |---|---:|
-| Catalogue entities | 136 |
+| Catalogue entities | 137 |
 | Portable dashboard references | 128 |
-| Entity translation keys | 4 |
+| Entity translation keys | 5 |
 | Proposed relabels awaiting owner review | 0 |
 | Owner-approved relabels | 10 |
 
@@ -19,7 +19,7 @@ remain separate.
 | Audience | Total | Referenced | Not referenced |
 |---|---:|---:|---:|
 | primary | 61 | 61 | 0 |
-| advanced | 46 | 39 | 7 |
+| advanced | 47 | 39 | 8 |
 | diagnostic | 29 | 28 | 1 |
 
 Dashboard absence is audit evidence, not automatically a defect: Fleet,
@@ -33,7 +33,7 @@ Any primary omissions require a presentation decision before change.
 
 ## Category evidence
 
-Current categories: `{'none': 106, 'diagnostic': 3, 'config': 27}`.
+Current categories: `{'none': 106, 'diagnostic': 3, 'config': 28}`.
 
 The semantic review marks the following entities as diagnostic audience,
 but Home Assistant does not currently classify them as Diagnostic. This is
