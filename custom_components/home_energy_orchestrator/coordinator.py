@@ -25,6 +25,7 @@ from .const import (
     CONF_EV_MAX_CURRENT,
     CONF_EV_MIN_CURRENT,
     CONF_EV_PHASE_COUNT,
+    CONF_EV_RESERVATION_SOC_MAX_AGE_HOURS,
     CONF_EV_TELEMETRY_MAX_AGE_SECONDS,
     CONF_EV_TELEMETRY_MAX_SKEW_SECONDS,
     CONF_EV_VOLTAGE,
@@ -55,6 +56,7 @@ from .const import (
     DEFAULT_BONUS_WINDOW_START,
     DEFAULT_DAILY_CHARGE,
     DEFAULT_DAILY_FREE_ALLOWANCE_KWH,
+    DEFAULT_EV_RESERVATION_SOC_MAX_AGE_HOURS,
     DEFAULT_EV_TELEMETRY_MAX_AGE_SECONDS,
     DEFAULT_EV_TELEMETRY_MAX_SKEW_SECONDS,
     DEFAULT_EXPORT_ALLOWANCE_KWH,
@@ -84,7 +86,7 @@ from .const import (
     DOMAIN,
     REASON_INVALID_CONFIGURATION,
 )
-from .ev_current_measurement import measure_ev_current
+from .ev_current_measurement import measure_ev_current, sleeping_ev_unplugged_for_learning
 from .ev_observation_adapter import capture_ev_feedback, ev_observation_entity_map
 from .models import EnergyLedger, SiteSnapshot
 from .normalise import current_to_a, percent
@@ -1235,7 +1237,7 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
         )
 
     def _state_qualified_ev_power_kw(self, now: datetime) -> float | None:
-        """Subtract only the shared, source-qualified measured EV power."""
+        """Measure EV draw for learning or account for a qualified sleeping unplug."""
         feedback = capture_ev_feedback(self.hass, ev_observation_entity_map(self.runtime_config))
         measurement = measure_ev_current(
             self.hass, feedback, now=now,
@@ -1268,6 +1270,18 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
         elif measurement.valid:
             current_a = measurement.current_a
         else:
+            local_cable = self.runtime_config.ev_connection.local_connection_entity
+            if local_cable and self.hass.states.is_state(local_cable, "on"):
+                return None
+            # Reuse the existing bounded sleeping-frame age. The result is a
+            # learning-only zero and cannot qualify live current or a handoff.
+            sleeping_age_hours = self.runtime_config.ev_numbers.value(
+                CONF_EV_RESERVATION_SOC_MAX_AGE_HOURS, DEFAULT_EV_RESERVATION_SOC_MAX_AGE_HOURS,
+            )
+            if sleeping_ev_unplugged_for_learning(
+                self.hass, feedback, now=now, max_age_seconds=sleeping_age_hours * 3600,
+            ):
+                return 0.0
             return None
         try:
             voltage_v = self._configured_float(CONF_EV_VOLTAGE)

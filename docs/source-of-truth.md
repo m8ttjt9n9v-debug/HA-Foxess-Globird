@@ -1,5 +1,15 @@
 # Project source of truth
 
+## House learning with a sleeping EV
+
+The reference learner subtracts state-qualified EV draw from the whole-house
+measurement. The learner uses fresh measured EV current when available. An
+explicitly sleeping Tesla can also contribute zero when its original Tessie
+frame shows disconnected, unplugged and zero amps, and the mapped entities
+agree. The frame must come from the healthy, bound provider and fall within
+the configured sleeping-frame age. Each observation rechecks that evidence.
+Charging and export use their existing physical-current qualification.
+
 ## Unreleased configured EV charge-limit correction
 
 The existing normal EV target is configurable through0–100%;90% remains its

@@ -207,6 +207,84 @@ def measure_ev_planning_soc(
     )
 
 
+def sleeping_ev_unplugged_for_learning(
+    hass: HomeAssistant,
+    feedback: EvFeedbackSnapshot,
+    *,
+    now: datetime,
+    max_age_seconds: float,
+) -> bool:
+    """Qualify a retained unplugged frame for house-load subtraction alone."""
+    if now.tzinfo is None or not _valid_age(max_age_seconds, positive=True):
+        return False
+    cable, charging, actual = (
+        feedback.cable_connected, feedback.charging_state, feedback.actual_current,
+    )
+    switch = feedback.charge_switch
+    if (
+        cable.available_state != "off" or charging.available_state != "disconnected"
+        or actual.unit != "A" or actual.current_a != 0
+        or switch.entity_id and switch.available_state != "off"
+    ):
+        return False
+    required = (cable, charging, actual, switch) if switch.entity_id else (cable, charging, actual)
+    if any(
+        item.restored or item.last_reported is None or item.last_reported.tzinfo is None
+        or item.last_reported > now for item in required
+    ):
+        return False
+
+    registry = er.async_get(hass)
+    rows = [registry.async_get(item.entity_id) if item.entity_id else None
+            for item in (cable, charging, actual)]
+    if any(row is None or row.platform != "tessie" for row in rows):
+        return False
+    row = rows[0]
+    entry = hass.config_entries.async_get_entry(row.config_entry_id)
+    device = dr.async_get(hass).async_get(row.device_id) if row.device_id else None
+    if (
+        entry is None or entry.domain != "tessie" or entry.state != ConfigEntryState.LOADED
+        or device is None or entry.entry_id not in device.config_entries
+    ):
+        return False
+    vins = {value for domain, value in device.identifiers if domain == "tessie"}
+    if len(vins) != 1:
+        return False
+    vin = next(iter(vins))
+    if not _native_charge_anchors_match(registry, feedback, entry, device, vin):
+        return False
+    vehicles = getattr(getattr(entry, "runtime_data", None), "vehicles", None)
+    if isinstance(vehicles, Mapping):
+        vehicles = vehicles.values()
+    elif not isinstance(vehicles, (list, tuple)):
+        return False
+    matches = [vehicle for vehicle in vehicles if getattr(vehicle, "vin", None) == vin]
+    if len(matches) != 1:
+        return False
+    provider = getattr(matches[0], "data_coordinator", None)
+    if (
+        provider is None or getattr(provider, "last_update_success", False) is not True
+        or getattr(provider, "config_entry", None) is not entry
+    ):
+        return False
+    data = getattr(provider, "data", None)
+    if (
+        not isinstance(data, Mapping) or data.get("state") != "asleep"
+        or data.get("charge_state_conn_charge_cable") != "<invalid>"
+        or data.get("charge_state_charging_state") != "Disconnected"
+    ):
+        return False
+    current = data.get("charge_state_charger_actual_current")
+    stamp = data.get("charge_state_timestamp")
+    if type(current) not in (int, float) or current != 0 or not _valid_age(stamp):
+        return False
+    try:
+        measured_at = datetime.fromtimestamp(stamp / 1000, UTC)
+    except (OverflowError, OSError, ValueError):
+        return False
+    return 0 <= (now - measured_at).total_seconds() <= max_age_seconds
+
+
 @dataclass(frozen=True, slots=True)
 class EvCurrentMeasurement:
     """One immutable measured value and its source, never commanded power.

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.12.63.dev5 — House learning with a sleeping, unplugged EV
+
+- Continue house learning when a healthy native Tessie provider confirms a
+  sleeping, unplugged vehicle with zero current within the bounded measurement
+  age. Qualify measured charging current through the existing live path.
+
 ## 0.12.63.dev4 — Configured EV charging ceiling
 
 - Apply the site's configured normal charge limit to keepalive headroom and

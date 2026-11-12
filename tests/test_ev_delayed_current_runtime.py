@@ -9,11 +9,18 @@ import asyncio
 from dataclasses import replace
 from datetime import timedelta
 from math import floor
+from unittest.mock import AsyncMock
 
 import pytest
+from homeassistant.helpers import entity_registry as er
 
 from custom_components.home_energy_orchestrator.coordinator import EnergyCoordinator
 from custom_components.home_energy_orchestrator.ev_active import ActiveEvController
+from custom_components.home_energy_orchestrator.ev_current_measurement import measure_ev_current
+from custom_components.home_energy_orchestrator.ev_observation_adapter import (
+    capture_ev_feedback,
+    ev_observation_entity_map,
+)
 from custom_components.home_energy_orchestrator.planner.export import ExportPlan
 from custom_components.home_energy_orchestrator.telemetry import NormalizedSample, TelemetrySource
 from tests.test_ev_backfill_timing import _fresh, _services
@@ -93,6 +100,26 @@ def _vehicle(hass, rig, at, *, actual, requested, limit=90, charging=True):
     hass.states.async_set("sensor.car_charging", "charging" if charging else "stopped",
                           force_update=True)
     hass.states.async_set("switch.car_charge", "on" if charging else "off", force_update=True)
+
+
+def _asleep_unplugged(hass, rig, measured_at):
+    """Publish a real unplugged frame whose clock can age while the car sleeps."""
+    _vehicle(hass, rig, measured_at, actual=0, requested=6, charging=False)
+    rig.provider.data.update({
+        "state": "asleep",
+        "charge_state_charging_state": "Disconnected",
+        "charge_state_conn_charge_cable": "<invalid>",
+        "charge_state_charge_enable_request": True,
+    })
+    hass.states.async_set("binary_sensor.car_cable", "off")
+    hass.states.async_set("sensor.car_charging", "disconnected")
+
+
+def _house_learner(hass, rig, **changes):
+    config = {**rig.coordinator.config, "house_load_includes_ev": True, **changes}
+    coordinator = EnergyCoordinator(hass, config, "native-learning-idle-test")
+    coordinator.snapshot = replace(rig.coordinator.snapshot, house_load_kw=6)
+    return coordinator
 
 
 async def test_fully_generic_fresh_physical_feedback_preserves_existing_top_up_permission(
@@ -534,5 +561,117 @@ async def test_house_learner_subtracts_only_the_shared_native_actual_measurement
         else:
             assert power == pytest.approx(8 * 230 * phase_count / 1000)
             assert house == pytest.approx(6 - power)
+    finally:
+        coordinator.shutdown()
+
+
+@pytest.mark.parametrize(("age_seconds", "max_hours", "accepted"), [
+    (90, None, True),
+    (12 * 3600, None, True),
+    (24 * 3600, None, True),
+    (24 * 3600 + 0.001, None, False),
+    (-0.001, None, False),
+    (2 * 3600, 2, True),
+    (2 * 3600 + 0.001, 2, False),
+    (90, 0, False),
+])
+async def test_house_learner_uses_only_bounded_asleep_disconnected_evidence(
+    hass, freezer, age_seconds, max_hours, accepted,
+):
+    rig = _morning(hass, freezer)
+    _asleep_unplugged(hass, rig, rig.now - timedelta(seconds=age_seconds))
+    changes = {} if max_hours is None else {"ev_reservation_soc_max_age_hours": max_hours}
+    coordinator = _house_learner(hass, rig, **changes)
+    try:
+        assert coordinator._protected_house_learning_power_kw(rig.now) == (
+            6 if accepted else None
+        )
+        feedback = capture_ev_feedback(hass, ev_observation_entity_map(coordinator.runtime_config))
+        assert not measure_ev_current(hass, feedback, now=rig.now, max_age_seconds=90).valid
+    finally:
+        coordinator.shutdown()
+
+
+@pytest.mark.parametrize("state", ["Stopped", "Complete", "NoPower"])
+async def test_house_learner_rejects_retained_plugged_zero_but_keeps_fresh_zero(
+    hass, freezer, state,
+):
+    rig = _morning(hass, freezer)
+    _vehicle(hass, rig, rig.now, actual=0, requested=6, charging=False)
+    rig.provider.data["charge_state_charging_state"] = state
+    reported_state = "no_power" if state == "NoPower" else state.lower()
+    hass.states.async_set("sensor.car_charging", reported_state)
+    coordinator = _house_learner(hass, rig)
+    try:
+        assert coordinator._protected_house_learning_power_kw(rig.now) == 6
+        rig.provider.data["state"] = "asleep"
+        assert coordinator._protected_house_learning_power_kw(rig.now) is None
+    finally:
+        coordinator.shutdown()
+
+
+@pytest.mark.parametrize("fault", [
+    "stale_online", "offline", "failed_provider", "missing_clock", "bool_current",
+    "positive_current", "reconnected", "local_connection_on", "switch_on", "restored_cable",
+    "restored_charging", "restored_current", "wrong_cable_binding",
+])
+async def test_house_learner_rejects_unsafe_asleep_disconnected_evidence(hass, freezer, fault):
+    rig = _morning(hass, freezer)
+    _asleep_unplugged(hass, rig, rig.now - timedelta(hours=2))
+    data = rig.provider.data
+    changes = {}
+    if fault == "stale_online":
+        data["state"] = "online"
+    elif fault == "offline":
+        data["state"] = "offline"
+    elif fault == "failed_provider":
+        rig.provider.last_update_success = False
+    elif fault == "missing_clock":
+        data.pop("charge_state_timestamp")
+    elif fault == "bool_current":
+        data["charge_state_charger_actual_current"] = False
+    elif fault == "positive_current":
+        data["charge_state_charger_actual_current"] = 1
+        hass.states.async_set("sensor.car_actual_current", "1", {"unit_of_measurement": "A"})
+    elif fault == "reconnected":
+        hass.states.async_set("binary_sensor.car_cable", "on")
+    elif fault == "local_connection_on":
+        changes["ev_local_connection_entity"] = "binary_sensor.local_cable"
+        hass.states.async_set("binary_sensor.local_cable", "on")
+    elif fault == "switch_on":
+        hass.states.async_set("switch.car_charge", "on")
+    elif fault.startswith("restored_"):
+        entity_id = {
+            "restored_cable": "binary_sensor.car_cable",
+            "restored_charging": "sensor.car_charging",
+            "restored_current": "sensor.car_actual_current",
+        }[fault]
+        entity = hass.states.get(entity_id)
+        hass.states.async_set(entity_id, entity.state, {**entity.attributes, "restored": True})
+    elif fault == "wrong_cable_binding":
+        er.async_get(hass).async_update_entity("binary_sensor.car_cable", device_id=None)
+    coordinator = _house_learner(hass, rig, **changes)
+    try:
+        assert coordinator._protected_house_learning_power_kw(rig.now) is None
+    finally:
+        coordinator.shutdown()
+
+
+async def test_house_learner_completes_daily_cycle_with_asleep_unplugged_vehicle(
+    hass, freezer, monkeypatch,
+):
+    rig = _morning(hass, freezer)
+    start = rig.now.replace(hour=17, minute=0)
+    freezer.move_to(start)
+    _asleep_unplugged(hass, rig, start)
+    coordinator = _house_learner(hass, rig)
+    monkeypatch.setattr(coordinator, "_async_save_demand_state", AsyncMock())
+    try:
+        for minute in range(0, 24 * 60 + 1, 9):
+            freezer.move_to(start + timedelta(minutes=minute))
+            await coordinator._async_sample_house_load()
+        (sample,) = coordinator.demand_history.samples
+        assert sample.observed_at == start + timedelta(days=1)
+        assert sample.energy_kwh == pytest.approx(6 * (24 - 59 / 60))
     finally:
         coordinator.shutdown()

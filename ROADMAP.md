@@ -1,5 +1,11 @@
 # Project roadmap
 
+## House learning with a sleeping EV
+
+- [x] Use a bounded sleeping, disconnected native frame for zero EV draw in
+  learning when the mapped feedback agrees. Test a complete learning cycle and
+  reject expiry, source failures, reconnects and retained plugged frames.
+
 ## Unreleased — Configured EV targets, without a hidden90% ceiling
 
 - [x] Replace the retained non-Full90% clamp with the physical percentage bound

@@ -1,5 +1,14 @@
 # System requirements and integration map
 
+## House learning with a sleeping EV
+
+For whole-house measurements that include the EV, a healthy native Tessie
+frame can supply a zero subtraction while the vehicle is asleep. It must
+confirm disconnected cable, disconnected charge state and zero amps with
+matching mapped feedback. The original timestamp uses the existing configured
+sleeping-frame age, which defaults to 24 hours. Positive draw still requires
+fresh measured current. Charging and export continue to use live evidence.
+
 ## Configured EV target correction (unreleased)
 
 Normal charging uses the configured 0–100% target as its ceiling, subject to
