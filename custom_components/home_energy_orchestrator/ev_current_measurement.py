@@ -267,14 +267,20 @@ def measure_ev_planning_soc(
     )
 
 
-def sleeping_ev_unplugged_for_learning(
+def unplugged_ev_for_learning(
     hass: HomeAssistant,
     feedback: EvFeedbackSnapshot,
     *,
     now: datetime,
     max_age_seconds: float,
 ) -> bool:
-    """Qualify a retained unplugged frame for house-load subtraction alone."""
+    """Qualify bounded explicit disconnection for learning subtraction alone.
+
+    A disconnected vehicle cannot consume home charging energy. Its retained
+    numeric current is not required to settle to zero. This is deliberately
+    separate from physical-current/command qualification and never applies to
+    connected, offline, failed or unbound sources.
+    """
     if now.tzinfo is None or not _valid_age(max_age_seconds, positive=True):
         return False
     cable, charging, actual = (
@@ -283,7 +289,8 @@ def sleeping_ev_unplugged_for_learning(
     switch = feedback.charge_switch
     if (
         cable.available_state != "off" or charging.available_state != "disconnected"
-        or actual.unit != "A" or actual.current_a != 0
+        or actual.unit != "A" or actual.current_a is None
+        or not isfinite(actual.current_a) or actual.current_a < 0
         or switch.entity_id and switch.available_state != "off"
     ):
         return False
@@ -329,14 +336,17 @@ def sleeping_ev_unplugged_for_learning(
         return False
     data = getattr(provider, "data", None)
     if (
-        not isinstance(data, Mapping) or data.get("state") != "asleep"
+        not isinstance(data, Mapping) or data.get("state") not in {"online", "asleep"}
         or data.get("charge_state_conn_charge_cable") != "<invalid>"
         or data.get("charge_state_charging_state") != "Disconnected"
     ):
         return False
     current = data.get("charge_state_charger_actual_current")
     stamp = data.get("charge_state_timestamp")
-    if type(current) not in (int, float) or current != 0 or not _valid_age(stamp):
+    if (
+        type(current) not in (int, float) or not isfinite(current) or current < 0
+        or not _valid_age(stamp)
+    ):
         return False
     try:
         measured_at = datetime.fromtimestamp(stamp / 1000, UTC)

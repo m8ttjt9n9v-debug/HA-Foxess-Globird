@@ -1,12 +1,23 @@
 # System requirements and integration map
 
-## House learning with a sleeping EV
+## Reliable house-learning collection
+
+Persist qualified base demand and independent raw-house progress in the
+existing demand journal. Only complete measured protected cycles train the
+existing P80 model; missing protected consumption cannot become zero. Excluded
+free hours need no telemetry. Preserve compatible partial progress on restart,
+use UTC elapsed time with local tariff boundaries, bind progress to source
+meaning and apply the existing retention limit on selection. Expose coverage
+and last-cycle diagnostics. See [the collection contract](house-learning-collection.md).
+
+## House learning with an unplugged EV
 
 For whole-house measurements that include the EV, a healthy native Tessie
-frame can supply a zero subtraction while the vehicle is asleep. It must
-confirm disconnected cable, disconnected charge state and zero amps with
-matching mapped feedback. The original timestamp uses the existing configured
-sleeping-frame age, which defaults to 24 hours. Positive draw still requires
+frame can supply a zero subtraction while the vehicle is online or asleep.
+It must confirm disconnected cable and charge state with matching mapped
+feedback, an off charge switch and no positive local connection. Retained
+numeric amps do not need to settle to zero. The original timestamp uses the
+existing configured planning-frame age, which defaults to 24 hours. Positive draw still requires
 fresh measured current. Charging and export continue to use live evidence.
 
 ## Configured EV target correction (unreleased)

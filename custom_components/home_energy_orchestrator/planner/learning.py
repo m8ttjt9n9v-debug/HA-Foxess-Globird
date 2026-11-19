@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from dataclasses import dataclass
-from datetime import date, datetime, time, timedelta
+from datetime import UTC, date, datetime, time, timedelta
 from math import floor, isfinite
 from typing import Any
 
@@ -125,7 +125,12 @@ class DemandHistory:
             raise ValueError("observed_at must be timezone-aware")
         retention_now = max(
             observed_at,
-            max((sample.observed_at for sample in self.samples), default=observed_at),
+            max(
+                (sample.observed_at for sample in self.samples),
+                default=observed_at,
+                key=_utc,
+            ),
+            key=_utc,
         )
         self.samples = list(
             retain_demand_samples(
@@ -145,8 +150,12 @@ class DemandHistory:
             ]
         }
 
-    def select(self, fallback_kwh: float) -> DemandLearningResult:
+    def select(
+        self, fallback_kwh: float, now: datetime | None = None
+    ) -> DemandLearningResult:
         """Select the current budget from the retained history."""
+        if now is not None:
+            self.prune(now)
         return select_protected_cycle_budget(
             [sample.energy_kwh for sample in self.samples],
             fallback_kwh,
@@ -154,6 +163,15 @@ class DemandHistory:
             sample_limit=self.sample_limit,
             percentile=80,
         )
+
+    def prune(self, now: datetime) -> None:
+        """Apply age/identity retention even if collection has stopped."""
+        self.samples = list(retain_demand_samples(
+            self.samples,
+            now,
+            max_age_days=self.max_age_days,
+            sample_limit=self.sample_limit,
+        ))
 
 
 def protected_base_house_power_kw(
@@ -192,15 +210,26 @@ def protected_base_house_power_kw(
 
 @dataclass(slots=True)
 class DemandCycleSampler:
-    """Integrate non-free-window house power into completed daily cycles."""
+    """Integrate protected demand without turning missing coverage into zero.
+
+    Free-window energy is excluded by definition and needs no power reading.
+    A missing protected interval retains the known partial energy for diagnosis,
+    but prevents that cycle from becoming a measured-history sample.
+    """
 
     free_window_start: time
     free_window_end: time
     max_gap: timedelta = timedelta(minutes=10)
     _last_at: datetime | None = None
     _last_power_kw: float | None = None
+    _last_qualified_at: datetime | None = None
+    _last_qualified_power_kw: float | None = None
     _cycle_started: bool = False
     _cycle_energy_kwh: float = 0.0
+    _cycle_observed_seconds: float = 0.0
+    _cycle_missing_seconds: float = 0.0
+    _cycle_missing_reason: str | None = None
+    _last_cycle: dict[str, str | float | bool | None] | None = None
 
     def __post_init__(self) -> None:
         if self.free_window_start == self.free_window_end:
@@ -208,93 +237,260 @@ class DemandCycleSampler:
         if self.max_gap <= timedelta(0):
             raise ValueError("max_gap must be positive")
 
-    def observe(self, observed_at: datetime, house_power_kw: float) -> DemandCycleSample | None:
-        """Accept one power reading and return a sample when a cycle completes."""
+    @property
+    def known_energy_kwh(self) -> float:
+        """Return measured partial energy, never a completed-budget estimate."""
+        return self._cycle_energy_kwh
+
+    @property
+    def observed_seconds(self) -> float:
+        """Return protected time covered by qualified left-method readings."""
+        return self._cycle_observed_seconds
+
+    @property
+    def missing_seconds(self) -> float:
+        """Return protected time that could not be measured."""
+        return self._cycle_missing_seconds
+
+    @property
+    def missing_reason(self) -> str | None:
+        """Return the first missing-coverage reason in the current cycle."""
+        return self._cycle_missing_reason
+
+    @property
+    def cycle_started(self) -> bool:
+        """Return whether the current protected interval has a known start."""
+        return self._cycle_started
+
+    @property
+    def last_cycle(self) -> dict[str, str | float | bool | None] | None:
+        """Return the last closed cycle, including rejected partial cycles."""
+        return None if self._last_cycle is None else dict(self._last_cycle)
+
+    def observe(
+        self, observed_at: datetime, house_power_kw: float | None
+    ) -> DemandCycleSample | None:
+        """Advance boundaries even when a required power component is missing."""
         if observed_at.tzinfo is None:
             raise ValueError("observed_at must be timezone-aware")
-        if not isfinite(house_power_kw) or house_power_kw < 0:
-            self._reset(observed_at, None)
-            return None
-        if self._last_at is None or self._last_power_kw is None:
+        if house_power_kw is not None and (
+            isinstance(house_power_kw, bool)
+            or not isfinite(house_power_kw) or house_power_kw < 0
+        ):
+            house_power_kw = None
+        if self._last_at is None:
             self._last_at = observed_at
             self._last_power_kw = house_power_kw
-            if self._is_window_start(observed_at):
+            if house_power_kw is not None:
+                self._last_qualified_at = observed_at
+                self._last_qualified_power_kw = house_power_kw
+            # An excluded free interval is a complete zero contribution even
+            # when startup missed its first instant or the EV is unavailable.
+            if self._in_free_window(observed_at):
                 self._cycle_started = True
             return None
-        if observed_at <= self._last_at or observed_at - self._last_at > self.max_gap:
-            self._reset(observed_at, house_power_kw)
+        if _utc(observed_at) <= _utc(self._last_at):
             return None
 
-        starts = self._window_starts_between(self._last_at, observed_at)
-        cuts = self._window_boundaries_between(self._last_at, observed_at)
+        # ISO persistence retains an offset, not a time-zone rule. Rebind the
+        # old instant to the current site's zone before making local boundaries.
+        previous_at = self._last_at.astimezone(observed_at.tzinfo)
+        # Preserve the existing bounded left-method hold through a brief input
+        # outage. Boundary/None observations must never renew that evidence.
+        expiry = (
+            None if self._last_qualified_at is None
+            else _utc(self._last_qualified_at) + self.max_gap
+        )
+        starts = {_utc(value) for value in self._window_starts_between(
+            previous_at, observed_at
+        )}
+        cuts = self._window_boundaries_between(previous_at, observed_at)
+        if expiry is not None and _utc(previous_at) < expiry < _utc(observed_at):
+            cuts_by_instant = {_utc(value): value for value in cuts}
+            cuts_by_instant[expiry] = expiry.astimezone(observed_at.tzinfo)
+            cuts = [cuts_by_instant[instant] for instant in sorted(cuts_by_instant)]
         result: DemandCycleSample | None = None
         for begin, finish in zip(cuts, cuts[1:]):
-            midpoint = begin + (finish - begin) / 2
-            if not self._in_free_window(midpoint):
-                energy = self._left_energy(begin, finish)
-                self._cycle_energy_kwh += energy if self._cycle_started else 0.0
-            if finish in starts:
+            seconds = _elapsed(begin, finish)
+            midpoint = (_utc(begin) + timedelta(seconds=seconds / 2)).astimezone(
+                observed_at.tzinfo
+            )
+            if self._cycle_started and not self._in_free_window(midpoint):
+                if expiry is not None and _utc(finish) <= expiry:
+                    assert self._last_qualified_power_kw is not None
+                    self._cycle_energy_kwh += self._last_qualified_power_kw * seconds / 3600
+                    self._cycle_observed_seconds += seconds
+                else:
+                    self._cycle_missing_seconds += seconds
+                    if self._cycle_missing_reason is None:
+                        self._cycle_missing_reason = (
+                            "missing_power" if expiry is None else "observation_gap"
+                        )
+            if _utc(finish) in starts:
                 if self._cycle_started:
-                    result = DemandCycleSample(finish, self._cycle_energy_kwh)
-                self._cycle_started = True
-                self._cycle_energy_kwh = 0.0
+                    complete = self._cycle_missing_seconds == 0
+                    self._last_cycle = {
+                        "observed_at": finish.isoformat(),
+                        "energy_kwh": self._cycle_energy_kwh,
+                        "observed_seconds": self._cycle_observed_seconds,
+                        "missing_seconds": self._cycle_missing_seconds,
+                        "missing_reason": self._cycle_missing_reason,
+                        "complete": complete,
+                    }
+                    if complete:
+                        result = DemandCycleSample(finish, self._cycle_energy_kwh)
+                self._begin_cycle()
 
         self._last_at = observed_at
         self._last_power_kw = house_power_kw
+        if house_power_kw is not None:
+            self._last_qualified_at = observed_at
+            self._last_qualified_power_kw = house_power_kw
         return result
 
     def restore(self, payload: Any, now: datetime) -> None:
-        """Restore one in-progress cycle after a short Home Assistant restart."""
+        """Restore progress; later observations account for any outage gap."""
         if not isinstance(payload, dict) or now.tzinfo is None:
             return
         try:
             last_at = datetime.fromisoformat(str(payload["last_at"]))
-            last_power_kw = float(payload["last_power_kw"])
+            raw_power = payload["last_power_kw"]
+            last_power_kw = None if raw_power is None else float(raw_power)
+            qualified_fields = (
+                "last_qualified_at" in payload or "last_qualified_power_kw" in payload
+            )
+            if qualified_fields:
+                qualified_stamp = payload["last_qualified_at"]
+                qualified_at = (
+                    None if qualified_stamp is None
+                    else datetime.fromisoformat(str(qualified_stamp))
+                )
+                qualified_raw_power = payload["last_qualified_power_kw"]
+                qualified_power = (
+                    None if qualified_raw_power is None else float(qualified_raw_power)
+                )
+            else:
+                # The old sampler's clock advanced only on a numeric reading.
+                qualified_at = None if last_power_kw is None else last_at
+                qualified_raw_power = raw_power
+                qualified_power = last_power_kw
             cycle_energy_kwh = float(payload["cycle_energy_kwh"])
-            cycle_started = bool(payload["cycle_started"])
+            legacy_cycle_started = payload["cycle_started"]
+            cycle_started = payload.get("coverage_cycle_started", legacy_cycle_started)
+            observed_seconds = float(payload.get("cycle_observed_seconds", 0.0))
+            missing_seconds = float(payload.get("cycle_missing_seconds", 0.0))
+            missing_reason = payload.get("cycle_missing_reason")
         except (KeyError, TypeError, ValueError):
             return
         if (
             last_at.tzinfo is None
-            or last_at > now
-            or now - last_at > self.max_gap
-            or not isfinite(last_power_kw)
-            or last_power_kw < 0
+            or _utc(last_at) > _utc(now)
+            or (last_power_kw is not None and (
+                not isfinite(last_power_kw) or last_power_kw < 0
+            ))
+            or isinstance(raw_power, bool)
+            or isinstance(qualified_raw_power, bool)
+            or (qualified_at is None) != (qualified_power is None)
+            or (qualified_at is not None and (
+                qualified_at.tzinfo is None or _utc(qualified_at) > _utc(last_at)
+            ))
+            or (qualified_power is not None and (
+                not isfinite(qualified_power) or qualified_power < 0
+            ))
+            or (last_power_kw is not None and (
+                qualified_at is None or _utc(qualified_at) != _utc(last_at)
+                or qualified_power != last_power_kw
+            ))
+            or not isinstance(legacy_cycle_started, bool)
+            or not isinstance(cycle_started, bool)
+            or any(isinstance(payload.get(key), bool) for key in (
+                "cycle_energy_kwh", "cycle_observed_seconds", "cycle_missing_seconds"
+            ))
             or not isfinite(cycle_energy_kwh)
             or cycle_energy_kwh < 0
+            or not isfinite(observed_seconds)
+            or observed_seconds < 0
+            or not isfinite(missing_seconds)
+            or missing_seconds < 0
+            or (missing_reason is not None and not isinstance(missing_reason, str))
+            or (missing_seconds > 0 and not missing_reason)
         ):
             return
         self._last_at = last_at
         self._last_power_kw = last_power_kw
+        self._last_qualified_at = qualified_at
+        self._last_qualified_power_kw = qualified_power
         self._cycle_started = cycle_started
         self._cycle_energy_kwh = cycle_energy_kwh
+        self._cycle_observed_seconds = observed_seconds
+        self._cycle_missing_seconds = missing_seconds
+        self._cycle_missing_reason = missing_reason
+        last_cycle = payload.get("last_cycle")
+        if isinstance(last_cycle, dict):
+            self._last_cycle = self._validated_last_cycle(last_cycle, now)
 
-    def to_payload(self) -> dict[str, str | float | bool] | None:
+    def to_payload(self) -> dict[str, object] | None:
         """Encode the in-progress cycle for restart-safe persistence."""
-        if self._last_at is None or self._last_power_kw is None:
+        if self._last_at is None:
             return None
         return {
             "last_at": self._last_at.isoformat(),
             "last_power_kw": self._last_power_kw,
-            "cycle_started": self._cycle_started,
+            "last_qualified_at": (
+                None if self._last_qualified_at is None
+                else self._last_qualified_at.isoformat()
+            ),
+            "last_qualified_power_kw": self._last_qualified_power_kw,
+            # Old readers do not know missing coverage. Withhold their cycle
+            # admission flag so rollback cannot train on this partial energy.
+            "cycle_started": self._cycle_started and self._cycle_missing_seconds == 0,
+            "coverage_cycle_started": self._cycle_started,
             "cycle_energy_kwh": self._cycle_energy_kwh,
+            "cycle_observed_seconds": self._cycle_observed_seconds,
+            "cycle_missing_seconds": self._cycle_missing_seconds,
+            "cycle_missing_reason": self._cycle_missing_reason,
+            "last_cycle": self.last_cycle,
         }
 
-    def _reset(self, observed_at: datetime, house_power_kw: float | None) -> None:
-        self._last_at = observed_at
-        self._last_power_kw = house_power_kw
-        self._cycle_started = False
+    def _begin_cycle(self) -> None:
+        self._cycle_started = True
         self._cycle_energy_kwh = 0.0
+        self._cycle_observed_seconds = 0.0
+        self._cycle_missing_seconds = 0.0
+        self._cycle_missing_reason = None
 
-    def _left_energy(self, begin: datetime, finish: datetime) -> float:
-        """Mirror the pilot integration sensor's configured left method."""
-        assert self._last_power_kw is not None
-        return self._last_power_kw * (finish - begin).total_seconds() / 3600
+    @staticmethod
+    def _validated_last_cycle(
+        payload: dict[str, Any], now: datetime
+    ) -> dict[str, str | float | bool | None] | None:
+        """Retain diagnostics only; they can never repopulate measured history."""
+        try:
+            at = datetime.fromisoformat(str(payload["observed_at"]))
+            energy = float(payload["energy_kwh"])
+            observed = float(payload["observed_seconds"])
+            missing = float(payload["missing_seconds"])
+            reason = payload.get("missing_reason")
+            complete = payload["complete"]
+        except (KeyError, TypeError, ValueError):
+            return None
+        if (
+            at.tzinfo is None or _utc(at) > _utc(now)
+            or any(not isfinite(value) or value < 0 for value in (energy, observed, missing))
+            or not isinstance(complete, bool) or complete != (missing == 0)
+            or (reason is not None and not isinstance(reason, str))
+            or (missing > 0 and not reason)
+        ):
+            return None
+        return {
+            "observed_at": at.isoformat(), "energy_kwh": energy,
+            "observed_seconds": observed, "missing_seconds": missing,
+            "missing_reason": reason, "complete": complete,
+        }
 
     def _window_bounds(self, day: date, tzinfo) -> tuple[datetime, datetime]:
         start = datetime.combine(day, self.free_window_start, tzinfo=tzinfo)
         finish = datetime.combine(day, self.free_window_end, tzinfo=tzinfo)
-        if finish <= start:
+        if _utc(finish) <= _utc(start):
             finish += timedelta(days=1)
         return start, finish
 
@@ -304,29 +500,29 @@ class DemandCycleSampler:
         last_day = finish.date() + timedelta(days=2)
         while day <= last_day:
             candidate, _ = self._window_bounds(day, begin.tzinfo)
-            if begin < candidate <= finish:
+            if _utc(begin) < _utc(candidate) <= _utc(finish):
                 starts.add(candidate)
             day += timedelta(days=1)
         return starts
 
     def _window_boundaries_between(self, begin: datetime, finish: datetime) -> list[datetime]:
-        boundaries = {begin, finish}
+        boundaries = {_utc(begin): begin, _utc(finish): finish}
         day = begin.date() - timedelta(days=2)
         last_day = finish.date() + timedelta(days=2)
         while day <= last_day:
             window_start, window_finish = self._window_bounds(day, begin.tzinfo)
-            if begin < window_start < finish:
-                boundaries.add(window_start)
-            if begin < window_finish < finish:
-                boundaries.add(window_finish)
+            if _utc(begin) < _utc(window_start) < _utc(finish):
+                boundaries[_utc(window_start)] = window_start
+            if _utc(begin) < _utc(window_finish) < _utc(finish):
+                boundaries[_utc(window_finish)] = window_finish
             day += timedelta(days=1)
-        return sorted(boundaries)
+        return [boundaries[instant] for instant in sorted(boundaries)]
 
     def _in_free_window(self, value: datetime) -> bool:
         day = value.date() - timedelta(days=1)
         for _ in range(3):
             window_start, window_finish = self._window_bounds(day, value.tzinfo)
-            if window_start <= value < window_finish:
+            if _utc(window_start) <= _utc(value) < _utc(window_finish):
                 return True
             day += timedelta(days=1)
         return False
@@ -335,7 +531,7 @@ class DemandCycleSampler:
         day = value.date() - timedelta(days=1)
         for _ in range(3):
             window_start, _ = self._window_bounds(day, value.tzinfo)
-            if window_start == value:
+            if _utc(window_start) == _utc(value):
                 return True
             day += timedelta(days=1)
         return False
@@ -369,17 +565,25 @@ class DailyDemandCycleSampler:
             if observed_at.timetz().replace(tzinfo=None) == self.boundary:
                 self._cycle_started = True
             return None
-        if observed_at <= self._last_at or observed_at - self._last_at > self.max_gap:
+        if (
+            _utc(observed_at) <= _utc(self._last_at)
+            or _elapsed(self._last_at, observed_at) > self.max_gap.total_seconds()
+        ):
             self._reset(observed_at, power_kw)
             return None
 
-        boundaries = self._boundaries_between(self._last_at, observed_at)
+        previous_at = self._last_at.astimezone(observed_at.tzinfo)
+        boundaries = self._boundaries_between(previous_at, observed_at)
         result: DemandCycleSample | None = None
-        cuts = sorted({self._last_at, observed_at, *boundaries})
+        cuts_by_instant = {_utc(value): value for value in (
+            previous_at, observed_at, *boundaries
+        )}
+        cuts = [cuts_by_instant[instant] for instant in sorted(cuts_by_instant)]
+        boundary_instants = {_utc(value) for value in boundaries}
         for begin, finish in zip(cuts, cuts[1:]):
             if self._cycle_started:
                 self._cycle_energy_kwh += self._left_energy(begin, finish)
-            if finish in boundaries:
+            if _utc(finish) in boundary_instants:
                 if self._cycle_started:
                     result = DemandCycleSample(finish, self._cycle_energy_kwh)
                 self._cycle_started = True
@@ -402,8 +606,8 @@ class DailyDemandCycleSampler:
             return
         if (
             last_at.tzinfo is None
-            or last_at > now
-            or now - last_at > self.max_gap
+            or _utc(last_at) > _utc(now)
+            or _elapsed(last_at, now) > self.max_gap.total_seconds()
             or not isfinite(last_power_kw)
             or last_power_kw < 0
             or not isfinite(cycle_energy_kwh)
@@ -437,7 +641,7 @@ class DailyDemandCycleSampler:
         day = begin.date()
         while day <= finish.date():
             candidate = datetime.combine(day, self.boundary, tzinfo=begin.tzinfo)
-            if begin < candidate <= finish:
+            if _utc(begin) < _utc(candidate) <= _utc(finish):
                 boundaries.add(candidate)
             day += timedelta(days=1)
         return boundaries
@@ -445,7 +649,7 @@ class DailyDemandCycleSampler:
     def _left_energy(self, begin: datetime, finish: datetime) -> float:
         """Mirror the pilot integration sensor's configured left method."""
         assert self._last_power_kw is not None
-        return self._last_power_kw * (finish - begin).total_seconds() / 3600
+        return self._last_power_kw * _elapsed(begin, finish) / 3600
 
 
 def advance_house_learning(
@@ -458,10 +662,13 @@ def advance_house_learning(
     last_saved_at: datetime | None,
 ) -> HouseLearningAdvanceResult:
     """Advance both learning streams without Home Assistant or Store access."""
-    if demand_sampler is None or observation.base_house_power_kw is None:
+    if demand_sampler is None and heater_sampler is None:
         return HouseLearningAdvanceResult(False, False, False, False)
-    sample = demand_sampler.observe(
-        observation.observed_at, observation.base_house_power_kw
+    previous_cycle = None if demand_sampler is None else demand_sampler.last_cycle
+    sample = (
+        None if demand_sampler is None else demand_sampler.observe(
+            observation.observed_at, observation.base_house_power_kw
+        )
     )
     heater_sample = None
     if heater_sampler is not None and observation.heater_power_kw is not None:
@@ -472,7 +679,10 @@ def advance_house_learning(
         demand_history.add(sample.observed_at, sample.energy_kwh)
     if heater_sample is not None:
         heater_history.add(heater_sample.observed_at, heater_sample.energy_kwh)
-    save_interval = demand_sampler.max_gap / 2
+    sampler = demand_sampler if demand_sampler is not None else heater_sampler
+    assert sampler is not None
+    save_interval = sampler.max_gap.total_seconds() / 2
+    base_cycle_closed = demand_sampler is not None and demand_sampler.last_cycle != previous_cycle
     return HouseLearningAdvanceResult(
         accepted=True,
         base_cycle_completed=sample is not None,
@@ -480,8 +690,9 @@ def advance_house_learning(
         save_required=(
             sample is not None
             or heater_sample is not None
+            or base_cycle_closed
             or last_saved_at is None
-            or observation.observed_at - last_saved_at >= save_interval
+            or _elapsed(last_saved_at, observation.observed_at) >= save_interval
         ),
     )
 
@@ -496,18 +707,33 @@ class DemandPersistenceState:
     heater_in_progress_cycle: object = None
     include_in_progress_cycle: bool = False
     include_heater_in_progress_cycle: bool = False
+    raw_house_in_progress_cycle: object = None
+    include_raw_house_in_progress_cycle: bool = False
+    source_binding: tuple[str, ...] | None = None
 
     @classmethod
     def restore(cls, payload: object, now: datetime) -> DemandPersistenceState:
         """Decode histories while retaining sampler payloads for domain restore."""
         mapping = payload if isinstance(payload, dict) else {}
+        binding = _collection_binding(mapping.get("source_binding"))
+        # Missing is a compatible legacy journal. A present malformed identity
+        # is not legacy authority: retain completed history, discard all pending
+        # collection whose physical source can no longer be established.
+        progress_valid = "source_binding" not in mapping or binding is not None
         return cls(
             demand_history=DemandHistory.from_payload(mapping, now),
             heater_history=DemandHistory.from_payload(mapping.get("heater_history"), now),
-            in_progress_cycle=mapping.get("in_progress_cycle"),
-            heater_in_progress_cycle=mapping.get("heater_in_progress_cycle"),
+            in_progress_cycle=mapping.get("in_progress_cycle") if progress_valid else None,
+            heater_in_progress_cycle=(
+                mapping.get("heater_in_progress_cycle") if progress_valid else None
+            ),
             include_in_progress_cycle="in_progress_cycle" in mapping,
             include_heater_in_progress_cycle="heater_in_progress_cycle" in mapping,
+            raw_house_in_progress_cycle=(
+                mapping.get("raw_house_in_progress_cycle") if progress_valid else None
+            ),
+            include_raw_house_in_progress_cycle="raw_house_in_progress_cycle" in mapping,
+            source_binding=binding,
         )
 
     @classmethod
@@ -517,6 +743,8 @@ class DemandPersistenceState:
         heater_history: DemandHistory,
         demand_sampler: DemandCycleSampler | None,
         heater_sampler: DailyDemandCycleSampler | None,
+        raw_house_sampler: DemandCycleSampler | None = None,
+        source_binding: tuple[str, ...] | None = None,
     ) -> DemandPersistenceState:
         """Capture the current runtime state without changing payload shape."""
         return cls(
@@ -530,6 +758,11 @@ class DemandPersistenceState:
             ),
             include_in_progress_cycle=demand_sampler is not None,
             include_heater_in_progress_cycle=heater_sampler is not None,
+            raw_house_in_progress_cycle=(
+                None if raw_house_sampler is None else raw_house_sampler.to_payload()
+            ),
+            include_raw_house_in_progress_cycle=raw_house_sampler is not None,
+            source_binding=_collection_binding(source_binding),
         )
 
     def to_payload(self) -> dict[str, object]:
@@ -540,7 +773,30 @@ class DemandPersistenceState:
             payload["in_progress_cycle"] = self.in_progress_cycle
         if self.include_heater_in_progress_cycle:
             payload["heater_in_progress_cycle"] = self.heater_in_progress_cycle
+        if self.include_raw_house_in_progress_cycle:
+            payload["raw_house_in_progress_cycle"] = self.raw_house_in_progress_cycle
+        if self.source_binding is not None:
+            payload["source_binding"] = list(self.source_binding)
         return payload
+
+
+def _collection_binding(value: object) -> tuple[str, ...] | None:
+    """Decode an optional source identity without coercing malformed data."""
+    if (
+        isinstance(value, (list, tuple)) and value
+        and all(isinstance(part, str) and part for part in value)
+    ):
+        return tuple(value)
+    return None
+
+
+def _utc(value: datetime) -> datetime:
+    """Compare instants and integrate elapsed time across local DST changes."""
+    return value.astimezone(UTC)
+
+
+def _elapsed(begin: datetime, finish: datetime) -> float:
+    return (_utc(finish) - _utc(begin)).total_seconds()
 
 
 def retain_demand_samples(
@@ -555,16 +811,21 @@ def retain_demand_samples(
         raise ValueError("now must be timezone-aware")
     if max_age_days < 1 or sample_limit < 1:
         raise ValueError("sample limits must be positive")
-    cutoff = now - timedelta(days=max_age_days)
+    cutoff = _utc(now) - timedelta(days=max_age_days)
     valid = [
         sample
         for sample in samples
         if sample.observed_at.tzinfo is not None
-        and cutoff <= sample.observed_at <= now
+        and cutoff <= _utc(sample.observed_at) <= _utc(now)
         and isfinite(sample.energy_kwh)
         and sample.energy_kwh >= 0
     ]
-    return tuple(sorted(valid, key=lambda sample: sample.observed_at)[-sample_limit:])
+    # Replayed collection cannot create a second measured day. Keep the first
+    # accepted value for an already known ending instant, including other offsets.
+    unique: dict[datetime, DemandCycleSample] = {}
+    for sample in valid:
+        unique.setdefault(_utc(sample.observed_at), sample)
+    return tuple(unique[instant] for instant in sorted(unique)[-sample_limit:])
 
 
 def _percentile(values: list[float], percentile: float) -> float:

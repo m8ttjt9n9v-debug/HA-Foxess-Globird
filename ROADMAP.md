@@ -1,5 +1,21 @@
 # Project roadmap
 
+## Reliable house-learning collection (unreleased)
+
+- [x] Preserve healthy raw-house evidence separately from qualified EV/heater
+  subtraction; retain partial energy and reject incomplete measured cycles.
+- [x] Exclude free-window telemetry requirements, preserve free-only restart
+  progress, use UTC elapsed time across clock changes and collect heaters
+  independently. Enforce existing retention and deduplicate completed cycles.
+- [x] Bind unfinished progress to commissioned source/topology/window meaning;
+  preserve completed histories and expose collection completeness diagnostics.
+- [x] Accept bounded healthy native unplugged evidence for learning even with
+  retained current, without relaxing physical charging/export qualification.
+- [x] Complete local regression, recorded-data replay and upgrade/rollback
+  qualification, including bounded short-gap parity with the reference learner.
+- [ ] Separately authorise any candidate deployment. No installation or release
+  is authorised by this repository work.
+
 ## House learning with a sleeping EV
 
 - [x] Use a bounded sleeping, disconnected native frame for zero EV draw in

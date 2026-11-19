@@ -62,7 +62,7 @@ def test_house_learning_cycle_advances_both_histories_from_one_observation() -> 
     assert len(heater_history.samples) == 1
 
 
-def test_house_learning_cycle_rejects_unavailable_base_source_without_mutation() -> None:
+def test_house_learning_cycle_advances_excluded_window_without_base_source() -> None:
     sampler = DemandCycleSampler(time(12), time(15))
     result = advance_house_learning(
         demand_sampler=sampler,
@@ -75,9 +75,10 @@ def test_house_learning_cycle_rejects_unavailable_base_source_without_mutation()
         last_saved_at=None,
     )
 
-    assert not result.accepted
-    assert not result.save_required
-    assert sampler.to_payload() is None
+    assert result.accepted
+    assert result.save_required
+    assert sampler.cycle_started
+    assert sampler.missing_seconds == 0
 
 
 def test_learning_uses_explicit_fallback_during_warmup() -> None:
@@ -252,7 +253,7 @@ def test_learning_persistence_state_rejects_invalid_outer_payload() -> None:
     }
 
 
-def test_cycle_sampler_rejects_stale_in_progress_state() -> None:
+def test_cycle_sampler_restores_progress_across_excluded_free_only_gap() -> None:
     start = datetime(2026, 9, 1, 12, tzinfo=UTC)
     sampler = DemandCycleSampler(time(12), time(15))
     sampler.observe(start, 1.0)
@@ -260,7 +261,8 @@ def test_cycle_sampler_rejects_stale_in_progress_state() -> None:
     restored = DemandCycleSampler(time(12), time(15))
     restored.restore(sampler.to_payload(), start + timedelta(minutes=11))
 
-    assert restored.to_payload() is None
+    assert restored.to_payload() == sampler.to_payload()
+    assert restored.missing_seconds == 0
 
 
 def test_daily_sampler_records_a_full_boundary_to_boundary_heater_cycle() -> None:

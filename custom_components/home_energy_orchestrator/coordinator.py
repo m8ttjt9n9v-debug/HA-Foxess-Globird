@@ -86,8 +86,9 @@ from .const import (
     DOMAIN,
     REASON_INVALID_CONFIGURATION,
 )
-from .ev_current_measurement import measure_ev_current, sleeping_ev_unplugged_for_learning
+from .ev_current_measurement import measure_ev_current, unplugged_ev_for_learning
 from .ev_observation_adapter import capture_ev_feedback, ev_observation_entity_map
+from .house_learning import learning_source_binding
 from .models import EnergyLedger, SiteSnapshot
 from .normalise import current_to_a, percent
 from .persistence import TypedStoreRepository, TypedValueStoreRepository
@@ -184,8 +185,13 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
         self.telemetry: NormalizedTelemetry | None = None
         self.demand_history = DemandHistory([])
         self.demand_sampler = self._create_demand_sampler()
+        # Keep whole-house evidence even when EV subtraction is unavailable.
+        # This stream is diagnostic/recoverable evidence, never a P80 input.
+        self.raw_house_sampler = self._create_demand_sampler()
         self.heater_history = DemandHistory([])
         self.heater_sampler = self._create_heater_sampler()
+        self._demand_source_binding = self._learning_source_binding()
+        self._learning_collection_reason = "not_started"
         self._zero_import_tracker = ZeroImportDurationTracker()
         self.daily_import = DailyImportAccumulator()
         self.daily_export = DailyImportAccumulator()
@@ -357,10 +363,35 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
         state = await self._demand_repository.async_load()
         self.demand_history = state.demand_history
         self.heater_history = state.heater_history
+        current_binding = self._learning_source_binding()
+        self._demand_source_binding = current_binding
+        if state.source_binding is not None and state.source_binding != current_binding:
+            # Completed samples retain their upgrade contract. An unfinished
+            # integral cannot join values from a different source or window.
+            self._learning_collection_reason = "source_changed"
+            return
         if self.demand_sampler is not None:
             self.demand_sampler.restore(state.in_progress_cycle, dt_util.now())
         if self.heater_sampler is not None:
             self.heater_sampler.restore(state.heater_in_progress_cycle, dt_util.now())
+        if self.raw_house_sampler is not None:
+            self.raw_house_sampler.restore(state.raw_house_in_progress_cycle, dt_util.now())
+
+    def _learning_source_binding(self) -> tuple[str, ...]:
+        """Identify the sources behind this unfinished learning interval."""
+        return learning_source_binding(self.hass, self.runtime_config)
+
+    def _ensure_learning_source_binding(self) -> None:
+        """Start fresh progress after source, topology or free-window edits."""
+        current = self._learning_source_binding()
+        if current == self._demand_source_binding:
+            return
+        self.demand_sampler = self._create_demand_sampler()
+        self.raw_house_sampler = self._create_demand_sampler()
+        self.heater_sampler = self._create_heater_sampler()
+        self._demand_source_binding = current
+        self._demand_sampler_last_saved_at = None
+        self._learning_collection_reason = "source_changed"
 
     async def async_load_daily_import(self) -> None:
         """Load the persisted same-day tariff accumulators."""
@@ -523,14 +554,14 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
             fallback = DEFAULT_HOUSE_LEARNING_FALLBACK_KWH
         if not isfinite(fallback) or fallback < 0:
             fallback = DEFAULT_HOUSE_LEARNING_FALLBACK_KWH
-        return self.demand_history.select(fallback)
+        return self.demand_history.select(fallback, now=dt_util.now())
 
     @property
     def heater_learning_result(self) -> DemandLearningResult | None:
         """Return the optional separate heater P80 stream."""
         if self.heater_sampler is None:
             return None
-        return self.heater_history.select(0.0)
+        return self.heater_history.select(0.0, now=dt_util.now())
 
     @property
     def learning_result(self) -> HouseBudgetResult:
@@ -545,6 +576,10 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
             occupied_fallback = DEFAULT_HOUSE_LEARNING_FALLBACK_KWH
         if not isfinite(away_fallback) or away_fallback < 0:
             away_fallback = DEFAULT_HOUSE_AWAY_FALLBACK_KWH
+        # Age evidence even when no new cycle completes. The selector and its
+        # P80/fallback/occupancy formula remain unchanged.
+        self.demand_history.prune(dt_util.now())
+        self.heater_history.prune(dt_util.now())
         return select_house_cycle_budget(
             [sample.energy_kwh for sample in self.demand_history.samples],
             (
@@ -1186,16 +1221,23 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
 
     async def _async_sample_house_load(self) -> None:
         """Feed qualified house-load readings into the rolling sampler."""
-        if self.demand_sampler is None or self.snapshot is None:
+        self._ensure_learning_source_binding()
+        if self.demand_sampler is None:
             return
         now = dt_util.now()
+        raw_kw = None if self.snapshot is None else self.snapshot.house_load_kw
+        if self.raw_house_sampler is not None:
+            self.raw_house_sampler.observe(now, raw_kw)
         house_load_kw = self._protected_house_learning_power_kw(now)
-        if house_load_kw is None:
-            return
+        self._learning_collection_reason = (
+            "house_load_unavailable" if raw_kw is None
+            else "subtraction_unavailable" if house_load_kw is None
+            else "ok"
+        )
         # Window boundaries are configured in Home Assistant's local site time.
         # Using UTC would silently learn a different interval at most sites.
         heater_power_kw = (
-            self._power(self.runtime_config.house.heater_power_entity)
+            self._fresh_power(self.runtime_config.house.heater_power_entity, now)
             if self.heater_sampler is not None
             else None
         )
@@ -1280,7 +1322,7 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
             sleeping_age_hours = self.runtime_config.ev_numbers.value(
                 CONF_EV_RESERVATION_SOC_MAX_AGE_HOURS, DEFAULT_EV_RESERVATION_SOC_MAX_AGE_HOURS,
             )
-            if sleeping_ev_unplugged_for_learning(
+            if unplugged_ev_for_learning(
                 self.hass, feedback, now=now, max_age_seconds=sleeping_age_hours * 3600,
             ):
                 return 0.0
@@ -1293,6 +1335,30 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
         if voltage_v <= 0:
             return None
         return current_a * voltage_v * phase_count / 1000
+
+    @property
+    def learning_collection_diagnostics(self) -> dict[str, object]:
+        """Report known versus missing energy without granting budget authority."""
+        def progress(sampler):
+            if sampler is None:
+                return None
+            return {
+                "cycle_started": sampler.cycle_started,
+                "known_energy_kwh": round(sampler.known_energy_kwh, 6),
+                "observed_seconds": round(sampler.observed_seconds, 3),
+                "missing_seconds": round(sampler.missing_seconds, 3),
+                "missing_reason": sampler.missing_reason,
+                "last_cycle": sampler.to_payload().get("last_cycle")
+                if sampler.to_payload() is not None else None,
+            }
+
+        last = self.demand_history.samples[-1] if self.demand_history.samples else None
+        return {
+            "reason": self._learning_collection_reason,
+            "last_completed_at": None if last is None else last.observed_at.isoformat(),
+            "raw_house": progress(self.raw_house_sampler),
+            "base_house": progress(self.demand_sampler),
+        }
 
     def _fresh_power(self, entity_id: object, now: datetime) -> float | None:
         """Read a mapped power component only while its state is fresh."""
@@ -1315,5 +1381,7 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
             self.heater_history,
             self.demand_sampler,
             self.heater_sampler,
+            raw_house_sampler=self.raw_house_sampler,
+            source_binding=self._demand_source_binding,
         )
         await self._demand_repository.async_save(state)

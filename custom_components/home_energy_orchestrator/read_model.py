@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, datetime
 from typing import TYPE_CHECKING
 
@@ -454,6 +454,7 @@ class LearningReadModel:
     person_count: int
     people_home: int
     all_people_away_for_hours: float
+    collection: dict[str, object] = field(default_factory=dict)
 
     def sensor_values(self) -> dict[str, object]:
         """Project the existing house-learning entity states."""
@@ -494,6 +495,7 @@ class LearningReadModel:
             "person_entities_found": self.person_count,
             "people_home": self.people_home,
             "all_people_away_for_hours": self.all_people_away_for_hours,
+            "collection": self.collection,
         }
 
 
@@ -1364,6 +1366,7 @@ def build_site_read_model(
         person_count=occupancy.person_count,
         people_home=occupancy.people_home,
         all_people_away_for_hours=occupancy.all_people_away_for_hours,
+        collection=getattr(coordinator, "learning_collection_diagnostics", {}),
     )
     ev_model = _build_ev_read_model(coordinator, now)
     automation = coordinator.runtime_config.automation

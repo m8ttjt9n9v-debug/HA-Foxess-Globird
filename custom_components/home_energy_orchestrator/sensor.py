@@ -128,6 +128,8 @@ class EnergySensor(CoordinatorEntity[EnergyCoordinator], SensorEntity):
             return read_model.ev.capacity_attributes()
         if self.entity_description.key == "house_occupancy_state":
             return read_model.learning.occupancy_attributes()
+        if self.entity_description.key in {"learning_status", "learning_samples"}:
+            return read_model.learning.collection
         if self.entity_description.key != "status":
             return None
         return read_model.status_attributes()

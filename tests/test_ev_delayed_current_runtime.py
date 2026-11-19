@@ -611,8 +611,8 @@ async def test_house_learner_rejects_retained_plugged_zero_but_keeps_fresh_zero(
 
 
 @pytest.mark.parametrize("fault", [
-    "stale_online", "offline", "failed_provider", "missing_clock", "bool_current",
-    "positive_current", "reconnected", "local_connection_on", "switch_on", "restored_cable",
+    "offline", "failed_provider", "missing_clock", "bool_current",
+    "reconnected", "local_connection_on", "switch_on", "restored_cable",
     "restored_charging", "restored_current", "wrong_cable_binding",
 ])
 async def test_house_learner_rejects_unsafe_asleep_disconnected_evidence(hass, freezer, fault):
@@ -620,9 +620,7 @@ async def test_house_learner_rejects_unsafe_asleep_disconnected_evidence(hass, f
     _asleep_unplugged(hass, rig, rig.now - timedelta(hours=2))
     data = rig.provider.data
     changes = {}
-    if fault == "stale_online":
-        data["state"] = "online"
-    elif fault == "offline":
+    if fault == "offline":
         data["state"] = "offline"
     elif fault == "failed_provider":
         rig.provider.last_update_success = False
@@ -630,9 +628,6 @@ async def test_house_learner_rejects_unsafe_asleep_disconnected_evidence(hass, f
         data.pop("charge_state_timestamp")
     elif fault == "bool_current":
         data["charge_state_charger_actual_current"] = False
-    elif fault == "positive_current":
-        data["charge_state_charger_actual_current"] = 1
-        hass.states.async_set("sensor.car_actual_current", "1", {"unit_of_measurement": "A"})
     elif fault == "reconnected":
         hass.states.async_set("binary_sensor.car_cable", "on")
     elif fault == "local_connection_on":
@@ -652,6 +647,37 @@ async def test_house_learner_rejects_unsafe_asleep_disconnected_evidence(hass, f
         er.async_get(hass).async_update_entity("binary_sensor.car_cable", device_id=None)
     coordinator = _house_learner(hass, rig, **changes)
     try:
+        assert coordinator._protected_house_learning_power_kw(rig.now) is None
+    finally:
+        coordinator.shutdown()
+
+
+@pytest.mark.parametrize("provider_state", ["online", "asleep"])
+@pytest.mark.parametrize("retained_current", [0, 1, 3])
+async def test_learning_unplugged_zero_ignores_retained_amps_without_granting_live_authority(
+    hass, freezer, provider_state, retained_current,
+):
+    rig = _morning(hass, freezer)
+    measured_at = rig.now - timedelta(hours=2)
+    _asleep_unplugged(hass, rig, measured_at)
+    rig.provider.data.update({
+        "state": provider_state,
+        "charge_state_charger_actual_current": retained_current,
+    })
+    hass.states.async_set(
+        "sensor.car_actual_current", str(retained_current), {"unit_of_measurement": "A"},
+    )
+    # House learning has no reason to require a vehicle SoC when disconnected.
+    hass.states.async_set("sensor.car_soc", "unavailable")
+    coordinator = _house_learner(hass, rig)
+    try:
+        assert coordinator._protected_house_learning_power_kw(rig.now) == 6
+        assert rig.provider.data["charge_state_timestamp"] == measured_at.timestamp() * 1000
+        feedback = capture_ev_feedback(hass, ev_observation_entity_map(coordinator.runtime_config))
+        assert not measure_ev_current(hass, feedback, now=rig.now, max_age_seconds=90).valid
+        rig.provider.data["charge_state_timestamp"] = (
+            rig.now - timedelta(hours=24, milliseconds=1)
+        ).timestamp() * 1000
         assert coordinator._protected_house_learning_power_kw(rig.now) is None
     finally:
         coordinator.shutdown()

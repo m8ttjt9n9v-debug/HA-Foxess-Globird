@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.12.63.dev8 — Reliable house-learning collection (local candidate)
+
+- Retain independent raw-house energy and qualified partial progress, with
+  explicit missing-coverage diagnostics. Incomplete cycles do not train P80.
+- Ignore telemetry gaps inside excluded free hours, preserve compatible
+  restart progress, fix elapsed-time accounting through daylight-saving
+  changes, collect heaters independently and enforce existing history expiry.
+- Qualify bounded, healthy native unplugged evidence for learning despite
+  retained amps. Keep the reserve formula and physical charging/export checks.
+
 ## 0.12.63.dev7 — Dynamic EV reservation during telemetry outages
 
 - Offer **Use last known SoC** and **Pause automatic export after a timeout**

@@ -454,6 +454,7 @@ def test_site_read_model_projects_existing_sensor_and_fleet_values() -> None:
         "reason": "people_home",
     }
     assert model.learning.diagnostics() == {
+        "collection": {},
         "model": "occupied_combined_p80",
         "cycle_budget_kwh": 6.5,
         "sample_count": 7,

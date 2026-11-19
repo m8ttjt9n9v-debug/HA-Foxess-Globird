@@ -1,13 +1,27 @@
 # Project source of truth
 
-## House learning with a sleeping EV
+## Reliable house-learning collection (unreleased)
+
+Keep the existing protected-demand/P80/reserve formula. Record healthy raw
+house progress independently of missing EV subtraction; raw/partial energy
+never becomes a measured budget sample. Excluded free-window gaps and restarts
+do not invalidate protected coverage. Unknown protected consumption remains
+incomplete, with known energy retained and explicit coverage diagnostics.
+Heater collection is independent. Elapsed-time accounting uses UTC with local
+tariff boundaries; completed samples deduplicate and expire under the existing
+retention policy. Persist unfinished source binding and resume only compatible
+progress. See [the source mapping and regression contract](house-learning-collection.md).
+
+## House learning with an unplugged EV
 
 The reference learner subtracts state-qualified EV draw from the whole-house
 measurement. The learner uses fresh measured EV current when available. An
-explicitly sleeping Tesla can also contribute zero when its original Tessie
-frame shows disconnected, unplugged and zero amps, and the mapped entities
-agree. The frame must come from the healthy, bound provider and fall within
-the configured sleeping-frame age. Each observation rechecks that evidence.
+explicitly disconnected Tesla can also contribute zero when its original
+online/asleep Tessie frame and mapped entities agree it is unplugged, with
+the mapped charge switch off and no positive local connection. Retained amps
+need not settle to zero. The frame must come from the healthy, bound provider
+and fall within the configured planning-frame age. Each observation rechecks
+that evidence; SoC is not required to measure house consumption.
 Charging and export use their existing physical-current qualification.
 
 ## Unreleased configured EV charge-limit correction
