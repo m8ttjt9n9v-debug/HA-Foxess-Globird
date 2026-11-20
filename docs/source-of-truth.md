@@ -38,6 +38,23 @@ override authority. See
 This explicitly requested correction supersedes the reference's90% policy;
 it is not a claim of unchanged source parity or a published/deployed release.
 
+## Unreleased: measured free-window allowance
+
+The optional EV allowance guard now ends automatic free charging when today's
+measured free-window import reaches the configured daily allowance. Before
+exhaustion, selected EV priority keeps its configured maximum and normal charge
+ceiling. Forecasts of house-battery deficit and EV need no longer pace current.
+After exhaustion, reuse ordinary outside-window policies, including qualified
+solar soak; retain the independent Charge to Full override. The existing
+battery charge session still finishes to Self Use at exhaustion.
+
+Persist the counter's first allowance crossing, preserve tariff accounting and
+daily reset, and recheck old free EV plans at command boundaries. Existing
+electrical, source, reserve, export, commissioning and ownership gates remain.
+Keep saved options compatible while retiring the ineffective forecast margin
+from setup. See [provenance, lifecycle and regression coverage](free-window-allowance.md).
+This repository change grants no deployment or release authority.
+
 ## Local candidate: Dynamic EV reservation and qualified measurements
 
 Optional **Dynamic SoC shortfall** reserves current wall energy to the human-set
@@ -421,7 +438,7 @@ by this correction. Repository regressions do not establish live acceptance.
 - Optional dedicated EV planning capacity replaces the instantaneous
   remaining-energy/SoC inference only when explicitly selected. One read-only
   resolver supplies the learned limit/free-window gain, both Trip schedulers,
-  allowance and vehicle-room projections for backfill. It accepts an explicitly
+  vehicle-room projections for backfill. It accepts an explicitly
   mapped Wh/kWh capacity sensor, the exact mapped car's already-loaded Tessie
   nominal-full-pack field, or a configured value. Tessie adds no HTTP reader,
   credentials or polling loop. Invalid, stale, future, ambiguous or unloaded
@@ -909,19 +926,13 @@ by this correction. Repository regressions do not establish live acceptance.
   sustained charging/current-loss mismatch is an alert, not a healthy state.
   The complete six-source phase mapping is a runtime alternative to a direct
   current entity, matching the configuration contract.
-- House-load topology is explicit. The retained pilot mapping already excludes
-  EV power and remains the default. A whole-house mapping may opt into removing
-  measured EV current converted with the commissioned voltage and EV phase
-  count exactly once for the free-window allowance projection. HEO never
-  infers this choice from entity names, site phase count, or inverter model;
-  invalid actual-current evidence makes the projection unavailable.
-- In that whole-house topology, a vehicle-SoC update alone must not recalculate
-  the allowance while requested and actual EV current are still converging.
-  Hold the existing target only until feedback agrees or the normal
-  three-minute decision boundary. A measured service-limit overrun always
-  bypasses this transition hold. The hold exists only while allowance
-  protection is enabled and both the prior and current EV SoC remain below the
-  configured target; reaching the target is evaluated immediately.
+- House-load topology remains explicit for house-only readings and learning;
+  measured EV power is removed exactly once where configured. Free-window
+  allowance eligibility now uses the observed import counter, independently of
+  house/EV recharge forecasts or the mapped load's includes-EV flag.
+- The existing SoC-only current-transition hold remains bounded by matched
+  feedback and the normal decision interval. It never defers a service-limit
+  overrun, target attainment or the new immediate allowance-exhaustion handoff.
 - A mapped live FoxESS battery-capacity entity is authoritative over the
   configured numeric fallback. Setup may prefill that fallback from an
   unambiguous live FoxESS Modbus capacity value, but must not manufacture a

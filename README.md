@@ -154,7 +154,10 @@ current. See the [commissioning checklist](docs/commissioning.md).
   default-off intent, explicit commissioning, complete Tessie mappings, and the
   shared Safety Lock. It preserves matched three-minute service feedback,
   charge-limit/current/start ordering, the separate anti-pause limit, and the
-  configured whole-site allowance as an outer ceiling. An unchanged target is
+  measured daily allowance cutoff. EV priority requests its configured maximum
+  while allowance remains; exhaustion hands off to ordinary outside-window
+  policies, including solar soak. Explicit Charge to Full remains available.
+  See [allowance lifecycle](docs/free-window-allowance.md). An unchanged target is
   limited to three feedback-confirmed command attempts. See the
   [EV charging policy](docs/ev-charging-policy.md).
 - Default-off Local-Modbus-only solar-spill and latest-start pre-free Tessie

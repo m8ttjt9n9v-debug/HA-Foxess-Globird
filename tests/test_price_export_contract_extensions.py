@@ -74,7 +74,7 @@ def test_price_export_adds_only_five_reviewed_configuration_keys() -> None:
         - len(EV_IMPORT_CONFIG_KEYS)
         - len(EV_SURPLUS_REARM_CONFIG_KEYS)
         - len(EV_RESERVATION_CONFIG_KEYS)
-        == historical["page_field_count"] + 5
+        == historical["page_field_count"] - 1 + 5  # Reviewed legacy margin retirement.
     )
 
 
@@ -112,7 +112,7 @@ def test_capacity_configuration_is_a_separate_three_key_addition() -> None:
         == ADDITIVE_CONFIG_KEYS
     )
     assert historical["page_field_count"] == 135
-    assert current["page_field_count"] == 135 + 5 + 3 + 2 + 1 + 3 + 1 + 1 + 1 + 1 + 4
+    assert current["page_field_count"] == 135 - 1 + 5 + 3 + 2 + 1 + 3 + 1 + 1 + 1 + 1 + 4
 
 
 def test_price_export_admits_only_monitor_and_one_automatic_request() -> None:

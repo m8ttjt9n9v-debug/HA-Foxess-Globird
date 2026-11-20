@@ -1134,6 +1134,7 @@ class EnergyCoordinator(DataUpdateCoordinator[EnergyLedger]):
                 zerohero_export=self._zerohero_export_last_saved,
             ),
             checkpoint=self._async_checkpoint_accounting_meter,
+            free_import_limit_kwh=self.runtime_config.nonnegative.daily_free_allowance_kwh,
         )
         try:
             measured_capacity = self._energy(

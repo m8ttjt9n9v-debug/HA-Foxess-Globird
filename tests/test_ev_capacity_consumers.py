@@ -7,7 +7,6 @@ import pytest
 
 from custom_components.home_energy_orchestrator.planner.ev import (
     estimate_vehicle_energy_to_target_kwh,
-    evaluate_allowance_projection,
 )
 from custom_components.home_energy_orchestrator.planner.ev_daily_backfill import (
     DailyBackfillPlanningEvidence,
@@ -24,7 +23,6 @@ from custom_components.home_energy_orchestrator.planner.trip_charge import (
     calculate_trip_charge_plan,
 )
 
-from .test_ev import ALLOWANCE_PROJECTION
 from .test_ev_learning import LEARNED_EVIDENCE
 from .test_ev_outside_window import PRE_FREE_PLANNING
 
@@ -109,15 +107,6 @@ def test_explicit_capacity_does_not_make_invalid_vehicle_soc_usable(soc):
         ))
 
 
-def test_allowance_projection_accepts_explicit_capacity_without_stored_energy():
-    result = evaluate_allowance_projection(
-        replace(
-            ALLOWANCE_PROJECTION,
-            stored_energy_kwh=None,
-            planning_capacity_kwh=80,
-        )
-    )
-    assert result.decision is not None
 
 
 def test_pre_free_retains_export_budget_but_limits_vehicle_room_using_capacity():

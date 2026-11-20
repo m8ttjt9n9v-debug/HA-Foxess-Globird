@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "key": "ev_allowance_safety_margin_kwh",
+  "page": "ev_policies",
+  "order": 13,
+  "persisted_key_retained": true,
+  "guard_label_before": "Keep free-window EV charging within the free-energy allowance",
+  "guard_label_after": "End free EV charging when the daily allowance is used",
+  "reason": "Measured free-window eligibility replaces forecast pacing; retain saved values for rollback without exposing an ineffective planning control."
+}

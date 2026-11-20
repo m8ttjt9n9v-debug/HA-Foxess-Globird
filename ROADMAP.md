@@ -1,5 +1,18 @@
 # Project roadmap
 
+## Measured free-window allowance (unreleased)
+
+- [x] Preserve the canonical EV-priority maximum; remove the forecast-based
+  house-battery/EV pacing extension and future quota reservations.
+- [x] At measured daily exhaustion, reuse outside-window charging and solar
+  soak, preserve explicit Full, and retain battery Self Use cleanup.
+- [x] Persist the exact crossing and test delayed ramps, command boundaries,
+  restart, daily reset, noise, settings and unchanged physical/safety gates.
+- [x] Preserve saved settings and frozen contracts with reviewed retirement of
+  the obsolete forecast-only setup margin.
+- [x] Complete the full runtime regression run and focused rechecks of the
+  reviewed setup/status expectation changes. No deployment or release is authorised.
+
 ## Reliable house-learning collection (unreleased)
 
 - [x] Preserve healthy raw-house evidence separately from qualified EV/heater

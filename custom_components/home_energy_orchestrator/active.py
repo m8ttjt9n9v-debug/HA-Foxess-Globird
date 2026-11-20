@@ -86,6 +86,7 @@ from .planner.foxess_ownership import (
     evaluate_foxess_ownership,
 )
 from .planner.foxess_recovery import mark_foxess_source_unavailable
+from .planner.free_charging import free_allowance_available, remaining_free_allowance
 from .planner.ledger import calculate_ledger
 from .telemetry import CLOUD_SOLAR_BALANCE_MAX_AGE_SECONDS
 from .telemetry_adapter import capture_telemetry_source
@@ -194,6 +195,10 @@ class ActiveFoxessController:
             and not self.manual.is_active
         )
         if not allowed:
+            return False
+        if self.charge_session.phase in {"starting", "active", "recovering"} and (
+            not free_allowance_available(self._free_charge_remaining_kwh(dt_util.now()))
+        ):
             return False
         if self.export_session.phase in {
             "starting",
@@ -1029,9 +1034,7 @@ class ActiveFoxessController:
         window_active = self.coordinator._free_window_hours_remaining(now) > 0  # noqa: SLF001
         soc = getattr(self.coordinator.snapshot, "battery_soc", None)
         target_soc = self.coordinator.runtime_config.battery.free_window_target_percent
-        free_energy_remaining = getattr(
-            self.coordinator.data, "free_energy_remaining_kwh", None
-        )
+        free_energy_remaining = self._free_charge_remaining_kwh(now)
         policy = evaluate_foxess_charge_policy(
             FoxessChargePolicyContext(
                 requested_enabled=automation.battery_charge_enabled,
@@ -1100,6 +1103,21 @@ class ActiveFoxessController:
             if executed:
                 _LOGGER.info("FoxESS free-window charge plan executed: %s", executed)
         return True
+
+    def _free_charge_remaining_kwh(self, now: datetime) -> float | None:
+        """Use the observed counter even while its Store/publication awaits."""
+        meter = getattr(self.coordinator, "free_window_import", None)
+        if meter is None:
+            # Retain the read-model adapter contract for older facades. The
+            # native coordinator always supplies its persisted import counter.
+            return getattr(self.coordinator.data, "free_energy_remaining_kwh", None)
+        allowance = self.coordinator.runtime_config.nonnegative.daily_free_allowance_kwh
+        if allowance is None:
+            return None
+        return remaining_free_allowance(
+            allowance_kwh=allowance, imported_kwh=meter.imported_kwh,
+            measured_at=meter.last_at, now=now,
+        )
 
     async def _async_reconcile_export(
         self,

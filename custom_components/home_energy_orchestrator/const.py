@@ -193,6 +193,7 @@ CONF_TELEMETRY_MAX_AGE_SECONDS = "telemetry_max_age_seconds"
 CONF_BATTERY_FREE_WINDOW_TARGET = "battery_free_window_target_percent"
 CONF_BATTERY_CHARGE_EFFICIENCY = "battery_charge_efficiency_percent"
 CONF_EV_ALLOWANCE_GUARD_ENABLED = "ev_allowance_guard_enabled"
+# Legacy saved forecast margin; retained for options round-trip, no longer used.
 CONF_EV_ALLOWANCE_SAFETY_MARGIN = "ev_allowance_safety_margin_kwh"
 CONF_EV_SOLAR_SPILL_ENABLED = "ev_solar_spill_enabled"
 CONF_EV_SOLAR_SPILL_BATTERY_SOC = "ev_solar_spill_battery_soc_percent"

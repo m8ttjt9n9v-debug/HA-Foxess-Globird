@@ -82,7 +82,8 @@ HEO does not infer a tariff cohort from the provider name.
 - It does not dynamically pace battery power against the daily free-energy
   allowance. It requests the commissioned fixed battery charge power while
   allowance remains and stops when the remaining allowance reaches zero. The
-  existing EV allowance planner may allocate remaining headroom more finely.
+  EV now uses the same measured cutoff and its existing outside-window handoff;
+  no forecast-based EV pacing or future quota allocation is added.
 - Safety Lock prevents restoration writes as well as start writes. Before
   deliberately locking or unloading an active controller, use the independent
   charge switch to request its bounded Self Use restoration.

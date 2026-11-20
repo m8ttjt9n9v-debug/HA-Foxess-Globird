@@ -1766,13 +1766,6 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     ),
                 ): selector.BooleanSelector(),
                 vol.Required(
-                    CONF_EV_ALLOWANCE_SAFETY_MARGIN,
-                    default=defaults.get(
-                        CONF_EV_ALLOWANCE_SAFETY_MARGIN,
-                        DEFAULT_EV_ALLOWANCE_SAFETY_MARGIN,
-                    ),
-                ): vol.Coerce(float),
-                vol.Required(
                     CONF_EV_SOLAR_SPILL_ENABLED,
                     default=defaults.get(
                         CONF_EV_SOLAR_SPILL_ENABLED, DEFAULT_EV_SOLAR_SPILL_ENABLED
@@ -2697,7 +2690,9 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             site_headroom = float(data[CONF_SITE_GRID_HEADROOM_CURRENT])
             battery_target = float(data[CONF_BATTERY_FREE_WINDOW_TARGET])
             battery_efficiency = float(data[CONF_BATTERY_CHARGE_EFFICIENCY])
-            allowance_margin = float(data[CONF_EV_ALLOWANCE_SAFETY_MARGIN])
+            allowance_margin = float(data.get(
+                CONF_EV_ALLOWANCE_SAFETY_MARGIN, DEFAULT_EV_ALLOWANCE_SAFETY_MARGIN,
+            ))
             solar_spill_soc = float(data[CONF_EV_SOLAR_SPILL_BATTERY_SOC])
             morning_solar_reserve = float(data[CONF_EV_MORNING_SOLAR_RESERVE_SOC])
             telemetry_max_age = float(data[CONF_EV_TELEMETRY_MAX_AGE_SECONDS])

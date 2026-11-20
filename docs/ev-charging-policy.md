@@ -68,35 +68,25 @@ not be substituted for raw SoC in the energy equation, because doing so would
 apply the minimum twice. A battery-capacity mapping must contain kWh capacity,
 not either form of SoC percentage.
 
-## Daily allowance extension
+## Measured daily allowance
 
-The whole-site allowance is an outer ceiling, not a replacement charging
-algorithm. It receives the already calculated base current plus explicit,
-configured projections for remaining non-EV import and EV energy need.
+The existing optional allowance guard uses today's observed free-window import.
+Below the configured daily allowance, the canonical free-window current passes
+through unchanged. At exhaustion, use ordinary outside-window policies, including
+qualified solar soak. Charge to Full remains an explicit paid override. A missing
+or invalid current-day counter grants no automatic free charging.
 
-- First calculate the physical site envelope from configured per-phase service
-  current, site voltage, phase count, and remaining window duration. If even
-  sustained service-limit import cannot reach the remaining allowance, the
-  allowance controller is provably unnecessary and leaves the pilot-site behavior unchanged.
-- If imported energy plus projected house, battery, EV, and safety margin fits
-  under the configured kWh allowance, the base current passes through unchanged.
-- Only a projected overrun activates pacing. The remaining EV budget is
-  converted to current using configured voltage, phase count, current step, and
-  remaining window duration.
-- A missing live allowance meter fails to the protected baseline.
-- A direct or powered connector may require a non-zero protected baseline. The
-  controller must expose that it cannot guarantee the tariff boundary when
-  uncontrollable house/FoxESS import plus this safety baseline exceeds it.
-- FoxCloud ownership of the inverter does not by itself block the independent
-  EV gate: the EV controller writes only explicitly mapped Tessie actuators.
-  The shared Safety Lock remains an absolute write interlock.
+There is no house-battery deficit projection, EV-need pacing, future quota
+reservation or new controller. Keep tariff metering active after eligibility
+ends. Save the first allowance crossing, retain same-day exhaustion across
+restart, and use the existing daily reset. The monotonic counter needs no second
+start threshold. Unknown evidence and existing safety stops remain immediate.
 
-Service capacity limits instantaneous import; it does not allocate energy.
-Conversely, the kWh allowance limits total energy; it does not prove an
-instantaneous current is electrically safe. Both constraints must pass.
-
-The extension must never hard-code an allowance, service current, voltage,
-phase count, connector rating, efficiency, time, or entity ID.
+Physical service/inverter/current limits, normal charge ceiling, source clocks,
+commissioning, Safety Lock and exclusive owners remain independent. HEO cannot
+stop an unrelated cloud schedule, household import or a deliberately retained
+protected baseline. Meter and actuator delays can produce overage; this is not a
+retailer settlement guarantee. See [provenance and lifecycle](free-window-allowance.md).
 
 ## Runtime and anti-flapping boundary
 
@@ -135,8 +125,8 @@ phase count, connector rating, efficiency, time, or entity ID.
   sampling and planning, exposes ordered `would_*` actions, and performs no
   reconciliation attempts or service calls. The adapter independently requires
   a `ready` gate, so rehearsal visibility cannot authorize a write.
-- The mapped house-load source used for allowance projection must exclude EV
-  charging, matching the pilot site's `non_tesla_house_load` role.
+- House-load topology remains explicit for learning and house-only display.
+  It no longer creates a forecast-derived ceiling on free-window EV current.
 
 ## Smart-socket runtime
 

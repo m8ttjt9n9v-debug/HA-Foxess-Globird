@@ -18,13 +18,10 @@ from homeassistant.util import dt as dt_util
 
 from .configuration import valid_ev_reservation_soc_max_age_hours
 from .const import (
-    CONF_BATTERY_CHARGE_EFFICIENCY,
-    CONF_BATTERY_FREE_WINDOW_TARGET,
     CONF_BONUS_WINDOW_END,
     CONF_BONUS_WINDOW_START,
     CONF_DAILY_FREE_ALLOWANCE_KWH,
     CONF_DISCHARGE_EFFICIENCY_PERCENT,
-    CONF_EV_ALLOWANCE_SAFETY_MARGIN,
     CONF_EV_ARRIVAL_RESERVE_SOC,
     CONF_EV_BACKFILL_BUFFER_MINUTES,
     CONF_EV_BEFORE_EXPORT_IMPORT_CONFIRM_SECONDS,
@@ -74,13 +71,10 @@ from .const import (
     CONF_SERVICE_IMPORT_LIMIT_A,
     CONF_SITE_GRID_HEADROOM_CURRENT,
     CONF_SITE_PHASE_COUNT,
-    DEFAULT_BATTERY_CHARGE_EFFICIENCY,
-    DEFAULT_BATTERY_FREE_WINDOW_TARGET,
     DEFAULT_BONUS_WINDOW_END,
     DEFAULT_BONUS_WINDOW_START,
     DEFAULT_DAILY_FREE_ALLOWANCE_KWH,
     DEFAULT_DISCHARGE_EFFICIENCY_PERCENT,
-    DEFAULT_EV_ALLOWANCE_SAFETY_MARGIN,
     DEFAULT_EV_ARRIVAL_RESERVE_SOC,
     DEFAULT_EV_BACKFILL_BUFFER_MINUTES,
     DEFAULT_EV_BEFORE_EXPORT_IMPORT_CONFIRM_SECONDS,
@@ -176,7 +170,6 @@ from .planner.control_windows import (
 from .planner.ev import (
     DIRECT_EVSE_RECONCILIATION_PHASES,
     EV_SOC_MAX_PERCENT,
-    AllowanceProjectionInputs,
     ChargeLimitInputs,
     DirectEvseCurrentFeedback,
     DirectEvseCurrentProof,
@@ -198,7 +191,6 @@ from .planner.ev import (
     cap_direct_charge_limit_target,
     charging_path_ceiling_a,
     estimate_vehicle_energy_to_target_kwh,
-    evaluate_allowance_projection,
     evaluate_ev_decision_cadence,
     evaluate_free_window_target,
     evaluate_general_charge_limit,
@@ -318,6 +310,7 @@ from .planner.ev_reservation import (
     calculate_ev_reservation_budget,
 )
 from .planner.ev_solar_soak import SolarSoakAverage
+from .planner.free_charging import free_allowance_available, remaining_free_allowance
 from .planner.learning import DemandHistory
 from .planner.ledger import calculate_ledger
 from .planner.timed_average import TimedAverageWindow
@@ -2246,23 +2239,11 @@ class ActiveEvController:
         self.allowance_phase = "disabled"
         self.allowance_house_load_kw = None
         self.allowance_ev_power_kw = None
-        if self.coordinator.runtime_config.ev_policy.allowance_guard_enabled:
-            allowance = self._allowance_target(
-                target_current,
-                baseline,
-                current_minimum,
-                current_step,
-                policy_limit,
-                vehicle_soc,
-                remaining_hours,
-                snapshot,
-            )
-            if allowance is None:
-                target_current = baseline
-                self.allowance_phase = "projection_unavailable"
-            else:
-                target_current = allowance.current_a
-                self.allowance_phase = allowance.phase
+        self.allowance_phase = (
+            "allowance_available"
+            if self.coordinator.runtime_config.ev_policy.allowance_guard_enabled
+            else "disabled"
+        )
         limit_min = observation.limit_minimum_percent
         limit_max = observation.limit_maximum_percent
         limit_step = observation.limit_step_percent
@@ -2305,95 +2286,6 @@ class ActiveEvController:
             "free_window", reason
         )
         return False
-
-    def _allowance_target(
-        self,
-        base_current: float,
-        baseline: float,
-        minimum: float,
-        step: float,
-        policy_limit: float,
-        vehicle_soc: float | None,
-        remaining_hours: float,
-        snapshot,
-    ):
-        stored = self._mapped_energy(
-            self.coordinator.runtime_config.ev_telemetry.stored_energy_entity
-        )
-        capacity = self.capacity_evidence()
-        explicit_capacity = self.coordinator.runtime_config.ev_capacity.source != "legacy_ratio"
-        if explicit_capacity and capacity.value_kwh is None:
-            return None
-        planning_capacity = capacity.value_kwh if explicit_capacity else None
-        imported = (
-            self.coordinator.free_window_import.imported_kwh
-            if self.coordinator.free_window_import.last_at is not None
-            else None
-        )
-        load_includes_ev = self.coordinator.runtime_config.house.load_includes_ev
-        projection_evidence_present = (
-            (stored is not None or planning_capacity is not None)
-            and vehicle_soc is not None
-            and snapshot.battery_soc is not None
-            and snapshot.house_load_kw is not None
-        )
-        if load_includes_ev and projection_evidence_present:
-            actual_current, actual_current_valid = self._actual_ev_current_a()
-        else:
-            # Preserve the EV-exclusive fast path without observing an
-            # irrelevant Tessie value.
-            actual_current = 0.0
-            actual_current_valid = False
-        result = evaluate_allowance_projection(
-            AllowanceProjectionInputs(
-                base_current_a=base_current,
-                protected_baseline_a=baseline,
-                minimum_charge_a=minimum,
-                current_step_a=step,
-                stored_energy_kwh=stored,
-                vehicle_soc_percent=vehicle_soc,
-                vehicle_target_soc_percent=policy_limit,
-                vehicle_charge_efficiency_percent=self._float(
-                    CONF_EV_CHARGE_EFFICIENCY,
-                    DEFAULT_EV_CHARGE_EFFICIENCY,
-                ),
-                battery_capacity_kwh=snapshot.battery_capacity_kwh,
-                battery_soc_percent=snapshot.battery_soc,
-                battery_target_percent=self._float(
-                    CONF_BATTERY_FREE_WINDOW_TARGET,
-                    DEFAULT_BATTERY_FREE_WINDOW_TARGET,
-                ),
-                battery_charge_efficiency_percent=self._float(
-                    CONF_BATTERY_CHARGE_EFFICIENCY,
-                    DEFAULT_BATTERY_CHARGE_EFFICIENCY,
-                ),
-                house_load_kw=snapshot.house_load_kw,
-                house_load_includes_ev=load_includes_ev,
-                actual_ev_current_a=actual_current,
-                actual_ev_current_valid=actual_current_valid,
-                ev_voltage_v=self._float(CONF_EV_VOLTAGE, DEFAULT_EV_VOLTAGE),
-                ev_phase_count=int(self._float(CONF_EV_PHASE_COUNT, DEFAULT_EV_PHASE_COUNT)),
-                site_service_limit_a=self._float(
-                    CONF_SERVICE_IMPORT_LIMIT_A,
-                    DEFAULT_SERVICE_IMPORT_LIMIT_A,
-                ),
-                site_phase_count=int(self._float(CONF_SITE_PHASE_COUNT, DEFAULT_SITE_PHASE_COUNT)),
-                remaining_window_hours=remaining_hours,
-                allowance_kwh=self._float(
-                    CONF_DAILY_FREE_ALLOWANCE_KWH,
-                    DEFAULT_DAILY_FREE_ALLOWANCE_KWH,
-                ),
-                imported_in_window_kwh=imported,
-                safety_margin_kwh=self._float(
-                    CONF_EV_ALLOWANCE_SAFETY_MARGIN,
-                    DEFAULT_EV_ALLOWANCE_SAFETY_MARGIN,
-                ),
-                planning_capacity_kwh=planning_capacity,
-            )
-        )
-        self.allowance_house_load_kw = result.house_load_kw
-        self.allowance_ev_power_kw = result.ev_power_kw
-        return result.decision
 
     def _outside_uses_current_budget(self, now: datetime) -> bool:
         """Identify the direct policies that read the live protected budget."""
@@ -4728,7 +4620,23 @@ class ActiveEvController:
         end = self.coordinator._configured_time(  # noqa: SLF001
             CONF_FREE_CHARGE_END, DEFAULT_FREE_CHARGE_END
         )
-        return window_position(now, start=start, end=end)
+        position = window_position(now, start=start, end=end)
+        if not position[0] or not self.coordinator.runtime_config.ev_policy.allowance_guard_enabled:
+            return position
+        meter = self.coordinator.free_window_import
+        remaining = remaining_free_allowance(
+            allowance_kwh=self._float(
+                CONF_DAILY_FREE_ALLOWANCE_KWH, DEFAULT_DAILY_FREE_ALLOWANCE_KWH,
+            ),
+            imported_kwh=meter.imported_kwh,
+            measured_at=meter.last_at,
+            now=now,
+        )
+        if not free_allowance_available(remaining):
+            # End only charging eligibility. Tariff timing, accounting and the
+            # independent explicit Charge to Full authority are unchanged.
+            return False, 0.0, 0.0
+        return position
 
     def _create_adapter(self) -> EvServiceAdapter | None:
         actuators = self.coordinator.runtime_config.ev_actuators
@@ -4755,6 +4663,18 @@ class ActiveEvController:
     def _writes_still_authorized(self) -> bool:
         """Keep reducing reconciliation open; recheck a positive top-up live."""
         if self.gate_status != "ready":
+            return False
+        if (
+            self.policy_route is not None
+            and self.policy_route.route == "free_window"
+            and self.coordinator.runtime_config.ev_policy.allowance_guard_enabled
+            and not self._charge_to_full_requested()
+            and (self.target_current_a or 0) > self._float(CONF_EV_PROTECTED_BASELINE_A, 0)
+            and not self._free_window(dt_util.now())[0]
+        ):
+            # Recheck after every awaited write/checkpoint. An old free plan
+            # cannot start or retry after exhaustion; ordinary reducing and
+            # outside-policy plans retain their existing gates.
             return False
         if (self.when_connected_backfill_selected() and self.outside_target_active
                 and self._when_connected_backfill_hold(dt_util.now())

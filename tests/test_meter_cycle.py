@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
@@ -63,6 +64,27 @@ def _capture(requests):
         requests.append(request)
 
     return capture
+
+
+async def test_allowance_crossing_is_saved_before_regular_meter_threshold() -> None:
+    meters = _meters()
+    at = datetime(2026, 9, 17, 12, tzinfo=ZoneInfo("Australia/Sydney"))
+    meter = meters.free_window_import
+    meter.observe(3.6, at)
+    meter.imported_kwh = 49.999
+    saved = []
+    await advance_accounting_meters(
+        meters, grid_power_kw=3.6, export_power_kw=0,
+        observed_at=at + timedelta(seconds=2),
+        checkpoints=replace(_checkpoints(0), free_window_import=49.999),
+        checkpoint=_capture(saved), free_import_limit_kwh=50,
+    )
+    payload = meter.to_payload()
+    assert meter.imported_kwh == pytest.approx(50.001)
+    assert any(row.name == FREE_WINDOW_IMPORT for row in saved)
+    restored = WindowImportAccumulator(window_start=time(11), window_end=time(14))
+    restored.restore(payload, at + timedelta(seconds=3))
+    assert restored.imported_kwh >= 50
 
 
 async def test_first_observation_requests_every_store_in_existing_order() -> None:

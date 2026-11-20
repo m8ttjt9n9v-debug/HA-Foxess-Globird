@@ -270,7 +270,9 @@ async def test_expired_native_current_is_not_free_window_average_or_house_subtra
     assert rig.controller.actual_current_a is None
     assert not rig.controller.ev_average.result(later).source_value_valid
     if allowance:
-        assert rig.controller.allowance_phase == "projection_unavailable"
+        # No forecast/subtraction planner remains. An unknown allowance counter
+        # takes the ordinary route, without making expired native current valid.
+        assert rig.controller.allowance_phase == "outside_free_window"
         assert rig.controller.allowance_house_load_kw is None
         assert rig.controller.allowance_ev_power_kw is None
 

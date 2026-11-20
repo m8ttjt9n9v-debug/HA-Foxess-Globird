@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.12.63.dev9 — Measured free-window allowance (local candidate)
+
+- Keep EV-priority charging at its configured maximum while the measured daily
+  free-import allowance remains. Remove forecast-based EV pacing.
+- At exhaustion, use existing outside-window policies, including qualified
+  solar soak; preserve explicit Charge to Full and battery Self Use cleanup.
+- Persist allowance crossings and preserve existing electrical, reserve,
+  ownership and current checks. Retain saved options for rollback while
+  removing the obsolete forecast-margin control from setup.
+
 ## 0.12.63.dev8 — Reliable house-learning collection (local candidate)
 
 - Retain independent raw-house energy and qualified partial progress, with

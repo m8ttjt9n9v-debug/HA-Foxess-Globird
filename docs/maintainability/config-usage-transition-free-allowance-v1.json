@@ -1,0 +1,38 @@
+{
+  "after": [
+    {
+      "access": "get",
+      "constant": "CONF_EV_ALLOWANCE_SAFETY_MARGIN",
+      "key": "ev_allowance_safety_margin_kwh",
+      "kind": "raw_mapping",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._validate_input",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    }
+  ],
+  "before": [
+    {
+      "access": "get",
+      "constant": "CONF_EV_ALLOWANCE_SAFETY_MARGIN",
+      "key": "ev_allowance_safety_margin_kwh",
+      "kind": "raw_mapping",
+      "layer": "boundary",
+      "receiver": "defaults",
+      "scope": "ConfigFlow._schema",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    },
+    {
+      "access": "subscript_load",
+      "constant": "CONF_EV_ALLOWANCE_SAFETY_MARGIN",
+      "key": "ev_allowance_safety_margin_kwh",
+      "kind": "raw_mapping",
+      "layer": "boundary",
+      "receiver": "data",
+      "scope": "ConfigFlow._validate_input",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py"
+    }
+  ],
+  "reason": "Retired forecast margin remains a compatible optional saved value at the configuration boundary.",
+  "schema_version": 1
+}

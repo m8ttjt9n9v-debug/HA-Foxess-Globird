@@ -1436,8 +1436,9 @@ async def test_free_charge_does_not_start_after_allowance_is_exhausted(
     assert calls == []
 
 
+@pytest.mark.parametrize("published_remaining", [0, 5])
 async def test_active_free_charge_restores_self_use_when_allowance_is_exhausted(
-    hass, monkeypatch
+    hass, monkeypatch, published_remaining
 ):
     calls = []
     hass.bus.async_listen(EVENT_CALL_SERVICE, calls.append)
@@ -1478,15 +1479,18 @@ async def test_active_free_charge_restores_self_use_when_allowance_is_exhausted(
         }
     )
     coordinator.snapshot.battery_soc = 96.0
-    coordinator.data.free_energy_remaining_kwh = 0.0
+    coordinator.data.free_energy_remaining_kwh = published_remaining
+    coordinator.free_window_import = SimpleNamespace(last_at=now, imported_kwh=50)
     controller = _loaded_controller(hass, coordinator)
     controller.charge_session = ChargeSessionState("active", 8.0, 0)
+    assert not controller._writes_still_authorized()  # Counter beats a stale publication.
 
     await controller.async_reconcile()
     await hass.async_block_till_done()
 
     assert controller.charge_session == ChargeSessionState("stopping", 8.0, 1, now)
     assert controller.last_actions == ("select_mode", "set_charge_power")
+    assert controller._writes_still_authorized()  # Exhaustion must not block Self Use cleanup.
     assert {
         (event.data["domain"], event.data["service"]) for event in calls
     } == {("number", "set_value"), ("select", "select_option")}

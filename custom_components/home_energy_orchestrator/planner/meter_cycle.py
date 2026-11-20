@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import datetime
+from math import isfinite
 
 from .daily_meter import (
     DailyImportAccumulator,
@@ -63,6 +64,7 @@ async def advance_accounting_meters(
     observed_at: datetime,
     checkpoints: MeterCheckpointState,
     checkpoint: Callable[[MeterCheckpointRequest], Awaitable[None]],
+    free_import_limit_kwh: float | None = None,
 ) -> tuple[MeterCheckpointRequest, ...]:
     """Advance every meter once and return ordered checkpoint requests.
 
@@ -114,6 +116,12 @@ async def advance_accounting_meters(
             or total < prior
             or total - prior >= threshold
             or meter.checkpoint_required
+            or (
+                name == FREE_WINDOW_IMPORT
+                and free_import_limit_kwh is not None
+                and isfinite(free_import_limit_kwh)
+                and prior < free_import_limit_kwh <= total
+            )
         ):
             request = MeterCheckpointRequest(name, total)
             requests.append(request)

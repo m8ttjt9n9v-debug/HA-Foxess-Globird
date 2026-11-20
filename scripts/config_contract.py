@@ -8,6 +8,7 @@ from pathlib import Path
 
 from custom_components.home_energy_orchestrator import const
 from custom_components.home_energy_orchestrator.config_flow import ConfigFlow
+from scripts.config_field_amendments import RETIREMENT_PATH
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 BASELINE_PATH = REPOSITORY_ROOT / "docs" / "maintainability" / "config-contract-v0.12.26.json"
@@ -102,6 +103,11 @@ def build_config_contract(*, include_extensions: bool = False) -> dict[str, obje
         for page, fields in ConfigFlow._PAGE_FIELDS.items()
     }
     pages = {page: fields for page, fields in pages.items() if fields}
+    if not include_extensions:
+        # Reconstruct the frozen historical UI, without reviving the retired
+        # control on today's setup pages or modifying its saved key.
+        retired = json.loads(RETIREMENT_PATH.read_text(encoding="utf-8"))
+        pages[retired["page"]].insert(retired["order"] - 1, retired["key"])
     page_keys = [key for fields in pages.values() for key in fields]
     declared_keys = sorted(
         {

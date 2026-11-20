@@ -216,7 +216,7 @@ automatically enabled, and installation does not prove live spike delivery.
   Pilot Site the mapped source is non-heater base-house power and the heater is
   supplied through the optional separate power mapping, preventing double
   counting. If the mapped value includes EV charging, enable **Mapped
-  house-load sensor includes EV charging** so the allowance projection removes
+  house-load sensor includes EV charging** so house-only readings remove
   live EV power exactly once. Leave it disabled for an already EV-exclusive
   house sensor. This correction requires valid actual EV current plus the
   commissioned EV voltage and phase count; missing evidence fails closed.

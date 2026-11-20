@@ -6,8 +6,6 @@ from datetime import UTC, datetime, timedelta
 import pytest
 
 from custom_components.home_energy_orchestrator.planner.ev import (
-    AllowanceCeilingInputs,
-    AllowanceProjectionInputs,
     ChargeLimitInputs,
     DirectEvseObservation,
     DirectEvseReconciliation,
@@ -24,14 +22,11 @@ from custom_components.home_energy_orchestrator.planner.ev import (
     SmartSocketRecoveryObservation,
     SmartSocketRecoveryState,
     SmartSocketStageState,
-    apply_daily_allowance_ceiling,
     cap_direct_charge_limit_target,
     charging_path_ceiling_a,
     direct_evse_response_matches,
     direct_evse_retry_interval,
-    estimate_other_free_window_import_kwh,
     estimate_vehicle_energy_to_target_kwh,
-    evaluate_allowance_projection,
     evaluate_ev_decision_cadence,
     evaluate_free_window_target,
     evaluate_general_charge_limit,
@@ -600,188 +595,6 @@ def test_general_limit_confirmation_clears_fingerprint_and_charge_to_full_wins()
     assert decision.fingerprint_transition == "clear"
 
 
-ALLOWANCE = AllowanceCeilingInputs(
-    base_current_a=16,
-    protected_baseline_a=1,
-    minimum_charge_a=1,
-    current_step_a=1,
-    voltage_v=230,
-    phase_count=3,
-    site_service_limit_a=80,
-    site_voltage_v=230,
-    site_phase_count=3,
-    remaining_window_hours=2,
-    allowance_kwh=50,
-    imported_in_window_kwh=10,
-    projected_other_import_kwh=25,
-    projected_ev_energy_kwh=5,
-)
-
-ALLOWANCE_PROJECTION = AllowanceProjectionInputs(
-    base_current_a=16,
-    protected_baseline_a=1,
-    minimum_charge_a=1,
-    current_step_a=1,
-    stored_energy_kwh=5,
-    vehicle_soc_percent=50,
-    vehicle_target_soc_percent=60,
-    vehicle_charge_efficiency_percent=90,
-    battery_capacity_kwh=40,
-    battery_soc_percent=100,
-    battery_target_percent=100,
-    battery_charge_efficiency_percent=90,
-    house_load_kw=12,
-    house_load_includes_ev=False,
-    actual_ev_current_a=16,
-    actual_ev_current_valid=True,
-    ev_voltage_v=230,
-    ev_phase_count=3,
-    site_service_limit_a=63,
-    site_phase_count=3,
-    remaining_window_hours=2,
-    allowance_kwh=50,
-    imported_in_window_kwh=25,
-    safety_margin_kwh=0,
-)
-
-
-def test_allowance_projection_preserves_explicit_house_load_topologies():
-    exclusive = evaluate_allowance_projection(ALLOWANCE_PROJECTION)
-    whole_house = evaluate_allowance_projection(
-        replace(ALLOWANCE_PROJECTION, house_load_includes_ev=True)
-    )
-
-    assert exclusive.decision is not None
-    assert exclusive.decision.current_a == 1
-    assert exclusive.decision.phase == "allowance_below_charger_minimum"
-    assert exclusive.house_load_kw == 12
-    assert exclusive.ev_power_kw is None
-    assert whole_house.decision is not None
-    assert whole_house.decision.current_a == 16
-    assert whole_house.decision.phase == "allowance_not_constraining"
-    assert whole_house.house_load_kw == 0.96
-    assert whole_house.ev_power_kw == 11.04
-
-
-def test_allowance_projection_whole_house_fails_closed_without_ev_current():
-    result = evaluate_allowance_projection(
-        replace(
-            ALLOWANCE_PROJECTION,
-            house_load_includes_ev=True,
-            actual_ev_current_valid=False,
-        )
-    )
-
-    assert result.decision is None
-    assert result.house_load_kw is None
-    assert result.ev_power_kw is None
-
-
-@pytest.mark.parametrize(
-    "changes",
-    [
-        {"stored_energy_kwh": None},
-        {"vehicle_soc_percent": None},
-        {"battery_soc_percent": None},
-        {"house_load_kw": None},
-    ],
-)
-def test_allowance_projection_requires_all_energy_evidence(changes):
-    result = evaluate_allowance_projection(replace(ALLOWANCE_PROJECTION, **changes))
-
-    assert result.decision is None
-    assert result.house_load_kw is None
-    assert result.ev_power_kw is None
-
-
-def test_allowance_projection_keeps_missing_meter_as_baseline_decision():
-    result = evaluate_allowance_projection(
-        replace(ALLOWANCE_PROJECTION, imported_in_window_kwh=None)
-    )
-
-    assert result.decision is not None
-    assert result.decision.current_a == 1
-    assert result.decision.phase == "allowance_meter_unavailable"
-    assert result.house_load_kw == 12
-    assert result.ev_power_kw is None
-
-
-def test_normal_small_session_is_not_evenly_spread_or_throttled():
-    decision = apply_daily_allowance_ceiling(ALLOWANCE)
-    assert decision.current_a == 16
-    assert decision.phase == "allowance_not_constraining"
-
-
-def test_pilot_site_service_envelope_cannot_reach_configured_allowance():
-    decision = apply_daily_allowance_ceiling(
-        replace(
-            ALLOWANCE,
-            site_service_limit_a=63,
-            site_voltage_v=230,
-            site_phase_count=1,
-            remaining_window_hours=2.9,
-            imported_in_window_kwh=0,
-            projected_other_import_kwh=40,
-            projected_ev_energy_kwh=30,
-        )
-    )
-    assert decision.current_a == 16
-    assert decision.phase == "allowance_physically_unreachable"
-
-
-def test_higher_capacity_site_continues_to_projection_check():
-    decision = apply_daily_allowance_ceiling(
-        replace(
-            ALLOWANCE,
-            projected_other_import_kwh=35,
-            projected_ev_energy_kwh=20,
-        )
-    )
-    assert decision.current_a == 3
-    assert decision.phase == "allowance_pacing"
-
-
-def test_projected_overrun_activates_topology_aware_allowance_pacing():
-    decision = apply_daily_allowance_ceiling(replace(ALLOWANCE, projected_ev_energy_kwh=30))
-    # 15 kWh / 2 h / (230 V * 3 phases) = 10.86 A, floored to a 1 A step.
-    assert decision.current_a == 10
-    assert decision.phase == "allowance_pacing"
-
-
-def test_allowance_is_configured_not_literal():
-    decision = apply_daily_allowance_ceiling(
-        replace(
-            ALLOWANCE,
-            allowance_kwh=20,
-            imported_in_window_kwh=4,
-            projected_other_import_kwh=8,
-            projected_ev_energy_kwh=20,
-            remaining_window_hours=1,
-        )
-    )
-    assert decision.current_a == 11
-    assert decision.phase == "allowance_pacing"
-
-
-def test_missing_allowance_meter_fails_to_protected_baseline():
-    decision = apply_daily_allowance_ceiling(replace(ALLOWANCE, imported_in_window_kwh=None))
-    assert decision.current_a == 1
-    assert decision.phase == "allowance_meter_unavailable"
-
-
-def test_exhausted_allowance_cannot_claim_zero_when_path_requires_baseline():
-    decision = apply_daily_allowance_ceiling(
-        replace(ALLOWANCE, imported_in_window_kwh=50, projected_ev_energy_kwh=20)
-    )
-    assert decision.current_a == 1
-    assert decision.phase == "allowance_exhausted"
-
-
-def test_allowance_validation_rejects_invalid_topology():
-    with pytest.raises(ValueError):
-        apply_daily_allowance_ceiling(replace(ALLOWANCE, phase_count=0))
-
-
 def test_vehicle_need_uses_live_stored_energy_instead_of_fixed_capacity():
     # 45 kWh stored at 60% implies 75 kWh usable capacity. Reaching 80%
     # requires 15 kWh in the pack, or 16.667 kWh at 90% wall efficiency.
@@ -808,19 +621,6 @@ def test_small_vehicle_top_up_projection_is_not_a_fixed_site_value():
     )
 
 
-def test_other_projection_combines_configured_battery_gap_and_live_house_load():
-    # 8 kWh pack gap at 80% efficiency plus 2 kW for two hours.
-    assert (
-        estimate_other_free_window_import_kwh(
-            battery_capacity_kwh=40,
-            battery_soc_percent=70,
-            battery_target_percent=90,
-            battery_charge_efficiency_percent=80,
-            house_load_kw=2,
-            remaining_window_hours=2,
-        )
-        == 14
-    )
 
 
 def test_whole_house_topology_subtracts_three_phase_ev_once():

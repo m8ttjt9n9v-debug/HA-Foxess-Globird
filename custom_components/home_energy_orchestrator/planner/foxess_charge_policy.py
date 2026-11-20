@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from .charge_session import ChargeSessionState
+from .free_charging import free_allowance_available
 
 _LATCHED_PHASES = frozenset({"starting", "active", "recovering", "stopping"})
 
@@ -60,10 +61,7 @@ def evaluate_foxess_charge_policy(
         if source_available and context.session.phase in _LATCHED_PHASES
         else (0.0 if source_available else None)
     )
-    allowance_available = (
-        context.free_energy_remaining_kwh is not None
-        and float(context.free_energy_remaining_kwh) > 0
-    )
+    allowance_available = free_allowance_available(context.free_energy_remaining_kwh)
     eligible_to_start = (
         context.battery_soc is not None
         and 0 <= float(context.battery_soc) < context.target_soc_percent

@@ -483,7 +483,7 @@ async def test_ev_allowance_target_does_not_cycle_with_inclusive_house_load(
         assert target is not None and target.state == "16.0"
         assert requested is not None and requested.state == "16.0"
         assert actual is not None and actual.state == f"{float(actual_current):.1f}"
-        assert controller.allowance_house_load_kw == pytest.approx(0.96, abs=0.001)
+        assert controller.allowance_house_load_kw is None  # Forecast pacing was retired.
 
     assert harness.service_calls == ()
     assert controller.target_current_a == 16
@@ -635,10 +635,14 @@ async def test_ev_soc_update_holds_allowance_during_ramp_but_not_service_overrun
         controller.target_current_a,
     )
     assert controller.target_current_a is not None
-    assert controller.target_current_a < 16
+    # The live overrun forces immediate re-evaluation. The matched average is
+    # still below the service rating here: retiring financial forecast pacing
+    # must not masquerade as a change to the electrical correction formula.
+    assert controller.target_current_a == 16
+    assert controller.allowance_phase == "allowance_available"
     limit_actions = ("would_set_charge_limit",) if reported_limit != 100 else ()
     assert controller.target_limit_percent == 100
-    assert controller.last_actions == (*limit_actions, "would_set_charge_current")
+    assert controller.last_actions == limit_actions
     assert harness.service_calls == ()
     await harness.unload(entry)
     hass.services.async_remove("number", "set_value")

@@ -187,12 +187,12 @@ def validate_against_release_baseline() -> None:
     actual = {field["key"]: field for field in current["fields"]}
     if current["config_entry_version"] != baseline["config_entry_version"]:
         raise ValueError("configuration entry version changed")
-    if current["field_count"] != baseline["field_count"] + len(added):
-        raise ValueError("field count differs from baseline plus reviewed additions")
     expected = {
         field["key"]: field
         for field in reviewed_field_amendments(list((retained | added).values()))
     }
+    if current["field_count"] != len(expected):
+        raise ValueError("field count differs from the reviewed amended contract")
     if actual.keys() != expected.keys():
         raise ValueError("configuration field identities changed beyond reviewed additions")
     for key, record in expected.items():

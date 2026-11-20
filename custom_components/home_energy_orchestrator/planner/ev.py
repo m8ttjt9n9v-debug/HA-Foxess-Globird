@@ -1926,195 +1926,14 @@ def evaluate_general_charge_limit(
     )
 
 
-@dataclass(frozen=True, slots=True)
-class AllowanceCeilingInputs:
-    """Configurable whole-site allowance extension applied after base policy."""
-
-    base_current_a: float
-    protected_baseline_a: float
-    minimum_charge_a: float
-    current_step_a: float
-    voltage_v: float
-    phase_count: int
-    site_service_limit_a: float
-    site_voltage_v: float
-    site_phase_count: int
-    remaining_window_hours: float
-    allowance_kwh: float
-    imported_in_window_kwh: float | None
-    projected_other_import_kwh: float
-    projected_ev_energy_kwh: float
-    safety_margin_kwh: float = 0.0
 
 
-@dataclass(frozen=True, slots=True)
-class AllowanceProjectionInputs:
-    """Primitive evidence and policy used by the whole-site allowance guard."""
-
-    base_current_a: float
-    protected_baseline_a: float
-    minimum_charge_a: float
-    current_step_a: float
-    stored_energy_kwh: float | None
-    vehicle_soc_percent: float | None
-    vehicle_target_soc_percent: float
-    vehicle_charge_efficiency_percent: float
-    battery_capacity_kwh: float
-    battery_soc_percent: float | None
-    battery_target_percent: float
-    battery_charge_efficiency_percent: float
-    house_load_kw: float | None
-    house_load_includes_ev: bool
-    actual_ev_current_a: float
-    actual_ev_current_valid: bool
-    ev_voltage_v: float
-    ev_phase_count: int
-    site_service_limit_a: float
-    site_phase_count: int
-    remaining_window_hours: float
-    allowance_kwh: float
-    imported_in_window_kwh: float | None
-    safety_margin_kwh: float
-    planning_capacity_kwh: float | None = None
 
 
-@dataclass(frozen=True, slots=True)
-class AllowanceProjectionResult:
-    """Allowance decision plus the diagnostics underpinning its projection."""
-
-    decision: EvCurrentDecision | None
-    house_load_kw: float | None
-    ev_power_kw: float | None
 
 
-def evaluate_allowance_projection(
-    inputs: AllowanceProjectionInputs,
-) -> AllowanceProjectionResult:
-    """Compose retained EV, battery and house projections without HA state."""
-    if (
-        (inputs.stored_energy_kwh is None and inputs.planning_capacity_kwh is None)
-        or inputs.vehicle_soc_percent is None
-        or inputs.battery_soc_percent is None
-        or inputs.house_load_kw is None
-    ):
-        return AllowanceProjectionResult(None, None, None)
-
-    house_load_kw = inputs.house_load_kw
-    ev_power_kw = None
-    if inputs.house_load_includes_ev:
-        if not inputs.actual_ev_current_valid:
-            return AllowanceProjectionResult(None, None, None)
-        try:
-            house_load_kw = house_load_excluding_ev_kw(
-                house_load_kw=inputs.house_load_kw,
-                actual_ev_current_a=inputs.actual_ev_current_a,
-                ev_voltage_v=inputs.ev_voltage_v,
-                ev_phase_count=inputs.ev_phase_count,
-            )
-        except ValueError:
-            return AllowanceProjectionResult(None, None, None)
-        ev_power_kw = round(
-            inputs.actual_ev_current_a
-            * inputs.ev_voltage_v
-            * inputs.ev_phase_count
-            / 1000,
-            3,
-        )
-
-    try:
-        ev_need = estimate_vehicle_energy_to_target_kwh(
-            stored_energy_kwh=inputs.stored_energy_kwh,
-            current_soc_percent=inputs.vehicle_soc_percent,
-            target_soc_percent=inputs.vehicle_target_soc_percent,
-            charge_efficiency_percent=inputs.vehicle_charge_efficiency_percent,
-            planning_capacity_kwh=inputs.planning_capacity_kwh,
-        )
-        other = estimate_other_free_window_import_kwh(
-            battery_capacity_kwh=inputs.battery_capacity_kwh,
-            battery_soc_percent=inputs.battery_soc_percent,
-            battery_target_percent=inputs.battery_target_percent,
-            battery_charge_efficiency_percent=(
-                inputs.battery_charge_efficiency_percent
-            ),
-            house_load_kw=house_load_kw,
-            remaining_window_hours=inputs.remaining_window_hours,
-        )
-        decision = apply_daily_allowance_ceiling(
-            AllowanceCeilingInputs(
-                base_current_a=inputs.base_current_a,
-                protected_baseline_a=min(
-                    inputs.protected_baseline_a,
-                    inputs.base_current_a,
-                ),
-                minimum_charge_a=inputs.minimum_charge_a,
-                current_step_a=inputs.current_step_a,
-                voltage_v=inputs.ev_voltage_v,
-                phase_count=inputs.ev_phase_count,
-                site_service_limit_a=inputs.site_service_limit_a,
-                site_voltage_v=inputs.ev_voltage_v,
-                site_phase_count=inputs.site_phase_count,
-                remaining_window_hours=inputs.remaining_window_hours,
-                allowance_kwh=inputs.allowance_kwh,
-                imported_in_window_kwh=inputs.imported_in_window_kwh,
-                projected_other_import_kwh=other,
-                projected_ev_energy_kwh=ev_need,
-                safety_margin_kwh=inputs.safety_margin_kwh,
-            )
-        )
-    except ValueError:
-        decision = None
-    return AllowanceProjectionResult(decision, house_load_kw, ev_power_kw)
 
 
-def apply_daily_allowance_ceiling(inputs: AllowanceCeilingInputs) -> EvCurrentDecision:
-    """Cap only sessions projected to exceed the configured whole-site allowance.
-
-    This is intentionally not an even-spread charging algorithm.  If the
-    projected house, battery and EV energy fits, the canonical current passes
-    through unchanged.  Pacing begins only when the complete projection would
-    exceed the configured allowance.
-    """
-    _validate_allowance_inputs(inputs)
-    baseline = min(inputs.protected_baseline_a, inputs.base_current_a)
-    if inputs.imported_in_window_kwh is None:
-        return _decision(baseline, "allowance_meter_unavailable")
-    maximum_remaining_site_import = (
-        inputs.site_service_limit_a
-        * inputs.site_voltage_v
-        * inputs.site_phase_count
-        / 1000
-        * inputs.remaining_window_hours
-    )
-    if (
-        inputs.imported_in_window_kwh + maximum_remaining_site_import + inputs.safety_margin_kwh
-        <= inputs.allowance_kwh
-    ):
-        return _decision(inputs.base_current_a, "allowance_physically_unreachable")
-    projected_total = (
-        inputs.imported_in_window_kwh
-        + inputs.projected_other_import_kwh
-        + inputs.projected_ev_energy_kwh
-        + inputs.safety_margin_kwh
-    )
-    if projected_total <= inputs.allowance_kwh:
-        return _decision(inputs.base_current_a, "allowance_not_constraining")
-
-    ev_budget = max(
-        inputs.allowance_kwh
-        - inputs.imported_in_window_kwh
-        - inputs.projected_other_import_kwh
-        - inputs.safety_margin_kwh,
-        0.0,
-    )
-    if inputs.remaining_window_hours <= 0 or ev_budget <= 0:
-        return _decision(baseline, "allowance_exhausted")
-    average_power_kw = ev_budget / inputs.remaining_window_hours
-    raw_cap_a = average_power_kw * 1000 / (inputs.voltage_v * inputs.phase_count)
-    stepped_cap_a = floor(raw_cap_a / inputs.current_step_a) * inputs.current_step_a
-    cap = min(stepped_cap_a, inputs.base_current_a)
-    if cap < inputs.minimum_charge_a:
-        return _decision(baseline, "allowance_below_charger_minimum")
-    return _decision(max(cap, baseline), "allowance_pacing")
 
 
 def estimate_vehicle_energy_to_target_kwh(
@@ -2160,30 +1979,6 @@ def estimate_vehicle_energy_to_target_kwh(
     return round(pack_energy / (charge_efficiency_percent / 100), 3)
 
 
-def estimate_other_free_window_import_kwh(
-    *,
-    battery_capacity_kwh: float,
-    battery_soc_percent: float,
-    battery_target_percent: float,
-    battery_charge_efficiency_percent: float,
-    house_load_kw: float,
-    remaining_window_hours: float,
-) -> float:
-    """Estimate remaining non-EV import from explicit battery and house inputs."""
-    _validate_energy_projection(
-        battery_capacity_kwh,
-        battery_soc_percent,
-        battery_target_percent,
-        battery_charge_efficiency_percent,
-        house_load_kw,
-        remaining_window_hours,
-    )
-    if battery_soc_percent > 100 or battery_target_percent > 100:
-        raise ValueError("battery SOC and target cannot exceed 100 percent")
-    pack_gap = battery_capacity_kwh * max(battery_target_percent - battery_soc_percent, 0.0) / 100
-    battery_wall_energy = pack_gap / (battery_charge_efficiency_percent / 100)
-    house_energy = house_load_kw * remaining_window_hours
-    return round(battery_wall_energy + house_energy, 3)
 
 
 def house_load_excluding_ev_kw(
@@ -2263,36 +2058,6 @@ def _validate_charge_limit_inputs(inputs: ChargeLimitInputs) -> None:
         raise ValueError("charge-limit range must be ordered with a positive step")
 
 
-def _validate_allowance_inputs(inputs: AllowanceCeilingInputs) -> None:
-    values = (
-        inputs.base_current_a,
-        inputs.protected_baseline_a,
-        inputs.minimum_charge_a,
-        inputs.current_step_a,
-        inputs.voltage_v,
-        inputs.site_service_limit_a,
-        inputs.site_voltage_v,
-        inputs.remaining_window_hours,
-        inputs.allowance_kwh,
-        inputs.projected_other_import_kwh,
-        inputs.projected_ev_energy_kwh,
-        inputs.safety_margin_kwh,
-    )
-    if inputs.imported_in_window_kwh is not None:
-        values += (inputs.imported_in_window_kwh,)
-    if not all(isfinite(value) for value in values) or any(value < 0 for value in values):
-        raise ValueError("allowance inputs must be finite and non-negative")
-    if (
-        inputs.current_step_a <= 0
-        or inputs.voltage_v <= 0
-        or inputs.phase_count < 1
-        or inputs.site_service_limit_a <= 0
-        or inputs.site_voltage_v <= 0
-        or inputs.site_phase_count < 1
-    ):
-        raise ValueError("allowance topology and current step must be positive")
-    if inputs.protected_baseline_a > inputs.base_current_a:
-        raise ValueError("allowance baseline cannot exceed the base current")
 
 
 def _validate_energy_projection(*values: float) -> None:
