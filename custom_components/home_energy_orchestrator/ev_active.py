@@ -59,6 +59,9 @@ from .const import (
     CONF_EV_SOLAR_SOAK_ADJUSTMENT_MINUTES,
     CONF_EV_SOLAR_SOAK_AVERAGE_MINUTES,
     CONF_EV_SOLAR_SOAK_BATTERY_SOC,
+    CONF_EV_SOLAR_SOAK_MAX_ENABLED,
+    CONF_EV_SOLAR_SOAK_START_SOC,
+    CONF_EV_SOLAR_SOAK_STOP_SOC,
     CONF_EV_SOLAR_SPILL_BATTERY_SOC,
     CONF_EV_SURPLUS_REARM_ENERGY,
     CONF_EV_TELEMETRY_MAX_AGE_SECONDS,
@@ -109,6 +112,8 @@ from .const import (
     DEFAULT_EV_SOLAR_SOAK_ADJUSTMENT_MINUTES,
     DEFAULT_EV_SOLAR_SOAK_AVERAGE_MINUTES,
     DEFAULT_EV_SOLAR_SOAK_BATTERY_SOC,
+    DEFAULT_EV_SOLAR_SOAK_START_SOC,
+    DEFAULT_EV_SOLAR_SOAK_STOP_SOC,
     DEFAULT_EV_SOLAR_SPILL_BATTERY_SOC,
     DEFAULT_EV_SURPLUS_REARM_ENERGY,
     DEFAULT_EV_TELEMETRY_MAX_AGE_SECONDS,
@@ -309,7 +314,12 @@ from .planner.ev_reservation import (
     EvReservationInputs,
     calculate_ev_reservation_budget,
 )
-from .planner.ev_solar_soak import SolarSoakAverage
+from .planner.ev_solar_soak import (
+    SolarSoakAverage,
+    SolarSoakMaximumInputs,
+    SolarSoakMaximumState,
+    plan_maximum_solar_soak,
+)
 from .planner.free_charging import free_allowance_available, remaining_free_allowance
 from .planner.learning import DemandHistory
 from .planner.ledger import calculate_ledger
@@ -359,6 +369,7 @@ class ActiveEvController:
             CONF_EV_SOLAR_SOAK_AVERAGE_MINUTES, DEFAULT_EV_SOLAR_SOAK_AVERAGE_MINUTES,
         )))
         self._solar_soak_active = False
+        self.solar_soak_maximum = SolarSoakMaximumState()
         self.before_export_recovery = EvBeforeExportRecovery()
         self._before_export_state_loaded = False
         self._before_export_storage_error = False
@@ -581,6 +592,7 @@ class ActiveEvController:
     ) -> None:
         """Run one reconciliation with task-local feedback that cannot leak."""
         token = _CYCLE_FEEDBACK.set(None)
+        previous_soak = self.solar_soak_maximum
         try:
             if force_decision:
                 await self._async_reconcile_cycle(now, force_decision=True)
@@ -588,6 +600,13 @@ class ActiveEvController:
                 await self._async_reconcile_cycle(now)
         finally:
             _CYCLE_FEEDBACK.reset(token)
+            if (previous_soak.active, previous_soak.binding) != (
+                self.solar_soak_maximum.active, self.solar_soak_maximum.binding,
+            ):
+                # Checkpoint latch withdrawal even on an early safety/disabled
+                # return. A restart must not resurrect an old episode in-band.
+                async with self._lock:
+                    await self._async_save()
 
     async def _async_reconcile_cycle(
         self, now: datetime | None = None, *, force_decision: bool = False,
@@ -1077,6 +1096,24 @@ class ActiveEvController:
                     else f"rehearsal_{rehearsal_plan.reason}"
                 )
                 return
+            if self.solar_soak_maximum.active:
+                # The existing import-confirmation clock may retain only an
+                # already-issued matching request. Do not dispatch even a
+                # positive retry while the site is importing.
+                telemetry = self.coordinator.telemetry
+                threshold = self.coordinator.runtime_config.nonnegative.zero_import_threshold_kw
+                if (telemetry is not None and threshold is not None
+                        and telemetry.grid_power.value is not None
+                        and telemetry.grid_power.value > threshold
+                        and self.target_current_a == self.reconciliation.target_current_a
+                        and observation.charge_limit_percent == self.target_limit_percent
+                        and self.reconciliation.target_limit_percent == self.target_limit_percent
+                        and self.actual_current_a is not None
+                        and self.actual_current_a <= (self.target_current_a or 0)
+                        and self._solar_soak_write_authorized(retain_existing=True)):
+                    self.last_reason = "solar_soak_maximum_import_confirmation"
+                    await self._async_save(now)
+                    return
             if entered_free_window:
                 # A free-power window is independently authorised.  Do not
                 # make it wait for an outside/pre-free fault cooldown; the
@@ -1111,6 +1148,17 @@ class ActiveEvController:
             self.last_reason = transition.plan.reason
             if runtime.save_reconciliation:
                 await self._async_save(now)
+                if self.solar_soak_maximum.active and (
+                    self.gate_status != "ready" or not self._solar_soak_write_authorized(
+                        retain_existing=not transition.plan.commands,
+                    )
+                ):
+                    fresh = self._capture_feedback()
+                    _CYCLE_FEEDBACK.set(fresh)
+                    await self._async_restore_ready_by_baseline(
+                        dt_util.now(), fresh.direct_observation, gate=self.gate_status,
+                    )
+                    return
                 if self._dynamic_backfill_target_selected() and (
                     self.gate_status != "ready" or not self._dynamic_backfill_write_authorized()
                 ):
@@ -1167,7 +1215,7 @@ class ActiveEvController:
                     self.last_write_at = now
                 self.last_reason = "ev_write_gate_closed"
                 await self._async_save(now)
-                if (self._ordinary_solar_target_selected()
+                if (self._ordinary_solar_target_selected() or self.solar_soak_maximum.active
                         or self._dynamic_backfill_target_selected()):
                     # A source can fail between two awaited service calls.
                     # Withdraw the existing surplus request through its normal
@@ -3095,7 +3143,7 @@ class ActiveEvController:
         return True
 
     def _before_export_energy_budget(
-        self, now: datetime, *, retain_existing: bool = False,
+        self, now: datetime, *, retain_existing: bool = False, solar_soak_maximum: bool = False,
     ) -> float | None:
         """Read a current budget cohort after any awaited lifecycle checkpoint.
 
@@ -3111,7 +3159,9 @@ class ActiveEvController:
             self.hass, ev_observation_entity_map(self.coordinator.runtime_config),
         ))
         try:
-            return self._observed_before_export_energy_budget(now, retain_existing=retain_existing)
+            return self._observed_before_export_energy_budget(
+                now, retain_existing=retain_existing, solar_soak_maximum=solar_soak_maximum,
+            )
         finally:
             _CYCLE_FEEDBACK.reset(token)
 
@@ -3134,6 +3184,7 @@ class ActiveEvController:
 
     def _observed_before_export_energy_budget(
         self, now: datetime, *, retain_existing: bool = False, when_connected: bool = False,
+        solar_soak_maximum: bool = False,
     ) -> float | None:
         """Recheck the same reserve/house/EV ledger against one current cohort."""
         runtime = self.coordinator.runtime_config
@@ -3274,7 +3325,8 @@ class ActiveEvController:
             (self.decision_phase == "ev_before_export_charging" or when_connected and (
                 self.decision_phase in {"daily_ready_backfill", "pre_free_backfill"}
                 and self.outside_target_active
-            ))
+            ) or solar_soak_maximum and self.solar_soak_maximum.active
+             and self.decision_phase == "solar_spill")
             and self.outside_control_active
             and (not self.daily_backfill_stop_pending or when_connected)
             and previous.target_current_a is not None
@@ -3285,6 +3337,8 @@ class ActiveEvController:
             ))
             and observation is not None and observation.charge_switch_on
             and observation.requested_current_a == previous.target_current_a
+            and (not solar_soak_maximum
+                 or observation.charge_limit_percent == previous.target_limit_percent)
         )
         seconds = self._float(
             CONF_EV_BEFORE_EXPORT_IMPORT_CONFIRM_SECONDS,
@@ -3293,6 +3347,8 @@ class ActiveEvController:
         binding = (*self._before_export_recovery_binding(),
                    *(source.entity_id for source in telemetry.grid_power.sources),
                    str(import_threshold), str(seconds))
+        if solar_soak_maximum:
+            binding += ("solar_soak_maximum", *self._solar_soak_maximum_binding())
         self.before_export_import, allowed = confirm_before_export_import(
             self.before_export_import, binding=binding, now=now,
             source_at=telemetry.grid_power.updated_at, importing=importing,
@@ -4364,6 +4420,12 @@ class ActiveEvController:
         )
         if (buffered_soak and not morning
                 and self.coordinator.runtime_config.ev_policy.charge_path == "direct_evse"):
+            if self.coordinator.config.get(CONF_EV_SOLAR_SOAK_MAX_ENABLED, False) is not False:
+                return self._maximum_solar_soak_decision(
+                    now, ceiling=ceiling, minimum=current_minimum, step=current_step,
+                    vehicle_soc=vehicle_soc, soft_limit=soft_limit,
+                )
+            self.solar_soak_maximum = SolarSoakMaximumState()
             authority = self._solar_soak_authority(now)
             if authority is None or not evaluation.telemetry_valid:
                 self._reset_solar_soak()
@@ -4407,6 +4469,7 @@ class ActiveEvController:
 
     def _reset_solar_soak(self):
         self.solar_soak_average.clear()
+        self.solar_soak_maximum = SolarSoakMaximumState()
         self._solar_soak_active = False
         if self.measured_solar_adjustment.phase == "solar_spill":
             self.measured_solar_adjustment = MeasuredSolarAdjustmentState()
@@ -4429,14 +4492,15 @@ class ActiveEvController:
             ),
         ]
 
-    def _solar_soak_authority(self, now):
+    def _solar_soak_authority(self, now, *, maximum=False, retain_existing=False):
         runtime = self.coordinator.runtime_config
         snapshot, telemetry = self.coordinator.snapshot, self.coordinator.telemetry
         solar = None if telemetry is None else telemetry.solar_power
         feedback = _CYCLE_FEEDBACK.get()
         live_soc = None if feedback is None else feedback.battery_soc.number
         floor_percent = max(self._float(
-            CONF_EV_SOLAR_SOAK_BATTERY_SOC, DEFAULT_EV_SOLAR_SOAK_BATTERY_SOC,
+            CONF_EV_SOLAR_SOAK_STOP_SOC if maximum else CONF_EV_SOLAR_SOAK_BATTERY_SOC,
+            DEFAULT_EV_SOLAR_SOAK_STOP_SOC if maximum else DEFAULT_EV_SOLAR_SOAK_BATTERY_SOC,
         ), self._float(
             CONF_EV_OUTSIDE_BATTERY_RESERVE_PERCENT, DEFAULT_EV_OUTSIDE_BATTERY_RESERVE_PERCENT,
         ))
@@ -4450,13 +4514,92 @@ class ActiveEvController:
             or not floor_percent < snapshot.battery_soc <= 100
             or live_soc is None or not floor_percent < live_soc <= 100
             or solar is None or not solar.valid or not solar.fresh or solar.value is None
-            or not isfinite(solar.value) or solar.value <= 0 or solar.updated_at is None
+            or not isfinite(solar.value)
+            or (solar.value < 0 if maximum and self.solar_soak_maximum.active
+                else solar.value <= 0)
+            or solar.updated_at is None
             or not 0 <= (now - solar.updated_at).total_seconds()
             <= runtime.telemetry.max_age_seconds
         ):
             return None
-        budget = self._before_export_energy_budget(now)
+        budget = self._before_export_energy_budget(
+            now, retain_existing=retain_existing, solar_soak_maximum=maximum,
+        )
         return (budget, solar.value) if budget is not None and budget > 0 else None
+
+    def _solar_soak_maximum_binding(self):
+        runtime = self.coordinator.runtime_config
+        return tuple(str(value) for value in (
+            *self._solar_soak_binding(), runtime.ev_policy.solar_soak_max_enabled,
+            self._float(CONF_EV_SOLAR_SOAK_START_SOC, DEFAULT_EV_SOLAR_SOAK_START_SOC),
+            self._float(CONF_EV_SOLAR_SOAK_STOP_SOC, DEFAULT_EV_SOLAR_SOAK_STOP_SOC),
+            self._float(CONF_EV_OUTSIDE_BATTERY_RESERVE_PERCENT,
+                        DEFAULT_EV_OUTSIDE_BATTERY_RESERVE_PERCENT),
+            self._float(CONF_EV_OUTSIDE_INVERTER_PERCENT, DEFAULT_EV_OUTSIDE_INVERTER_PERCENT),
+            self._float(CONF_EV_MAX_CURRENT, 0),
+            self._normal_charge_limit(), runtime.ev_connection.cable_connected_entity,
+            runtime.ev_connection.at_home_entity,
+            runtime.battery.capacity_entity, runtime.battery.configured_capacity_kwh,
+            self._float(CONF_DISCHARGE_EFFICIENCY_PERCENT, DEFAULT_DISCHARGE_EFFICIENCY_PERCENT),
+        ))
+
+    def _maximum_solar_soak_plan(self, now, authority, *, ceiling, minimum, step,
+                                vehicle_soc, soft_limit):
+        runtime = self.coordinator.runtime_config
+        snapshot = self.coordinator.snapshot
+        feedback = _CYCLE_FEEDBACK.get()
+        live_soc = None if feedback is None else feedback.battery_soc.number
+        snapshot_soc = None if snapshot is None else snapshot.battery_soc
+        soc = (min(snapshot_soc, live_soc)
+               if live_soc is not None and snapshot_soc is not None else None)
+        return plan_maximum_solar_soak(self.solar_soak_maximum, SolarSoakMaximumInputs(
+            now=now, binding=self._solar_soak_maximum_binding(),
+            enabled=runtime.ev_policy.solar_soak_max_enabled,
+            eligible=(self.gate_status == "ready" and self._connected_at_home()[0]
+                      and vehicle_soc is not None and vehicle_soc < soft_limit
+                      and authority is not None),
+            telemetry_valid=self._measured_ev_telemetry(now).telemetry_valid,
+            battery_soc_percent=soc,
+            start_soc_percent=self._float(CONF_EV_SOLAR_SOAK_START_SOC,
+                                          DEFAULT_EV_SOLAR_SOAK_START_SOC),
+            stop_soc_percent=self._float(CONF_EV_SOLAR_SOAK_STOP_SOC,
+                                         DEFAULT_EV_SOLAR_SOAK_STOP_SOC),
+            outside_reserve_percent=self._float(CONF_EV_OUTSIDE_BATTERY_RESERVE_PERCENT,
+                                                DEFAULT_EV_OUTSIDE_BATTERY_RESERVE_PERCENT),
+            solar_generation_kw=None if authority is None else authority[1],
+            protected_energy_kwh=None if authority is None else authority[0],
+            battery_capacity_kwh=None if snapshot is None else snapshot.battery_capacity_kwh,
+            discharge_efficiency_percent=self._float(CONF_DISCHARGE_EFFICIENCY_PERCENT,
+                                                     DEFAULT_DISCHARGE_EFFICIENCY_PERCENT),
+            current_ceiling_a=ceiling, charger_minimum_a=minimum, current_step_a=step,
+            voltage_v=self._float(CONF_EV_VOLTAGE, DEFAULT_EV_VOLTAGE),
+            phase_count=int(self._float(CONF_EV_PHASE_COUNT, DEFAULT_EV_PHASE_COUNT)),
+            max_gap_seconds=runtime.telemetry.max_age_seconds,
+        ))
+
+    def _maximum_solar_soak_decision(self, now, *, ceiling, minimum, step,
+                                     vehicle_soc, soft_limit):
+        authority = self._solar_soak_authority(now, maximum=True, retain_existing=True)
+        telemetry = self.coordinator.telemetry
+        threshold = self.coordinator.runtime_config.nonnegative.zero_import_threshold_kw
+        if (telemetry is not None and threshold is not None
+                and telemetry.grid_power.value is not None
+                and telemetry.grid_power.value > threshold):
+            # Economic import confirmation only retains an issued matching
+            # target. It never funds a fresh start or a current increase.
+            ceiling = min(ceiling, self.reconciliation.target_current_a or 0)
+        decision = self._maximum_solar_soak_plan(
+            now, authority, ceiling=ceiling, minimum=minimum, step=step,
+            vehicle_soc=vehicle_soc, soft_limit=soft_limit,
+        )
+        self.solar_soak_maximum = decision.state
+        self.solar_soak_average.clear()
+        self.measured_solar_adjustment = MeasuredSolarAdjustmentState()
+        self._solar_soak_active = decision.state.active and decision.current_a > 0
+        self._solar_soak_ceiling_a = decision.current_a
+        return SolarSpillDecision(decision.current_a, 0 if authority is None else authority[1],
+                                  "solar_soak_maximum" if self._solar_soak_active
+                                  else decision.phase)
 
     def _pre_free_window(self, now: datetime) -> tuple[datetime, bool, float]:
         free_time = self.coordinator._configured_time(  # noqa: SLF001
@@ -4970,14 +5113,19 @@ class ActiveEvController:
         finally:
             _CYCLE_FEEDBACK.reset(token)
 
-    def _solar_soak_write_authorized(self):
+    def _solar_soak_write_authorized(self, *, retain_existing=False):
         now = dt_util.now()
         runtime = self.coordinator.runtime_config
         token = _CYCLE_FEEDBACK.set(capture_ev_feedback(
             self.hass, ev_observation_entity_map(runtime),
         ))
         try:
-            authority = self._solar_soak_authority(now)
+            maximum = self.solar_soak_maximum.active
+            if maximum and not runtime.ev_policy.solar_soak_max_enabled:
+                return False
+            authority = self._solar_soak_authority(
+                now, maximum=maximum, retain_existing=maximum and retain_existing,
+            )
             soc = self._mapped_number(runtime.ev_telemetry.soc_entity)
             observation = self._observation()
             if (authority is None or observation is None
@@ -5008,6 +5156,15 @@ class ActiveEvController:
             required = (target or 0) * self._float(CONF_EV_VOLTAGE, DEFAULT_EV_VOLTAGE) * (
                 self._float(CONF_EV_PHASE_COUNT, DEFAULT_EV_PHASE_COUNT)
             ) / 1000 / 120
+            if maximum:
+                decision = self._maximum_solar_soak_plan(
+                    now, authority, ceiling=ceiling,
+                    minimum=self._physical_charging_minimum_a(observation) or 0,
+                    step=observation.current_step_a, vehicle_soc=soc,
+                    soft_limit=self._normal_charge_limit(),
+                )
+                return (decision.state.active and target is not None
+                        and 0 < target <= decision.current_a)
             return target is not None and 0 < target <= ceiling and authority[0] >= required
         finally:
             _CYCLE_FEEDBACK.reset(token)
@@ -5164,6 +5321,13 @@ class ActiveEvController:
         self.reconciliation = persisted.reconciliation
         self.target_current_a = persisted.reconciliation.target_current_a
         self.target_limit_percent = persisted.reconciliation.target_limit_percent
+        self.solar_soak_maximum = SolarSoakMaximumState.restore(
+            persisted.solar_soak_maximum_payload, now,
+            binding=self._solar_soak_maximum_binding(),
+            max_gap_seconds=self.coordinator.runtime_config.telemetry.max_age_seconds,
+        )
+        if self.solar_soak_maximum.active:
+            self._solar_soak_active = True
         self.pre_free_session = persisted.pre_free_session
         self.measured_solar_adjustment = persisted.measured_solar_adjustment
         if self.measured_solar_adjustment.phase == "solar_spill":
@@ -5200,6 +5364,7 @@ class ActiveEvController:
             grid_average_payload=self.grid_average.to_payload(),
             ev_average_payload=self.ev_average.to_payload(),
             solar_soak_average_payload=self.solar_soak_average.to_payload(),
+            solar_soak_maximum_payload=self.solar_soak_maximum.to_payload(),
             driving_history=self.driving_history,
             driving_snapshot=self.driving_snapshot,
             daily_driving_energy_kwh=self.daily_driving_energy_kwh,

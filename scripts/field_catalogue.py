@@ -53,6 +53,10 @@ EV_RESERVATION_ADDITIONS_PATH = (
     REPOSITORY_ROOT / "docs/maintainability/config-field-additions-ev-reservation-v1.json"
 )
 
+SOLAR_SOAK_MAX_ADDITIONS_PATH = (
+    REPOSITORY_ROOT / "docs/maintainability/config-field-additions-solar-soak-max-v1.json"
+)
+
 _EV_PAGES = {"car", "charger", "ev_policies", "recovery"}
 
 
@@ -121,6 +125,7 @@ def rendered_catalogue() -> str:
         EV_IMPORT_ADDITIONS_PATH,
         EV_SURPLUS_REARM_ADDITIONS_PATH,
         EV_RESERVATION_ADDITIONS_PATH,
+        SOLAR_SOAK_MAX_ADDITIONS_PATH,
     ):
         additions = json.loads(path.read_text(encoding="utf-8"))
         if additions["field_count"] != len(additions["fields"]):

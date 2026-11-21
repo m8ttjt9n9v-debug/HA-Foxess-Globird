@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.12.63.dev10 — Maximum-rate solar soak (local candidate)
+
+- Add an optional maximum-rate afternoon solar-soak mode, with configurable
+  95% start and 90% stop defaults in setup and native dashboard controls.
+- Keep the existing outside-inverter percentage and protected energy/current
+  checks; buffer ordinary solar changes through the house battery instead of
+  repeatedly following a moving surplus average.
+- Persist qualified hysteresis intent in the existing EV journal and cover
+  threshold jitter, delayed feedback, safety withdrawal, import transients,
+  restart and policy handoff locally. Existing sites remain opted out.
+
 ## 0.12.63.dev9 — Measured free-window allowance (local candidate)
 
 - Keep EV-priority charging at its configured maximum while the measured daily

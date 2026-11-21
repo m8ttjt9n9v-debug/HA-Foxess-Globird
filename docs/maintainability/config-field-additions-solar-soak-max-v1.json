@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "extension": "solar_soak_max_v1",
+  "field_count": 3,
+  "fields": [
+    {
+      "key": "ev_solar_soak_max_enabled",
+      "page": "ev_policies",
+      "order": 40,
+      "required": true,
+      "has_default": true,
+      "default": false,
+      "input_kind": "boolean",
+      "input_config": null,
+      "setup_label": "Use maximum EV rate above the home battery start threshold",
+      "reconfigure_label": "Use maximum EV rate above the home battery start threshold"
+    },
+    {
+      "key": "ev_solar_soak_start_soc_percent",
+      "page": "ev_policies",
+      "order": 41,
+      "required": true,
+      "has_default": true,
+      "default": 95.0,
+      "input_kind": "number",
+      "input_config": {
+        "min": 0.0,
+        "max": 100.0,
+        "step": 0.1,
+        "mode": "box",
+        "unit_of_measurement": "%"
+      },
+      "setup_label": "Maximum solar soak start SoC (%)",
+      "reconfigure_label": "Maximum solar soak start SoC (%)"
+    },
+    {
+      "key": "ev_solar_soak_stop_soc_percent",
+      "page": "ev_policies",
+      "order": 42,
+      "required": true,
+      "has_default": true,
+      "default": 90.0,
+      "input_kind": "number",
+      "input_config": {
+        "min": 0.0,
+        "max": 100.0,
+        "step": 0.1,
+        "mode": "box",
+        "unit_of_measurement": "%"
+      },
+      "setup_label": "Maximum solar soak stop SoC (%)",
+      "reconfigure_label": "Maximum solar soak stop SoC (%)"
+    }
+  ]
+}

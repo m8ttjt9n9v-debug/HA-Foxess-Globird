@@ -21,6 +21,7 @@ from scripts.config_contract import (
     EV_SURPLUS_REARM_CONFIG_KEYS,
     LOAD_CONFIG_KEYS,
     SOLAR_SOAK_CONFIG_KEYS,
+    SOLAR_SOAK_MAX_CONFIG_KEYS,
 )
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
@@ -66,6 +67,10 @@ EV_SURPLUS_REARM_ADDITIONS_PATH = (
 )
 EV_RESERVATION_ADDITIONS_PATH = (
     REPOSITORY_ROOT / "docs/maintainability/config-usage-additions-ev-reservation-v1.json"
+)
+
+SOLAR_SOAK_MAX_ADDITIONS_PATH = (
+    REPOSITORY_ROOT / "docs/maintainability/config-usage-additions-solar-soak-max-v1.json"
 )
 RECONFIGURE_TRANSITION_PATH = (
     REPOSITORY_ROOT / "docs" / "maintainability" / "config-usage-transition-reconfigure-v1.json"
@@ -234,6 +239,14 @@ def build_config_usage_contract(*, include_extensions: bool = False) -> dict[str
         visitor.visit(tree)
         records.extend(visitor.records)
     if not include_extensions:
+        maximum = json.loads(SOLAR_SOAK_MAX_ADDITIONS_PATH.read_text(encoding="utf-8"))
+        accesses = [item for item in records if item["key"] in SOLAR_SOAK_MAX_CONFIG_KEYS]
+        if maximum["access_count"] != len(maximum["accesses"]) or sorted(
+            json.dumps(item, sort_keys=True) for item in accesses
+        ) != sorted(json.dumps(item, sort_keys=True) for item in maximum["accesses"]):
+            raise ValueError("Reviewed maximum solar-soak configuration usage changed")
+        for reviewed in maximum["accesses"]:
+            records.remove(reviewed)
         reservation = json.loads(EV_RESERVATION_ADDITIONS_PATH.read_text(encoding="utf-8"))
         accesses = [item for item in records if item["key"] in EV_RESERVATION_CONFIG_KEYS]
         if reservation["access_count"] != len(reservation["accesses"]) or sorted(

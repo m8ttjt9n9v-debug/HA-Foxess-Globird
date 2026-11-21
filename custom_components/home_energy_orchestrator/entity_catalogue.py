@@ -765,6 +765,29 @@ EV_SOLAR_SOAK_DESCRIPTIONS = (
     ),
 )
 
+EV_SOLAR_SOAK_MAX_THRESHOLD_DESCRIPTIONS = (
+    NumberEntityDescription(
+        key="ev_solar_soak_start_soc",
+        name="Maximum Solar Soak Start SoC",
+        icon="mdi:battery-arrow-up",
+        native_unit_of_measurement=PERCENTAGE,
+        native_min_value=0.0,
+        native_max_value=100.0,
+        native_step=0.1,
+        entity_category=EntityCategory.CONFIG,
+    ),
+    NumberEntityDescription(
+        key="ev_solar_soak_stop_soc",
+        name="Maximum Solar Soak Stop SoC",
+        icon="mdi:battery-arrow-down",
+        native_unit_of_measurement=PERCENTAGE,
+        native_min_value=0.0,
+        native_max_value=100.0,
+        native_step=0.1,
+        entity_category=EntityCategory.CONFIG,
+    ),
+)
+
 EV_BACKFILL_TIMING_DESCRIPTION = SelectEntityDescription(
     key="ev_backfill_timing",
     name="EV Backfill Timing",
@@ -867,6 +890,12 @@ EV_MORNING_SOLAR_DESCRIPTION = SwitchEntityDescription(
     key="ev_morning_solar",
     name="Morning Solar EV Charging",
     icon="mdi:solar-power-variant",
+    entity_category=EntityCategory.CONFIG,
+)
+EV_SOLAR_SOAK_MAX_DESCRIPTION = SwitchEntityDescription(
+    key="ev_solar_soak_max_enabled",
+    name="Maximum EV Solar Soak",
+    icon="mdi:solar-power-variant-outline",
     entity_category=EntityCategory.CONFIG,
 )
 CHARGE_TO_FULL_DESCRIPTION = SwitchEntityDescription(
@@ -1003,6 +1032,8 @@ _NON_SENSOR_PROJECTIONS = {
     "ev_solar_soak_battery_soc": "EvSolarSoakNumber.native_value",
     "ev_solar_soak_average_minutes": "EvSolarSoakNumber.native_value",
     "ev_solar_soak_adjustment_minutes": "EvSolarSoakNumber.native_value",
+    "ev_solar_soak_start_soc": "EvSolarSoakThresholdNumber.native_value",
+    "ev_solar_soak_stop_soc": "EvSolarSoakThresholdNumber.native_value",
     "house_occupancy_mode": "HouseOccupancyModeSelect.current_option",
     "ev_backfill_timing": "EvBackfillTimingSelect.current_option",
     "ev_reservation_mode": "EvReservationModeSelect.current_option",
@@ -1017,6 +1048,7 @@ _NON_SENSOR_PROJECTIONS = {
     "automatic_ev_control": "AutomaticEvControlSwitch.is_on",
     "ev_before_export": "EvBeforeExportSwitch.is_on",
     "ev_morning_solar": "EvMorningSolarSwitch.is_on",
+    "ev_solar_soak_max_enabled": "EvSolarSoakMaxSwitch.is_on",
     "ev_charge_to_full": "EvChargeToFullSwitch.is_on",
     "sign_conventions_verified": "SignConventionsVerifiedBinarySensor.is_on",
     "aemo_monitor": "AemoMonitorSwitch.is_on",
@@ -1046,6 +1078,8 @@ def _entity_spec(platform: EntityPlatform, description: EntityDescription) -> En
         availability = (
             "market_configuration" if description.key in _AEMO_CONFIGURATION_KEYS
             else "configuration" if (description in EV_SOLAR_SOAK_DESCRIPTIONS
+                                      or description in EV_SOLAR_SOAK_MAX_THRESHOLD_DESCRIPTIONS
+                                      or description == EV_SOLAR_SOAK_MAX_DESCRIPTION
                                       or description in (EV_BEFORE_EXPORT_BUFFER_DESCRIPTION,
                                                          EV_BEFORE_EXPORT_IMPORT_DESCRIPTION,
                                                          EV_SURPLUS_REARM_ENERGY_DESCRIPTION,
@@ -1074,6 +1108,9 @@ ENTITY_SPECS = (
     _entity_spec("number", EV_BEFORE_EXPORT_IMPORT_DESCRIPTION),
     _entity_spec("number", EV_MORNING_SOLAR_RESERVE_DESCRIPTION),
     *(_entity_spec("number", description) for description in EV_SOLAR_SOAK_DESCRIPTIONS),
+    *(_entity_spec("number", description)
+      for description in EV_SOLAR_SOAK_MAX_THRESHOLD_DESCRIPTIONS),
+    _entity_spec("switch", EV_SOLAR_SOAK_MAX_DESCRIPTION),
     _entity_spec("select", HOUSE_OCCUPANCY_DESCRIPTION),
     _entity_spec("select", EV_BACKFILL_TIMING_DESCRIPTION),
     _entity_spec("select", EV_RESERVATION_MODE_DESCRIPTION),

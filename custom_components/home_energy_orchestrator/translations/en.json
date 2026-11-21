@@ -114,6 +114,9 @@
           "ev_solar_soak_battery_soc_percent": "Home battery buffer floor (%)",
           "ev_solar_soak_average_minutes": "Solar averaging period (minutes)",
           "ev_solar_soak_adjustment_minutes": "Normal current adjustment period (minutes)",
+          "ev_solar_soak_max_enabled": "Use maximum EV rate above the home battery start threshold",
+          "ev_solar_soak_start_soc_percent": "Maximum solar soak start SoC (%)",
+          "ev_solar_soak_stop_soc_percent": "Maximum solar soak stop SoC (%)",
           "ev_morning_solar_enabled": "Use morning solar for EV before free power",
           "ev_morning_solar_reserve_soc_percent": "Home battery minimum for morning solar EV charging (%)",
           "ev_pre_free_backfill_enabled": "Use spare home-battery energy for EV before free power",
@@ -295,6 +298,9 @@
           "ev_solar_soak_battery_soc_percent": "Home battery buffer floor (%)",
           "ev_solar_soak_average_minutes": "Solar averaging period (minutes)",
           "ev_solar_soak_adjustment_minutes": "Normal current adjustment period (minutes)",
+          "ev_solar_soak_max_enabled": "Use maximum EV rate above the home battery start threshold",
+          "ev_solar_soak_start_soc_percent": "Maximum solar soak start SoC (%)",
+          "ev_solar_soak_stop_soc_percent": "Maximum solar soak stop SoC (%)",
           "ev_morning_solar_enabled": "Use morning solar for EV before free power",
           "ev_morning_solar_reserve_soc_percent": "Home battery minimum for morning solar EV charging (%)",
           "ev_pre_free_backfill_enabled": "Use spare home-battery energy for EV before free power",
@@ -553,6 +559,9 @@
             "ev_solar_soak_battery_soc_percent": "Home battery buffer floor (%)",
             "ev_solar_soak_average_minutes": "Solar averaging period (minutes)",
             "ev_solar_soak_adjustment_minutes": "Normal current adjustment period (minutes)",
+            "ev_solar_soak_max_enabled": "Use maximum EV rate above the home battery start threshold",
+            "ev_solar_soak_start_soc_percent": "Maximum solar soak start SoC (%)",
+            "ev_solar_soak_stop_soc_percent": "Maximum solar soak stop SoC (%)",
             "ev_morning_solar_enabled": "Use morning solar for EV before free power",
             "ev_morning_solar_reserve_soc_percent": "Home battery minimum for morning solar EV charging (%)",
             "ev_pre_free_backfill_enabled": "Use spare home-battery energy for EV before free power",
@@ -593,6 +602,9 @@
             "ev_solar_soak_battery_soc_percent": "After free power, allow solar-soak battery buffering above this home-battery SoC while solar is generating and protected Sellable remains. A higher outside-window reserve still wins; this cannot override house protection or power limits.",
             "ev_solar_soak_average_minutes": "Average the reconstructed solar opportunity over this many minutes, then round up to the next supported car amp within existing limits. Changing this period starts fresh averaging history.",
             "ev_solar_soak_adjustment_minutes": "Adopt normal current changes this often to avoid chasing clouds. Import, lost energy permission and safety reductions act immediately; they do not wait for this timer.",
+            "ev_solar_soak_max_enabled": "Optional mode for enabled direct Solar Spill charging after free power. Start above the threshold, use the existing outside-window inverter percentage, and let the home battery buffer solar changes down to the stop threshold. House reserves, EV targets, service/current limits and source checks still apply.",
+            "ev_solar_soak_start_soc_percent": "Start maximum solar soak only above this home-battery SoC. It must be higher than the stop threshold; the gap prevents repeated restarts near the boundary.",
+            "ev_solar_soak_stop_soc_percent": "Release maximum solar soak at or below this home-battery SoC. A higher existing outside-window reserve still wins. Wait for the start threshold before maximum solar soak can start again.",
             "ev_morning_solar_enabled": "Before free power, send measured solar surplus to the EV. Charging from spare home-battery energy takes over if it starts.",
             "ev_morning_solar_reserve_soc_percent": "Morning solar EV charging requires at least this home-battery SoC; separate from the regular solar threshold.",
             "ev_pre_free_backfill_enabled": "Use available home-battery surplus after protecting house needs, with the timing selected below.",
@@ -628,6 +640,20 @@
                 "ev_solar_soak_battery_soc_percent": "Buffer only above this home-battery SoC while solar and protected Sellable remain. A higher outside-window reserve still wins.",
                 "ev_solar_soak_average_minutes": "Average measured opportunity over this period before rounding up to a supported amp within all limits.",
                 "ev_solar_soak_adjustment_minutes": "Normal changes use this cadence. Safety reductions and permission loss act immediately."
+              }
+            },
+            "solar_soak_max": {
+              "name": "Maximum EV solar soak",
+              "description": "Optional steady maximum-rate mode within the existing direct solar policy. Keep the original averaged policy when disabled.",
+              "data": {
+                "ev_solar_soak_max_enabled": "Use maximum EV rate above the home battery start threshold",
+                "ev_solar_soak_start_soc_percent": "Maximum solar soak start SoC (%)",
+                "ev_solar_soak_stop_soc_percent": "Maximum solar soak stop SoC (%)"
+              },
+              "data_description": {
+                "ev_solar_soak_max_enabled": "Optional mode for enabled direct Solar Spill charging after free power. Start above the threshold, use the existing outside-window inverter percentage, and let the home battery buffer solar changes down to the stop threshold. House reserves, EV targets, service/current limits and source checks still apply.",
+                "ev_solar_soak_start_soc_percent": "Start maximum solar soak only above this home-battery SoC. It must be higher than the stop threshold; the gap prevents repeated restarts near the boundary.",
+                "ev_solar_soak_stop_soc_percent": "Release maximum solar soak at or below this home-battery SoC. A higher existing outside-window reserve still wins. Wait for the start threshold before maximum solar soak can start again."
               }
             }
           }
@@ -872,6 +898,9 @@
             "ev_solar_soak_battery_soc_percent": "Home battery buffer floor (%)",
             "ev_solar_soak_average_minutes": "Solar averaging period (minutes)",
             "ev_solar_soak_adjustment_minutes": "Normal current adjustment period (minutes)",
+            "ev_solar_soak_max_enabled": "Use maximum EV rate above the home battery start threshold",
+            "ev_solar_soak_start_soc_percent": "Maximum solar soak start SoC (%)",
+            "ev_solar_soak_stop_soc_percent": "Maximum solar soak stop SoC (%)",
             "ev_morning_solar_enabled": "Use morning solar for EV before free power",
             "ev_morning_solar_reserve_soc_percent": "Home battery minimum for morning solar EV charging (%)",
             "ev_pre_free_backfill_enabled": "Use spare home-battery energy for EV before free power",
@@ -912,6 +941,9 @@
             "ev_solar_soak_battery_soc_percent": "After free power, allow solar-soak battery buffering above this home-battery SoC while solar is generating and protected Sellable remains. A higher outside-window reserve still wins; this cannot override house protection or power limits.",
             "ev_solar_soak_average_minutes": "Average the reconstructed solar opportunity over this many minutes, then round up to the next supported car amp within existing limits. Changing this period starts fresh averaging history.",
             "ev_solar_soak_adjustment_minutes": "Adopt normal current changes this often to avoid chasing clouds. Import, lost energy permission and safety reductions act immediately; they do not wait for this timer.",
+            "ev_solar_soak_max_enabled": "Optional mode for enabled direct Solar Spill charging after free power. Start above the threshold, use the existing outside-window inverter percentage, and let the home battery buffer solar changes down to the stop threshold. House reserves, EV targets, service/current limits and source checks still apply.",
+            "ev_solar_soak_start_soc_percent": "Start maximum solar soak only above this home-battery SoC. It must be higher than the stop threshold; the gap prevents repeated restarts near the boundary.",
+            "ev_solar_soak_stop_soc_percent": "Release maximum solar soak at or below this home-battery SoC. A higher existing outside-window reserve still wins. Wait for the start threshold before maximum solar soak can start again.",
             "ev_morning_solar_enabled": "Before free power, send measured solar surplus to the EV. Charging from spare home-battery energy takes over if it starts.",
             "ev_morning_solar_reserve_soc_percent": "Morning solar EV charging requires at least this home-battery SoC; separate from the regular solar threshold.",
             "ev_pre_free_backfill_enabled": "Use available home-battery surplus after protecting house needs, with the timing selected below.",
@@ -947,6 +979,20 @@
                 "ev_solar_soak_battery_soc_percent": "Buffer only above this home-battery SoC while solar and protected Sellable remain. A higher outside-window reserve still wins.",
                 "ev_solar_soak_average_minutes": "Average measured opportunity over this period before rounding up to a supported amp within all limits.",
                 "ev_solar_soak_adjustment_minutes": "Normal changes use this cadence. Safety reductions and permission loss act immediately."
+              }
+            },
+            "solar_soak_max": {
+              "name": "Maximum EV solar soak",
+              "description": "Optional steady maximum-rate mode within the existing direct solar policy. Keep the original averaged policy when disabled.",
+              "data": {
+                "ev_solar_soak_max_enabled": "Use maximum EV rate above the home battery start threshold",
+                "ev_solar_soak_start_soc_percent": "Maximum solar soak start SoC (%)",
+                "ev_solar_soak_stop_soc_percent": "Maximum solar soak stop SoC (%)"
+              },
+              "data_description": {
+                "ev_solar_soak_max_enabled": "Optional mode for enabled direct Solar Spill charging after free power. Start above the threshold, use the existing outside-window inverter percentage, and let the home battery buffer solar changes down to the stop threshold. House reserves, EV targets, service/current limits and source checks still apply.",
+                "ev_solar_soak_start_soc_percent": "Start maximum solar soak only above this home-battery SoC. It must be higher than the stop threshold; the gap prevents repeated restarts near the boundary.",
+                "ev_solar_soak_stop_soc_percent": "Release maximum solar soak at or below this home-battery SoC. A higher existing outside-window reserve still wins. Wait for the start threshold before maximum solar soak can start again."
               }
             }
           }
@@ -1051,6 +1097,7 @@
       "invalid_ev_charge_path": "Choose direct EVSE or smart socket.",
       "incomplete_smart_socket_mapping": "Commissioned smart-socket control requires its switch mapping and a current limit at least as high as the commissioned EV minimum.",
       "invalid_site_limits": "Check capacity, floor, reserve, charger, inverter, current, and voltage limits.",
+      "invalid_solar_soak_band": "Maximum solar soak requires 0 ≤ stop SoC < start SoC ≤ 100%.",
       "battery_capacity_required": "Select a live FoxESS battery-capacity sensor, or enter a commissioned fallback capacity.",
       "invalid_daily_ev_backfill": "Daily EV backfill requires a commissioned inverter output/discharge limit, a non-zero outside-window percentage, and a ready time before the free-power window.",
       "invalid_ready_by_ev_backfill": "Ready by surplus backfill requires a commissioned inverter output/discharge limit, a non-zero outside-window percentage, and a ready-by time after midnight and before free power starts.",
@@ -1185,6 +1232,7 @@
       }
     },
     "switch": {
+      "ev_solar_soak_max_enabled": {"name": "Maximum EV Solar Soak"},
       "aemo_monitor": {
         "name": "AEMO Price Monitoring"
       },
@@ -1219,6 +1267,8 @@
       "ev_solar_soak_battery_soc": {"name": "Solar Soak Battery Floor"},
       "ev_solar_soak_average_minutes": {"name": "Solar Soak Averaging Period"},
       "ev_solar_soak_adjustment_minutes": {"name": "Solar Soak Adjustment Period"},
+      "ev_solar_soak_start_soc": {"name": "Maximum Solar Soak Start SoC"},
+      "ev_solar_soak_stop_soc": {"name": "Maximum Solar Soak Stop SoC"},
       "aemo_export_threshold": {
         "name": "AEMO Export Price Threshold"
       },

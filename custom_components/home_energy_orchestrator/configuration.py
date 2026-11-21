@@ -83,6 +83,9 @@ from .const import (
     CONF_EV_SMART_SOCKET_CURRENT_LIMIT,
     CONF_EV_SMART_SOCKET_POWER_SWITCHING,
     CONF_EV_SOC,
+    CONF_EV_SOLAR_SOAK_MAX_ENABLED,
+    CONF_EV_SOLAR_SOAK_START_SOC,
+    CONF_EV_SOLAR_SOAK_STOP_SOC,
     CONF_EV_SOLAR_SPILL_ENABLED,
     CONF_EV_STORED_ENERGY,
     CONF_EV_VOLTAGE,
@@ -504,6 +507,18 @@ class EvCapacitySettings:
         return {}
 
 
+def valid_ev_solar_soak_thresholds(start: object, stop: object) -> bool:
+    """Require a real hysteresis band; invalid saved values grant no authority."""
+    if isinstance(start, bool) or isinstance(stop, bool):
+        return False
+    try:
+        start_value, stop_value = float(start), float(stop)
+    except (TypeError, ValueError, OverflowError):
+        return False
+    return (isfinite(start_value) and isfinite(stop_value)
+            and 0 <= stop_value < start_value <= 100)
+
+
 @dataclass(frozen=True, slots=True)
 class EvPolicySettings:
     """Existing EV path and optional-policy selections."""
@@ -512,6 +527,7 @@ class EvPolicySettings:
     free_window_priority: str
     allowance_guard_enabled: bool
     solar_spill_enabled: bool
+    solar_soak_max_enabled: bool
     morning_solar_enabled: bool
     pre_free_enabled: bool
     pre_free_backfill_timing: str
@@ -560,6 +576,8 @@ _EV_NUMERIC_FIELD_NAMES = (
     "EV_SOLAR_SOAK_BATTERY_SOC",
     "EV_SOLAR_SOAK_AVERAGE_MINUTES",
     "EV_SOLAR_SOAK_ADJUSTMENT_MINUTES",
+    "EV_SOLAR_SOAK_START_SOC",
+    "EV_SOLAR_SOAK_STOP_SOC",
     "EV_SURPLUS_REARM_ENERGY",
     "EV_TELEMETRY_MAX_AGE_SECONDS",
     "EV_TELEMETRY_MAX_SKEW_SECONDS",
@@ -625,6 +643,18 @@ class EvNumericSettings:
             values[key] = candidate if valid else (
                 100.0 if name == "EV_SOLAR_SOAK_BATTERY_SOC" else default
             )
+        start_key, stop_key = (
+            config_const.CONF_EV_SOLAR_SOAK_START_SOC,
+            config_const.CONF_EV_SOLAR_SOAK_STOP_SOC,
+        )
+        start = data.get(start_key, config_const.DEFAULT_EV_SOLAR_SOAK_START_SOC)
+        stop = data.get(stop_key, config_const.DEFAULT_EV_SOLAR_SOAK_STOP_SOC)
+        if valid_ev_solar_soak_thresholds(start, stop):
+            values[start_key], values[stop_key] = float(start), float(stop)
+        else:
+            # An impossible band cannot grant max-rate authority after a
+            # corrupt save. Keep it explicitly invalid for the policy planner.
+            values[start_key] = values[stop_key] = 100.0
         rearm_key = config_const.CONF_EV_SURPLUS_REARM_ENERGY
         rearm_value = data.get(rearm_key, config_const.DEFAULT_EV_SURPLUS_REARM_ENERGY)
         # Above the supported range is an explicit fail-closed sentinel, not
@@ -1285,6 +1315,18 @@ class RuntimeConfiguration:
                     data.get(
                         CONF_EV_SOLAR_SPILL_ENABLED,
                         DEFAULT_EV_SOLAR_SPILL_ENABLED,
+                    )
+                ),
+                solar_soak_max_enabled=(
+                    data.get(
+                        CONF_EV_SOLAR_SOAK_MAX_ENABLED,
+                        config_const.DEFAULT_EV_SOLAR_SOAK_MAX_ENABLED,
+                    ) is True
+                    and valid_ev_solar_soak_thresholds(
+                        data.get(CONF_EV_SOLAR_SOAK_START_SOC,
+                                 config_const.DEFAULT_EV_SOLAR_SOAK_START_SOC),
+                        data.get(CONF_EV_SOLAR_SOAK_STOP_SOC,
+                                 config_const.DEFAULT_EV_SOLAR_SOAK_STOP_SOC),
                     )
                 ),
                 morning_solar_enabled=bool(

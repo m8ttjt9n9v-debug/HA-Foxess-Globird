@@ -24,6 +24,7 @@ from .configuration import (
     RuntimeConfiguration,
     valid_ev_reservation_soc_max_age_hours,
     valid_ev_reservation_unplugged_soc_max_age_minutes,
+    valid_ev_solar_soak_thresholds,
     valid_ev_surplus_rearm_energy,
 )
 from .const import (
@@ -123,6 +124,9 @@ from .const import (
     CONF_EV_SOLAR_SOAK_ADJUSTMENT_MINUTES,
     CONF_EV_SOLAR_SOAK_AVERAGE_MINUTES,
     CONF_EV_SOLAR_SOAK_BATTERY_SOC,
+    CONF_EV_SOLAR_SOAK_MAX_ENABLED,
+    CONF_EV_SOLAR_SOAK_START_SOC,
+    CONF_EV_SOLAR_SOAK_STOP_SOC,
     CONF_EV_SOLAR_SPILL_BATTERY_SOC,
     CONF_EV_SOLAR_SPILL_ENABLED,
     CONF_EV_STORED_ENERGY,
@@ -256,6 +260,9 @@ from .const import (
     DEFAULT_EV_SOLAR_SOAK_ADJUSTMENT_MINUTES,
     DEFAULT_EV_SOLAR_SOAK_AVERAGE_MINUTES,
     DEFAULT_EV_SOLAR_SOAK_BATTERY_SOC,
+    DEFAULT_EV_SOLAR_SOAK_MAX_ENABLED,
+    DEFAULT_EV_SOLAR_SOAK_START_SOC,
+    DEFAULT_EV_SOLAR_SOAK_STOP_SOC,
     DEFAULT_EV_SOLAR_SPILL_BATTERY_SOC,
     DEFAULT_EV_SOLAR_SPILL_ENABLED,
     DEFAULT_EV_SURPLUS_REARM_ENERGY,
@@ -778,6 +785,12 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         number(CONF_EV_SMART_SOCKET_RETRY_SECONDS) > 0,
                 }
             elif page == "ev_policies":
+                if not isinstance(data[CONF_EV_SOLAR_SOAK_MAX_ENABLED], bool):
+                    return {CONF_EV_SOLAR_SOAK_MAX_ENABLED: "invalid_site_limits"}
+                if not valid_ev_solar_soak_thresholds(
+                    data[CONF_EV_SOLAR_SOAK_START_SOC], data[CONF_EV_SOLAR_SOAK_STOP_SOC],
+                ):
+                    return {CONF_EV_SOLAR_SOAK_START_SOC: "invalid_solar_soak_band"}
                 checks = {
                     CONF_EV_RESERVATION_SOC_MAX_AGE_HOURS:
                         valid_ev_reservation_soc_max_age_hours(
@@ -2243,6 +2256,15 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             CONF_EV_SOLAR_SOAK_ADJUSTMENT_MINUTES: data.get(
                 CONF_EV_SOLAR_SOAK_ADJUSTMENT_MINUTES, DEFAULT_EV_SOLAR_SOAK_ADJUSTMENT_MINUTES,
             ),
+            CONF_EV_SOLAR_SOAK_MAX_ENABLED: data.get(
+                CONF_EV_SOLAR_SOAK_MAX_ENABLED, DEFAULT_EV_SOLAR_SOAK_MAX_ENABLED,
+            ),
+            CONF_EV_SOLAR_SOAK_START_SOC: data.get(
+                CONF_EV_SOLAR_SOAK_START_SOC, DEFAULT_EV_SOLAR_SOAK_START_SOC,
+            ),
+            CONF_EV_SOLAR_SOAK_STOP_SOC: data.get(
+                CONF_EV_SOLAR_SOAK_STOP_SOC, DEFAULT_EV_SOLAR_SOAK_STOP_SOC,
+            ),
             CONF_EV_MORNING_SOLAR_ENABLED: data.get(
                 CONF_EV_MORNING_SOLAR_ENABLED, DEFAULT_EV_MORNING_SOLAR_ENABLED
             ),
@@ -2422,6 +2444,12 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     def _validate_input(self, data: dict[str, object]) -> dict[str, str]:
         """Reject malformed IDs and unsafe physical limits before saving them."""
+        if not isinstance(data.get(CONF_EV_SOLAR_SOAK_MAX_ENABLED), bool):
+            return {CONF_EV_SOLAR_SOAK_MAX_ENABLED: "invalid_site_limits"}
+        if not valid_ev_solar_soak_thresholds(
+            data.get(CONF_EV_SOLAR_SOAK_START_SOC), data.get(CONF_EV_SOLAR_SOAK_STOP_SOC),
+        ):
+            return {CONF_EV_SOLAR_SOAK_START_SOC: "invalid_solar_soak_band"}
         if data.get(CONF_EV_RESERVATION_MODE) not in EV_RESERVATION_MODES:
             return {CONF_EV_RESERVATION_MODE: "invalid_ev_reservation_mode"}
         if data.get(CONF_EV_RESERVATION_UNAVAILABLE_BEHAVIOR) not in (

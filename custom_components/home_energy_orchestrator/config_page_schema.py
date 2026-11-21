@@ -21,6 +21,9 @@ from .const import (
     CONF_EV_SOLAR_SOAK_ADJUSTMENT_MINUTES,
     CONF_EV_SOLAR_SOAK_AVERAGE_MINUTES,
     CONF_EV_SOLAR_SOAK_BATTERY_SOC,
+    CONF_EV_SOLAR_SOAK_MAX_ENABLED,
+    CONF_EV_SOLAR_SOAK_START_SOC,
+    CONF_EV_SOLAR_SOAK_STOP_SOC,
     CONF_EV_SURPLUS_REARM_ENERGY,
 )
 from .field_catalogue import FIELD_KEYS_BY_PAGE, FIELD_SPECS_BY_KEY, FieldSpec
@@ -69,8 +72,14 @@ SOLAR_SOAK_SECTION = {
         CONF_EV_SOLAR_SOAK_BATTERY_SOC,
         CONF_EV_SOLAR_SOAK_AVERAGE_MINUTES,
         CONF_EV_SOLAR_SOAK_ADJUSTMENT_MINUTES,
-    )
+    ),
+    "solar_soak_max": (
+        CONF_EV_SOLAR_SOAK_MAX_ENABLED,
+        CONF_EV_SOLAR_SOAK_START_SOC,
+        CONF_EV_SOLAR_SOAK_STOP_SOC,
+    ),
 }
+_SOLAR_SOAK_SECTION_KEYS = {key for keys in SOLAR_SOAK_SECTION.values() for key in keys}
 
 
 def _marker(spec: FieldSpec, defaults: Mapping[str, object]) -> vol.Marker:
@@ -102,7 +111,7 @@ def _validator(spec: FieldSpec) -> Any:
     if spec.selector_kind == "number":
         if spec.key == CONF_EV_RESERVATION_UNPLUGGED_SOC_MAX_AGE_MINUTES:
             return WholeMinuteSelector(selector.NumberSelectorConfig(**config))
-        if (spec.key in SOLAR_SOAK_SECTION["solar_soak"]
+        if (spec.key in _SOLAR_SOAK_SECTION_KEYS
                 or spec.key in {CONF_EV_BEFORE_EXPORT_SOC_BUFFER,
                                 CONF_EV_BEFORE_EXPORT_IMPORT_CONFIRM_SECONDS,
                                 CONF_EV_RESERVATION_SOC_MAX_AGE_HOURS,
@@ -135,14 +144,16 @@ def build_page_schema(page: str, defaults: Mapping[str, object]) -> vol.Schema:
     """Return one ordered page, grouping matched grid phases for operators."""
     fields: dict[vol.Marker, Any] = {}
     for key in FIELD_KEYS_BY_PAGE[page]:
-        if page == "ev_policies" and key in SOLAR_SOAK_SECTION["solar_soak"]:
-            if key == CONF_EV_SOLAR_SOAK_BATTERY_SOC:
-                fields[vol.Required("solar_soak")] = section(
+        if page == "ev_policies" and key in _SOLAR_SOAK_SECTION_KEYS:
+            name, keys = next((name, keys) for name, keys in SOLAR_SOAK_SECTION.items()
+                              if key in keys)
+            if key == keys[0]:
+                fields[vol.Required(name)] = section(
                     vol.Schema({
                         _marker(FIELD_SPECS_BY_KEY[item], defaults): _validator(
                             FIELD_SPECS_BY_KEY[item]
                         )
-                        for item in SOLAR_SOAK_SECTION["solar_soak"]
+                        for item in keys
                     }),
                     {"collapsed": False},
                 )

@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "extension": "solar_soak_max_v1",
+  "config_entry_version": 6,
+  "additional_config_keys": [
+    "ev_solar_soak_max_enabled",
+    "ev_solar_soak_start_soc_percent",
+    "ev_solar_soak_stop_soc_percent"
+  ],
+  "automatic_control_defaults_changed": false
+}

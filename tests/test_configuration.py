@@ -496,7 +496,7 @@ def test_nonnegative_bridge_preserves_valid_configured_values() -> None:
 
 def test_ev_numeric_snapshot_covers_all_reviewed_defaults_and_is_immutable() -> None:
     numbers = RuntimeConfiguration.from_mapping({}).ev_numbers
-    assert len(numbers.values) == 48
+    assert len(numbers.values) == 50
     for name in config_module._EV_NUMERIC_FIELD_NAMES:  # noqa: SLF001
         key = getattr(heo_const, f"CONF_{name}")
         default = float(getattr(heo_const, f"DEFAULT_{name}"))
@@ -516,8 +516,10 @@ def test_ev_numeric_snapshot_preserves_invalid_finite_fallbacks(value: object) -
     for name in config_module._EV_NUMERIC_FIELD_NAMES:  # noqa: SLF001
         key = getattr(heo_const, f"CONF_{name}")
         default = float(getattr(heo_const, f"DEFAULT_{name}"))
-        if name == "EV_SOLAR_SOAK_BATTERY_SOC":
-            default = 100.0  # A corrupt saved buffer floor disables extra soak.
+        if name in (
+            "EV_SOLAR_SOAK_BATTERY_SOC", "EV_SOLAR_SOAK_START_SOC", "EV_SOLAR_SOAK_STOP_SOC",
+        ):
+            default = 100.0  # A corrupt floor/band cannot enable buffered or maximum soak.
         if name == "EV_BEFORE_EXPORT_IMPORT_CONFIRM_SECONDS":
             default = 0.0  # A corrupt interval cannot permit import retention.
         if name == "EV_SURPLUS_REARM_ENERGY":
@@ -540,6 +542,8 @@ def test_ev_numeric_snapshot_preserves_negative_values() -> None:
         heo_const.CONF_EV_SOLAR_SOAK_BATTERY_SOC: 100.0,
         heo_const.CONF_EV_SOLAR_SOAK_AVERAGE_MINUTES: 5.0,
         heo_const.CONF_EV_SOLAR_SOAK_ADJUSTMENT_MINUTES: 5.0,
+        heo_const.CONF_EV_SOLAR_SOAK_START_SOC: 100.0,
+        heo_const.CONF_EV_SOLAR_SOAK_STOP_SOC: 100.0,
         heo_const.CONF_EV_BEFORE_EXPORT_IMPORT_CONFIRM_SECONDS: 0.0,
         heo_const.CONF_EV_SURPLUS_REARM_ENERGY: 6.0,
         heo_const.CONF_EV_RESERVATION_SOC_MAX_AGE_HOURS: 0.0,

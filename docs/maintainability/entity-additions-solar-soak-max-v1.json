@@ -1,0 +1,45 @@
+{
+  "entities": [
+    {
+      "default_entity_id": "number.home_energy_ev_solar_soak_start_soc",
+      "device_class": null,
+      "enabled_by_default": true,
+      "entity_category": "config",
+      "key": "ev_solar_soak_start_soc",
+      "name": "Maximum Solar Soak Start SoC",
+      "platform": "number",
+      "state_class": null,
+      "translation_key": null,
+      "unique_id_template": "{config_entry_id}_ev_solar_soak_start_soc",
+      "unit": "%"
+    },
+    {
+      "default_entity_id": "number.home_energy_ev_solar_soak_stop_soc",
+      "device_class": null,
+      "enabled_by_default": true,
+      "entity_category": "config",
+      "key": "ev_solar_soak_stop_soc",
+      "name": "Maximum Solar Soak Stop SoC",
+      "platform": "number",
+      "state_class": null,
+      "translation_key": null,
+      "unique_id_template": "{config_entry_id}_ev_solar_soak_stop_soc",
+      "unit": "%"
+    },
+    {
+      "default_entity_id": "switch.home_energy_ev_solar_soak_max_enabled",
+      "device_class": null,
+      "enabled_by_default": true,
+      "entity_category": "config",
+      "key": "ev_solar_soak_max_enabled",
+      "name": "Maximum EV Solar Soak",
+      "platform": "switch",
+      "state_class": null,
+      "translation_key": null,
+      "unique_id_template": "{config_entry_id}_ev_solar_soak_max_enabled",
+      "unit": null
+    }
+  ],
+  "entity_count": 3,
+  "schema_version": 1
+}

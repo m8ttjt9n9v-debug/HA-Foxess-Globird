@@ -287,6 +287,12 @@ views:
             title: Afternoon solar soak
             show_header_toggle: false
             entities:
+              - entity: switch.home_energy_ev_solar_soak_max_enabled
+                name: Maximum solar soak
+              - entity: number.home_energy_ev_solar_soak_start_soc
+                name: Maximum soak starts at
+              - entity: number.home_energy_ev_solar_soak_stop_soc
+                name: Maximum soak stops at
               - entity: number.home_energy_ev_solar_soak_battery_soc
                 name: Minimum house-battery SoC
               - entity: number.home_energy_ev_solar_soak_average_minutes
@@ -298,6 +304,12 @@ views:
               These values also appear in EV Charging policies. Extra afternoon
               soak needs solar and Sellable energy; a higher outside reserve
               and all current limits still apply. Safety reductions are immediate.
+              Optional maximum soak requires enabled direct Solar Spill control:
+              it starts at the maximum-soak start SoC and stops at the lower
+              stop SoC. The configured outside-free inverter percentage still
+              limits the EV. After stopping, wait for the start threshold
+              before maximum soak can start again. With maximum soak off, the
+              minimum SoC, averaging and update interval control ordinary soak.
           - type: tile
             entity: sensor.home_energy_ev_solar_spill_status
             name: Solar-spill decision

@@ -1,5 +1,20 @@
 # Project source of truth
 
+## Unreleased: maximum-rate afternoon solar soak
+
+The optional Maximum EV Solar Soak mode uses the existing outside-window
+current ceiling above a configurable house-battery start threshold (default
+95%) and retains it through ordinary solar fluctuations until the stop
+threshold (default90%) or a higher protected floor is reached. Start is strict;
+stop is inclusive. No averaged-soak fallback consumes the recovery band while
+this mode is selected. Existing sites default off and retain averaged soak.
+
+Keep the reserve formula, source/current/electrical checks, normal EV target,
+single writer and policy priorities. Reuse the existing EV journal for bounded,
+source-bound hysteresis and the existing import-confirmation clock for an
+already-issued matching request only. No automation or independent power
+authority is added. See [source mapping, lifecycle and regression coverage](high-battery-solar-soak.md).
+
 ## Reliable house-learning collection (unreleased)
 
 Keep the existing protected-demand/P80/reserve formula. Record healthy raw
@@ -745,7 +760,8 @@ by this correction. Repository regressions do not establish live acceptance.
   solar. Pre-free battery backfill consumes no more than the local protected
   export plan and the vehicle's wall-energy room. Its no-solar path retains
   the latest-start calculation and persisted active phase/frozen start.
-- From v0.12.55, enabled **post-free direct-EVSE** solar spill uses a
+- From v0.12.55, enabled **post-free direct-EVSE** solar spill, unless the
+  separately enabled maximum-rate extension above is selected, uses a
   time-weighted mean of that same reconstruction, rounded UP once
   to a supported current step and then capped DOWN by physical, service and
   the saved outside-window inverter percentage. Qualified positive gross solar

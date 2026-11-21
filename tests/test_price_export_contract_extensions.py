@@ -20,6 +20,7 @@ from scripts.config_contract import (
     LOAD_CONFIG_KEYS,
     PRICE_EXPORT_CONFIG_KEYS,
     SOLAR_SOAK_CONFIG_KEYS,
+    SOLAR_SOAK_MAX_CONFIG_KEYS,
     build_config_contract,
 )
 from scripts.entity_contract import (
@@ -56,6 +57,7 @@ def test_price_export_adds_only_five_reviewed_configuration_keys() -> None:
         - AMBER_CONFIG_KEYS
         - LOAD_CONFIG_KEYS
         - SOLAR_SOAK_CONFIG_KEYS
+        - SOLAR_SOAK_MAX_CONFIG_KEYS
         - EV_EXPORT_BUFFER_CONFIG_KEYS
         - EV_LOCAL_CONNECTION_CONFIG_KEYS
         - EV_IMPORT_CONFIG_KEYS
@@ -69,6 +71,7 @@ def test_price_export_adds_only_five_reviewed_configuration_keys() -> None:
         - len(AMBER_CONFIG_KEYS)
         - len(LOAD_CONFIG_KEYS)
         - len(SOLAR_SOAK_CONFIG_KEYS)
+        - len(SOLAR_SOAK_MAX_CONFIG_KEYS)
         - len(EV_EXPORT_BUFFER_CONFIG_KEYS)
         - len(EV_LOCAL_CONNECTION_CONFIG_KEYS)
         - len(EV_IMPORT_CONFIG_KEYS)
@@ -101,6 +104,7 @@ def test_capacity_configuration_is_a_separate_three_key_addition() -> None:
         | AMBER_CONFIG_KEYS
         | LOAD_CONFIG_KEYS
         | SOLAR_SOAK_CONFIG_KEYS
+        | SOLAR_SOAK_MAX_CONFIG_KEYS
         | EV_EXPORT_BUFFER_CONFIG_KEYS
         | EV_LOCAL_CONNECTION_CONFIG_KEYS
         | EV_IMPORT_CONFIG_KEYS
@@ -112,7 +116,7 @@ def test_capacity_configuration_is_a_separate_three_key_addition() -> None:
         == ADDITIVE_CONFIG_KEYS
     )
     assert historical["page_field_count"] == 135
-    assert current["page_field_count"] == 135 - 1 + 5 + 3 + 2 + 1 + 3 + 1 + 1 + 1 + 1 + 4
+    assert current["page_field_count"] == 135 - 1 + 5 + 3 + 2 + 1 + 3 + 1 + 1 + 1 + 1 + 4 + 3
 
 
 def test_price_export_admits_only_monitor_and_one_automatic_request() -> None:
@@ -138,6 +142,9 @@ def test_price_export_admits_only_monitor_and_one_automatic_request() -> None:
         ("number", "ev_solar_soak_battery_soc"),
         ("number", "ev_solar_soak_average_minutes"),
         ("number", "ev_solar_soak_adjustment_minutes"),
+        ("switch", "ev_solar_soak_max_enabled"),
+        ("number", "ev_solar_soak_start_soc"),
+        ("number", "ev_solar_soak_stop_soc"),
     }
     assert new - trip_ids - load_ids - solar_soak_ids - {
         ("number", "ev_before_export_soc_buffer"),

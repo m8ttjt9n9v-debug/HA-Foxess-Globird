@@ -505,7 +505,20 @@ opposite flow, or two nonzero magnitudes cannot use this timing fallback.
 Ready by, pre-free backfill and measured-solar stages use this same boundary;
 none gets a separate relaxed freshness rule.
 
-Enabled post-free direct-EVSE spill additionally requires qualified positive
+The optional [maximum-rate solar-soak mode](high-battery-solar-soak.md) requires
+enabled post-free direct-EVSE Solar Spill and the same commissioned sources,
+ownership and protected energy checks. Setup and native dashboard controls
+share a default-off switch and separate 95% start / 90% stop numbers. Stop must
+be below start. Positive qualified gross PV and house SoC strictly above start
+admit a new episode; fresh zero PV may be buffered once active. The existing
+outside-inverter percentage, service/connector limits and energy above the
+stop floor bound every request. Reaching the stop floor or losing authority
+withdraws immediately; a higher outside reserve wins. No averaged-soak fallback
+runs in the recovery band while selected. Bounded source-bound restart intent
+uses the existing journal. The existing import-confirmation clock may retain
+only an already-issued matching target, with no positive retry or new start.
+
+Without that optional mode, enabled post-free direct-EVSE spill requires qualified positive
 canonical solar and current protected Sellable, Local Modbus/master authority,
 idle battery sessions and Self Use. It buffers a configured reconstructed mean
 only while BOTH qualified current and snapshot house SoC exceed the buffer floor and any

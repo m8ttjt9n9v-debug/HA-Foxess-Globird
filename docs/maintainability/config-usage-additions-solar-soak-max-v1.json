@@ -1,0 +1,207 @@
+{
+  "access_count": 20,
+  "accesses": [
+    {
+      "constant": "CONF_EV_SOLAR_SOAK_MAX_ENABLED",
+      "key": "ev_solar_soak_max_enabled",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py",
+      "scope": "ConfigFlow._apply_defaults",
+      "receiver": "data",
+      "access": "get",
+      "kind": "raw_mapping",
+      "layer": "boundary"
+    },
+    {
+      "constant": "CONF_EV_SOLAR_SOAK_START_SOC",
+      "key": "ev_solar_soak_start_soc_percent",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py",
+      "scope": "ConfigFlow._apply_defaults",
+      "receiver": "data",
+      "access": "get",
+      "kind": "raw_mapping",
+      "layer": "boundary"
+    },
+    {
+      "constant": "CONF_EV_SOLAR_SOAK_STOP_SOC",
+      "key": "ev_solar_soak_stop_soc_percent",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py",
+      "scope": "ConfigFlow._apply_defaults",
+      "receiver": "data",
+      "access": "get",
+      "kind": "raw_mapping",
+      "layer": "boundary"
+    },
+    {
+      "constant": "CONF_EV_SOLAR_SOAK_MAX_ENABLED",
+      "key": "ev_solar_soak_max_enabled",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py",
+      "scope": "ConfigFlow._page_limit_error",
+      "receiver": "data",
+      "access": "subscript_load",
+      "kind": "raw_mapping",
+      "layer": "boundary"
+    },
+    {
+      "constant": "CONF_EV_SOLAR_SOAK_START_SOC",
+      "key": "ev_solar_soak_start_soc_percent",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py",
+      "scope": "ConfigFlow._page_limit_error",
+      "receiver": "data",
+      "access": "subscript_load",
+      "kind": "raw_mapping",
+      "layer": "boundary"
+    },
+    {
+      "constant": "CONF_EV_SOLAR_SOAK_STOP_SOC",
+      "key": "ev_solar_soak_stop_soc_percent",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py",
+      "scope": "ConfigFlow._page_limit_error",
+      "receiver": "data",
+      "access": "subscript_load",
+      "kind": "raw_mapping",
+      "layer": "boundary"
+    },
+    {
+      "constant": "CONF_EV_SOLAR_SOAK_MAX_ENABLED",
+      "key": "ev_solar_soak_max_enabled",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py",
+      "scope": "ConfigFlow._validate_input",
+      "receiver": "data",
+      "access": "get",
+      "kind": "raw_mapping",
+      "layer": "boundary"
+    },
+    {
+      "constant": "CONF_EV_SOLAR_SOAK_START_SOC",
+      "key": "ev_solar_soak_start_soc_percent",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py",
+      "scope": "ConfigFlow._validate_input",
+      "receiver": "data",
+      "access": "get",
+      "kind": "raw_mapping",
+      "layer": "boundary"
+    },
+    {
+      "constant": "CONF_EV_SOLAR_SOAK_STOP_SOC",
+      "key": "ev_solar_soak_stop_soc_percent",
+      "source": "custom_components/home_energy_orchestrator/config_flow.py",
+      "scope": "ConfigFlow._validate_input",
+      "receiver": "data",
+      "access": "get",
+      "kind": "raw_mapping",
+      "layer": "boundary"
+    },
+    {
+      "constant": "CONF_EV_SOLAR_SOAK_MAX_ENABLED",
+      "key": "ev_solar_soak_max_enabled",
+      "source": "custom_components/home_energy_orchestrator/configuration.py",
+      "scope": "RuntimeConfiguration.from_mapping",
+      "receiver": "data",
+      "access": "get",
+      "kind": "raw_mapping",
+      "layer": "boundary"
+    },
+    {
+      "constant": "CONF_EV_SOLAR_SOAK_START_SOC",
+      "key": "ev_solar_soak_start_soc_percent",
+      "source": "custom_components/home_energy_orchestrator/configuration.py",
+      "scope": "RuntimeConfiguration.from_mapping",
+      "receiver": "data",
+      "access": "get",
+      "kind": "raw_mapping",
+      "layer": "boundary"
+    },
+    {
+      "constant": "CONF_EV_SOLAR_SOAK_STOP_SOC",
+      "key": "ev_solar_soak_stop_soc_percent",
+      "source": "custom_components/home_energy_orchestrator/configuration.py",
+      "scope": "RuntimeConfiguration.from_mapping",
+      "receiver": "data",
+      "access": "get",
+      "kind": "raw_mapping",
+      "layer": "boundary"
+    },
+    {
+      "constant": "CONF_EV_SOLAR_SOAK_MAX_ENABLED",
+      "key": "ev_solar_soak_max_enabled",
+      "source": "custom_components/home_energy_orchestrator/ev_active.py",
+      "scope": "ActiveEvController._solar_spill_decision",
+      "receiver": "self.coordinator.config",
+      "access": "get",
+      "kind": "raw_mapping",
+      "layer": "runtime"
+    },
+    {
+      "constant": "CONF_EV_SOLAR_SOAK_START_SOC",
+      "key": "ev_solar_soak_start_soc_percent",
+      "source": "custom_components/home_energy_orchestrator/number.py",
+      "scope": "EvSolarSoakThresholdNumber.async_set_native_value",
+      "receiver": "candidate",
+      "access": "get",
+      "kind": "raw_mapping",
+      "layer": "runtime"
+    },
+    {
+      "constant": "CONF_EV_SOLAR_SOAK_START_SOC",
+      "key": "ev_solar_soak_start_soc_percent",
+      "source": "custom_components/home_energy_orchestrator/number.py",
+      "scope": "EvSolarSoakThresholdNumber.async_set_native_value",
+      "receiver": "self.coordinator",
+      "access": "update_config_value",
+      "kind": "managed_mutation",
+      "layer": "runtime"
+    },
+    {
+      "constant": "CONF_EV_SOLAR_SOAK_STOP_SOC",
+      "key": "ev_solar_soak_stop_soc_percent",
+      "source": "custom_components/home_energy_orchestrator/number.py",
+      "scope": "EvSolarSoakThresholdNumber.async_set_native_value",
+      "receiver": "candidate",
+      "access": "get",
+      "kind": "raw_mapping",
+      "layer": "runtime"
+    },
+    {
+      "constant": "CONF_EV_SOLAR_SOAK_STOP_SOC",
+      "key": "ev_solar_soak_stop_soc_percent",
+      "source": "custom_components/home_energy_orchestrator/number.py",
+      "scope": "EvSolarSoakThresholdNumber.async_set_native_value",
+      "receiver": "self.coordinator",
+      "access": "update_config_value",
+      "kind": "managed_mutation",
+      "layer": "runtime"
+    },
+    {
+      "constant": "CONF_EV_SOLAR_SOAK_MAX_ENABLED",
+      "key": "ev_solar_soak_max_enabled",
+      "source": "custom_components/home_energy_orchestrator/switch.py",
+      "scope": "EvSolarSoakMaxSwitch._set_enabled",
+      "receiver": "self.coordinator",
+      "access": "update_config_value",
+      "kind": "managed_mutation",
+      "layer": "runtime"
+    },
+    {
+      "constant": "CONF_EV_SOLAR_SOAK_START_SOC",
+      "key": "ev_solar_soak_start_soc_percent",
+      "source": "custom_components/home_energy_orchestrator/switch.py",
+      "scope": "EvSolarSoakMaxSwitch._set_enabled",
+      "receiver": "data",
+      "access": "get",
+      "kind": "raw_mapping",
+      "layer": "runtime"
+    },
+    {
+      "constant": "CONF_EV_SOLAR_SOAK_STOP_SOC",
+      "key": "ev_solar_soak_stop_soc_percent",
+      "source": "custom_components/home_energy_orchestrator/switch.py",
+      "scope": "EvSolarSoakMaxSwitch._set_enabled",
+      "receiver": "data",
+      "access": "get",
+      "kind": "raw_mapping",
+      "layer": "runtime"
+    }
+  ],
+  "extension": "solar_soak_max_v1",
+  "schema_version": 1
+}

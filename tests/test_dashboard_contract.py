@@ -26,6 +26,18 @@ def test_dashboard_references_only_contracted_heo_entities() -> None:
     assert referenced <= contracted
 
 
+def test_solar_soak_controls_include_the_opt_in_band_and_legacy_settings() -> None:
+    references = entity_references()
+    assert {
+        "switch.home_energy_ev_solar_soak_max_enabled",
+        "number.home_energy_ev_solar_soak_start_soc",
+        "number.home_energy_ev_solar_soak_stop_soc",
+        "number.home_energy_ev_solar_soak_battery_soc",
+        "number.home_energy_ev_solar_soak_average_minutes",
+        "number.home_energy_ev_solar_soak_adjustment_minutes",
+    } <= references
+
+
 def test_dashboard_attribute_cards_use_contracted_custom_attributes() -> None:
     """Attribute cards must not depend on undocumented HEO attributes."""
     contract = build_entity_attribute_contract()

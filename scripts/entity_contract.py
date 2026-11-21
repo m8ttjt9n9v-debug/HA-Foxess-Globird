@@ -51,6 +51,10 @@ EV_RESERVATION_ADDITIONS_PATH = (
     REPOSITORY_ROOT / "docs/maintainability/entity-additions-ev-reservation-v1.json"
 )
 
+SOLAR_SOAK_MAX_ADDITIONS_PATH = (
+    REPOSITORY_ROOT / "docs/maintainability/entity-additions-solar-soak-max-v1.json"
+)
+
 
 def _json_value(value: Any) -> Any:
     if isinstance(value, Enum):
@@ -112,6 +116,7 @@ def validate_against_release_baseline() -> None:
             EV_IMPORT_ADDITIONS_PATH,
             EV_BACKFILL_TIMING_ADDITIONS_PATH,
             EV_RESERVATION_ADDITIONS_PATH,
+            SOLAR_SOAK_MAX_ADDITIONS_PATH,
         )
     ]
     for extension in additions:

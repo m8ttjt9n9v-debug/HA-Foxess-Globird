@@ -11,6 +11,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from . import EnergyConfigEntry
 from .aemo_monitor_controls import AemoMonitorSwitch
+from .configuration import valid_ev_solar_soak_thresholds
 from .const import (
     CONF_AUTOMATIC_CHARGE_ENABLED,
     CONF_AUTOMATIC_EXPORT_ENABLED,
@@ -20,7 +21,12 @@ from .const import (
     CONF_EV_CHARGE_TO_FULL,
     CONF_EV_CHARGE_TO_FULL_ENABLED,
     CONF_EV_MORNING_SOLAR_ENABLED,
+    CONF_EV_SOLAR_SOAK_MAX_ENABLED,
+    CONF_EV_SOLAR_SOAK_START_SOC,
+    CONF_EV_SOLAR_SOAK_STOP_SOC,
     CONF_REHEARSAL_MODE,
+    DEFAULT_EV_SOLAR_SOAK_START_SOC,
+    DEFAULT_EV_SOLAR_SOAK_STOP_SOC,
     FOXESS_CONTROL_OWNER_MODBUS,
 )
 from .coordinator import EnergyCoordinator
@@ -30,6 +36,7 @@ from .entity_catalogue import (
     EV_BEFORE_EXPORT_DESCRIPTION,
     EV_DESCRIPTION,
     EV_MORNING_SOLAR_DESCRIPTION,
+    EV_SOLAR_SOAK_MAX_DESCRIPTION,
     EXPORT_DESCRIPTION,
     PRICE_TRIGGERED_EXPORT_DESCRIPTION,
     SAFETY_DESCRIPTION,
@@ -62,6 +69,7 @@ async def async_setup_entry(
                 entry,
                 EV_MORNING_SOLAR_DESCRIPTION,
             ),
+            EvSolarSoakMaxSwitch(entry.runtime_data, entry, EV_SOLAR_SOAK_MAX_DESCRIPTION),
             EvChargeToFullSwitch(
                 entry.runtime_data,
                 entry,
@@ -337,6 +345,51 @@ class EvMorningSolarSwitch(CoordinatorEntity[EnergyCoordinator], SwitchEntity):
         self.async_write_ha_state()
         controller = self.coordinator.ev_controller
         if controller is not None:
+            await controller.async_reconcile()
+        self.coordinator.async_update_listeners()
+
+
+class EvSolarSoakMaxSwitch(CoordinatorEntity[EnergyCoordinator], SwitchEntity):
+    """Opt into a bounded maximum-rate mode in the existing solar writer."""
+
+    def __init__(self, coordinator, entry, description) -> None:
+        super().__init__(coordinator)
+        self.entity_description = description
+        self._entry = entry
+        self._attr_unique_id = f"{entry.entry_id}_{description.key}"
+        self.entity_id = "switch.home_energy_ev_solar_soak_max_enabled"
+        self._attr_has_entity_name = True
+
+    @property
+    def available(self) -> bool:
+        return True
+
+    @property
+    def is_on(self) -> bool:
+        return self.coordinator.runtime_config.ev_policy.solar_soak_max_enabled
+
+    async def async_turn_on(self, **kwargs: object) -> None:
+        await self._set_enabled(True)
+
+    async def async_turn_off(self, **kwargs: object) -> None:
+        await self._set_enabled(False)
+
+    async def _set_enabled(self, enabled: bool) -> None:
+        data = {**self._entry.data, **self._entry.options}
+        if enabled and not valid_ev_solar_soak_thresholds(
+            data.get(CONF_EV_SOLAR_SOAK_START_SOC, DEFAULT_EV_SOLAR_SOAK_START_SOC),
+            data.get(CONF_EV_SOLAR_SOAK_STOP_SOC, DEFAULT_EV_SOLAR_SOAK_STOP_SOC),
+        ):
+            raise HomeAssistantError("Maximum solar-soak start must be above stop (0–100%)")
+        self.hass.config_entries.async_update_entry(
+            self._entry,
+            data={**self._entry.data, CONF_EV_SOLAR_SOAK_MAX_ENABLED: enabled},
+            options={key: value for key, value in self._entry.options.items()
+                     if key != CONF_EV_SOLAR_SOAK_MAX_ENABLED},
+        )
+        self.coordinator.update_config_value(CONF_EV_SOLAR_SOAK_MAX_ENABLED, enabled)
+        self.async_write_ha_state()
+        if (controller := self.coordinator.ev_controller) is not None:
             await controller.async_reconcile()
         self.coordinator.async_update_listeners()
 

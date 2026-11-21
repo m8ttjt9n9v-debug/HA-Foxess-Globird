@@ -44,11 +44,16 @@ EV_RESERVATION_CONFIG_KEYS = frozenset({
     const.CONF_EV_RESERVATION_UNPLUGGED_SOC_MAX_AGE_MINUTES,
     const.CONF_EV_RESERVATION_UNAVAILABLE_BEHAVIOR,
 })
+SOLAR_SOAK_MAX_CONFIG_KEYS = frozenset({
+    const.CONF_EV_SOLAR_SOAK_MAX_ENABLED,
+    const.CONF_EV_SOLAR_SOAK_START_SOC,
+    const.CONF_EV_SOLAR_SOAK_STOP_SOC,
+})
 ADDITIVE_CONFIG_KEYS = (
     AEMO_CONFIG_KEYS | PRICE_EXPORT_CONFIG_KEYS | EV_CAPACITY_CONFIG_KEYS | AMBER_CONFIG_KEYS
     | LOAD_CONFIG_KEYS | SOLAR_SOAK_CONFIG_KEYS | EV_EXPORT_BUFFER_CONFIG_KEYS
     | EV_LOCAL_CONNECTION_CONFIG_KEYS | EV_IMPORT_CONFIG_KEYS | EV_SURPLUS_REARM_CONFIG_KEYS
-    | EV_RESERVATION_CONFIG_KEYS
+    | EV_RESERVATION_CONFIG_KEYS | SOLAR_SOAK_MAX_CONFIG_KEYS
 )
 CAPACITY_ADDITIONS_PATH = (
     REPOSITORY_ROOT / "docs" / "maintainability" / "config-additions-ev-capacity-v1.json"
@@ -78,6 +83,10 @@ EV_RESERVATION_ADDITIONS_PATH = (
     REPOSITORY_ROOT / "docs/maintainability/config-additions-ev-reservation-v1.json"
 )
 
+SOLAR_SOAK_MAX_ADDITIONS_PATH = (
+    REPOSITORY_ROOT / "docs/maintainability/config-additions-solar-soak-max-v1.json"
+)
+
 
 def build_config_contract(*, include_extensions: bool = False) -> dict[str, object]:
     """Return page order plus declared persisted-key vocabulary."""
@@ -91,6 +100,7 @@ def build_config_contract(*, include_extensions: bool = False) -> dict[str, obje
         (EV_IMPORT_ADDITIONS_PATH, EV_IMPORT_CONFIG_KEYS),
         (EV_SURPLUS_REARM_ADDITIONS_PATH, EV_SURPLUS_REARM_CONFIG_KEYS),
         (EV_RESERVATION_ADDITIONS_PATH, EV_RESERVATION_CONFIG_KEYS),
+        (SOLAR_SOAK_MAX_ADDITIONS_PATH, SOLAR_SOAK_MAX_CONFIG_KEYS),
     ):
         addition = json.loads(path.read_text(encoding="utf-8"))
         if (

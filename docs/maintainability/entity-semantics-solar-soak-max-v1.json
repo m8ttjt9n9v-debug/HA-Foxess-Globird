@@ -1,0 +1,76 @@
+{
+  "schema_version": 1,
+  "entity_count": 3,
+  "attribute_profiles": {},
+  "entities": [
+    {
+      "key": "ev_solar_soak_start_soc",
+      "definition": "Saved activation home-battery SoC for maximum solar soak. Start must be strictly above stop. The distinct band avoids repeated max-rate starts around one boundary; original averaged-soak settings remain unchanged.",
+      "producer": "EvSolarSoakThresholdNumber.native_value projects RuntimeConfiguration.ev_numbers. Setup/reconfiguration and native edits persist the same configuration-entry setting.",
+      "role": "configuration",
+      "unit_and_sign": "Finite percentage, 0 through 100, displayed in 0.1 percentage-point steps; start > stop. Defaults start 95%, stop 90%.",
+      "time_basis": "Current persisted operator setting; survives restart/reload. Setting edits reconcile the existing EV controller without creating another writer.",
+      "availability": "Editable while HEO is loaded, including a telemetry outage. Editing a setting does not grant hardware authority.",
+      "state_vocabulary": "Finite valid hysteresis band. Invalid native edits are rejected and invalid saved pairs use 100/100 sentinels that cannot grant maximum mode.",
+      "audience": "advanced",
+      "equivalents": {
+        "foxess": null,
+        "globird": null,
+        "tessie": null
+      },
+      "consumers": [
+        "EV Charging policies",
+        "Native solar-soak controls",
+        "Existing ActiveEvController sole EV writer"
+      ],
+      "decision": "retain",
+      "review_status": "engineering_draft"
+    },
+    {
+      "key": "ev_solar_soak_stop_soc",
+      "definition": "Saved release home-battery SoC for maximum solar soak. Start must be strictly above stop. The distinct band avoids repeated max-rate starts around one boundary; original averaged-soak settings remain unchanged.",
+      "producer": "EvSolarSoakThresholdNumber.native_value projects RuntimeConfiguration.ev_numbers. Setup/reconfiguration and native edits persist the same configuration-entry setting.",
+      "role": "configuration",
+      "unit_and_sign": "Finite percentage, 0 through 100, displayed in 0.1 percentage-point steps; start > stop. Defaults start 95%, stop 90%.",
+      "time_basis": "Current persisted operator setting; survives restart/reload. Setting edits reconcile the existing EV controller without creating another writer.",
+      "availability": "Editable while HEO is loaded, including a telemetry outage. Editing a setting does not grant hardware authority.",
+      "state_vocabulary": "Finite valid hysteresis band. Invalid native edits are rejected and invalid saved pairs use 100/100 sentinels that cannot grant maximum mode.",
+      "audience": "advanced",
+      "equivalents": {
+        "foxess": null,
+        "globird": null,
+        "tessie": null
+      },
+      "consumers": [
+        "EV Charging policies",
+        "Native solar-soak controls",
+        "Existing ActiveEvController sole EV writer"
+      ],
+      "decision": "retain",
+      "review_status": "engineering_draft"
+    },
+    {
+      "key": "ev_solar_soak_max_enabled",
+      "definition": "Opt-in maximum-current branch of the already-enabled direct post-free solar policy. Defaults off; no independent writer or paid charging override. Existing house reserves, current limits, source qualification and higher owners remain authoritative.",
+      "producer": "EvSolarSoakMaxSwitch.is_on projects RuntimeConfiguration.ev_policy.solar_soak_max_enabled. Setup/reconfiguration and native edits persist the same configuration-entry setting.",
+      "role": "configuration",
+      "unit_and_sign": "Boolean; default false.",
+      "time_basis": "Current persisted operator setting; survives restart/reload. Setting edits reconcile the existing EV controller without creating another writer.",
+      "availability": "Editable while HEO is loaded, including a telemetry outage. Editing a setting does not grant hardware authority.",
+      "state_vocabulary": "on/off; invalid saved pairs disable max mode.",
+      "audience": "advanced",
+      "equivalents": {
+        "foxess": null,
+        "globird": null,
+        "tessie": null
+      },
+      "consumers": [
+        "EV Charging policies",
+        "Native solar-soak controls",
+        "Existing ActiveEvController sole EV writer"
+      ],
+      "decision": "retain",
+      "review_status": "engineering_draft"
+    }
+  ]
+}

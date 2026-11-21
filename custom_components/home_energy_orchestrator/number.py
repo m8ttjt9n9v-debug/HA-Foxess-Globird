@@ -16,6 +16,7 @@ from .aemo_monitor_controls import AemoThresholdNumber
 from .configuration import (
     valid_ev_reservation_soc_max_age_hours,
     valid_ev_reservation_unplugged_soc_max_age_minutes,
+    valid_ev_solar_soak_thresholds,
     valid_ev_surplus_rearm_energy,
 )
 from .const import (
@@ -28,6 +29,8 @@ from .const import (
     CONF_EV_SOLAR_SOAK_ADJUSTMENT_MINUTES,
     CONF_EV_SOLAR_SOAK_AVERAGE_MINUTES,
     CONF_EV_SOLAR_SOAK_BATTERY_SOC,
+    CONF_EV_SOLAR_SOAK_START_SOC,
+    CONF_EV_SOLAR_SOAK_STOP_SOC,
     CONF_EV_SURPLUS_REARM_ENERGY,
     DEFAULT_EV_BEFORE_EXPORT_IMPORT_CONFIRM_SECONDS,
     DEFAULT_EV_RESERVATION_SOC_MAX_AGE_HOURS,
@@ -35,6 +38,8 @@ from .const import (
     DEFAULT_EV_SOLAR_SOAK_ADJUSTMENT_MINUTES,
     DEFAULT_EV_SOLAR_SOAK_AVERAGE_MINUTES,
     DEFAULT_EV_SOLAR_SOAK_BATTERY_SOC,
+    DEFAULT_EV_SOLAR_SOAK_START_SOC,
+    DEFAULT_EV_SOLAR_SOAK_STOP_SOC,
     DEFAULT_EV_SURPLUS_REARM_ENERGY,
 )
 from .coordinator import EnergyCoordinator
@@ -47,6 +52,7 @@ from .entity_catalogue import (
     EV_RESERVATION_SOC_MAX_AGE_DESCRIPTION,
     EV_RESERVATION_UNPLUGGED_SOC_MAX_AGE_DESCRIPTION,
     EV_SOLAR_SOAK_DESCRIPTIONS,
+    EV_SOLAR_SOAK_MAX_THRESHOLD_DESCRIPTIONS,
     EV_SURPLUS_REARM_ENERGY_DESCRIPTION,
 )
 from .entity_catalogue import (
@@ -95,6 +101,10 @@ async def async_setup_entry(
             *(
                 EvSolarSoakNumber(entry.runtime_data, entry, description)
                 for description in EV_SOLAR_SOAK_DESCRIPTIONS
+            ),
+            *(
+                EvSolarSoakThresholdNumber(entry.runtime_data, entry, description)
+                for description in EV_SOLAR_SOAK_MAX_THRESHOLD_DESCRIPTIONS
             ),
         )
     )
@@ -280,6 +290,59 @@ class EvSolarSoakNumber(CoordinatorEntity[EnergyCoordinator], NumberEntity):
         self.async_write_ha_state()
         controller = self.coordinator.ev_controller
         if controller is not None:
+            await controller.async_reconcile()
+        self.coordinator.async_update_listeners()
+
+
+class EvSolarSoakThresholdNumber(CoordinatorEntity[EnergyCoordinator], NumberEntity):
+    """Persist one edge without allowing an inverted maximum-soak band."""
+
+    _SETTINGS = {
+        "ev_solar_soak_start_soc": (CONF_EV_SOLAR_SOAK_START_SOC, DEFAULT_EV_SOLAR_SOAK_START_SOC),
+        "ev_solar_soak_stop_soc": (CONF_EV_SOLAR_SOAK_STOP_SOC, DEFAULT_EV_SOLAR_SOAK_STOP_SOC),
+    }
+
+    def __init__(self, coordinator, entry, description) -> None:
+        super().__init__(coordinator)
+        self.entity_description = description
+        self._entry = entry
+        self._attr_unique_id = f"{entry.entry_id}_{description.key}"
+        self.entity_id = f"number.home_energy_{description.key}"
+        self._attr_has_entity_name = True
+
+    @property
+    def available(self) -> bool:
+        return True
+
+    @property
+    def native_value(self) -> float:
+        key, default = self._SETTINGS[self.entity_description.key]
+        return self.coordinator.runtime_config.ev_numbers.value(key, default)
+
+    async def async_set_native_value(self, value: float) -> None:
+        try:
+            numeric = float(value)
+        except (TypeError, ValueError, OverflowError) as error:
+            raise HomeAssistantError("Use a finite maximum solar-soak SoC") from error
+        if isinstance(value, bool) or not isfinite(numeric) or not 0 <= numeric <= 100:
+            raise HomeAssistantError("Use a finite maximum solar-soak SoC between 0 and 100")
+        key, _default = self._SETTINGS[self.entity_description.key]
+        candidate = {**self._entry.data, **self._entry.options, key: numeric}
+        if not valid_ev_solar_soak_thresholds(
+            candidate.get(CONF_EV_SOLAR_SOAK_START_SOC, DEFAULT_EV_SOLAR_SOAK_START_SOC),
+            candidate.get(CONF_EV_SOLAR_SOAK_STOP_SOC, DEFAULT_EV_SOLAR_SOAK_STOP_SOC),
+        ):
+            raise HomeAssistantError("Maximum solar-soak start must be above stop (0–100%)")
+        self.hass.config_entries.async_update_entry(
+            self._entry, data={**self._entry.data, key: numeric},
+            options={name: item for name, item in self._entry.options.items() if name != key},
+        )
+        if key == CONF_EV_SOLAR_SOAK_START_SOC:
+            self.coordinator.update_config_value(CONF_EV_SOLAR_SOAK_START_SOC, numeric)
+        else:
+            self.coordinator.update_config_value(CONF_EV_SOLAR_SOAK_STOP_SOC, numeric)
+        self.async_write_ha_state()
+        if (controller := self.coordinator.ev_controller) is not None:
             await controller.async_reconcile()
         self.coordinator.async_update_listeners()
 

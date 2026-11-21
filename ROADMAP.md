@@ -728,6 +728,15 @@ request charging.
 
 ## Buffered afternoon solar capture
 
+- [x] Unreleased: add a separately enabled maximum-rate mode with configurable
+  95% start / 90% stop thresholds. Reuse the saved outside-inverter percentage,
+  current/source checks, protected ledger and EV journal. Hold through ordinary
+  solar changes while funded; require recovery above start after withdrawal.
+  Preserve averaged soak when opted out. Local regression coverage includes
+  jitter, delayed feedback, import confirmation, restart and policy handoff;
+  this does not establish deployment or live acceptance. See
+  [the behaviour and source mapping](docs/high-battery-solar-soak.md).
+
 - [x] v0.12.56: expose the buffer floor, averaging window and ordinary update
   interval in EV Charging policies and as persistent dashboard number controls,
   default90%/5min/5min. Both surfaces edit the same values. Reset old bound
