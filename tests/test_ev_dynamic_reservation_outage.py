@@ -34,10 +34,37 @@ TIMEOUT = "ev_reservation_unplugged_soc_max_age_minutes"
 LOCAL_CABLE = "binary_sensor.local_ev_connected"
 
 
+def _publish_current_modbus(rig):
+    """Publish this trace's fresh electrical cohort without a vehicle report.
+
+    The older fixture refreshed only its cached model. Positive command checks
+    now independently read the commissioned raw sources, so each explicit local
+    publication must supply those HA states too. Reads never renew a clock.
+    """
+    telemetry = rig.coordinator.telemetry
+    for key, sample in (
+        ("grid_power_entity", telemetry.grid_power),
+        ("battery_power_entity", telemetry.battery_power),
+        ("house_load_entity", telemetry.house_load),
+    ):
+        assert len(sample.sources) == 1
+        source = sample.sources[0]
+        assert source.entity_id == rig.coordinator.config[key]
+        assert source.updated_at == rig.now
+        rig.coordinator.hass.states.async_set(
+            source.entity_id, str(source.raw_value), {"unit_of_measurement": source.raw_unit},
+            timestamp=rig.now.timestamp(), force_update=True,
+        )
+    raw = rig.coordinator._normalized_telemetry(rig.now)
+    assert raw.grid_power.valid and raw.grid_power.fresh
+    assert raw.battery_power.valid and raw.battery_power.fresh
+
+
 def _advance(freezer, rig, elapsed):
     rig.now += elapsed
     freezer.move_to(rig.now)
     _fresh(rig.coordinator, rig.now)
+    _publish_current_modbus(rig)
 
 
 def _offline(hass, rig, *, reported_soc="unavailable"):

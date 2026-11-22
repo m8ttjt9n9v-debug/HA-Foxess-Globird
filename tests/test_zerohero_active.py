@@ -7,6 +7,7 @@ from types import SimpleNamespace
 
 import pytest
 from homeassistant.const import EVENT_CALL_SERVICE
+from homeassistant.util import dt as dt_util
 
 from custom_components.home_energy_orchestrator.active import ActiveFoxessController
 from custom_components.home_energy_orchestrator.configuration import RuntimeConfiguration
@@ -16,9 +17,11 @@ from custom_components.home_energy_orchestrator.const import (
     CONF_AUTOMATIC_EXPORT_ENABLED,
     CONF_AUTOMATIC_EXPORT_LIMIT_KWH,
     CONF_BATTERY_FREE_WINDOW_TARGET,
+    CONF_BATTERY_POWER,
     CONF_BONUS_WINDOW_END,
     CONF_BONUS_WINDOW_START,
     CONF_CONFIGURE_EV,
+    CONF_CONFIGURE_SOLAR,
     CONF_DISCHARGE_EFFICIENCY_PERCENT,
     CONF_EV_AT_HOME,
     CONF_EV_BEFORE_EXPORT_ENABLED,
@@ -39,6 +42,8 @@ from custom_components.home_energy_orchestrator.const import (
     CONF_FREE_CHARGE_END,
     CONF_FREE_CHARGE_SCHEDULE_CONFIRMED,
     CONF_FREE_CHARGE_START,
+    CONF_GRID_POWER,
+    CONF_HOUSE_LOAD,
     CONF_INVERTER_CHARGE_LIMIT_KW,
     CONF_INVERTER_DISCHARGE_LIMIT_KW,
     CONF_REHEARSAL_MODE,
@@ -46,6 +51,7 @@ from custom_components.home_energy_orchestrator.const import (
     FOXESS_CONTROL_OWNER_CLOUD,
     FOXESS_CONTROL_OWNER_MODBUS,
 )
+from custom_components.home_energy_orchestrator.coordinator import EnergyCoordinator
 from custom_components.home_energy_orchestrator.foxess_adapter import FoxessWriteBlocked
 from custom_components.home_energy_orchestrator.planner.charge_session import (
     ChargeSessionState,
@@ -53,6 +59,7 @@ from custom_components.home_energy_orchestrator.planner.charge_session import (
 from custom_components.home_energy_orchestrator.planner.export_session import (
     ExportSessionState,
 )
+from custom_components.home_energy_orchestrator.solar_provider import SolisPublishedFrames
 
 
 def _coordinator(**config):
@@ -67,6 +74,11 @@ def _coordinator(**config):
         CONF_FOXESS_FORCE_CHARGE_POWER: "number.foxess_charge",
         CONF_FOXESS_FORCE_DISCHARGE_POWER: "number.foxess_discharge",
         CONF_INVERTER_CHARGE_LIMIT_KW: 15.0,
+        CONF_GRID_POWER: "sensor.zerohero_unit_grid_power",
+        CONF_BATTERY_POWER: "sensor.zerohero_unit_battery_power",
+        CONF_HOUSE_LOAD: "sensor.zerohero_unit_house_load",
+        CONF_CONFIGURE_SOLAR: False,
+        CONF_EV_VOLTAGE: 230.0,
         **config,
     }
     def free_window_hours_remaining(now):
@@ -209,6 +221,28 @@ async def test_manual_and_telemetry_gate_action_metadata_matches_pure_contract(
 
 def _loaded_controller(hass, coordinator):
     """Construct a controller with explicit valid unit-test storage evidence."""
+    if not hasattr(coordinator, "_normalized_telemetry"):
+        coordinator.hass = hass
+        coordinator.solis_frames = SolisPublishedFrames(hass)
+        coordinator._max_telemetry_age = lambda: (
+            coordinator.runtime_config.telemetry.max_age_seconds
+        )
+        coordinator._normalized_telemetry = lambda now: EnergyCoordinator._normalized_telemetry(
+            coordinator, now,
+        )
+    # The original ZEROHERO fake had no raw power mappings. Supply explicit
+    # publisher evidence once, using its scenario clock; subsequent reads do
+    # not refresh it. Other fixtures retain all their configured raw states.
+    for entity, value in (
+        ("sensor.zerohero_unit_grid_power", 0),
+        ("sensor.zerohero_unit_battery_power", 0),
+        ("sensor.zerohero_unit_house_load", 0.8),
+    ):
+        if hass.states.get(entity) is None:
+            hass.states.async_set(
+                entity, str(value), {"unit_of_measurement": "kW"},
+                timestamp=dt_util.now().timestamp(),
+            )
     coordinator.manual_test = SimpleNamespace(
         is_active=False,
         active_kind=None,

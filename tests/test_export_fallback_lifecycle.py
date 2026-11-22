@@ -293,3 +293,57 @@ async def test_corrupt_persisted_export_cannot_adopt_feed_in_first(export_fallba
     assert not calls
     assert entry.runtime_data.active_controller.export_session.phase == "idle"
     assert entry.runtime_data.active_controller.last_reason == "ownership_unknown"
+
+
+async def test_owned_fixed_fallback_rearms_without_optional_current_energy_plan(
+    export_fallback, freezer,
+):
+    harness, setup, calls = export_fallback
+    entry = await setup(overrides={"ev_reservation_mode": "fixed"})
+    coordinator = entry.runtime_data
+    active = coordinator.active_controller
+    runtime = coordinator.runtime_config
+    assert not runtime.power_sources.battery_entity
+    assert not runtime.battery.charge_power_entity
+    assert not runtime.battery.discharge_power_entity
+    assert not coordinator._normalized_telemetry(dt_util.now()).battery_power.valid
+    assert active._export_physical_sources_fresh(dt_util.now())
+    assert calls == [(MODE, "Force Discharge")]
+    await active.async_reconcile()
+    assert active.export_session.phase == "active"
+    before = await harness.load_store(f"{DOMAIN}.{entry.entry_id}.export_session")
+    assert before["phase"] == "active" and before["requested_power_kw"] == POWER
+
+    freezer.tick(timedelta(seconds=31))
+    # Keep the real refresh Debouncer locked only while ordering this event
+    # cohort. The existing latch sees fresh electrical publications and a
+    # genuine base-mode fallback before a queued optional forecast refresh.
+    async with coordinator._debounced_refresh.async_lock():
+        for entity, value, unit in (
+            ("sensor.test_battery_soc", 80, "%"),
+            ("sensor.test_grid_power", 0, "kW"),
+            ("sensor.test_house_load", 0.8, "kW"),
+        ):
+            harness.hass.states.async_set(
+                entity, str(value), {"unit_of_measurement": unit}, force_update=True,
+            )
+        mode = harness.hass.states.get(MODE)
+        harness.hass.states.async_set(
+            MODE, "Feed-in First", dict(mode.attributes), force_update=True,
+        )
+        coordinator.demand_sampler = None
+        calls.clear()
+        await active.async_reconcile()
+
+        # Fixed/ZEROHERO already owns POWER. A missing optional house forecast
+        # removes a new plan, not that retained bounded session's authority.
+        assert coordinator.learning_remaining_kwh is None
+        assert active.export_plan is None
+        assert calls == [(MODE, "Force Discharge")]
+        assert active.export_session.requested_power_kw == POWER
+        assert active.export_session.phase == "starting"
+        assert float(harness.hass.states.get(DISCHARGE).state) == POWER
+        stored = await harness.load_store(f"{DOMAIN}.{entry.entry_id}.export_session")
+        assert stored["phase"] == "starting"
+        assert stored["requested_power_kw"] == before["requested_power_kw"]
+        assert stored.get("authority_source", "zerohero") == "zerohero"

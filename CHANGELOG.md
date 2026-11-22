@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.13.0rc1 — Consolidated EV, learning and export safeguards
+
+- Combine the local fixes since v0.12.62: independent persistent EV retries,
+  configured normal charge limits, resilient house-learning collection and
+  Dynamic reservation with configurable handling of missing vehicle SoC.
+  Physical charging/export evidence remains independently qualified.
+- End guarded automatic free charging at the measured daily allowance; retain
+  existing outside-window policies and the explicit Charge to Full override.
+- Include optional maximum-rate afternoon solar soak with configurable 95%
+  start / 90% stop defaults and existing inverter, energy and current limits.
+  Existing installations keep this new mode off until explicitly selected.
+- Recheck current electrical evidence at positive export writes and bind the
+  original reservation mode in the existing journal. Mode edits cannot carry
+  old export intent into a differently protected budget. Preserve reducing
+  cleanup and Fixed's existing bounded export latch.
+- Keep pending Dynamic recovery behind its measured durable checkpoint, clip
+  recovery to the configured normal ceiling, and distinguish completed
+  sleeping-vehicle planning from physical handoff evidence.
+- Preserve settings, registered identities, learning and compatible session
+  state. No automatic dashboard replacement or policy activation. Local
+  notification rules and third-party integration patches are separate.
+- This local release candidate does not guarantee vehicle command acceptance
+  or add concurrent forced export/EV charging, high-current resets, journey
+  prediction or Extended Away. Publication and installation remain separate.
+
 ## 0.12.63.dev10 — Maximum-rate solar soak (local candidate)
 
 - Add an optional maximum-rate afternoon solar-soak mode, with configurable

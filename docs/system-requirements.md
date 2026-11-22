@@ -1,5 +1,16 @@
 # System requirements and integration map
 
+## 0.13 consolidation candidate
+
+The local 0.13.0rc1 candidate combines the corrections below while retaining
+configuration-entry version 6, version-one stores and saved operator choices.
+Positive export commands additionally requalify currently configured raw
+electrical sources and the session's original reservation mode. Reducing
+cleanup stays available when authority is lost. Dynamic logical recovery uses
+the configured normal ceiling and its existing measured durable checkpoint;
+retained planning evidence does not grant physical command/handoff authority.
+See [candidate scope, upgrade constraints and release gates](release-0.13.md).
+
 ## Reliable house-learning collection
 
 Persist qualified base demand and independent raw-house progress in the

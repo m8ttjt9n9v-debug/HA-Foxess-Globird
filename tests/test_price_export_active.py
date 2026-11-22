@@ -13,12 +13,14 @@ from homeassistant.util import dt as dt_util
 
 from custom_components.home_energy_orchestrator.active import ActiveFoxessController
 from custom_components.home_energy_orchestrator.configuration import RuntimeConfiguration
+from custom_components.home_energy_orchestrator.coordinator import EnergyCoordinator
 from custom_components.home_energy_orchestrator.foxess_adapter import (
     FoxessServiceAdapter,
     FoxessWriteBlocked,
 )
 from custom_components.home_energy_orchestrator.models import SiteSnapshot
 from custom_components.home_energy_orchestrator.planner.foxess import FoxessCommand
+from custom_components.home_energy_orchestrator.solar_provider import SolisPublishedFrames
 
 NOW = datetime(2026, 10, 12, 9, tzinfo=UTC)
 MODE = "select.price_mode"
@@ -107,7 +109,7 @@ def register_price_services(hass, monkeypatch, calls, harness=None):
 async def price_rig(hass, monkeypatch, freezer):
     freezer.move_to(NOW)
     seed_price_states(hass)
-    config = dict(PRICE_CONFIG)
+    config = {"ev_voltage": 230.0, **PRICE_CONFIG}
     def sample(value):
         return SimpleNamespace(value=value, valid=True, fresh=True, updated_at=dt_util.now())
     coordinator = SimpleNamespace(
@@ -129,6 +131,15 @@ async def price_rig(hass, monkeypatch, freezer):
         _free_window_hours_remaining=lambda _now: 0,
         async_update_listeners=lambda: None,
         async_request_refresh=AsyncMock(), async_update_forecast=AsyncMock(),
+    )
+    # Reuse production capture/normalization for each write-boundary check.
+    # Keep the separately mutable cached telemetry above: these older tests
+    # deliberately exercise its age and validity independently of raw inputs.
+    coordinator.hass = hass
+    coordinator.solis_frames = SolisPublishedFrames(hass)
+    coordinator._max_telemetry_age = lambda: coordinator.runtime_config.telemetry.max_age_seconds
+    coordinator._normalized_telemetry = lambda now: EnergyCoordinator._normalized_telemetry(
+        coordinator, now,
     )
     result = SimpleNamespace(
         region="NSW1", price_trigger_valid=True, price_per_kwh=4,
@@ -303,6 +314,9 @@ async def test_paid_export_cap_cannot_reset_by_toggle_or_new_price_block(price_r
 async def test_normal_export_uses_shared_daily_cap_without_price_authority(price_rig, freezer):
     rig = price_rig
     freezer.move_to(dt_util.as_utc(dt_util.now().replace(hour=20, minute=0)))
+    # This cap-only scenario advances eleven hours into normal export time;
+    # publish current electrical evidence rather than reuse its morning frame.
+    seed_price_states(rig.hass)
     rig.config.update(automatic_export_enabled=True, critical_event_sell_enabled=False)
     rig.coordinator.runtime_config = RuntimeConfiguration.from_mapping(rig.config)
     rig.coordinator.data.paid_export_kwh = 25

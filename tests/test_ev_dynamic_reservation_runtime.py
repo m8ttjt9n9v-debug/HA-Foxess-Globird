@@ -305,6 +305,11 @@ async def test_return_topup_reuses_existing_recovery_start_and_release_threshold
     rig.controller.before_export_recovery = EvBeforeExportRecovery(
         pending, rig.controller._before_export_recovery_binding(),
     )
+    if pending:
+        # A new value alone cannot discharge the persisted obligation. The
+        # measured recovery transition must checkpoint before export resumes.
+        assert rig.controller.dynamic_topup_requested(rig.now)
+    await rig.controller._async_update_before_export_recovery(rig.now)
     assert rig.controller.dynamic_topup_requested(rig.now) is requested
 
 
@@ -321,6 +326,7 @@ async def test_minimum_above_normal_limit_cannot_deadlock_export_handoff(
     budget = _budget(rig)
     assert budget.target_soc_percent == 90
     assert budget.requested_reservation_kwh == pytest.approx(0.06 if requested else 0)
+    await rig.controller._async_update_before_export_recovery(rig.now)
     assert rig.controller.dynamic_topup_requested(rig.now) is requested
     # A persisted minimum+buffer intent cannot demand a normal-policy target
     # above the legal normal charging ceiling. Physical stopped proof remains.
@@ -342,6 +348,9 @@ async def test_pending_recovery_survives_restart_without_restoring_a_daily_quota
     assert replacement.dynamic_topup_requested(rig.now)
     assert replacement.daily_backfill_protection_kwh(rig.now) == pytest.approx(0.3)
     _publish_vehicle(hass, rig, soc=41)
+    assert replacement.dynamic_topup_requested(rig.now)
+    await replacement._async_update_before_export_recovery(rig.now)
+    assert not replacement.before_export_recovery.pending
     assert not replacement.dynamic_topup_requested(rig.now)
 
 

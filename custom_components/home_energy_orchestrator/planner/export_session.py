@@ -32,6 +32,7 @@ class ExportSessionState:
     price_deadline: datetime | None = None
     price_actuator_entities: tuple[str, str, str] | None = None
     price_permission_end: datetime | None = None
+    reservation_mode: str | None = None
 
     @classmethod
     def from_payload(cls, payload: dict[str, object] | None) -> ExportSessionState:
@@ -49,6 +50,9 @@ class ExportSessionState:
         mapping = _price_mapping(payload.get("price_actuator_entities"))
         permission_raw = payload.get("price_permission_end")
         permission_end = datetime.fromisoformat(str(permission_raw)) if permission_raw else None
+        reservation_mode = payload.get("reservation_mode")
+        if reservation_mode not in (None, "fixed", "dynamic"):
+            raise ValueError("invalid export reservation binding")
         if phase not in {"idle", "starting", "active", "stopping", "recovering"}:
             raise ValueError("invalid export session phase")
         if power < 0 or attempts < 0:
@@ -71,10 +75,13 @@ class ExportSessionState:
             or permission_end.utcoffset() is None or deadline > permission_end
         ):
             raise ValueError("invalid price permission boundary")
-        return cls(phase, power, attempts, last_at, authority, deadline, mapping, permission_end)
+        return cls(
+            phase, power, attempts, last_at, authority, deadline, mapping, permission_end,
+            reservation_mode,
+        )
 
     def to_payload(self) -> dict[str, object]:
-        """Return the unchanged Store payload."""
+        """Keep legacy payloads unchanged; retain an optional mode binding."""
         payload = {
             "phase": self.phase,
             "requested_power_kw": self.requested_power_kw,
@@ -83,6 +90,10 @@ class ExportSessionState:
                 self.last_command_at.isoformat() if self.last_command_at else None
             ),
         }
+        if self.reservation_mode not in (None, "fixed", "dynamic"):
+            raise ValueError("invalid export reservation binding")
+        if self.reservation_mode is not None:
+            payload["reservation_mode"] = self.reservation_mode
         if self.authority_source != "zerohero" or self.price_deadline is not None:
             if self.price_actuator_entities is None:
                 raise ValueError("price persistence requires original actuator mappings")
@@ -392,6 +403,7 @@ def _start(state, observation, now, requested, maximum, tolerance):
             "starting", requested, state.attempts + 1, now,
             state.authority_source, state.price_deadline,
             state.price_actuator_entities,
+            reservation_mode=state.reservation_mode,
         ),
         plan, "start_requested",
     )
@@ -412,6 +424,7 @@ def _stop(state, observation, now, tolerance):
             "stopping", state.requested_power_kw, state.attempts + 1, now,
             state.authority_source, state.price_deadline,
             state.price_actuator_entities,
+            reservation_mode=state.reservation_mode,
         ),
         plan,
         "stop_requested",

@@ -48,9 +48,12 @@ async def test_previous_release_reads_current_unchanged_surface(hass) -> None:
     assert coordinator.active_controller._charge_state_payload() == bundle["stores"][
         "charge_session"
     ]
-    assert coordinator.active_controller._export_state_payload() == bundle["stores"][
-        "export_session"
-    ]
+    expected_export = dict(bundle["stores"]["export_session"])
+    if not hasattr(coordinator.active_controller.export_session, "reservation_mode"):
+        # Older readers may ignore only this optional provenance field. They
+        # must still restore the pending reducing duty and every legacy field.
+        expected_export.pop("reservation_mode", None)
+    assert coordinator.active_controller._export_state_payload() == expected_export
     ev = coordinator.ev_controller
     ev_payload = bundle["stores"]["ev_control"]
     assert ev.reconciliation.target_current_a == 5.0

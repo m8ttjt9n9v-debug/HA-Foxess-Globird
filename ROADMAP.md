@@ -1,5 +1,19 @@
 # Project roadmap
 
+## 0.13.0 consolidation candidate
+
+- [x] Combine the local retry, normal-target, Dynamic planning, learning,
+  measured free-allowance and optional maximum-soak corrections in one tree.
+- [x] Restore Dynamic recovery, original-mode journal binding and current
+  electrical-source guards; preserve existing limits and Fixed latch semantics.
+- [x] Complete local regression coverage and bidirectional compatibility checks.
+- [ ] Complete controlled acceptance and the owner-selected settling window
+  before separately authorised publication. No deployment or schedule follows.
+
+Site notifications, recipients/quiet hours, live dashboard overlays and
+third-party integration patches remain separate from the HEO archive.
+See [the candidate scope and release gates](docs/release-0.13.md).
+
 ## Measured free-window allowance (unreleased)
 
 - [x] Preserve the canonical EV-priority maximum; remove the forecast-based

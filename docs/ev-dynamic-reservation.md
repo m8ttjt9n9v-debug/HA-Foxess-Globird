@@ -96,6 +96,21 @@ stale-source, reserve, current, ownership and disabled-control reductions remain
 immediate. Existing timing choices, normal targets, house reserves, total
 outside-window inverter percentage and electrical limits remain binding.
 
+The 0.13 consolidation clips Dynamic's effective minimum and buffered release
+to the configured normal ceiling. A pending or invalid recovery stays blocking
+until its measured transition is durably checkpointed; a read-only SoC lookup
+cannot complete it. With no pending duty, completed sleeping-vehicle planning
+uses the selected source-bound planning/outage policy. Physical stopped-car
+handoff, actual current and positive commands keep their separate evidence.
+
+Export sessions optionally bind their original reservation mode in the same
+version-one journal. A later mode edit withdraws the old positive intent through
+the existing reducer, including after a failed retirement save/reload. Current
+raw grid/battery evidence is requalified at positive-command boundaries so a
+coalesced refresh cannot extend stale permission. Fixed's original bounded
+latch and unconfigured optional battery mapping remain compatible. See the
+[candidate upgrade and legacy-unbound constraints](release-0.13.md).
+
 ## Provenance and corrections
 
 | Retained source or extension | Implementation |

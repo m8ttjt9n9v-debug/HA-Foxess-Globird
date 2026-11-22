@@ -135,12 +135,35 @@ async def test_pending_dynamic_recovery_uses_same_configured_boundary_after_rest
     assert _budget(rig).requested_reservation_kwh == pytest.approx(0.6)
     assert not rig.fox._ev_before_export_handoff_ready(rig.now)
 
-    # Reaching a numeric boundary does not prove physical EV stop.
+    # A newly measured boundary does not let read-only planning bypass the
+    # restored recovery checkpoint, nor does it prove physical EV stop.
     _publish_vehicle(hass, rig, soc=normal_target, actual=8, charging=True)
-    assert _budget(rig).requested_reservation_kwh == 0
+    source_at = rig.provider.data["charge_state_timestamp"]
+    assert rig.provider.data["charge_state_usable_battery_level"] == normal_target
+    budget = _budget(rig)
+    assert budget.target_soc_percent == normal_target
+    assert budget.requested_reservation_kwh == 0
+    assert restored.dynamic_topup_requested(rig.now)
+    assert restored.before_export_recovery.pending
+    assert restored.before_export_release_target() == normal_target
+    saved = await restored._repository.store.async_load()
+    assert saved["before_export_recovery"]["pending"] is True
+    assert not rig.fox._ev_before_export_handoff_ready(rig.now)
+    assert rig.provider.data["charge_state_timestamp"] == source_at
+
+    # The existing measured transition must save logical completion first.
+    # Its qualified SoC still cannot acknowledge the car's physical stop.
+    await restored._async_update_before_export_recovery(rig.now)
+    assert not restored.before_export_recovery.pending
+    assert restored.before_export_release_target() is None
+    saved = await restored._repository.store.async_load()
+    assert saved["before_export_recovery"]["pending"] is False
     assert not restored.dynamic_topup_requested(rig.now)
     assert not rig.fox._ev_before_export_handoff_ready(rig.now)
+    assert rig.provider.data["charge_state_timestamp"] == source_at
     _publish_vehicle(hass, rig, soc=normal_target, actual=0, charging=False)
+    assert _budget(rig).target_soc_percent == normal_target
+    assert _budget(rig).requested_reservation_kwh == 0
     assert rig.fox._ev_before_export_handoff_ready(rig.now)
     assert not restored._charge_to_full_requested()
 

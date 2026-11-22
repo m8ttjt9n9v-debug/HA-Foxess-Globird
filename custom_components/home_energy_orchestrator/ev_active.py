@@ -2948,6 +2948,15 @@ class ActiveEvController:
             *(str(value or '') for value in astuple(ev_observation_entity_map(runtime))),
         )
 
+    def _before_export_effective_minimum(self) -> float:
+        """Dynamic recovery shares its reservation's configured normal ceiling."""
+        minimum = self.coordinator.runtime_config.ev_preferences.before_export_soc_target
+        if self.dynamic_reservation_selected():
+            minimum = min(minimum, self._float(
+                CONF_EV_FREE_WINDOW_CHARGE_LIMIT, DEFAULT_EV_FREE_WINDOW_CHARGE_LIMIT,
+            ), EV_SOC_MAX_PERCENT)
+        return minimum
+
     def before_export_release_target(self) -> float | None:
         """Read-only gate shared by EV selection and the existing export writer."""
         runtime = self.coordinator.runtime_config
@@ -2956,7 +2965,7 @@ class ActiveEvController:
                 or runtime.ev_policy.charge_path == EV_CHARGE_PATH_SMART_SOCKET):
             return None
         release = before_export_recovery_target(
-            preference.before_export_soc_target, preference.before_export_soc_buffer,
+            self._before_export_effective_minimum(), preference.before_export_soc_buffer,
             min(self._float(CONF_EV_FREE_WINDOW_CHARGE_LIMIT, DEFAULT_EV_FREE_WINDOW_CHARGE_LIMIT),
                 EV_SOC_MAX_PERCENT),
         )
@@ -2997,7 +3006,7 @@ class ActiveEvController:
                 if soc is None:
                     return
                 release = before_export_recovery_target(
-                    preference.before_export_soc_target, preference.before_export_soc_buffer,
+                    self._before_export_effective_minimum(), preference.before_export_soc_buffer,
                     min(self._float(
                         CONF_EV_FREE_WINDOW_CHARGE_LIMIT, DEFAULT_EV_FREE_WINDOW_CHARGE_LIMIT,
                     ),
@@ -3005,7 +3014,7 @@ class ActiveEvController:
                 )
                 candidate = advance_before_export_recovery(
                     self.before_export_recovery, binding=self._before_export_recovery_binding(),
-                    soc=soc, minimum=preference.before_export_soc_target, release=release,
+                    soc=soc, minimum=self._before_export_effective_minimum(), release=release,
                     connected=self._connected_at_home()[0],
                 )
             finally:
@@ -4202,18 +4211,30 @@ class ActiveEvController:
             _CYCLE_FEEDBACK.reset(token)
         if not connected:
             return False
+        release = self.before_export_release_target()
+        if release is not None:
+            # A persisted recovery remains outstanding until its measured EV
+            # transition checkpoints completion. Planning cannot acknowledge it.
+            return True
         soc = measure_ev_soc(self.hass, feedback, now=now, max_age_seconds=self._float(
             CONF_EV_TELEMETRY_MAX_AGE_SECONDS, DEFAULT_EV_TELEMETRY_MAX_AGE_SECONDS,
         ))
+        if soc is None:
+            # Completed sleepers may need no logical top-up. Reuse the selected
+            # planning policy, independently of strict physical handoff proof.
+            observation = self._reservation_soc_observation(now, feedback)
+            soc = observation.value_percent
+            if soc is None:
+                retained = self._retained_reservation_soc(now, feedback, observation)
+                if retained is not None:
+                    soc = retained.value_percent
         preference = self.coordinator.runtime_config.ev_preferences
         ceiling = min(self._float(
             CONF_EV_FREE_WINDOW_CHARGE_LIMIT, DEFAULT_EV_FREE_WINDOW_CHARGE_LIMIT,
         ), EV_SOC_MAX_PERCENT)
-        release = self.before_export_release_target()
         return not decide_ev_before_export(
             enabled=True, ev_soc_percent=soc,
             target_soc_percent=min(preference.before_export_soc_target, ceiling),
-            recovery_target_soc_percent=min(release, ceiling) if release is not None else None,
         ).export_allowed
 
     def daily_backfill_protection_kwh(

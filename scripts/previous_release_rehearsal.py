@@ -71,6 +71,7 @@ def _current_rollback_bundle() -> dict[str, object]:
         requested_power_kw=9.0,
         attempts=1,
         last_command_at=recorded_at,
+        reservation_mode="dynamic",
     )
     ev = EvPersistenceState(
         restored_at=recorded_at,

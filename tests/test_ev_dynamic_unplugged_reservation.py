@@ -14,6 +14,7 @@ from custom_components.home_energy_orchestrator.planner.foxess_export_policy imp
     evaluate_foxess_export_policy,
 )
 from tests.test_ev_backfill_timing import _fresh
+from tests.test_ev_dynamic_reservation_outage import _publish_current_modbus
 from tests.test_ev_dynamic_reservation_runtime import (
     _budget,
     _context,
@@ -162,6 +163,7 @@ async def test_unplugged_planning_leaves_export_handoff_and_ev_authority_separat
     rig.now += timedelta(minutes=10)
     freezer.move_to(rig.now)
     _fresh(rig.coordinator, rig.now)
+    _publish_current_modbus(rig)
     await rig.controller._async_save(rig.now)
     rig.controller = ActiveEvController(hass, rig.coordinator)
     rig.coordinator.ev_controller = rig.controller
@@ -187,6 +189,7 @@ async def test_unplugged_planning_leaves_export_handoff_and_ev_authority_separat
         rig.now += timedelta(milliseconds=1)
         freezer.move_to(rig.now)
         _fresh(rig.coordinator, rig.now)
+        _publish_current_modbus(rig)
     assert not _budget(rig).valid
     await rig.fox.async_reconcile()
     await rig.controller.async_reconcile(rig.now)

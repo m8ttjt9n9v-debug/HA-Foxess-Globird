@@ -1,5 +1,20 @@
 # Project source of truth
 
+## 0.13.0 release-candidate consolidation
+
+The local 0.13.0rc1 candidate combines the post-v0.12.62 corrections below.
+Keep configuration-entry version 6, version-one stores, registered identities
+and saved choices. Installation does not select Dynamic, enable maximum soak
+or replace a dashboard. Publication and controlled acceptance remain separate.
+
+Restore the previously unmerged Dynamic lifecycle guards: a measured durable
+checkpoint before recovery release; recovery bounded by the configured normal
+ceiling; completed sleeping-vehicle planning separate from physical handoff;
+and current electrical evidence plus original reservation-mode binding before
+positive export writes. Reuse existing controllers, reducers, normalization
+and journals. Fixed allocation and bounded-latch semantics remain unchanged.
+See [release scope and qualification](release-0.13.md).
+
 ## Unreleased: maximum-rate afternoon solar soak
 
 The optional Maximum EV Solar Soak mode uses the existing outside-window

@@ -155,3 +155,51 @@ def test_export_session_payload_codec_preserves_all_phases() -> None:
 def test_export_session_payload_codec_rejects_malformed_state() -> None:
     with pytest.raises((KeyError, TypeError, ValueError)):
         ExportSessionState.from_payload({"phase": "unknown"})
+
+
+def test_optional_reservation_binding_roundtrips_without_changing_legacy_payload() -> None:
+    for mode in (None, "fixed", "dynamic"):
+        for phase in ("idle", "starting", "active", "stopping", "recovering"):
+            state = ExportSessionState(phase, 8, 1, NOW, reservation_mode=mode)
+            payload = state.to_payload()
+            assert ("reservation_mode" in payload) is (mode is not None)
+            assert ExportSessionState.from_payload(payload) == state
+
+
+def test_malformed_reservation_binding_cannot_be_read_or_checkpointed() -> None:
+    for value in ("", "unknown", True, 42, []):
+        payload = ExportSessionState("starting", 8, 1, NOW).to_payload()
+        payload["reservation_mode"] = value
+        with pytest.raises(ValueError, match="reservation binding"):
+            ExportSessionState.from_payload(payload)
+        with pytest.raises(ValueError, match="reservation binding"):
+            ExportSessionState("starting", 8, 1, NOW, reservation_mode=value).to_payload()
+
+
+def test_reservation_binding_survives_rearm_recovery_and_stop_until_durable_idle() -> None:
+    state = ExportSessionState(reservation_mode="dynamic")
+    starting = _advance(state)
+    assert starting.state.phase == "starting"
+    assert starting.state.reservation_mode == "dynamic"
+    active = _advance(starting.state, FoxessObservation("Force Discharge", 0, 8))
+    assert active.state.phase == "active"
+    rearmed = _advance(
+        active.state, FoxessObservation("Feed-in First", 0, 8),
+        now=NOW + timedelta(seconds=31),
+    )
+    assert rearmed.state.phase == "starting"
+    assert rearmed.state.reservation_mode == "dynamic"
+    recovering = _advance(rearmed.state, source_available=False)
+    assert recovering.state.phase == "recovering"
+    assert recovering.state.reservation_mode == "dynamic"
+    stopping = _advance(
+        recovering.state, FoxessObservation("Force Discharge", 0, 8),
+        finish_requested=True,
+    )
+    assert stopping.state.phase == "stopping"
+    assert stopping.state.reservation_mode == "dynamic"
+    idle = _advance(
+        stopping.state, FoxessObservation("Self Use", 0, 0), finish_requested=True,
+    )
+    assert idle.state.phase == "idle"
+    assert idle.state.reservation_mode is None

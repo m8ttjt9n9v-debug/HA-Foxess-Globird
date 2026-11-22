@@ -206,10 +206,21 @@ class ActiveFoxessController:
         } and not self._ev_before_export_handoff_ready(dt_util.now()):
             return False
         if self.export_session.phase in {"starting", "active"}:
+            # Raw electrical evidence can change while the journal save or a
+            # previous command yields, before its queued coordinator refresh.
+            # Reuse canonical normalization at this write boundary; a cached
+            # ledger cannot renew physical export authority. Stopping cleanup
+            # remains outside this positive gate.
+            if not self._export_physical_sources_fresh(dt_util.now()):
+                return False
             paid = self._paid_exported_kwh()
             if paid is None or paid >= runtime.export.automatic_limit_kwh:
                 return False
-            if runtime.ev_preferences.reservation_mode == "dynamic":
+            mode = runtime.ev_preferences.reservation_mode
+            if (self.export_session.reservation_mode is not None
+                    and mode != self.export_session.reservation_mode):
+                return False
+            if mode == "dynamic":
                 feedback = capture_foxess_feedback(self.hass, FoxessEntityMap(
                     runtime.inverter.work_mode_entity, runtime.inverter.force_charge_power_entity,
                     runtime.inverter.force_discharge_power_entity,
@@ -249,6 +260,22 @@ class ActiveFoxessController:
             inverter.work_mode_entity,
             inverter.force_charge_power_entity,
             inverter.force_discharge_power_entity,
+        )
+
+    def _export_physical_sources_fresh(self, now: datetime) -> bool:
+        """Requalify independently published Modbus without refreshing a ledger."""
+        runtime = self.coordinator.runtime_config
+        telemetry = self.coordinator._normalized_telemetry(now)
+        samples = [telemetry.grid_power]
+        # Battery power is optional in the original Fixed/ZEROHERO mapping.
+        # Missing optional configuration is not a failed configured sensor;
+        # canonical normalization still owns signed/pair selection and fallback.
+        if (runtime.power_sources.battery_entity or runtime.battery.charge_power_entity
+                or runtime.battery.discharge_power_entity):
+            samples.append(telemetry.battery_power)
+        return all(
+            sample.valid and sample.fresh and sample.value is not None
+            for sample in samples
         )
 
     def _price_physical_feedback_fresh(self, now: datetime) -> bool:
@@ -1127,9 +1154,10 @@ class ActiveFoxessController:
         now: datetime,
     ) -> bool:
         """Apply either permission through the same protected export session."""
+        reservation_mode = self.coordinator.runtime_config.ev_preferences.reservation_mode
         context = self._export_context(feedback, now)
         policy = evaluate_foxess_export_policy(context)
-        if self.coordinator.runtime_config.ev_preferences.reservation_mode == "dynamic":
+        if reservation_mode == "dynamic":
             funded = (
                 policy.export_plan is not None
                 and policy.export_plan.sellable_energy_kwh > 0
@@ -1160,6 +1188,15 @@ class ActiveFoxessController:
                 session_window_active=False,
                 finish_requested=True,
             )
+        if (self.export_session.phase != "idle"
+                and self.export_session.reservation_mode is not None
+                and self.export_session.reservation_mode != reservation_mode):
+            # Withdraw a bound old policy even after a failed stopping save
+            # and restart. Legacy unbound Fixed latches retain their contract.
+            policy = replace(
+                policy, effective_enabled=False, eligible=False, should_advance=True,
+                session_window_active=False, finish_requested=True,
+            )
         self.ev_before_export_decision = policy.before_export_decision
         self.export_effective_enabled = policy.effective_enabled
         self.automatic_export_remaining_kwh = policy.automatic_remaining_kwh
@@ -1186,6 +1223,13 @@ class ActiveFoxessController:
             price_permission_end=context.price_interval_end if policy.authority_source == "price"
             else None,
         )
+        if transition.state.phase != "idle" and (
+            previous.phase == "idle"
+            or previous.reservation_mode is None and reservation_mode == "dynamic"
+        ):
+            transition = replace(
+                transition, state=replace(transition.state, reservation_mode=reservation_mode),
+            )
         if transition.state.authority_source == "price" and previous.phase == "idle":
             transition = replace(
                 transition,
@@ -1232,14 +1276,27 @@ class ActiveFoxessController:
         self.last_reason = f"export_{transition.reason}"
         self.last_actions = ()
         if transition.plan.commands:
+            # Bind this execution to its original mode even if the awaited
+            # checkpoint or a command changes configuration. Fixed's existing
+            # bounded latch still needs no new optional energy plan.
             if positive and transition.state.authority_source == "price":
                 self._price_write_deadline = transition.state.price_deadline
                 window = self._price_window(now)
                 self._price_write_signature = self._price_signature(window) if window else None
             try:
                 await self._async_execute_export_plan(transition.plan, entities)
+            except FoxessWriteBlocked:
+                if (not positive or reservation_mode
+                        == self.coordinator.runtime_config.ev_preferences.reservation_mode):
+                    raise
             finally:
                 self._price_write_deadline = self._price_write_signature = None
+            if (positive and reservation_mode
+                    != self.coordinator.runtime_config.ev_preferences.reservation_mode):
+                # Existing reduction owns checkpoint/retry/readback. The saved
+                # original mode also withdraws this intent after restart if
+                # that stop checkpoint fails. No memory-only retirement fence.
+                await self._async_reconcile_locked()
         return True
 
     async def _async_execute_export_plan(self, plan, entities) -> None:

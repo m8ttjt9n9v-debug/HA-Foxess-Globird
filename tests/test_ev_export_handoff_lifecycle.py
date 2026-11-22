@@ -140,7 +140,10 @@ async def _cycle(rig, at, *, ev_first=False):
     await rig.hass.async_block_till_done(wait_background_tasks=True)
 
 
-async def _site(hass, monkeypatch, *, phases=3, price=False, mapped=True):
+async def _site(
+    hass, monkeypatch, *, phases=3, price=False, mapped=True, reservation_mode="fixed",
+    minimum_soc=40,
+):
     monkeypatch.setattr(
         "custom_components.home_energy_orchestrator.coordinator.dt_util.now",
         lambda: datetime.now(UTC),
@@ -240,7 +243,8 @@ async def _site(hass, monkeypatch, *, phases=3, price=False, mapped=True):
             export_limit_kw=15,
             automatic_export_limit_kwh=30,
             ev_before_export_enabled=True,
-            ev_before_export_soc_target_percent=40,
+            ev_reservation_mode=reservation_mode,
+            ev_before_export_soc_target_percent=minimum_soc,
             ev_before_export_soc_buffer_percent=1,
             ev_outside_inverter_percent=50,
             ev_outside_battery_reserve_percent=20,
