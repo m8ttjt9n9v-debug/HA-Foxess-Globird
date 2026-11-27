@@ -1,11 +1,12 @@
 # Project source of truth
 
-## 0.13.0 release-candidate consolidation
+## 0.13.0 consolidation
 
-The local 0.13.0rc1 candidate combines the post-v0.12.62 corrections below.
+Version 0.13.0 combines the post-v0.12.62 corrections below. It promotes the
+0.13.0rc1 integration with only the manifest version changed.
 Keep configuration-entry version 6, version-one stores, registered identities
 and saved choices. Installation does not select Dynamic, enable maximum soak
-or replace a dashboard. Publication and controlled acceptance remain separate.
+or replace a dashboard.
 
 Restore the previously unmerged Dynamic lifecycle guards: a measured durable
 checkpoint before recovery release; recovery bounded by the configured normal
@@ -15,7 +16,7 @@ positive export writes. Reuse existing controllers, reducers, normalization
 and journals. Fixed allocation and bounded-latch semantics remain unchanged.
 See [release scope and qualification](release-0.13.md).
 
-## Unreleased: maximum-rate afternoon solar soak
+## Maximum-rate afternoon solar soak
 
 The optional Maximum EV Solar Soak mode uses the existing outside-window
 current ceiling above a configurable house-battery start threshold (default
@@ -30,7 +31,7 @@ source-bound hysteresis and the existing import-confirmation clock for an
 already-issued matching request only. No automation or independent power
 authority is added. See [source mapping, lifecycle and regression coverage](high-battery-solar-soak.md).
 
-## Reliable house-learning collection (unreleased)
+## Reliable house-learning collection
 
 Keep the existing protected-demand/P80/reserve formula. Record healthy raw
 house progress independently of missing EV subtraction; raw/partial energy
@@ -54,7 +55,7 @@ and fall within the configured planning-frame age. Each observation rechecks
 that evidence; SoC is not required to measure house consumption.
 Charging and export use their existing physical-current qualification.
 
-## Unreleased configured EV charge-limit correction
+## Configured EV charge-limit correction
 
 The existing normal EV target is configurable through0–100%;90% remains its
 default, not a separate cap. Remove the former arbitrary non-Full90% clamp from
@@ -65,10 +66,9 @@ headroom and the final actuator write. A normal charge at its effective
 limit does not issue another start. Full and Trip retain their separate
 override authority. See
 [source mapping and regression contract](configured-ev-charge-limits.md).
-This explicitly requested correction supersedes the reference's90% policy;
-it is not a claim of unchanged source parity or a published/deployed release.
+This correction supersedes the reference's 90% policy.
 
-## Unreleased: measured free-window allowance
+## Measured free-window allowance
 
 The optional EV allowance guard now ends automatic free charging when today's
 measured free-window import reaches the configured daily allowance. Before
@@ -85,7 +85,7 @@ Keep saved options compatible while retiring the ineffective forecast margin
 from setup. See [provenance, lifecycle and regression coverage](free-window-allowance.md).
 This repository change grants no deployment or release authority.
 
-## Local candidate: Dynamic EV reservation and qualified measurements
+## Dynamic EV reservation and qualified measurements
 
 Optional **Dynamic SoC shortfall** reserves current wall energy to the human-set
 minimum plus its existing buffer, clipped to the normal target and including

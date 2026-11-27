@@ -1,20 +1,23 @@
 # Project roadmap
 
-## 0.13.0 consolidation candidate
+## 0.13.0 consolidation
 
 - [x] Combine the local retry, normal-target, Dynamic planning, learning,
   measured free-allowance and optional maximum-soak corrections in one tree.
 - [x] Restore Dynamic recovery, original-mode journal binding and current
   electrical-source guards; preserve existing limits and Fixed latch semantics.
-- [x] Complete local regression coverage and bidirectional compatibility checks.
-- [ ] Complete controlled acceptance and the owner-selected settling window
-  before separately authorised publication. No deployment or schedule follows.
+- [x] Complete release-candidate regression coverage and bidirectional
+  compatibility checks.
+- [ ] Complete a clean full run and the hosted Tests, Hassfest and HACS checks
+  for the stable commit before separately authorised publication.
+- [ ] Verify the published asset against the stable commit before any
+  separately authorised installation.
 
 Site notifications, recipients/quiet hours, live dashboard overlays and
 third-party integration patches remain separate from the HEO archive.
-See [the candidate scope and release gates](docs/release-0.13.md).
+See [the 0.13 release guide](docs/release-0.13.md).
 
-## Measured free-window allowance (unreleased)
+## Measured free-window allowance — 0.13.0
 
 - [x] Preserve the canonical EV-priority maximum; remove the forecast-based
   house-battery/EV pacing extension and future quota reservations.
@@ -27,7 +30,7 @@ See [the candidate scope and release gates](docs/release-0.13.md).
 - [x] Complete the full runtime regression run and focused rechecks of the
   reviewed setup/status expectation changes. No deployment or release is authorised.
 
-## Reliable house-learning collection (unreleased)
+## Reliable house-learning collection — 0.13.0
 
 - [x] Preserve healthy raw-house evidence separately from qualified EV/heater
   subtraction; retain partial energy and reject incomplete measured cycles.
@@ -49,7 +52,7 @@ See [the candidate scope and release gates](docs/release-0.13.md).
   learning when the mapped feedback agrees. Test a complete learning cycle and
   reject expiry, source failures, reconnects and retained plugged frames.
 
-## Unreleased — Configured EV targets, without a hidden90% ceiling
+## Configured EV targets — 0.13.0
 
 - [x] Replace the retained non-Full90% clamp with the physical percentage bound
   across ordinary EV commands, backfill/soak room and Dynamic reserve paths.
@@ -63,7 +66,7 @@ See [the candidate scope and release gates](docs/release-0.13.md).
 - [ ] Publish only after separately requested settled-release qualification.
   No release, live installation or monitoring follows from this repository fix.
 
-## Owner-requested local candidate — Dynamic EV reservation and telemetry
+## Dynamic EV reservation and telemetry — 0.13.0
 
 - [x] Add an explicit Fixed/Dynamic setup and native selector, retaining Fixed
   by default. Dynamic uses the chosen minimum plus buffer/current SoC/capacity

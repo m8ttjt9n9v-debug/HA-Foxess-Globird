@@ -1,15 +1,15 @@
 # System requirements and integration map
 
-## 0.13 consolidation candidate
+## 0.13 consolidation
 
-The local 0.13.0rc1 candidate combines the corrections below while retaining
+Version 0.13.0 combines the corrections below while retaining
 configuration-entry version 6, version-one stores and saved operator choices.
 Positive export commands additionally requalify currently configured raw
 electrical sources and the session's original reservation mode. Reducing
 cleanup stays available when authority is lost. Dynamic logical recovery uses
 the configured normal ceiling and its existing measured durable checkpoint;
 retained planning evidence does not grant physical command/handoff authority.
-See [candidate scope, upgrade constraints and release gates](release-0.13.md).
+See [release scope, upgrade constraints and validation](release-0.13.md).
 
 ## Reliable house-learning collection
 
@@ -31,7 +31,7 @@ numeric amps do not need to settle to zero. The original timestamp uses the
 existing configured planning-frame age, which defaults to 24 hours. Positive draw still requires
 fresh measured current. Charging and export continue to use live evidence.
 
-## Configured EV target correction (unreleased)
+## Configured EV target correction
 
 Normal charging uses the configured 0–100% target as its ceiling, subject to
 live actuator capability and the existing energy and electrical gates. The
@@ -39,7 +39,7 @@ default is 90%. Learned/general targets and keepalive headroom fit within that
 ceiling. Full and Trip use their existing override authority. See
 [the configured-target contract](configured-ev-charge-limits.md).
 
-## Optional Dynamic EV reservation (local candidate)
+## Optional Dynamic EV reservation
 
 Dynamic needs qualified SoC and planning capacity/charge efficiency. It reserves the wall-energy shortfall to the configured EV minimum
 plus existing buffer, clipped to the normal target. Unknown/stale evidence

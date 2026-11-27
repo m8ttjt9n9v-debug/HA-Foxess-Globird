@@ -1,9 +1,9 @@
-# 0.13 consolidation release candidate
+# 0.13.0 release guide
 
-The proposed stable version is **0.13.0**. Local **0.13.0rc1** combines the
-post-v0.12.62 candidate line for controlled qualification. It is not published
-or automatically installed. The roadmap leaves 1.0 readiness subject to
-sustained system trials and independently proven hardware combinations.
+Version **0.13.0** combines the post-v0.12.62 corrections qualified in
+**0.13.0rc1**. The stable integration changes only the manifest version from
+rc1. The roadmap leaves 1.0 readiness subject to sustained system trials and
+independently proven hardware combinations.
 
 ## Included behaviour
 
@@ -59,9 +59,14 @@ The ZIP contains committed integration files with `manifest.json` and
 third-party integration patches. Existing dashboards stay unchanged; reusable
 examples require deliberate import/merge against a fresh live layout.
 
-## Limits and remaining release gates
+House learning requires a qualified source across the protected part of the
+daily cycle. An upgrade retains compatible learning history and makes gaps
+visible. Sites using a cloud-derived balance still need measurements within
+its source freshness limits through the protected period.
 
-Local regression qualification covers 6,126 collected cases. The full run
+## Limits and release validation
+
+The rc1 regression qualification covered 6,126 collected cases. The full run
 passed 6,117; nine older fixture expectations required correction. All three
 affected files then passed their 93 cases, retaining the configured boundaries,
 durable checkpoint and physical-source assertions. Production hashes remained
@@ -75,10 +80,9 @@ grid import, shorter explicit-stop retry backoff, concurrent discretionary EV
 charging/forced export, high-current resets, journey prediction or Extended
 Away. Local regression evidence is separate from physical and tariff acceptance.
 
-Freeze the exact commit, archive and hashes. Run full regression, lint and
-contracts plus bidirectional rehearsals against v0.12.26 and the stable
-baseline; dedicated lifecycle/learning/retry/soak tests supplement that general
-rehearsal. Hosted workflow/HACS checks, controlled acceptance, the selected
-settling interval and explicit publication authority precede stable release.
-The 48-hour preference runs from the final control-code change. It creates no
-publishing, monitoring or additional deployment job.
+Qualify the exact stable commit with a clean full regression run, lint,
+contracts, bidirectional rehearsals against v0.12.26 and v0.12.62, and hosted
+Tests, Hassfest and HACS validation. Run hosted checks on the branch before
+tagging because the publication workflow can start as soon as a version tag
+is pushed. Verify the published ZIP against the tagged commit before a
+controlled installation.

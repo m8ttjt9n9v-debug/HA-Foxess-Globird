@@ -1,5 +1,35 @@
 # Changelog
 
+## 0.13.0 — Consolidated EV, learning and export safeguards
+
+- Persist independent EV current, charge-limit and start retries. Apply the
+  configured normal charging ceiling throughout ordinary charging and
+  recovery. Charge to Full and Trip retain their separate authority.
+- Offer Dynamic EV reservation with configurable handling of unavailable
+  vehicle SoC. Use one protected energy pool and retain original measurement
+  times. Physical charging and export handoff require their own qualified
+  evidence.
+- Continue learning across gaps in excluded free hours and compatible
+  restarts. Keep partial measurements and report protected coverage gaps.
+  Only complete protected cycles from qualified sources train the model.
+- End guarded automatic free charging at the measured daily allowance. Reuse
+  existing outside-window policies and retain the explicit Charge to Full
+  override and battery Self Use cleanup.
+- Offer optional maximum-rate afternoon solar soak with configurable 95%
+  start and 90% stop defaults, subject to existing energy and electrical
+  limits. The mode defaults off for existing installations.
+- Recheck live electrical evidence before positive export writes, preserve
+  the original reservation mode in the export journal and keep reducing
+  cleanup available. Complete pending Dynamic recovery through its measured
+  durable checkpoint.
+- Preserve settings, registered entities, learning history and compatible
+  journals. Start an upgrade with export idle unless the active session's
+  original reservation mode is already durably recorded. Existing dashboards
+  and policy selections are preserved.
+
+See the [release guide](https://github.com/m8ttjt9n9v-debug/HA-Foxess-Globird/blob/v0.13.0/docs/release-0.13.md)
+for upgrade constraints and qualification limits.
+
 ## 0.13.0rc1 — Consolidated EV, learning and export safeguards
 
 - Combine the local fixes since v0.12.62: independent persistent EV retries,
